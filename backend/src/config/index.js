@@ -23,7 +23,7 @@ module.exports = {
 
   // CORS configuration
   corsOptions: {
-    origin: [process.env.CORS_ORIGIN || "http://localhost:5173", "http://localhost:3001"],
+    origin: [process.env.CORS_ORIGIN || "http://localhost:5173", "http://localhost:3001", "http://localhost:5174"],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,

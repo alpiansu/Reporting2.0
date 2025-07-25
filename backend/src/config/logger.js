@@ -2,6 +2,7 @@ const winston = require('winston');
 const path = require('path');
 const fs = require('fs');
 const dotenv = require('dotenv');
+require('winston-daily-rotate-file'); // Tambahkan ini
 
 dotenv.config();
 
@@ -12,7 +13,6 @@ if (!fs.existsSync(logDir)) {
 }
 
 const logLevel = process.env.LOG_LEVEL || 'info';
-const logFile = process.env.LOG_FILE || 'logs/app.log';
 
 // Define log format
 const logFormat = winston.format.combine(
@@ -22,25 +22,36 @@ const logFormat = winston.format.combine(
   winston.format.json()
 );
 
+// Daily rotate file transport for general logs
+const dailyRotateTransport = new winston.transports.DailyRotateFile({
+  filename: path.join(logDir, 'app-%DATE%.log'),
+  datePattern: 'YYYY-MM-DD',
+  zippedArchive: true,
+  maxSize: '20m',
+  maxFiles: '14d', // Simpan log 14 hari terakhir
+  level: logLevel,
+  format: logFormat,
+});
+
+// Daily rotate file transport for error logs
+const errorRotateTransport = new winston.transports.DailyRotateFile({
+  filename: path.join(logDir, 'error-%DATE%.log'),
+  datePattern: 'YYYY-MM-DD',
+  zippedArchive: true,
+  maxSize: '20m',
+  maxFiles: '30d', // Simpan error log 30 hari terakhir
+  level: 'error',
+  format: logFormat,
+});
+
 // Create logger instance
 const logger = winston.createLogger({
   level: logLevel,
   format: logFormat,
   defaultMeta: { service: 'web-reporting' },
   transports: [
-    // Write logs to file
-    new winston.transports.File({ 
-      filename: path.join(__dirname, '../../', logFile),
-      maxsize: 5242880, // 5MB
-      maxFiles: 5,
-    }),
-    // Write errors to separate file
-    new winston.transports.File({ 
-      filename: path.join(__dirname, '../../logs/error.log'), 
-      level: 'error',
-      maxsize: 5242880, // 5MB
-      maxFiles: 5,
-    }),
+    dailyRotateTransport,
+    errorRotateTransport,
   ],
 });
 

@@ -1,5 +1,7 @@
 <template>
   <div class="main-layout">
+    <!-- Mobile Overlay -->
+    <div class="mobile-overlay" v-if="mobileOpen" @click="toggleMobileDrawer"></div>
     <!-- App Bar -->
     <header class="app-bar">
       <div class="app-bar-left">
@@ -57,15 +59,11 @@
       <!-- Sidebar -->
       <aside class="sidebar" :class="{ 'sidebar-open': drawerOpen, 'sidebar-mobile-open': mobileOpen }">
         <div class="sidebar-header">
-          <div class="logo">
-            <img src="/favicon.ico" alt="Logo" class="logo-image" />
-            <h2 class="sidebar-title">Reporting 2.0</h2>
-          </div>
-          <button class="close-button" @click="handleDrawerClose">
-            <i class="pi pi-chevron-left"></i>
+          <button class="toggle-button" @click="handleDrawerClose">
+            <i :class="`pi ${drawerOpen ? 'pi-chevron-left' : 'pi-chevron-right'}`"></i>
           </button>
         </div>
-        <div class="sidebar-user">
+        <div class="sidebar-user" v-if="drawerOpen">
           <div class="avatar" v-if="user">
             {{ user.fullName?.charAt(0) || user.username?.charAt(0) || 'U' }}
           </div>
@@ -74,7 +72,7 @@
             <div class="user-role">{{ user?.role || 'User' }}</div>
           </div>
         </div>
-        <div class="sidebar-divider"></div>
+        <div class="sidebar-divider" v-if="drawerOpen"></div>
         <nav class="sidebar-nav">
           <router-link 
             v-for="item in menuItems" 
@@ -85,7 +83,7 @@
             @click="mobileOpen = false"
           >
             <i :class="`pi ${item.icon}`"></i>
-            <span>{{ item.text }}</span>
+            <span v-if="drawerOpen">{{ item.text }}</span>
           </router-link>
         </nav>
       </aside>
@@ -126,7 +124,7 @@ const toggleMobileDrawer = () => {
 };
 
 const handleDrawerClose = () => {
-  drawerOpen.value = false;
+  drawerOpen.value = !drawerOpen.value; // Toggle instead of just closing
 };
 
 const toggleUserMenu = () => {
@@ -341,28 +339,20 @@ const isActive = (path) => {
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
-  transition: transform 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 5;
+  overflow: hidden;
 }
 
 .sidebar-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   padding: 16px;
   height: 64px;
 }
 
-.sidebar-title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  margin: 0;
-  background: linear-gradient(90deg, var(--primary-color), var(--primary-color-lighten));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.close-button {
+.toggle-button {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -372,9 +362,10 @@ const isActive = (path) => {
   border: none;
   background: transparent;
   cursor: pointer;
+  transition: transform 0.3s ease;
 }
 
-.close-button:hover {
+.toggle-button:hover {
   background-color: rgba(0, 0, 0, 0.04);
 }
 
@@ -425,6 +416,10 @@ const isActive = (path) => {
   text-decoration: none;
   color: var(--text-color);
   font-weight: 500;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  position: relative;
 }
 
 .nav-item:hover {
@@ -443,6 +438,14 @@ const isActive = (path) => {
 .nav-item i {
   margin-right: 16px;
   font-size: 1.25rem;
+  min-width: 20px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.nav-item span {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  display: inline-block;
 }
 
 .main-content {
@@ -450,6 +453,17 @@ const isActive = (path) => {
   padding: 24px;
   overflow-y: auto;
   background-color: #f5f5f5;
+}
+
+/* Mobile Overlay */
+.mobile-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 4;
 }
 
 /* Mobile Responsive */
@@ -460,10 +474,52 @@ const isActive = (path) => {
     left: 0;
     height: calc(100vh - 64px);
     transform: translateX(-100%);
+    width: 260px !important;
+    z-index: 10;
   }
 
   .sidebar-mobile-open {
     transform: translateX(0);
+  }
+  
+  .app-bar {
+    padding: 0 8px;
+    z-index: 5;
+  }
+  
+  .main-content {
+    padding: 16px;
+  }
+}
+
+/* Small screens */
+@media (max-width: 480px) {
+  .app-title {
+    font-size: 1rem;
+  }
+  
+  .logo-image {
+    height: 24px;
+  }
+  
+  .username {
+    display: none;
+  }
+  
+  .main-content {
+    padding: 12px;
+  }
+  
+  .sidebar {
+    width: 240px !important;
+  }
+  
+  .nav-item {
+    padding: 10px 12px;
+  }
+  
+  .nav-item i {
+    font-size: 1.1rem;
   }
 }
 
@@ -476,32 +532,35 @@ const isActive = (path) => {
   .sidebar {
     position: relative;
     transform: none !important;
+    transition: width 0.3s ease;
   }
 
+  .sidebar.sidebar-open {
+    width: 260px;
+  }
+  
   .sidebar:not(.sidebar-open) {
     width: 64px;
   }
 
-  .sidebar:not(.sidebar-open) .sidebar-title,
-  .sidebar:not(.sidebar-open) .user-info,
-  .sidebar:not(.sidebar-open) .nav-item span {
-    display: none;
-  }
-
   .sidebar:not(.sidebar-open) .nav-item {
     justify-content: center;
+    padding: 12px;
   }
 
   .sidebar:not(.sidebar-open) .nav-item i {
     margin-right: 0;
+    font-size: 1.5rem;
+    transform: scale(1.1);
   }
-
-  .sidebar:not(.sidebar-open) .sidebar-user {
-    justify-content: center;
-  }
-
-  .sidebar:not(.sidebar-open) .close-button {
+  
+  .sidebar:not(.sidebar-open) .toggle-button {
     transform: rotate(180deg);
+  }
+  
+  .sidebar:not(.sidebar-open) .nav-item span {
+    opacity: 0;
+    transform: translateX(-10px);
   }
 }
 </style>

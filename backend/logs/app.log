@@ -288,3 +288,6 @@
 {"level":"error","message":"Login failed: User not found","service":"web-reporting","timestamp":"2025-07-25 08:32:05"}
 {"level":"error","message":"Login failed: User not found","service":"web-reporting","timestamp":"2025-07-25 08:32:06"}
 {"level":"error","message":"Login failed: User not found","service":"web-reporting","timestamp":"2025-07-25 08:32:15"}
+{"level":"error","message":"Login failed: User not found","service":"web-reporting","timestamp":"2025-07-25 08:51:28"}
+{"level":"error","message":"Login failed: Invalid password","service":"web-reporting","timestamp":"2025-07-25 08:51:35"}
+{"level":"info","message":"User admin logged in successfully","service":"web-reporting","timestamp":"2025-07-25 08:51:48"}

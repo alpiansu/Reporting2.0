@@ -1,10 +1,9 @@
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const routes = require('./routes');
-const { requestLogger, errorHandler, notFound } = require('./middlewares');
-const config = require('./config');
-const logger = require('./config/logger');
+const express = require("express");
+const cors = require("cors");
+const helmet = require("helmet");
+const routes = require("./routes");
+const { requestLogger, errorHandler, notFound } = require("./middlewares");
+const config = require("./config");
 
 // Initialize Express app
 const app = express();

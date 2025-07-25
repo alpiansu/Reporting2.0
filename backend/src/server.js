@@ -39,8 +39,11 @@ async function startServer() {
 
     // Sync database models (in development only)
     if (config.nodeEnv === "development") {
-      await sequelize.sync({ alter: true });
-      logger.info("Database models synchronized");
+      // Cek dan buat tabel jika belum ada, alter hanya jika field belum ada atau tidak sesuai
+      await sequelize.sync({ alter: false }); // Hanya create table jika belum ada
+      // Untuk alter, lakukan manual jika ada perubahan model
+      // Contoh: await sequelize.getQueryInterface().addColumn('users', 'fieldBaru', { type: Sequelize.STRING });
+      logger.info("Database models checked/created (no global alter)");
     }
 
     // Create dummy user

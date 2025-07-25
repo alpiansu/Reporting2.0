@@ -1,26 +1,17 @@
-const express = require('express');
-const authRoutes = require('./auth.routes');
-const storeRoutes = require('./store.routes');
-const screeningRoutes = require('./screening.routes');
+const express = require("express");
+const authRoutes = require("./auth.routes");
+const storeRoutes = require("./store.routes");
+const screeningRoutes = require("./screening.routes");
+const { swaggerUi, swaggerSpec } = require("../config/swagger");
 
 const router = express.Router();
 
-// API Routes
-router.use('/api/auth', authRoutes);
-router.use('/api/stores', storeRoutes);
-router.use('/api/screenings', screeningRoutes);
+// Swagger UI route (harus di atas semua route /api/* agar file static swagger tidak bentrok)
+router.use("/api", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-// API Documentation route
-router.get('/api', (req, res) => {
-  res.json({
-    message: 'Web Reporting 2.0 API',
-    version: '1.0.0',
-    endpoints: {
-      auth: '/api/auth',
-      stores: '/api/stores',
-      screenings: '/api/screenings',
-    },
-  });
-});
+// API Routes
+router.use("/api/auth", authRoutes);
+router.use("/api/stores", storeRoutes);
+router.use("/api/screenings", screeningRoutes);
 
 module.exports = router;

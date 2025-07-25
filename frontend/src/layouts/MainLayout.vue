@@ -30,12 +30,12 @@
             <i class="pi pi-user"></i>
             <span>Profile</span>
           </div>
-          <div class="dropdown-item" @click="navigateTo('/settings')">
-            <i class="pi pi-cog"></i>
-            <span>Settings</span>
+          <div class="dropdown-item" @click="openChangePasswordDialog">
+            <i class="pi pi-key"></i>
+            <span>Change Password</span>
           </div>
           <div class="dropdown-divider"></div>
-          <div class="dropdown-item" @click="handleLogout">
+          <div class="dropdown-item" @click="confirmLogout">
             <i class="pi pi-sign-out"></i>
             <span>Logout</span>
           </div>
@@ -63,15 +63,6 @@
             <i :class="`pi ${drawerOpen ? 'pi-chevron-left' : 'pi-chevron-right'}`"></i>
           </button>
         </div>
-        <div class="sidebar-user" v-if="drawerOpen">
-          <div class="avatar" v-if="user">
-            {{ user.fullName?.charAt(0) || user.username?.charAt(0) || 'U' }}
-          </div>
-          <div class="user-info">
-            <div class="user-name">{{ user?.fullName || user?.username || 'User' }}</div>
-            <div class="user-role">{{ user?.role || 'User' }}</div>
-          </div>
-        </div>
         <div class="sidebar-divider" v-if="drawerOpen"></div>
         <nav class="sidebar-nav">
           <router-link 
@@ -96,12 +87,35 @@
       </main>
     </div>
   </div>
+  
+  <!-- Logout Confirmation Dialog -->
+  <confirm-dialog
+    v-model="showLogoutConfirm"
+    title="Logout Confirmation"
+    message="Are you sure you want to logout?"
+    confirm-text="Logout"
+    @confirm="handleLogout"
+  />
+  
+  <!-- Change Password Dialog -->
+  <form-dialog
+    v-model="showChangePasswordDialog"
+    title="Change Password"
+    submit-text="Update Password"
+    :loading="passwordLoading"
+    @submit="submitChangePassword"
+  >
+    <change-password-form ref="passwordFormRef" @submit="submitChangePassword" />
+  </form-dialog>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '../stores';
+import ConfirmDialog from '../components/common/ConfirmDialog.vue';
+import FormDialog from '../components/common/FormDialog.vue';
+import ChangePasswordForm from '../components/auth/ChangePasswordForm.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -141,9 +155,47 @@ const toggleNotifications = () => {
   }
 };
 
+// Show logout confirmation dialog
+const showLogoutConfirm = ref(false);
+const confirmLogout = () => {
+  userMenuOpen.value = false;
+  showLogoutConfirm.value = true;
+};
+
+// Handle actual logout
 const handleLogout = () => {
   authStore.logout();
   router.push('/login');
+};
+
+// Change password dialog
+const showChangePasswordDialog = ref(false);
+const passwordLoading = ref(false);
+const passwordFormRef = ref(null);
+
+const openChangePasswordDialog = () => {
+  userMenuOpen.value = false;
+  showChangePasswordDialog.value = true;
+  // Reset form when opening dialog
+  if (passwordFormRef.value) {
+    passwordFormRef.value.resetForm();
+  }
+};
+
+const submitChangePassword = async (passwordData) => {
+  try {
+    passwordLoading.value = true;
+    await authStore.changePassword(passwordData);
+    showChangePasswordDialog.value = false;
+    // Show success message or notification here
+    alert('Password changed successfully');
+  } catch (error) {
+    // Handle error
+    console.error('Failed to change password:', error);
+    alert(error.response?.data?.message || 'Failed to change password');
+  } finally {
+    passwordLoading.value = false;
+  }
 };
 
 const navigateTo = (path) => {

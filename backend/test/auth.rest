@@ -1,0 +1,26 @@
+### Test login success
+POST http://localhost:3000/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin123"
+}
+
+### Test login failed (wrong password)
+POST http://localhost:3001/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "wrongpassword"
+}
+
+### Test login failed (user not found)
+POST http://localhost:3001/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "notfound",
+  "password": "admin123"
+}

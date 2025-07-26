@@ -13,7 +13,11 @@ const swaggerDefinition = {
   servers: [
     {
       url: "http://localhost:3000/api",
-      description: "Development server",
+      description: "API server",
+    },
+    {
+      url: "http://localhost:3000/docs",
+      description: "Swagger Documentation",
     },
   ],
   components: {

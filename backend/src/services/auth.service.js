@@ -1,11 +1,44 @@
 const { User } = require('../models');
 const { jwt } = require('../config');
 const logger = require('../config/logger');
+const userActivityService = require('./userActivity.service');
 
 /**
  * Service for handling authentication related operations
  */
 class AuthService {
+  /**
+   * Logout user
+   * @param {number} userId - User ID
+   * @param {Object} requestInfo - Request information for activity logging
+   * @param {string} requestInfo.ipAddress - IP address
+   * @param {string} requestInfo.userAgent - User agent
+   * @returns {boolean} - True if logout successful
+   */
+  async logout(userId, requestInfo = {}) {
+    try {
+      // Log logout activity
+      if (userId) {
+        await userActivityService.logActivity({
+          userId,
+          type: 'logout',
+          description: 'Logged out from the system',
+          ipAddress: requestInfo.ipAddress || null,
+          userAgent: requestInfo.userAgent || null,
+          location: null,
+        });
+      }
+      
+      // In a stateless JWT auth system, logout is handled client-side
+      // by removing the token from storage
+      return true;
+    } catch (error) {
+      logger.error(`Error logging logout activity: ${error.message}`);
+      // Still return true since the actual logout is client-side
+      return true;
+    }
+  }
+  
   /**
    * Login a user with username/email and password
    * @param {string} login - Username or email
@@ -30,6 +63,16 @@ class AuthService {
       // Update last login timestamp
       user.lastLogin = new Date();
       await user.save();
+      
+      // Log login activity
+      await userActivityService.logActivity({
+        userId: user.id,
+        type: 'login',
+        description: 'Logged in to the system',
+        ipAddress: null, // In a real app, this would come from the request
+        userAgent: null, // In a real app, this would come from the request
+        location: null, // In a real app, this would be determined from IP
+      });
       
       // Generate JWT token
       const token = jwt.generateToken(user);
@@ -68,6 +111,16 @@ class AuthService {
       delete createdUser.password;
       
       logger.info(`New user registered: ${user.username}`);
+      
+      // Log registration activity
+      await userActivityService.logActivity({
+        userId: user.id,
+        type: 'register',
+        description: 'Created new account',
+        ipAddress: null, // In a real app, this would come from the request
+        userAgent: null, // In a real app, this would come from the request
+        location: null, // In a real app, this would be determined from IP
+      });
       
       return {
         user: createdUser,
@@ -126,11 +179,76 @@ class AuthService {
       user.password = newPassword;
       await user.save();
       
+      // Log password change activity
+      await userActivityService.logActivity({
+        userId: user.id,
+        type: 'password',
+        description: 'Changed account password',
+        ipAddress: null, // In a real app, this would come from the request
+        userAgent: null, // In a real app, this would come from the request
+        location: null, // In a real app, this would be determined from IP
+      });
+      
       logger.info(`Password changed for user ${user.username}`);
       
       return true;
     } catch (error) {
       logger.error(`Change password failed: ${error.message}`);
+      throw error;
+    }
+  }
+  
+  /**
+   * Update user profile
+   * @param {number} userId - User ID
+   * @param {Object} profileData - Profile data to update
+   * @param {string} [profileData.fullName] - User's full name
+   * @param {string} [profileData.email] - User's email
+   * @param {string} [profileData.profileImage] - User's profile image path
+   * @returns {Object} Updated user data
+   */
+  async updateProfile(userId, profileData) {
+    try {
+      const user = await User.findByPk(userId);
+      
+      if (!user) {
+        throw new Error('User not found');
+      }
+      
+      // Update allowed fields
+      const allowedFields = ['fullName', 'email', 'profileImage'];
+      let updated = false;
+      
+      for (const field of allowedFields) {
+        if (profileData[field] !== undefined && user[field] !== profileData[field]) {
+          user[field] = profileData[field];
+          updated = true;
+        }
+      }
+      
+      if (updated) {
+        await user.save();
+        
+        // Log profile update activity
+        await userActivityService.logActivity({
+          userId: user.id,
+          type: 'profile',
+          description: 'Updated profile information',
+          ipAddress: null, // In a real app, this would come from the request
+          userAgent: null, // In a real app, this would come from the request
+          location: null, // In a real app, this would be determined from IP
+        });
+        
+        logger.info(`Profile updated for user ${user.username}`);
+      }
+      
+      // Return user data without password
+      const userData = user.toJSON();
+      delete userData.password;
+      
+      return userData;
+    } catch (error) {
+      logger.error(`Update profile failed: ${error.message}`);
       throw error;
     }
   }

@@ -72,9 +72,20 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  function logout() {
-    authService.logout();
-    user.value = null;
+  async function logout() {
+    try {
+      loading.value = true;
+      error.value = null;
+      await authService.logout();
+      user.value = null;
+    } catch (err) {
+      error.value = err.response?.data?.message || err.message;
+      console.error('Error during logout:', err);
+      // Still clear user data even if server request fails
+      user.value = null;
+    } finally {
+      loading.value = false;
+    }
   }
 
   async function updateProfile() {

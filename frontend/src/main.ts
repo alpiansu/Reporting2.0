@@ -10,6 +10,8 @@ import PrimeVue from 'primevue/config'
 import Lara from '@primeuix/themes/lara'
 // Tetap mengimpor primeicons
 import 'primeicons/primeicons.css'
+// Import PrimeVue ToastService
+import ToastService from 'primevue/toastservice'
 
 // Import transitions
 import TransitionComponents from './components/transitions'
@@ -30,6 +32,8 @@ app.use(PrimeVue, {
     }
   }
 })
+// Use PrimeVue ToastService
+app.use(ToastService)
 
 // Use transition components
 app.use(TransitionComponents)

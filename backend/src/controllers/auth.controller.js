@@ -1,4 +1,4 @@
-const { authService } = require("../services");
+const { authService, userActivityService } = require("../services");
 const logger = require("../config/logger");
 
 /**
@@ -21,6 +21,19 @@ class AuthController {
 
       const result = await authService.login(username, password);
 
+      // Get IP and user agent from request for activity logging
+      const ipAddress = req.ip || req.connection.remoteAddress;
+      const userAgent = req.headers['user-agent'];
+      
+      // Log login activity with request details
+      await userActivityService.logActivity({
+        userId: result.user.id,
+        type: 'login',
+        description: 'User logged in',
+        ipAddress,
+        userAgent,
+      });
+      
       res.status(200).json(result);
     } catch (error) {
       if (error.message === "User not found") {
@@ -58,6 +71,19 @@ class AuthController {
 
       const result = await authService.register(userData);
 
+      // Get IP and user agent from request for activity logging
+      const ipAddress = req.ip || req.connection.remoteAddress;
+      const userAgent = req.headers['user-agent'];
+      
+      // Log registration activity with request details
+      await userActivityService.logActivity({
+        userId: result.user.id,
+        type: 'register',
+        description: 'User registered',
+        ipAddress,
+        userAgent,
+      });
+      
       res.status(201).json(result);
     } catch (error) {
       // Handle duplicate username/email
@@ -98,7 +124,9 @@ class AuthController {
   async changePassword(req, res, next) {
     try {
       const userId = req.user.id;
-      const { currentPassword, newPassword } = req.body;
+      // Pastikan req.body ada dan bertipe object
+      const body = req.body || {};
+      const { currentPassword, newPassword } = body;
 
       if (!currentPassword || !newPassword) {
         return res.status(400).json({ message: "Current password and new password are required" });
@@ -110,11 +138,73 @@ class AuthController {
 
       await authService.changePassword(userId, currentPassword, newPassword);
 
+      // Get IP and user agent from request for activity logging
+      const ipAddress = req.ip || req.connection.remoteAddress;
+      const userAgent = req.headers['user-agent'];
+      
+      // Log password change activity with request details
+      await userActivityService.logActivity({
+        userId: userId,
+        type: 'password',
+        description: 'User changed password',
+        ipAddress,
+        userAgent,
+      });
+      
       res.status(200).json({ message: "Password changed successfully" });
     } catch (error) {
       if (error.message === "Current password is incorrect") {
         return res.status(400).json({ message: error.message });
       }
+      next(error);
+    }
+  }
+  
+  /**
+   * Update user profile
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @param {Function} next - Express next middleware function
+   */
+  async updateProfile(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const { fullName, email } = req.body;
+      
+      // Create profile data object with only allowed fields
+      const profileData = {};
+      
+      if (fullName !== undefined) profileData.fullName = fullName;
+      if (email !== undefined) profileData.email = email;
+      
+      // If profile image was uploaded and saved, it will be in req.body.profileImage
+      if (req.body.profileImage !== undefined) {
+        profileData.profileImage = req.body.profileImage;
+      }
+      
+      const updatedUser = await authService.updateProfile(userId, profileData);
+      
+      // Get IP and user agent from request for activity logging
+      const ipAddress = req.ip || req.connection.remoteAddress;
+      const userAgent = req.headers['user-agent'];
+      
+      // Log profile update activity with request details
+      await userActivityService.logActivity({
+        userId: userId,
+        type: 'profile',
+        description: 'User updated profile',
+        ipAddress,
+        userAgent,
+      });
+      
+      res.status(200).json(updatedUser);
+    } catch (error) {
+      logger.error(`Update profile error: ${error.message}`);
+      
+      if (error.name === "SequelizeUniqueConstraintError") {
+        return res.status(409).json({ message: "Email already in use" });
+      }
+      
       next(error);
     }
   }
@@ -132,6 +222,34 @@ class AuthController {
     const token = require("../config/jwt").generateToken(user);
 
     res.status(200).json({ token });
+  }
+
+  /**
+   * Logout user
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @param {Function} next - Express next middleware function
+   */
+  async logout(req, res, next) {
+    try {
+      const userId = req.user?.id;
+      
+      // Get IP and user agent from request for activity logging
+      const ipAddress = req.ip || req.connection.remoteAddress;
+      const userAgent = req.headers['user-agent'];
+      
+      // Log logout activity
+      if (userId) {
+        await authService.logout(userId, { ipAddress, userAgent });
+      }
+      
+      // In a stateless JWT auth system, logout is handled client-side
+      // by removing the token from storage
+      res.status(200).json({ message: "Logged out successfully" });
+    } catch (error) {
+      logger.error(`Logout error: ${error.message}`);
+      next(error);
+    }
   }
 }
 

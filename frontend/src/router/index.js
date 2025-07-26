@@ -70,6 +70,7 @@ const routes = [
         component: () => import('../views/profile/Profile.vue'),
         meta: { requiresAuth: true, title: 'Profile' }
       },
+
     ]
   },
   {

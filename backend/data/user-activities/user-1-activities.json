@@ -1,0 +1,24 @@
+[
+  {
+    "id": 1,
+    "userId": 1,
+    "type": "login",
+    "description": "Logged in to the system",
+    "ipAddress": null,
+    "userAgent": null,
+    "location": null,
+    "metadata": null,
+    "createdAt": "2025-07-25T10:27:06.146Z"
+  },
+  {
+    "id": 2,
+    "userId": 1,
+    "type": "login",
+    "description": "User logged in",
+    "ipAddress": "::1",
+    "userAgent": "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Mobile Safari/537.36",
+    "location": null,
+    "metadata": null,
+    "createdAt": "2025-07-25T10:27:06.158Z"
+  }
+]

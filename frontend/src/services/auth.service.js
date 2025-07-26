@@ -44,11 +44,21 @@ const authService = {
 
   /**
    * Logout user
+   * @returns {Promise} - Response with success message
    */
-  logout: () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
+  logout: async () => {
+    try {
+      // Call the logout endpoint to log the activity on the server
+      await api.post('/auth/logout');
+    } catch (error) {
+      console.error('Error logging logout on server:', error);
+      // Continue with client-side logout even if server request fails
+    } finally {
+      // Always clear local storage
+      localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+    }
   },
 
   /**
@@ -68,7 +78,16 @@ const authService = {
    * @returns {Promise} - Response with success message
    */
   changePassword: async (passwordData) => {
-    const response = await api.put('/auth/change-password', passwordData);
+    // Ensure we're sending the correct payload format
+    const payload = {
+      currentPassword: passwordData.currentPassword,
+      newPassword: passwordData.newPassword
+    };
+    
+    // Log payload for debugging (remove in production)
+    console.log('Auth service sending password change payload:', payload);
+    
+    const response = await api.put('/auth/change-password', payload);
     return response.data;
   },
 
@@ -104,6 +123,40 @@ const authService = {
   getCurrentUser: () => {
     const userStr = localStorage.getItem('user');
     return userStr ? JSON.parse(userStr) : null;
+  },
+  
+  /**
+   * Update user profile
+   * @param {Object} profileData - Profile data to update
+   * @returns {Promise} - Response with updated user data
+   */
+  updateProfile: async (profileData) => {
+    const response = await api.put('/auth/profile', profileData);
+    // Update local storage with new user data
+    localStorage.setItem('user', JSON.stringify(response.data));
+    return response.data;
+  },
+  
+  /**
+   * Upload profile image
+   * @param {Object} imageData - Image data
+   * @param {string} imageData.image - Base64 encoded image
+   * @param {string} imageData.mimetype - Image MIME type
+   * @param {string} imageData.filename - Original filename
+   * @returns {Promise} - Response with image path
+   */
+  uploadProfileImage: async (imageData) => {
+    const response = await api.post('/upload/profile-image', imageData);
+    return response.data;
+  },
+  
+  /**
+   * Delete profile image
+   * @returns {Promise} - Response with success message
+   */
+  deleteProfileImage: async () => {
+    const response = await api.delete('/upload/profile-image');
+    return response.data;
   },
 };
 

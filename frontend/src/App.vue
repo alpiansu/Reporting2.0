@@ -6,12 +6,16 @@
     <page-transition name="page" mode="out-in">
       <router-view />
     </page-transition>
+    
+    <!-- Global Toast component -->
+    <Toast position="bottom-right" />
   </div>
 </template>
 
 <script setup>
 import { onMounted } from 'vue';
 import { useAuthStore } from './stores';
+import Toast from 'primevue/toast';
 
 // Import animations
 import './assets/styles/animations.css';

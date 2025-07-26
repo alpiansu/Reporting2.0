@@ -15,7 +15,7 @@
         <button 
           class="submit-button" 
           @click="submit"
-          :disabled="loading"
+          :disabled="loading || disableSubmit"
         >
           <i v-if="loading" class="pi pi-spinner pi-spin"></i>
           <span>{{ submitText }}</span>
@@ -50,6 +50,10 @@ const props = defineProps({
     default: true
   },
   loading: {
+    type: Boolean,
+    default: false
+  },
+  disableSubmit: {
     type: Boolean,
     default: false
   }

@@ -58,12 +58,6 @@
     <div class="main-container">
       <!-- Sidebar -->
       <aside class="sidebar" :class="{ 'sidebar-open': drawerOpen, 'sidebar-mobile-open': mobileOpen }">
-        <div class="sidebar-header">
-          <button class="toggle-button" @click="handleDrawerClose">
-            <i :class="`pi ${drawerOpen ? 'pi-chevron-left' : 'pi-chevron-right'}`"></i>
-          </button>
-        </div>
-        <div class="sidebar-divider" v-if="drawerOpen"></div>
         <nav class="sidebar-nav">
           <router-link 
             v-for="item in menuItems" 
@@ -77,6 +71,12 @@
             <span v-if="drawerOpen">{{ item.text }}</span>
           </router-link>
         </nav>
+        <div class="sidebar-footer">
+          <div class="sidebar-divider" v-if="drawerOpen"></div>
+          <button class="toggle-button" @click="handleDrawerClose">
+            <i :class="`pi ${drawerOpen ? 'pi-chevron-left' : 'pi-chevron-right'}`"></i>
+          </button>
+        </div>
       </aside>
 
       <!-- Main Content -->
@@ -103,9 +103,14 @@
     title="Change Password"
     submit-text="Update Password"
     :loading="passwordLoading"
-    @submit="submitChangePassword"
+    :disable-submit="formHasErrors"
+    @submit="handleDialogSubmit"
   >
-    <change-password-form ref="passwordFormRef" @submit="submitChangePassword" />
+    <change-password-form 
+      ref="passwordFormRef" 
+      @submit="submitChangePassword" 
+      @validation-error="handleValidationError" 
+    />
   </form-dialog>
 </template>
 
@@ -113,9 +118,12 @@
 import { ref, computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '../stores';
+import { useToastService } from '../utils/toast';
 import ConfirmDialog from '../components/common/ConfirmDialog.vue';
 import FormDialog from '../components/common/FormDialog.vue';
 import ChangePasswordForm from '../components/auth/ChangePasswordForm.vue';
+
+const toast = useToastService();
 
 const router = useRouter();
 const route = useRoute();
@@ -138,7 +146,7 @@ const toggleMobileDrawer = () => {
 };
 
 const handleDrawerClose = () => {
-  drawerOpen.value = !drawerOpen.value; // Toggle instead of just closing
+  drawerOpen.value = !drawerOpen.value; // Toggle sidebar state
 };
 
 const toggleUserMenu = () => {
@@ -163,15 +171,23 @@ const confirmLogout = () => {
 };
 
 // Handle actual logout
-const handleLogout = () => {
-  authStore.logout();
-  router.push('/login');
+const handleLogout = async () => {
+  try {
+    await authStore.logout();
+    router.push('/login');
+    toast.showSuccess('Success', 'Logged out successfully');
+  } catch (error) {
+    console.error('Logout error:', error);
+    // Still redirect to login page even if there was an error
+    router.push('/login');
+  }
 };
 
 // Change password dialog
 const showChangePasswordDialog = ref(false);
 const passwordLoading = ref(false);
 const passwordFormRef = ref(null);
+const formHasErrors = ref(true); // Default to true to disable submit button initially
 
 const openChangePasswordDialog = () => {
   userMenuOpen.value = false;
@@ -180,19 +196,104 @@ const openChangePasswordDialog = () => {
   if (passwordFormRef.value) {
     passwordFormRef.value.resetForm();
   }
+  
+  // Reset form errors state
+  formHasErrors.value = true;
+  
+  // Wait for component to mount and then check errors
+  setTimeout(() => {
+    if (passwordFormRef.value) {
+      formHasErrors.value = passwordFormRef.value.hasErrors();
+    }
+  }, 100);
+};
+
+// Handle form dialog submit button click
+const handleDialogSubmit = () => {
+  // Set loading state
+  passwordLoading.value = true;
+  
+  // Manually trigger the form's submit event
+  const formElement = passwordFormRef.value?.$el;
+  if (formElement && formElement.tagName === 'FORM') {
+    // Simulate form submission by creating and dispatching a submit event
+    const submitEvent = new Event('submit', { cancelable: true });
+    formElement.dispatchEvent(submitEvent);
+  } else {
+    // If form ref is not available, reset loading state
+    passwordLoading.value = false;
+    toast.showError('Error', 'Form not available');
+  }
+};
+
+// Handle validation errors from the form
+const handleValidationError = (errors) => {
+  // Extract all error messages from the errors object
+  const errorMessages = Object.values(errors).filter(msg => msg);
+  
+  // Update form errors state based on validation
+  formHasErrors.value = errorMessages.length > 0;
+  
+  // If we're in loading state (form was submitted) and there are errors,
+  // reset loading state without showing toast
+  if (errorMessages.length > 0 && passwordLoading.value) {
+    passwordLoading.value = false;
+  }
 };
 
 const submitChangePassword = async (passwordData) => {
   try {
     passwordLoading.value = true;
-    await authStore.changePassword(passwordData);
+    
+    // Ensure we're sending the correct payload format
+    const payload = {
+      currentPassword: passwordData.currentPassword,
+      newPassword: passwordData.newPassword
+    };
+    
+    // Call the authStore changePassword method
+    await authStore.changePassword(payload);
+    
+    // Close the dialog and reset form
     showChangePasswordDialog.value = false;
-    // Show success message or notification here
-    alert('Password changed successfully');
+    if (passwordFormRef.value) {
+      passwordFormRef.value.resetForm();
+    }
+    
+    // Reset form errors state
+    formHasErrors.value = true; // Reset to true for next time dialog opens
+    
+    // Show success message with toast
+    toast.showSuccess('Success', 'Password changed successfully');
   } catch (error) {
-    // Handle error
+    // Handle error from backend
     console.error('Failed to change password:', error);
-    alert(error.response?.data?.message || 'Failed to change password');
+    
+    // Check if we have field-specific validation errors from backend
+    const backendErrors = error.response?.data?.errors;
+    if (backendErrors && typeof backendErrors === 'object' && passwordFormRef.value) {
+      // Map backend errors to form fields
+      const formErrors = {};
+      
+      if (backendErrors.currentPassword) {
+        formErrors.currentPassword = backendErrors.currentPassword;
+      }
+      
+      if (backendErrors.newPassword) {
+        formErrors.newPassword = backendErrors.newPassword;
+      }
+      
+      // If we have field-specific errors, update the form
+      if (Object.keys(formErrors).length > 0) {
+        passwordFormRef.value.setErrors(formErrors);
+      } else {
+        // If no field-specific errors, show generic error with toast
+        toast.showError('Error', error.response?.data?.message || 'Failed to change password');
+      }
+    } else {
+      // If no structured error data, show generic error with toast
+      toast.showError('Error', error.response?.data?.message || 'Failed to change password');
+    }
   } finally {
     passwordLoading.value = false;
   }
@@ -209,410 +310,5 @@ const isActive = (path) => {
 </script>
 
 <style scoped>
-.main-layout {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  width: 100vw;
-  overflow: hidden;
-}
-
-.app-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  height: 64px;
-  padding: 0 16px;
-  background-color: #fff;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  position: relative;
-  z-index: 10;
-}
-
-.app-bar-left, .app-bar-right {
-  display: flex;
-  align-items: center;
-}
-
-.menu-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  margin-right: 16px;
-}
-
-.menu-button:hover {
-  background-color: rgba(0, 0, 0, 0.04);
-}
-
-.logo {
-  display: flex;
-  align-items: center;
-}
-
-.logo-image {
-  height: 32px;
-  margin-right: 12px;
-}
-
-.app-title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  margin: 0;
-  background: linear-gradient(90deg, var(--primary-color), var(--primary-color-lighten));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.notification-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  margin-right: 16px;
-}
-
-.notification-button:hover {
-  background-color: rgba(0, 0, 0, 0.04);
-}
-
-.user-menu {
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  padding: 8px;
-  border-radius: 24px;
-}
-
-.user-menu:hover {
-  background-color: rgba(0, 0, 0, 0.04);
-}
-
-.avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background-color: var(--primary-color);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  margin-right: 8px;
-}
-
-.username {
-  margin-right: 8px;
-  font-weight: 500;
-}
-
-.dropdown {
-  position: absolute;
-  top: 64px;
-  right: 16px;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  min-width: 200px;
-  z-index: 100;
-}
-
-.dropdown-item {
-  display: flex;
-  align-items: center;
-  padding: 12px 16px;
-  cursor: pointer;
-}
-
-.dropdown-item:hover {
-  background-color: rgba(0, 0, 0, 0.04);
-}
-
-.dropdown-item i {
-  margin-right: 12px;
-  color: var(--text-color-secondary);
-}
-
-.dropdown-divider {
-  height: 1px;
-  background-color: rgba(0, 0, 0, 0.08);
-  margin: 8px 0;
-}
-
-.dropdown-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  font-weight: 600;
-}
-
-.clear-all {
-  background: none;
-  border: none;
-  color: var(--primary-color);
-  cursor: pointer;
-  font-size: 0.875rem;
-}
-
-.empty-notifications {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 24px 16px;
-  color: var(--text-color-secondary);
-}
-
-.empty-notifications i {
-  font-size: 24px;
-  margin-bottom: 8px;
-}
-
-.main-container {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-}
-
-.sidebar {
-  width: 260px;
-  background-color: white;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
-  display: flex;
-  flex-direction: column;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  z-index: 5;
-  overflow: hidden;
-}
-
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding: 16px;
-  height: 64px;
-}
-
-.toggle-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  transition: transform 0.3s ease;
-}
-
-.toggle-button:hover {
-  background-color: rgba(0, 0, 0, 0.04);
-}
-
-.sidebar-user {
-  display: flex;
-  align-items: center;
-  padding: 16px;
-  background-color: rgba(0, 0, 0, 0.02);
-  border-radius: 8px;
-  margin: 0 16px;
-}
-
-.user-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.user-name {
-  font-weight: 600;
-  line-height: 1.2;
-}
-
-.user-role {
-  font-size: 0.75rem;
-  color: var(--text-color-secondary);
-}
-
-.sidebar-divider {
-  height: 1px;
-  background-color: rgba(0, 0, 0, 0.08);
-  margin: 16px;
-}
-
-.sidebar-nav {
-  display: flex;
-  flex-direction: column;
-  padding: 8px;
-  flex: 1;
-  overflow-y: auto;
-}
-
-.nav-item {
-  display: flex;
-  align-items: center;
-  padding: 12px 16px;
-  border-radius: 8px;
-  margin-bottom: 4px;
-  text-decoration: none;
-  color: var(--text-color);
-  font-weight: 500;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-  overflow: hidden;
-  position: relative;
-}
-
-.nav-item:hover {
-  background-color: rgba(0, 0, 0, 0.04);
-}
-
-.nav-item.active {
-  background-color: rgba(var(--primary-color-rgb), 0.08);
-  color: var(--primary-color);
-}
-
-.nav-item.active:hover {
-  background-color: rgba(var(--primary-color-rgb), 0.12);
-}
-
-.nav-item i {
-  margin-right: 16px;
-  font-size: 1.25rem;
-  min-width: 20px;
-  text-align: center;
-  transition: all 0.3s ease;
-}
-
-.nav-item span {
-  transition: opacity 0.3s ease, transform 0.3s ease;
-  display: inline-block;
-}
-
-.main-content {
-  flex: 1;
-  padding: 24px;
-  overflow-y: auto;
-  background-color: #f5f5f5;
-}
-
-/* Mobile Overlay */
-.mobile-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  z-index: 4;
-}
-
-/* Mobile Responsive */
-@media (max-width: 768px) {
-  .sidebar {
-    position: fixed;
-    top: 64px;
-    left: 0;
-    height: calc(100vh - 64px);
-    transform: translateX(-100%);
-    width: 260px !important;
-    z-index: 10;
-  }
-
-  .sidebar-mobile-open {
-    transform: translateX(0);
-  }
-  
-  .app-bar {
-    padding: 0 8px;
-    z-index: 5;
-  }
-  
-  .main-content {
-    padding: 16px;
-  }
-}
-
-/* Small screens */
-@media (max-width: 480px) {
-  .app-title {
-    font-size: 1rem;
-  }
-  
-  .logo-image {
-    height: 24px;
-  }
-  
-  .username {
-    display: none;
-  }
-  
-  .main-content {
-    padding: 12px;
-  }
-  
-  .sidebar {
-    width: 240px !important;
-  }
-  
-  .nav-item {
-    padding: 10px 12px;
-  }
-  
-  .nav-item i {
-    font-size: 1.1rem;
-  }
-}
-
-/* Desktop Responsive */
-@media (min-width: 769px) {
-  .menu-button {
-    display: none;
-  }
-
-  .sidebar {
-    position: relative;
-    transform: none !important;
-    transition: width 0.3s ease;
-  }
-
-  .sidebar.sidebar-open {
-    width: 260px;
-  }
-  
-  .sidebar:not(.sidebar-open) {
-    width: 64px;
-  }
-
-  .sidebar:not(.sidebar-open) .nav-item {
-    justify-content: center;
-    padding: 12px;
-  }
-
-  .sidebar:not(.sidebar-open) .nav-item i {
-    margin-right: 0;
-    font-size: 1.5rem;
-    transform: scale(1.1);
-  }
-  
-  .sidebar:not(.sidebar-open) .toggle-button {
-    transform: rotate(180deg);
-  }
-  
-  .sidebar:not(.sidebar-open) .nav-item span {
-    opacity: 0;
-    transform: translateX(-10px);
-  }
-}
+@import './MainLayout.style.css';
 </style>

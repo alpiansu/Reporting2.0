@@ -5,13 +5,20 @@ const Screening = require('./screening.model');
 
 // Define relationships between models
 
+// Store - User relationship
+Store.belongsTo(User, { foreignKey: 'managerId', as: 'manager' });
+User.hasMany(Store, { foreignKey: 'managerId', as: 'managedStores' });
+
+// Screening relationships
+Screening.belongsTo(Store, { foreignKey: 'storeId', as: 'store' });
+Store.hasMany(Screening, { foreignKey: 'storeId', as: 'screenings' });
+
+Screening.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
+User.hasMany(Screening, { foreignKey: 'createdBy', as: 'createdScreenings' });
+
 // User - Screening relationship
 User.hasMany(Screening, { foreignKey: 'userId', as: 'screenings' });
 Screening.belongsTo(User, { foreignKey: 'userId', as: 'user' });
-
-// Store - Screening relationship
-Store.hasMany(Screening, { foreignKey: 'storeId', as: 'screenings' });
-Screening.belongsTo(Store, { foreignKey: 'storeId', as: 'store' });
 
 // Export models
 module.exports = {

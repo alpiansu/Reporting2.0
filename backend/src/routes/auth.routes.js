@@ -126,10 +126,24 @@ router.get("/profile", authenticateJWT, authController.getProfile);
 router.put("/change-password", authenticateJWT, authController.changePassword);
 
 /**
+ * @route PUT /api/auth/profile
+ * @desc Update user profile
+ * @access Private
+ */
+router.put("/profile", authenticateJWT, authController.updateProfile);
+
+/**
  * @route POST /api/auth/refresh-token
  * @desc Refresh JWT token
  * @access Private
  */
 router.post("/refresh-token", authenticateJWT, authController.refreshToken);
+
+/**
+ * @route POST /api/auth/logout
+ * @desc Logout user and log activity
+ * @access Private
+ */
+router.post("/logout", authenticateJWT, authController.logout);
 
 module.exports = router;

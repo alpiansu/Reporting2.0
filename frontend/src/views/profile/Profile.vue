@@ -17,6 +17,7 @@
           <div class="profile-info">
             <h2 class="profile-name">{{ user.fullName }}</h2>
             <p class="profile-role">{{ user.role }}</p>
+            <p class="profile-email">{{ user.email }}</p>
           </div>
           <button class="edit-profile-button" @click="openEditProfileDialog">
             <i class="pi pi-pencil"></i>
@@ -34,18 +35,6 @@
             <span class="detail-value">{{ user.email }}</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">Phone</span>
-            <span class="detail-value">{{ user.phone || 'Not provided' }}</span>
-          </div>
-          <div class="detail-item">
-            <span class="detail-label">Department</span>
-            <span class="detail-value">{{ user.department || 'Not provided' }}</span>
-          </div>
-          <div class="detail-item">
-            <span class="detail-label">Location</span>
-            <span class="detail-value">{{ user.location || 'Not provided' }}</span>
-          </div>
-          <div class="detail-item">
             <span class="detail-label">Member Since</span>
             <span class="detail-value">{{ formatDate(user.createdAt) }}</span>
           </div>
@@ -59,91 +48,12 @@
     </div>
     
     <!-- Edit Profile Dialog -->
-    <div v-if="showEditProfileDialog" class="dialog-overlay" @click="closeEditProfileDialog">
-      <div class="dialog-content" @click.stop>
-        <div class="dialog-header">
-          <h2>Edit Profile</h2>
-          <button class="close-button" @click="closeEditProfileDialog">
-            <i class="pi pi-times"></i>
-          </button>
-        </div>
-        <div class="dialog-body">
-          <form @submit.prevent="updateProfile" class="profile-form">
-            <div class="avatar-upload">
-              <div class="current-avatar">
-                <span v-if="!profileForm.profileImage && !avatarPreview">{{ getInitials(profileForm.fullName) }}</span>
-                <img v-else-if="avatarPreview" :src="avatarPreview" alt="Avatar preview" />
-                <img v-else :src="getProfileImageUrl(profileForm.profileImage)" alt="Current avatar" />
-              </div>
-              <div class="avatar-actions">
-                <label for="avatar-upload" class="upload-button">
-                  <i class="pi pi-upload"></i>
-                  Upload Photo
-                </label>
-                <input 
-                  type="file" 
-                  id="avatar-upload" 
-                  accept="image/*"
-                  @change="handleAvatarUpload"
-                  style="display: none;"
-                />
-                <button 
-                  v-if="profileForm.profileImage || avatarPreview" 
-                  type="button" 
-                  class="remove-button"
-                  @click="removeAvatar"
-                >
-                  <i class="pi pi-trash"></i>
-                  Remove
-                </button>
-              </div>
-            </div>
-            
-            <div class="form-row">
-              <div class="form-group">
-                <label for="fullName">Full Name</label>
-                <input type="text" id="fullName" v-model="profileForm.fullName" required />
-              </div>
-              <div class="form-group">
-                <label for="username">Username</label>
-                <input type="text" id="username" v-model="profileForm.username" required disabled />
-                <span class="field-hint">Username cannot be changed</span>
-              </div>
-            </div>
-            
-            <div class="form-row">
-              <div class="form-group">
-                <label for="email">Email</label>
-                <input type="email" id="email" v-model="profileForm.email" required />
-              </div>
-              <div class="form-group">
-                <label for="phone">Phone</label>
-                <input type="tel" id="phone" v-model="profileForm.phone" />
-              </div>
-            </div>
-            
-            <div class="form-row">
-              <div class="form-group">
-                <label for="department">Department</label>
-                <input type="text" id="department" v-model="profileForm.department" />
-              </div>
-              <div class="form-group">
-                <label for="location">Location</label>
-                <input type="text" id="location" v-model="profileForm.location" />
-              </div>
-            </div>
-            
-            <div class="form-actions">
-              <button type="button" class="cancel-button" @click="closeEditProfileDialog">Cancel</button>
-              <button type="submit" class="submit-button" :disabled="isSubmitting">
-                <span v-if="!isSubmitting">Save Changes</span>
-                <i v-else class="pi pi-spin pi-spinner"></i>
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
+    <EditProfileDialog
+      v-model="showEditProfileDialog"
+      :user-data="user"
+      @profile-updated="handleProfileUpdated"
+      @error="showError"
+    />
     
     <!-- Two-Factor Setup Dialog -->
     <div v-if="showTwoFactorDialog" class="dialog-overlay" @click="closeTwoFactorDialog">
@@ -236,9 +146,10 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import UserActivityList from '@/components/user/UserActivityList.vue';
+import EditProfileDialog from '@/components/user/EditProfileDialog.vue';
 import authService from '@/services/auth.service';
 
 const authStore = useAuthStore();
@@ -256,25 +167,16 @@ const user = ref({
   createdAt: ''
 });
 
+// Activity state for local demo purposes
+const recentActivity = ref([]);
 
 const twoFactorEnabled = ref(false);
 const backupCodes = ref([]);
 
-// Form state
+// Dialog state
 const showEditProfileDialog = ref(false);
 const showTwoFactorDialog = ref(false);
 const isSubmitting = ref(false);
-const avatarPreview = ref(null);
-
-const profileForm = reactive({
-  fullName: '',
-  username: '',
-  email: '',
-  phone: '',
-  department: '',
-  location: '',
-  avatar: null
-});
 
 const passwordForm = reactive({
   currentPassword: '',
@@ -288,9 +190,6 @@ const errors = reactive({
   confirmPassword: ''
 });
 
-const showCurrentPassword = ref(false);
-const showNewPassword = ref(false);
-const showConfirmPassword = ref(false);
 const verificationCode = ref('');
 
 // Toast state
@@ -306,16 +205,7 @@ onMounted(async () => {
     const userData = await authService.getProfile();
     user.value = userData;
     
-    // Initialize profile form with user data
-    Object.assign(profileForm, {
-      fullName: user.value.fullName,
-      username: user.value.username,
-      email: user.value.email,
-      phone: user.value.phone || '',
-      department: user.value.department || '',
-      location: user.value.location || '',
-      profileImage: user.value.profileImage
-    });
+    // User data is now handled by EditProfileDialog component
     
     // Generate mock backup codes
     generateBackupCodes();
@@ -356,23 +246,18 @@ const formatDate = (dateString) => {
 
 
 const openEditProfileDialog = () => {
-  // Reset the form with current user data
-  Object.assign(profileForm, {
-    fullName: user.value.fullName,
-    username: user.value.username,
-    email: user.value.email,
-    phone: user.value.phone,
-    department: user.value.department,
-    location: user.value.location,
-    avatar: user.value.avatar
-  });
-  
-  avatarPreview.value = null;
   showEditProfileDialog.value = true;
 };
 
-const closeEditProfileDialog = () => {
-  showEditProfileDialog.value = false;
+// Handle profile updated event from EditProfileDialog component
+const handleProfileUpdated = (updatedUser) => {
+  // Update user in store
+  user.value = updatedUser;
+  showSuccess('Profile updated successfully');
+  
+  // Refresh activities using the UserActivityList component
+  // We don't need to call fetchUserActivities() directly as it doesn't exist
+  // The UserActivityList component will handle fetching activities
 };
 
 const getProfileImageUrl = (imagePath) => {
@@ -381,103 +266,6 @@ const getProfileImageUrl = (imagePath) => {
   if (imagePath.startsWith('http')) return imagePath;
   // Otherwise, construct the URL based on your API's image serving endpoint
   return `${import.meta.env.VITE_API_URL || ''}${imagePath}`;
-};
-
-const handleAvatarUpload = async (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
-  
-  // Validate file type
-  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
-  if (!allowedTypes.includes(file.type)) {
-    showError('Please upload a valid image file (JPEG, PNG, or GIF)');
-    return;
-  }
-  
-  // Validate file size (5MB max)
-  const maxSize = 5 * 1024 * 1024; // 5MB in bytes
-  if (file.size > maxSize) {
-    showError('Image size should not exceed 5MB');
-    return;
-  }
-  
-  // Create a preview URL for immediate display
-  avatarPreview.value = URL.createObjectURL(file);
-  
-  // Store the file for later upload when the form is submitted
-  uploadedAvatar.value = file;
-};
-
-const removeAvatar = () => {
-  avatarPreview.value = null;
-  uploadedAvatar.value = null;
-  profileForm.profileImage = null;
-  
-  // Clear the file input
-  const fileInput = document.getElementById('avatar-upload');
-  if (fileInput) fileInput.value = '';
-};
-
-const updateProfile = async () => {
-  isSubmitting.value = true;
-  
-  try {
-    let profileImagePath = profileForm.profileImage;
-    
-    // If a new avatar was uploaded, process it first
-    if (uploadedAvatar.value) {
-      // Convert the file to base64
-      const reader = new FileReader();
-      const filePromise = new Promise((resolve) => {
-        reader.onload = (e) => resolve(e.target.result);
-        reader.readAsDataURL(uploadedAvatar.value);
-      });
-      
-      const base64Image = await filePromise;
-      
-      // Extract the base64 data (remove the data:image/xxx;base64, prefix)
-      const base64Data = base64Image.split(',')[1];
-      
-      // Upload the image
-      const imageData = {
-        image: base64Data,
-        mimetype: uploadedAvatar.value.type,
-        filename: uploadedAvatar.value.name
-      };
-      
-      const uploadResult = await authService.uploadProfileImage(imageData);
-      profileImagePath = uploadResult.imagePath;
-    } else if (profileForm.profileImage === null && user.value.profileImage) {
-      // If the profile image was removed, delete it from the server
-      await authService.deleteProfileImage();
-      profileImagePath = null;
-    }
-    
-    // Update the profile with all data including the new image path
-    const updatedProfile = await authService.updateProfile({
-      fullName: profileForm.fullName,
-      email: profileForm.email,
-      phone: profileForm.phone,
-      department: profileForm.department,
-      location: profileForm.location,
-      profileImage: profileImagePath
-    });
-    
-    // Update local user data
-    user.value = updatedProfile;
-    
-    closeEditProfileDialog();
-    showSuccess('Profile updated successfully');
-    
-    // Reset preview and uploaded avatar
-    avatarPreview.value = null;
-    uploadedAvatar.value = null;
-  } catch (error) {
-    console.error('Error updating profile:', error);
-    showError(error.response?.data?.message || 'Failed to update profile');
-  } finally {
-    isSubmitting.value = false;
-  }
 };
 
 const validatePasswordForm = () => {

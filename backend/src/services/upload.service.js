@@ -92,12 +92,19 @@ class UploadService {
       }
       
       // Save file
-      // Remove 'data:image/jpeg;base64,' part if present
+      // Extract base64 data from the full data URI
       let base64Data = fileData.data;
-      if (base64Data.includes(',')) {
+      
+      // Jika data dimulai dengan 'data:' (data URI scheme), ekstrak bagian base64-nya
+      if (base64Data.startsWith('data:')) {
+        // Format: data:[<mediatype>][;base64],<data>
         base64Data = base64Data.split(',')[1];
+        console.log('Extracted base64 data from data URI');
+      } else {
+        console.log('Data is already in base64 format');
       }
       
+      console.log('Writing file to:', filePath);
       await this.writeFileAsync(filePath, Buffer.from(base64Data, 'base64'));
       
       // Return public URL path

@@ -13,6 +13,7 @@
       <div class="dialog-footer" v-if="showFooter">
         <button class="cancel-button" @click="closeDialog">{{ cancelText }}</button>
         <button 
+          type="button"
           class="submit-button" 
           @click="submit"
           :disabled="loading || disableSubmit"
@@ -66,6 +67,7 @@ const closeDialog = () => {
 };
 
 const submit = () => {
+  console.log('FormDialog: submit button clicked');
   emit('submit');
 };
 </script>

@@ -25,6 +25,10 @@ class UploadController {
         originalname: req.body.filename || 'profile.jpg'
       };
       
+      // Log untuk debugging
+      console.log('Received image data type:', typeof req.body.image);
+      console.log('Image data starts with:', req.body.image.substring(0, 50) + '...');
+      
       const imagePath = await uploadService.saveProfileImage(userId, fileData);
       
       res.status(200).json({ imagePath });

@@ -1,12 +1,12 @@
 <template>
   <div class="profile-page">
     <!-- Custom page title with no app name -->
-    <page-title title="My Profile" :include-app-name="false" />
-    
+    <page-title title="My Profile" :include-app-name="true" separator=" | " />
+
     <div class="page-header">
       <h1 class="page-title">My Profile</h1>
     </div>
-    
+
     <div class="profile-content">
       <div class="profile-card">
         <div class="profile-header">
@@ -24,7 +24,7 @@
             Edit Profile
           </button>
         </div>
-        
+
         <div class="profile-details">
           <div class="detail-item">
             <span class="detail-label">Username</span>
@@ -40,21 +40,17 @@
           </div>
         </div>
       </div>
-      
+
       <div class="activity-card">
         <h2 class="card-title">Activity Log</h2>
         <user-activity-list />
       </div>
     </div>
-    
+
     <!-- Edit Profile Dialog -->
-    <EditProfileDialog
-      v-model="showEditProfileDialog"
-      :user-data="user"
-      @profile-updated="handleProfileUpdated"
-      @error="showError"
-    />
-    
+    <EditProfileDialog v-model="showEditProfileDialog" :user-data="user" @profile-updated="handleProfileUpdated"
+      @error="showError" />
+
     <!-- Two-Factor Setup Dialog -->
     <div v-if="showTwoFactorDialog" class="dialog-overlay" @click="closeTwoFactorDialog">
       <div class="dialog-content" @click.stop>
@@ -68,52 +64,43 @@
           <div class="two-factor-setup">
             <h3>Scan QR Code</h3>
             <p>Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)</p>
-            
+
             <div class="qr-code">
               <img src="https://placehold.co/200x200/e9ecef/adb5bd?text=QR+Code" alt="Two-factor QR code" />
             </div>
-            
+
             <div class="backup-codes">
               <h3>Backup Codes</h3>
-              <p>Save these backup codes in a secure place. You can use them to sign in if you lose access to your authenticator app.</p>
-              
+              <p>Save these backup codes in a secure place. You can use them to sign in if you lose access to your
+                authenticator app.</p>
+
               <div class="codes-grid">
                 <div v-for="(code, index) in backupCodes" :key="index" class="code-item">
                   {{ code }}
                 </div>
               </div>
-              
+
               <button class="download-codes-button">
                 <i class="pi pi-download"></i>
                 Download Codes
               </button>
             </div>
-            
+
             <div class="verification-section">
               <h3>Verify Setup</h3>
               <p>Enter the 6-digit code from your authenticator app to verify the setup</p>
-              
+
               <div class="verification-form">
                 <div class="form-group">
                   <label for="verificationCode">Verification Code</label>
-                  <input 
-                    type="text" 
-                    id="verificationCode" 
-                    v-model="verificationCode" 
-                    maxlength="6"
-                    placeholder="000000"
-                    required
-                  />
+                  <input type="text" id="verificationCode" v-model="verificationCode" maxlength="6" placeholder="000000"
+                    required />
                 </div>
-                
+
                 <div class="form-actions">
                   <button type="button" class="cancel-button" @click="closeTwoFactorDialog">Cancel</button>
-                  <button 
-                    type="button" 
-                    class="submit-button" 
-                    @click="verifyTwoFactorSetup"
-                    :disabled="verificationCode.length !== 6 || isSubmitting"
-                  >
+                  <button type="button" class="submit-button" @click="verifyTwoFactorSetup"
+                    :disabled="verificationCode.length !== 6 || isSubmitting">
                     <span v-if="!isSubmitting">Verify & Enable</span>
                     <i v-else class="pi pi-spin pi-spinner"></i>
                   </button>
@@ -124,7 +111,7 @@
         </div>
       </div>
     </div>
-    
+
     <!-- Success Toast -->
     <div v-if="showSuccessToast" class="toast success-toast">
       <i class="pi pi-check-circle"></i>
@@ -133,7 +120,7 @@
         <i class="pi pi-times"></i>
       </button>
     </div>
-    
+
     <!-- Error Toast -->
     <div v-if="showErrorToast" class="toast error-toast">
       <i class="pi pi-exclamation-circle"></i>

@@ -3,7 +3,7 @@
  */
 
 // Default title from environment variable or fallback
-const defaultTitle = import.meta.env.VITE_APP_TITLE || 'Reporting 2.0';
+const defaultTitle = import.meta.env.VITE_APP_TITLE || "Reporting 2.0";
 
 /**
  * Set the document title with optional prefix/suffix
@@ -14,11 +14,7 @@ const defaultTitle = import.meta.env.VITE_APP_TITLE || 'Reporting 2.0';
  * @param {boolean} options.reverse - Whether to put app name first
  */
 const setDocumentTitle = (pageTitle, options = {}) => {
-  const {
-    includeAppName = true,
-    separator = ' | ',
-    reverse = false
-  } = options;
+  const { includeAppName = true, separator = " | ", reverse = false } = options;
 
   if (!pageTitle) {
     document.title = defaultTitle;
@@ -26,9 +22,7 @@ const setDocumentTitle = (pageTitle, options = {}) => {
   }
 
   if (includeAppName) {
-    document.title = reverse
-      ? `${defaultTitle}${separator}${pageTitle}`
-      : `${pageTitle}${separator}${defaultTitle}`;
+    document.title = reverse ? `${defaultTitle}${separator}${pageTitle}` : `${pageTitle}${separator}${defaultTitle}`;
   } else {
     document.title = pageTitle;
   }

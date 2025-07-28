@@ -1,7 +1,7 @@
 <template>
   <div class="dashboard">
     <!-- Custom page title with specific options -->
-    <page-title title="Dashboard Overview" :include-app-name="true" separator=" - " />
+    <page-title title="Dashboard Overview" :include-app-name="true" separator=" | " />
     
     <h1 class="page-title">Dashboard</h1>
     

@@ -3,7 +3,7 @@
     <!-- Global page title component -->
     <page-title />
     
-    <page-transition name="page" mode="out-in">
+    <page-transition name="zoom-fade" mode="out-in" :duration="700">
       <router-view />
     </page-transition>
     
@@ -112,5 +112,25 @@ html, body {
 .mx-auto {
   margin-left: auto;
   margin-right: auto;
+}
+
+.zoom-fade-enter-active, .zoom-fade-leave-active {
+  transition: opacity 0.7s cubic-bezier(0.4, 0, 0.2, 1), transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.zoom-fade-enter-from {
+  opacity: 0;
+  transform: scale(0.92);
+}
+.zoom-fade-enter-to {
+  opacity: 1;
+  transform: scale(1);
+}
+.zoom-fade-leave-from {
+  opacity: 1;
+  transform: scale(1);
+}
+.zoom-fade-leave-to {
+  opacity: 0;
+  transform: scale(1.08);
 }
 </style>

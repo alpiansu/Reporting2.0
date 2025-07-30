@@ -1,5 +1,5 @@
 <template>
-  <form @submit.prevent="submitForm" class="profile-form">
+  <form @submit.prevent="submitForm" class="profile-form" enctype="multipart/form-data">
     <div class="avatar-upload">
       <div class="current-avatar">
         <span v-if="!formData.profileImage && !avatarPreview">{{ getInitials(formData.fullName) }}</span>
@@ -168,10 +168,6 @@ const validateForm = () => {
     console.log('Validation error: invalid email format');
   }
   
-  // Update errors and emit validation event
-  Object.assign(errors, newErrors);
-  emit('validation-error', errors);
-  
   const isValid = Object.keys(newErrors).length === 0;
   console.log('Form validation result:', isValid ? 'valid' : 'invalid', newErrors);
   return isValid;
@@ -190,14 +186,6 @@ const submitForm = () => {
     uploadedAvatar: uploadedAvatar.value
   };
   
-  // Debug: Log status profileImage dan uploadedAvatar
-  console.log('ProfileEditForm submitData:', {
-    profileImage: submitData.profileImage,
-    hasUploadedAvatar: !!uploadedAvatar.value,
-    uploadedAvatarType: uploadedAvatar.value ? uploadedAvatar.value.type : null
-  });
-  
-  console.log('Emitting submit event with data:', submitData);
   emit('submit', submitData);
   return submitData; // Return the data for direct access
 };
@@ -219,8 +207,8 @@ const hasErrors = () => {
 
 // Set errors from outside (e.g. from backend validation)
 const setErrors = (errorData) => {
-  Object.assign(errors, errorData);
-  emit('validation-error', errors);
+  
+  
 };
 
 // Expose methods to parent component

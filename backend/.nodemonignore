@@ -1,0 +1,3 @@
+# Ignore specific files from triggering nodemon restarts
+
+/data/user-activities/*

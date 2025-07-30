@@ -1,6 +1,7 @@
-const express = require('express');
-const { uploadController } = require('../controllers');
-const { authenticateJWT } = require('../middlewares');
+const express = require("express");
+const { uploadController } = require("../controllers");
+const { authenticateJWT } = require("../middlewares");
+const multerProfileImage = require("../middlewares/multerProfileImage");
 
 const router = express.Router();
 
@@ -66,7 +67,7 @@ const router = express.Router();
  *       500:
  *         description: Server error
  */
-router.post('/profile-image', authenticateJWT, uploadController.uploadProfileImage);
+router.post("/profile-image", authenticateJWT, multerProfileImage.single("image"), uploadController.uploadProfileImage);
 
 /**
  * @swagger
@@ -95,6 +96,6 @@ router.post('/profile-image', authenticateJWT, uploadController.uploadProfileIma
  *       500:
  *         description: Server error
  */
-router.delete('/profile-image', authenticateJWT, uploadController.deleteProfileImage);
+router.delete("/profile-image", authenticateJWT, uploadController.deleteProfileImage);
 
 module.exports = router;

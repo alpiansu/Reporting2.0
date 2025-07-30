@@ -58,6 +58,7 @@ watch(dialogVisible, (newValue) => {
 // Methods
 const handleValidationError = (errors) => {
   // You can handle validation errors here if needed
+  emit('error', errors);
   console.log('Validation errors:', errors);
 };
 
@@ -86,7 +87,7 @@ const handleSubmit = async () => {
     fullName: formData.fullName,
     email: formData.email,
     profileImage: formData.profileImage,
-    hasUploadedAvatar: !!profileFormRef.value?.uploadedAvatar
+    hasUploadedAvatar: !!formData.uploadedAvatar
   });
 
   isSubmitting.value = true;
@@ -98,30 +99,13 @@ const handleSubmit = async () => {
     console.log('Initial profileImagePath:', profileImagePath);
 
     // If a new avatar was uploaded, process it first
-    if (profileFormRef.value.uploadedAvatar) {
-      console.log('Processing uploaded avatar:', profileFormRef.value.uploadedAvatar);
-      // Convert the file to base64
-      const reader = new FileReader();
-      const filePromise = new Promise((resolve) => {
-        reader.onload = (e) => resolve(e.target.result);
-        reader.readAsDataURL(profileFormRef.value.uploadedAvatar);
-      });
-
-      const base64Image = await filePromise;
-
-      // Gunakan base64Image langsung tanpa memisahkan prefix
-      // Ini memastikan format data:image/xxx;base64 tetap ada
-      const base64Data = base64Image;
-
-      // Upload the image
-      const imageData = {
-        image: base64Data,
-        mimetype: profileFormRef.value.uploadedAvatar.type,
-        filename: profileFormRef.value.uploadedAvatar.name
-      };
-
-      console.log('Uploading image to server...');
-      const uploadResult = await authService.uploadProfileImage(imageData);
+    if (formData.uploadedAvatar) {
+      console.log('Processing uploaded avatar (multipart)...', formData.uploadedAvatar);
+      // Kirim file sebagai FormData (bukan base64)
+      const fd = new FormData();
+      fd.append('image', formData.uploadedAvatar);
+      console.log('Uploading image to server as FormData...');
+      const uploadResult = await authService.uploadProfileImage(fd);
       profileImagePath = uploadResult.imagePath;
       console.log('Image uploaded, new path:', profileImagePath);
     } else if (

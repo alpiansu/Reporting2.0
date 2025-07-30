@@ -1,4 +1,4 @@
-import api from './api';
+import api from "./api";
 
 /**
  * Authentication service for handling user auth operations
@@ -11,16 +11,16 @@ const authService = {
    * @param {string} credentials.password - Password
    * @returns {Promise} - Response with user data and tokens
    */
-  login: async (credentials) => {
-    const response = await api.post('/auth/login', credentials);
+  login: async credentials => {
+    const response = await api.post("/auth/login", credentials);
     // Backend mengembalikan data langsung tanpa wrapper success dan data
     const { token, user } = response.data;
-    localStorage.setItem('token', token);
+    localStorage.setItem("token", token);
     // Simpan refreshToken jika ada
     if (response.data.refreshToken) {
-      localStorage.setItem('refreshToken', response.data.refreshToken);
+      localStorage.setItem("refreshToken", response.data.refreshToken);
     }
-    localStorage.setItem('user', JSON.stringify(user));
+    localStorage.setItem("user", JSON.stringify(user));
     return response.data;
   },
 
@@ -29,16 +29,16 @@ const authService = {
    * @param {Object} userData - User registration data
    * @returns {Promise} - Response with user data and tokens
    */
-  register: async (userData) => {
-    const response = await api.post('/auth/register', userData);
+  register: async userData => {
+    const response = await api.post("/auth/register", userData);
     // Backend mengembalikan data langsung tanpa wrapper success dan data
     const { token, user } = response.data;
-    localStorage.setItem('token', token);
+    localStorage.setItem("token", token);
     // Simpan refreshToken jika ada
     if (response.data.refreshToken) {
-      localStorage.setItem('refreshToken', response.data.refreshToken);
+      localStorage.setItem("refreshToken", response.data.refreshToken);
     }
-    localStorage.setItem('user', JSON.stringify(user));
+    localStorage.setItem("user", JSON.stringify(user));
     return response.data;
   },
 
@@ -49,15 +49,15 @@ const authService = {
   logout: async () => {
     try {
       // Call the logout endpoint to log the activity on the server
-      await api.post('/auth/logout');
+      await api.post("/auth/logout");
     } catch (error) {
-      console.error('Error logging logout on server:', error);
+      console.error("Error logging logout on server:", error);
       // Continue with client-side logout even if server request fails
     } finally {
       // Always clear local storage
-      localStorage.removeItem('token');
-      localStorage.removeItem('refreshToken');
-      localStorage.removeItem('user');
+      localStorage.removeItem("token");
+      localStorage.removeItem("refreshToken");
+      localStorage.removeItem("user");
     }
   },
 
@@ -66,7 +66,7 @@ const authService = {
    * @returns {Promise} - Response with user profile data
    */
   getProfile: async () => {
-    const response = await api.get('/auth/profile');
+    const response = await api.get("/auth/profile");
     return response.data;
   },
 
@@ -77,17 +77,17 @@ const authService = {
    * @param {string} passwordData.newPassword - New password
    * @returns {Promise} - Response with success message
    */
-  changePassword: async (passwordData) => {
+  changePassword: async passwordData => {
     // Ensure we're sending the correct payload format
     const payload = {
       currentPassword: passwordData.currentPassword,
-      newPassword: passwordData.newPassword
+      newPassword: passwordData.newPassword,
     };
-    
+
     // Log payload for debugging (remove in production)
-    console.log('Auth service sending password change payload:', payload);
-    
-    const response = await api.put('/auth/change-password', payload);
+    console.log("Auth service sending password change payload:", payload);
+
+    const response = await api.put("/auth/change-password", payload);
     return response.data;
   },
 
@@ -96,15 +96,15 @@ const authService = {
    * @returns {Promise} - Response with new token
    */
   refreshToken: async () => {
-    const refreshToken = localStorage.getItem('refreshToken');
+    const refreshToken = localStorage.getItem("refreshToken");
     if (!refreshToken) {
-      throw new Error('No refresh token available');
+      throw new Error("No refresh token available");
     }
 
-    const response = await api.post('/auth/refresh-token', { refreshToken });
+    const response = await api.post("/auth/refresh-token", { refreshToken });
     // Backend mengembalikan data langsung tanpa wrapper success dan data
     const { token } = response.data;
-    localStorage.setItem('token', token);
+    localStorage.setItem("token", token);
     return response.data;
   },
 
@@ -113,7 +113,7 @@ const authService = {
    * @returns {boolean} - True if authenticated
    */
   isAuthenticated: () => {
-    return !!localStorage.getItem('token');
+    return !!localStorage.getItem("token");
   },
 
   /**
@@ -121,41 +121,42 @@ const authService = {
    * @returns {Object|null} - User data or null
    */
   getCurrentUser: () => {
-    const userStr = localStorage.getItem('user');
+    const userStr = localStorage.getItem("user");
     return userStr ? JSON.parse(userStr) : null;
   },
-  
+
   /**
    * Update user profile
    * @param {Object} profileData - Profile data to update
    * @returns {Promise} - Response with updated user data
    */
-  updateProfile: async (profileData) => {
-    const response = await api.put('/auth/profile', profileData);
+  updateProfile: async profileData => {
+    const response = await api.put("/auth/profile", profileData);
     // Update local storage with new user data
-    localStorage.setItem('user', JSON.stringify(response.data));
+    localStorage.setItem("user", JSON.stringify(response.data));
     return response.data;
   },
-  
+
   /**
-   * Upload profile image
-   * @param {Object} imageData - Image data
-   * @param {string} imageData.image - Base64 encoded image
-   * @param {string} imageData.mimetype - Image MIME type
-   * @param {string} imageData.filename - Original filename
+   * Upload profile image (FormData version)
+   * @param {FormData} formData - FormData with file (key: 'image')
    * @returns {Promise} - Response with image path
    */
-  uploadProfileImage: async (imageData) => {
-    const response = await api.post('/upload/profile-image', imageData);
+  uploadProfileImage: async formData => {
+    const response = await api.post("/upload/profile-image", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
     return response.data;
   },
-  
+
   /**
    * Delete profile image
    * @returns {Promise} - Response with success message
    */
   deleteProfileImage: async () => {
-    const response = await api.delete('/upload/profile-image');
+    const response = await api.delete("/upload/profile-image");
     return response.data;
   },
 };

@@ -11,7 +11,6 @@ export const useUserActivityStore = defineStore('userActivity', {
     loading: false,
     error: null,
     filters: {
-      type: null,
       startDate: null,
       endDate: null,
     },
@@ -89,7 +88,6 @@ export const useUserActivityStore = defineStore('userActivity', {
      */
     clearFilters() {
       this.filters = {
-        type: null,
         startDate: null,
         endDate: null,
       };

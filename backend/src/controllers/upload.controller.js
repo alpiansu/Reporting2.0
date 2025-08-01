@@ -25,7 +25,7 @@ class UploadController {
         filename: req.file.filename,
       };
       logger.info(`Uploading profile image for user ${userId}:`, fileData);
-      const imagePath = await uploadService.saveProfileImage(userId, fileData);
+      const imagePath = await uploadService.saveProfileImage(userId, req.file);
       res.status(200).json({ imagePath });
     } catch (error) {
       logger.error(`Upload profile image error: ${error.message}`);

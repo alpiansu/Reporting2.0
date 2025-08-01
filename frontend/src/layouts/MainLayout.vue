@@ -19,7 +19,8 @@
         </button>
         <div class="user-menu" @click="toggleUserMenu">
           <div class="avatar" v-if="user">
-            {{ user.fullName?.charAt(0) || user.username?.charAt(0) || 'U' }}
+            <span v-if="!user.profileImage">{{ user.fullName?.charAt(0) || user.username?.charAt(0) || 'U' }}</span>
+            <img v-else :src="getProfileImageUrl(user.profileImage)" alt="User avatar" />
           </div>
           <span class="username">{{ user?.fullName || user?.username || 'User' }}</span>
           <i class="pi pi-chevron-down"></i>
@@ -122,6 +123,7 @@ import { useToastService } from '../utils/toast';
 import ConfirmDialog from '../components/common/ConfirmDialog.vue';
 import FormDialog from '../components/common/FormDialog.vue';
 import ChangePasswordForm from '../components/auth/ChangePasswordForm.vue';
+import api from '../services/api';
 
 const toast = useToastService();
 
@@ -307,8 +309,20 @@ const navigateTo = (path) => {
 const isActive = (path) => {
   return route.path === path || route.path.startsWith(`${path}/`);
 };
+
+const getProfileImageUrl = (imagePath) => {
+  if (!imagePath) return null;
+  // If the image path is already a full URL, return it as is
+  if (imagePath.startsWith('http')) return imagePath;
+  // Get baseURL from api.js
+  const baseURL = api.defaults.baseURL.replace('/api', '');
+  // Otherwise, construct the URL based on your API's image serving endpoint
+  return `${baseURL}${imagePath}`;
+};
 </script>
 
 <style scoped>
 @import './MainLayout.style.css';
+
+/* Styles moved to MainLayout.style.css */
 </style>

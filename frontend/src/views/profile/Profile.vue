@@ -138,6 +138,7 @@ import { useAuthStore } from '@/stores/auth';
 import UserActivityList from '@/components/user/UserActivityList.vue';
 import EditProfileDialog from '@/components/user/EditProfileDialog.vue';
 import authService from '@/services/auth.service';
+import api from '@/services/api.js';
 
 const authStore = useAuthStore();
 
@@ -251,8 +252,10 @@ const getProfileImageUrl = (imagePath) => {
   if (!imagePath) return null;
   // If the image path is already a full URL, return it as is
   if (imagePath.startsWith('http')) return imagePath;
+  // Import baseURL from api.js
+  const baseURL = api.defaults.baseURL.replace('/api', '');
   // Otherwise, construct the URL based on your API's image serving endpoint
-  return `${import.meta.env.VITE_API_URL || ''}${imagePath}`;
+  return `${baseURL}${imagePath}`;
 };
 
 const validatePasswordForm = () => {

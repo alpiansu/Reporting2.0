@@ -14,13 +14,12 @@ class UserActivityController {
   async getUserActivities(req, res, next) {
     try {
       const userId = req.user.id;
-      const { limit, offset, type, startDate, endDate } = req.query;
+      const { limit, offset, startDate, endDate } = req.query;
       
       // Parse query parameters
       const options = {
         limit: limit ? parseInt(limit, 10) : undefined,
         offset: offset ? parseInt(offset, 10) : undefined,
-        type,
         startDate,
         endDate,
       };

@@ -88,13 +88,21 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function updateProfile() {
+  async function updateProfile(profileData) {
     try {
       loading.value = true;
-      const response = await authService.getProfile();
-      // Backend mengembalikan data user langsung di response.data
-      user.value = response;
-      return response;
+      // Jika profileData disediakan, gunakan untuk memperbarui profil
+      if (profileData) {
+        const response = await authService.updateProfile(profileData);
+        user.value = response;
+        return response;
+      } else {
+        // Jika tidak, ambil data profil terbaru
+        const response = await authService.getProfile();
+        // Backend mengembalikan data user langsung di response.data
+        user.value = response;
+        return response;
+      }
     } catch (err) {
       error.value = err.response?.data?.message || err.message;
       throw err;

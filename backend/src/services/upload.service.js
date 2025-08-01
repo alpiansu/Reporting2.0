@@ -77,14 +77,6 @@ class UploadService {
       const ext = path.extname(fileData.filename);
       const fileName = `user-${userId}-profile${ext}`;
       const destPath = path.join(this.profileImagesDir, fileName);
-      // Remove existing profile image if exists
-      try {
-        await this.statAsync(destPath);
-        await this.unlinkAsync(destPath);
-        logger.info(`Removed existing profile image for user ${userId}`);
-      } catch (error) {
-        // File doesn't exist, ignore
-      }
       // Move/rename uploaded file to correct name (if not already)
       if (fileData.path !== destPath) {
         await fs.promises.rename(fileData.path, destPath);

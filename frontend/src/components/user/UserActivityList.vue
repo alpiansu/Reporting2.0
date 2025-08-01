@@ -2,17 +2,6 @@
   <div class="user-activity-list">
     <div class="activity-filters">
       <div class="filter-group">
-        <label for="activity-type">Activity Type</label>
-        <select id="activity-type" v-model="selectedType" @change="applyFilters">
-          <option value="">All Types</option>
-          <option value="login">Login</option>
-          <option value="register">Register</option>
-          <option value="password">Password Change</option>
-          <option value="logout">Logout</option>
-        </select>
-      </div>
-      
-      <div class="filter-group">
         <label for="start-date">Start Date</label>
         <input 
           type="date" 
@@ -23,11 +12,31 @@
       </div>
       
       <div class="filter-group">
+        <label for="start-time">Start Time</label>
+        <input 
+          type="time" 
+          id="start-time" 
+          v-model="startTime" 
+          @change="applyFilters"
+        >
+      </div>
+      
+      <div class="filter-group">
         <label for="end-date">End Date</label>
         <input 
           type="date" 
           id="end-date" 
           v-model="endDate" 
+          @change="applyFilters"
+        >
+      </div>
+      
+      <div class="filter-group">
+        <label for="end-time">End Time</label>
+        <input 
+          type="time" 
+          id="end-time" 
+          v-model="endTime" 
           @change="applyFilters"
         >
       </div>
@@ -137,9 +146,10 @@ export default {
     const userActivityStore = useUserActivityStore();
     
     // Local state for filters
-    const selectedType = ref('');
     const startDate = ref('');
+    const startTime = ref('00:00');
     const endDate = ref('');
+    const endTime = ref('23:59');
     const itemsPerPage = ref(10);
     
     // Computed properties from store
@@ -157,19 +167,38 @@ export default {
     
     // Methods
     const applyFilters = () => {
+      let startDateTime = null;
+      let endDateTime = null;
+      
+      // Combine date and time for start date if both are provided
+      if (startDate.value) {
+        startDateTime = startDate.value;
+        if (startTime.value) {
+          startDateTime = `${startDate.value}T${startTime.value}:00`;
+        }
+      }
+      
+      // Combine date and time for end date if both are provided
+      if (endDate.value) {
+        endDateTime = endDate.value;
+        if (endTime.value) {
+          endDateTime = `${endDate.value}T${endTime.value}:59`;
+        }
+      }
+      
       const filters = {
-        type: selectedType.value || null,
-        startDate: startDate.value || null,
-        endDate: endDate.value || null,
+        startDate: startDateTime,
+        endDate: endDateTime,
       };
       
       userActivityStore.setFilters(filters);
     };
     
     const clearFilters = () => {
-      selectedType.value = '';
       startDate.value = '';
+      startTime.value = '00:00';
       endDate.value = '';
+      endTime.value = '23:59';
       userActivityStore.clearFilters();
     };
     
@@ -232,9 +261,10 @@ export default {
     
     return {
       // State
-      selectedType,
       startDate,
+      startTime,
       endDate,
+      endTime,
       itemsPerPage,
       
       // Computed

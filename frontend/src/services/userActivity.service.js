@@ -9,9 +9,8 @@ const userActivityService = {
    * @param {Object} options - Options for filtering and pagination
    * @param {number} options.limit - Maximum number of activities to return
    * @param {number} options.offset - Number of activities to skip
-   * @param {string} options.type - Filter by activity type
-   * @param {string} options.startDate - Filter by start date (ISO string)
-   * @param {string} options.endDate - Filter by end date (ISO string)
+   * @param {string} options.startDate - Filter by start date and time (ISO string)
+   * @param {string} options.endDate - Filter by end date and time (ISO string)
    * @returns {Promise<Object>} - Promise resolving to activities data
    */
   async getUserActivities(options = {}) {

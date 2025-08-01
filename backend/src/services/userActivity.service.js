@@ -144,24 +144,19 @@ class UserActivityService {
    * @param {Object} options - Query options
    * @param {number} [options.limit=100] - Maximum number of activities to return
    * @param {number} [options.offset=0] - Offset for pagination
-   * @param {string} [options.type] - Filter by activity type
-   * @param {string} [options.startDate] - Filter by start date
-   * @param {string} [options.endDate] - Filter by end date
+   * @param {string} [options.startDate] - Filter by start date and time (ISO string)
+   * @param {string} [options.endDate] - Filter by end date and time (ISO string)
    * @returns {Promise<Object>} Activities with pagination info
    */
   async getUserActivities(userId, options = {}) {
     try {
-      const { limit = 100, offset = 0, type, startDate, endDate } = options;
+      const { limit = 100, offset = 0, startDate, endDate } = options;
       
       // Get activities from JSON file
       const allActivities = await this.readUserActivitiesFromFile(userId);
       
       // Apply filters
       let filteredActivities = allActivities;
-      
-      if (type) {
-        filteredActivities = filteredActivities.filter(activity => activity.type === type);
-      }
       
       if (startDate) {
         const startDateObj = new Date(startDate);

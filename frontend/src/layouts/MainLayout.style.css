@@ -87,6 +87,13 @@
   justify-content: center;
   font-weight: 600;
   margin-right: 8px;
+  overflow: hidden;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .username {
   margin-right: 8px;
@@ -212,6 +219,31 @@
 
 /* Responsive styles */
 @media (max-width: 768px) {
+  /* Header responsive adjustments */
+  .app-bar {
+    padding: 0 8px;
+  }
+  
+  /* Hide username text on small screens */
+  .username {
+    display: none;
+  }
+  
+  /* Make logo smaller on small screens */
+  .logo-image {
+    height: 28px;
+  }
+  
+  .app-title {
+    font-size: 1rem;
+  }
+  
+  /* Reduce spacing between elements */
+  .notification-button {
+    margin-right: 8px;
+  }
+  
+  /* Sidebar responsive styles */
   .sidebar {
     position: fixed;
     left: -240px;
@@ -254,6 +286,36 @@
   
   /* Ensure sidebar toggle button works properly */
   .sidebar:not(.sidebar-mobile-open) .sidebar-footer .toggle-button {
+    display: none;
+  }
+}
+
+/* Extra small devices */
+@media (max-width: 480px) {
+  /* Further simplify header for very small screens */
+  .app-title {
+    font-size: 0.9rem;
+  }
+  
+  /* Make avatar smaller */
+  .avatar {
+    width: 32px;
+    height: 32px;
+    margin-right: 0;
+  }
+  
+  /* Reduce padding */
+  .app-bar {
+    padding: 0 4px;
+  }
+  
+  /* Adjust user menu padding */
+  .user-menu {
+    padding: 4px;
+  }
+  
+  /* Hide chevron icon */
+  .user-menu .pi-chevron-down {
     display: none;
   }
 }

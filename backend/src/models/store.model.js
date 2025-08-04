@@ -1,84 +1,127 @@
-const { DataTypes } = require('sequelize');
-const { sequelize } = require('../config/database');
+/**
+ * Store model - JSON file based implementation
+ *
+ * This model provides an interface similar to Sequelize models
+ * but uses a JSON file as the data source instead of a database.
+ *
+ * The actual data operations are handled by the storeService.
+ */
+const storeService = require("../services/storeService");
 
-const Store = sequelize.define('Store', {
-  id: {
-    type: DataTypes.INTEGER,
-    primaryKey: true,
-    autoIncrement: true,
+// Define the Store model schema for documentation and validation
+const StoreSchema = {
+  id: { type: "number", primaryKey: true },
+  storeCode: { type: "string", required: true },
+  station: { type: "string", required: true },
+  dbHost: { type: "string", required: true },
+  notes: { type: "string" },
+  storeName: { type: "string", required: true },
+  updtime: { type: "date" },
+  createdAt: { type: "date" },
+  updatedAt: { type: "date" },
+};
+
+/**
+ * Store model with methods similar to Sequelize models
+ * but using the storeService for actual data operations
+ */
+const Store = {
+  // Schema definition for documentation
+  schema: StoreSchema,
+
+  /**
+   * Find all stores with optional where clause
+   * @param {Object} options - Query options
+   * @returns {Promise<Array>} Array of store objects
+   */
+  findAll: async (options = {}) => {
+    const { where = {}, limit, offset, order } = options;
+
+    // Get all stores from service
+    const result = await storeService.getAllStores({
+      page: offset ? Math.floor(offset / (limit || 10)) + 1 : 1,
+      limit: limit || 10,
+      search: where.search,
+      region: where.region,
+      city: where.city,
+      status: where.isActive === true ? "active" : where.isActive === false ? "inactive" : undefined,
+    });
+
+    return result.stores;
   },
-  storeCode: {
-    type: DataTypes.STRING,
-    allowNull: false,
-    unique: true,
-    validate: {
-      notEmpty: true,
-    },
+
+  /**
+   * Find and count all stores with optional where clause
+   * @param {Object} options - Query options
+   * @returns {Promise<Object>} Object with count and rows properties
+   */
+  findAndCountAll: async (options = {}) => {
+    const { where = {}, limit, offset, order } = options;
+
+    // Get all stores from service
+    const result = await storeService.getAllStores({
+      page: offset ? Math.floor(offset / (limit || 10)) + 1 : 1,
+      limit: limit || 10,
+      search: where.search,
+      region: where.region,
+      city: where.city,
+      status: where.isActive === true ? "active" : where.isActive === false ? "inactive" : undefined,
+    });
+
+    return {
+      count: result.totalItems,
+      rows: result.stores,
+    };
   },
-  storeName: {
-    type: DataTypes.STRING,
-    allowNull: false,
-    validate: {
-      notEmpty: true,
-    },
+
+  /**
+   * Find a store by primary key
+   * @param {number} id - Store ID
+   * @returns {Promise<Object>} Store object
+   */
+  findByPk: async id => {
+    return storeService.getStoreById(id);
   },
-  address: {
-    type: DataTypes.TEXT,
-    allowNull: true,
+
+  /**
+   * Find one store with optional where clause
+   * @param {Object} options - Query options
+   * @returns {Promise<Object>} Store object
+   */
+  findOne: async (options = {}) => {
+    const { where = {} } = options;
+
+    if (where.storeCode) {
+      return storeService.getStoreByCode(where.storeCode);
+    }
+
+    // If no specific query, get the first store
+    const stores = await storeService.getAllStores({ limit: 1 });
+    return stores.stores[0] || null;
   },
-  region: {
-    type: DataTypes.STRING,
-    allowNull: true,
+
+  /**
+   * Create a new store
+   * @param {Object} data - Store data
+   * @returns {Promise<Object>} Created store
+   */
+  create: async data => {
+    return storeService.createStore(data);
   },
-  city: {
-    type: DataTypes.STRING,
-    allowNull: true,
+
+  /**
+   * Bulk create multiple stores
+   * @param {Array} dataArray - Array of store data
+   * @returns {Promise<Array>} Array of created stores
+   */
+  bulkCreate: async dataArray => {
+    const results = [];
+    for (const data of dataArray) {
+      const store = await storeService.createStore(data);
+      results.push(store);
+    }
+    return results;
   },
-  dbHost: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  dbPort: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    defaultValue: 3306,
-  },
-  dbUser: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  dbPassword: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  dbName: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  isActive: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: true,
-  },
-  lastScreening: {
-    type: DataTypes.DATE,
-    allowNull: true,
-  },
-  screeningStatus: {
-    type: DataTypes.ENUM('pending', 'in_progress', 'completed', 'failed'),
-    defaultValue: 'pending',
-  },
-  connectionStatus: {
-    type: DataTypes.ENUM('connected', 'disconnected', 'unknown'),
-    defaultValue: 'unknown',
-  },
-  notes: {
-    type: DataTypes.TEXT,
-    allowNull: true,
-  },
-}, {
-  tableName: 'stores',
-  timestamps: true,
-  underscored: true,
-});
+};
 
 module.exports = Store;

@@ -4,6 +4,7 @@ const storeRoutes = require("./store.routes");
 const screeningRoutes = require("./screening.routes");
 const userActivityRoutes = require("./userActivity.routes");
 const uploadRoutes = require("./upload.routes");
+const syncRoutes = require("./sync.routes");
 const { swaggerUi, swaggerSpec } = require("../config/swagger");
 
 const router = express.Router();
@@ -17,5 +18,6 @@ router.use("/api/stores", storeRoutes);
 router.use("/api/screenings", screeningRoutes);
 router.use("/api/user-activities", userActivityRoutes);
 router.use("/api/upload", uploadRoutes);
+router.use("/api/sync", syncRoutes);
 
 module.exports = router;

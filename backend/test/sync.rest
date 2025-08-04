@@ -1,0 +1,15 @@
+### Get JWT token (login)
+POST http://localhost:3000/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin123"
+}
+
+### Trigger manual sync (replace <TOKEN> with value from login)
+POST http://localhost:3000/api/sync/trigger
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJ1c2VyIiwiaWF0IjoxNzU0Mjc2MDMwLCJleHAiOjE3NTQzNjI0MzB9.BseTVnYd8tFuimH6CvvEc-QT7dSQqXW289fM62mb3kA
+Content-Type: application/json
+
+{}

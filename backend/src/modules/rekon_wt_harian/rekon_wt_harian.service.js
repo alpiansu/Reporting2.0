@@ -337,11 +337,22 @@ class RekonWtHarianService {
       const endTime = Date.now();
       logger.info(`Completed parallel processing in ${(endTime - startTime) / 1000} seconds`);
       
-      // Process results
+      // Process results and collect errors
+      const storeErrors = [];
+      
       for (const result of allResults) {
         if (result.status === 'fulfilled' && result.value) {
           const storeResult = result.value;
           results.processedStores++;
+          
+          // Collect errors from individual stores
+          if (storeResult.errors && storeResult.errors.length > 0) {
+            storeErrors.push({
+              store: storeResult.storeCode,
+              storeName: storeResult.storeName,
+              errors: storeResult.errors
+            });
+          }
           
           if (storeResult.differences && storeResult.differences.length > 0) {
             results.storesWithDifferences++;
@@ -353,8 +364,20 @@ class RekonWtHarianService {
             });
           }
         } else if (result.status === 'rejected') {
-          logger.error(`Store processing error: ${result.reason}`);
+          // This should rarely happen now since we handle errors in processStore
+          logger.error(`Unexpected store processing rejection: ${result.reason}`);
+          storeErrors.push({
+            store: 'unknown',
+            storeName: 'unknown', 
+            errors: [`Unexpected error: ${result.reason}`]
+          });
         }
+      }
+      
+      // Add store errors to results if any
+      if (storeErrors.length > 0) {
+        results.storeErrors = storeErrors;
+        logger.info(`Found errors in ${storeErrors.length} stores, but processing completed`);
       }
 
       // Clean up temporary file
@@ -391,10 +414,17 @@ class RekonWtHarianService {
     
     logger.info(`[${storeCode}] Starting processing...`);
     
-    // Create a timeout promise
-    const timeoutPromise = new Promise((_, reject) => {
+    // Create a timeout promise that returns error info instead of rejecting
+    const timeoutPromise = new Promise((resolve) => {
       setTimeout(() => {
-        reject(new Error(`Store ${storeCode} processing timeout after ${STORE_TIMEOUT}ms`));
+        const errorMsg = `Processing timeout after ${STORE_TIMEOUT}ms`;
+        logger.error(`[${storeCode}] ${errorMsg}`);
+        resolve({
+          storeCode,
+          storeName: store.storeName,
+          differences: [],
+          errors: [errorMsg]
+        });
       }, STORE_TIMEOUT);
     });
 
@@ -404,11 +434,25 @@ class RekonWtHarianService {
     try {
       // Race between timeout and actual processing
       const result = await Promise.race([processingPromise, timeoutPromise]);
-      logger.info(`[${storeCode}] Completed successfully`);
+      
+      // Check if result has errors (from timeout or processing)
+      if (result.errors && result.errors.length > 0) {
+        logger.info(`[${storeCode}] Completed with errors: ${result.errors.join(', ')}`);
+      } else {
+        logger.info(`[${storeCode}] Completed successfully`);
+      }
+      
       return result;
     } catch (error) {
-      logger.error(`[${storeCode}] Processing failed: ${error.message}`);
-      throw error;
+      // This should rarely happen now, but keep as fallback
+      const errorMsg = `Unexpected processing failure: ${error.message}`;
+      logger.error(`[${storeCode}] ${errorMsg}`);
+      return {
+        storeCode,
+        storeName: store.storeName,
+        differences: [],
+        errors: [errorMsg]
+      };
     }
   }
 
@@ -429,11 +473,13 @@ class RekonWtHarianService {
 
     try {
       if (!storeInfo.dbHost) {
-        logger.warn(`[${storeCode}] No dbHost found in branch ${cab}`);
+        const errorMsg = `No dbHost found in branch ${cab}`;
+        logger.warn(`[${storeCode}] ${errorMsg}`);
         return {
           storeCode,
           storeName: storeInfo.storeName,
           differences: [],
+          errors: [errorMsg]
         };
       }
 
@@ -441,11 +487,13 @@ class RekonWtHarianService {
       const storeConnection = await dbStore.createDbStore(storeInfo.dbHost, 1); // Only 1 retry attempt
 
       if (!storeConnection) {
-        logger.warn(`[${storeCode}] Could not connect to ${storeInfo.dbHost}`);
+        const errorMsg = `Could not connect to ${storeInfo.dbHost}`;
+        logger.warn(`[${storeCode}] ${errorMsg}`);
         return {
           storeCode,
           storeName: storeInfo.storeName,
           differences: [],
+          errors: [errorMsg]
         };
       }
 
@@ -473,6 +521,7 @@ class RekonWtHarianService {
             storeCode,
             storeName: storeInfo.storeName,
             differences: [],
+            errors: []
           };
         }
 
@@ -485,16 +534,34 @@ class RekonWtHarianService {
           storeCode,
           storeName: storeInfo.storeName,
           differences,
+          errors: []
         };
       } finally {
-        // Close store connection
-        if (storeConnection && storeConnection.end) {
-          await storeConnection.end();
+        // Properly close connection pool
+        if (storeConnection) {
+          try {
+            if (storeConnection.end) {
+              await storeConnection.end();
+            } else if (storeConnection.destroy) {
+              storeConnection.destroy();
+            }
+          } catch (closeError) {
+            // Log connection close error but don't throw
+            logger.warn(`[${storeCode}] Error closing connection: ${closeError.message}`);
+          }
         }
       }
     } catch (error) {
-      logger.error(`[${storeCode}] Error: ${error.message}`);
-      throw error; // Let Promise.allSettled handle the rejection
+      const errorMsg = `Processing error: ${error.message}`;
+      logger.error(`[${storeCode}] ${errorMsg}`);
+      
+      // Don't throw - return error info instead to prevent premature response
+      return {
+        storeCode,
+        storeName: storeInfo.storeName,
+        differences: [],
+        errors: [errorMsg]
+      };
     }
   }
 

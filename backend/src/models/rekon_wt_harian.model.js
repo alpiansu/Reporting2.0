@@ -209,7 +209,49 @@ const RekonWtHarian = sequelize.define(
   },
   {
     tableName: "rekon_wt_harian",
-    timestamps: false,
+    timestamps: false, // We handle timestamps manually with addtime/updtime
+    hooks: {
+      // Hook untuk mengisi addtime saat create (jika belum diisi)
+      beforeCreate: (record, options) => {
+        if (!record.addtime) {
+          record.addtime = new Date();
+        }
+        // Tidak set updtime saat create pertama kali
+        record.updtime = null;
+      },
+      // Hook untuk mengisi updtime saat update
+      beforeUpdate: (record, options) => {
+        record.updtime = new Date();
+      },
+      // Hook untuk bulk update  
+      beforeBulkUpdate: (options) => {
+        // Sequelize bulk update format: [values, whereClause]
+        // We need to add updtime to the values object
+        if (Array.isArray(options) && options.length >= 1) {
+          // Format: [updateValues, whereClause, options]
+          if (typeof options[0] === 'object') {
+            options[0].updtime = new Date();
+          }
+        } else if (options.attributes) {
+          // Direct attributes format
+          options.attributes.updtime = new Date();
+        } else {
+          // Fallback - create attributes if not exists
+          options.attributes = { updtime: new Date() };
+        }
+      },
+      // Hook untuk bulk create - pastikan addtime diisi
+      beforeBulkCreate: (records, options) => {
+        const now = new Date();
+        records.forEach(record => {
+          if (!record.addtime) {
+            record.addtime = now;
+          }
+          // Tidak set updtime untuk bulk create (data baru)
+          record.updtime = null;
+        });
+      },
+    },
     indexes: [
       {
         name: "idx_rekon_wt_harian_cab_periode",
@@ -218,6 +260,14 @@ const RekonWtHarian = sequelize.define(
       {
         name: "idx_rekon_wt_harian_toko_tgl",
         fields: ["shop", "tgl1"],
+      },
+      {
+        name: "idx_rekon_wt_harian_addtime",
+        fields: ["addtime"],
+      },
+      {
+        name: "idx_rekon_wt_harian_updtime",
+        fields: ["updtime"],
       },
     ],
   }

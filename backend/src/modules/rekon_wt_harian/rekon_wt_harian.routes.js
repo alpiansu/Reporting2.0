@@ -5,7 +5,6 @@ const express = require("express");
 const router = express.Router();
 const rekonWtHarianController = require("./rekon_wt_harian.controller");
 const { authenticateJWT, authorizeRole } = require("../../middlewares/auth.middleware");
-const config = require("../../config/rekon_wt_harian.config");
 
 /**
  * @swagger

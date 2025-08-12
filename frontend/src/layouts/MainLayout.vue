@@ -141,6 +141,7 @@ const menuItems = [
   { text: 'Dashboard', icon: 'pi-home', path: '/dashboard' },
   { text: 'Stores', icon: 'pi-shopping-bag', path: '/stores' },
   { text: 'Screenings', icon: 'pi-chart-bar', path: '/screenings' },
+  { text: 'Rekonsiliasi WT Harian', icon: 'pi-sync', path: '/rekon-wt-harian' },
 ];
 
 const toggleMobileDrawer = () => {

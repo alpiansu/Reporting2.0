@@ -9,7 +9,7 @@ Content-Type: application/json
 
 ### Trigger manual sync (replace <TOKEN> with value from login)
 POST http://localhost:3000/api/sync/trigger
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJ1c2VyIiwiaWF0IjoxNzU0Mjc2MDMwLCJleHAiOjE3NTQzNjI0MzB9.BseTVnYd8tFuimH6CvvEc-QT7dSQqXW289fM62mb3kA
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1NDQ2NzM1OSwiZXhwIjoxNzU0NTUzNzU5fQ.wjJPcLQV-oQzA6lRfiv_p2yL71tUSXJvBY904NnygB4
 Content-Type: application/json
 
 {}

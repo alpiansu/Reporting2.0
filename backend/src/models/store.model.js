@@ -6,7 +6,7 @@
  *
  * The actual data operations are handled by the storeService.
  */
-const storeService = require("../services/storeService");
+const storeService = require("../modules/store/store.service");
 
 // Define the Store model schema for documentation and validation
 const StoreSchema = {
@@ -16,6 +16,7 @@ const StoreSchema = {
   dbHost: { type: "string", required: true },
   notes: { type: "string" },
   storeName: { type: "string", required: true },
+  branch: { type: "string", required: true, comment: "Kode cabang dari field 'Cab'" },
   updtime: { type: "date" },
   createdAt: { type: "date" },
   updatedAt: { type: "date" },

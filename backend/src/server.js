@@ -3,8 +3,7 @@ const { sequelize } = require("./models");
 const config = require("./config");
 const logger = require("./config/logger");
 const User = require("./models/user.model");
-const cronScheduler = require("./services/cronScheduler");
-const storeService = require("./services/storeService");
+// Modules are now initialized in app.js
 
 // Set port
 const PORT = config.port;
@@ -46,21 +45,13 @@ async function startServer() {
       // Untuk alter, lakukan manual jika ada perubahan model
       // Contoh: await sequelize.getQueryInterface().addColumn('users', 'fieldBaru', { type: Sequelize.STRING });
       logger.info("Database models checked/created (no global alter)");
-
-      // Cek dan alter sales_per_dept agar field sesuai
-      const SalesPerDept = require("./models/sales_per_dept.model");
-      await SalesPerDept.sync({ alter: true });
-      logger.info("sales_per_dept table checked/altered as needed");
     }
 
     // Create dummy user
     await createDummyUser();
 
-    // Initialize store service and scheduler
-    await storeService.init();
-    logger.info("Store service initialized successfully");
-    await cronScheduler.init();
-    logger.info("Store synchronization scheduler started");
+    // Store service and scheduler are now initialized in app.js through modules
+    logger.info("Services initialized through module system");
 
     // Start listening for requests
     app.listen(PORT, () => {

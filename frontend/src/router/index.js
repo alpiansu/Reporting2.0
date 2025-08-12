@@ -64,6 +64,12 @@ const routes = [
         meta: { requiresAuth: true, title: "Screening Details" },
       },
       {
+        path: "rekon-wt-harian",
+        name: "RekonWtHarian",
+        component: () => import("../views/rekonWtHarian/RekonWtHarianView.vue"),
+        meta: { requiresAuth: true, title: "Rekonsiliasi WT Harian" },
+      },
+      {
         path: "profile",
         name: "Profile",
         component: () => import("../views/profile/Profile.vue"),

@@ -10,10 +10,7 @@ const Screening = sequelize.define('Screening', {
   storeId: {
     type: DataTypes.INTEGER,
     allowNull: false,
-    references: {
-      model: 'stores',
-      key: 'id',
-    },
+    // Removed reference to 'stores' table since Store is now JSON-based
   },
   userId: {
     type: DataTypes.INTEGER,

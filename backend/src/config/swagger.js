@@ -40,6 +40,7 @@ const options = {
     path.join(__dirname, "../routes/*.js"),
     path.join(__dirname, "../models/*.js"),
     path.join(__dirname, "../controllers/*.js"),
+    path.join(__dirname, "../modules/*/*.routes.js"),
   ],
 };
 

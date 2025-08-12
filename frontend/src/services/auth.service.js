@@ -143,7 +143,7 @@ const authService = {
    * @returns {Promise} - Response with image path
    */
   uploadProfileImage: async formData => {
-    const response = await api.post("/upload/profile-image", formData, {
+    const response = await api.post("/auth/profile-image", formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },
@@ -156,7 +156,7 @@ const authService = {
    * @returns {Promise} - Response with success message
    */
   deleteProfileImage: async () => {
-    const response = await api.delete("/upload/profile-image");
+    const response = await api.delete("/auth/profile-image");
     return response.data;
   },
 };

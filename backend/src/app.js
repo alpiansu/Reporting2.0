@@ -3,6 +3,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 const path = require("path");
 const routes = require("./routes");
+const modules = require("./modules");
 const { requestLogger, errorHandler, notFound } = require("./middlewares");
 const config = require("./config");
 
@@ -10,12 +11,14 @@ const config = require("./config");
 const app = express();
 
 // Enable trust proxy to get real client IP when behind proxy/load balancer
-app.set('trust proxy', true);
+app.set("trust proxy", true);
 
 // Security middleware
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
-}));
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
 
 // CORS middleware
 app.use(cors(config.corsOptions));
@@ -30,7 +33,10 @@ app.use(express.urlencoded({ extended: true }));
 // Request logging middleware
 app.use(requestLogger);
 
-// API routes
+// Initialize modules
+const initializedModules = modules.initialize(app);
+
+// API routes (for routes not handled by modules)
 app.use(routes);
 
 // 404 handler

@@ -298,88 +298,133 @@ class RekonWtHarianService {
         storesWithDifferences: 0,
         totalDifferences: 0,
         details: [],
+        waves: [], // Track wave processing
       };
 
-      // TRULY PARALLEL PROCESSING: Process stores with controlled concurrency using Promise.allSettled
+      // WAVE-BASED PROCESSING with retry for timeouts
+      const MAX_WAVES = 3;
       const CONCURRENCY_LIMIT = config.parallelProcessing?.concurrencyLimit || 5;
-      logger.info(`Processing ${branchStores.length} stores with concurrency limit of ${CONCURRENCY_LIMIT}`);
-
-      // Use a semaphore-like approach to control concurrency
-      const processConcurrentStores = async (stores, limit) => {
-        const results = [];
-        const executing = [];
-
-        for (const store of stores) {
-          const promise = this.processStoreWithTimeout(store, cab, period, wrcData).then(result => {
-            executing.splice(executing.indexOf(promise), 1);
-            return result;
-          });
-          
-          results.push(promise);
-          executing.push(promise);
-
-          // If we've reached the concurrency limit, wait for one to complete
-          if (executing.length >= limit) {
-            await Promise.race(executing);
-          }
-        }
-
-        // Wait for all remaining promises to complete
-        return await Promise.allSettled(results);
-      };
-
-      logger.info(`Starting parallel processing of ${branchStores.length} stores...`);
-      const startTime = Date.now();
       
-      // Process all stores with controlled concurrency
-      const allResults = await processConcurrentStores(branchStores, CONCURRENCY_LIMIT);
+      logger.info(`Starting wave-based processing of ${branchStores.length} stores with ${MAX_WAVES} waves max`);
+      const totalStartTime = Date.now();
       
-      const endTime = Date.now();
-      logger.info(`Completed parallel processing in ${(endTime - startTime) / 1000} seconds`);
+      // Process stores in waves, retrying timeout stores
+      let currentStores = branchStores.slice(); // Copy of all stores
+      let wave = 1;
       
-      // Process results and collect errors
-      const storeErrors = [];
-      
-      for (const result of allResults) {
-        if (result.status === 'fulfilled' && result.value) {
-          const storeResult = result.value;
-          results.processedStores++;
-          
-          // Collect errors from individual stores
-          if (storeResult.errors && storeResult.errors.length > 0) {
+      while (wave <= MAX_WAVES && currentStores.length > 0) {
+        logger.info(`\n🌊 Starting Wave ${wave} with ${currentStores.length} stores...`);
+        const waveStartTime = Date.now();
+        
+        // Process current wave of stores
+        const waveResults = await this.processStoreWave(currentStores, cab, period, wrcData, CONCURRENCY_LIMIT, wave);
+        
+        const waveEndTime = Date.now();
+        const waveDuration = (waveEndTime - waveStartTime) / 1000;
+        
+        // Process wave results
+        const timeoutStores = [];
+        const completedStores = [];
+        const storeErrors = [];
+        
+        for (const result of waveResults) {
+          if (result.status === 'fulfilled' && result.value) {
+            const storeResult = result.value;
+            
+            // Check if store timed out - be more specific about timeout detection
+            const isTimeout = storeResult.errors && storeResult.errors.some(error => 
+              error.includes('Processing timeout after') || error.includes('Query timeout') || error.toLowerCase().includes('timeout')
+            );
+            
+            logger.debug(`[Wave ${wave}] ${storeResult.storeCode}: isTimeout=${isTimeout}, errors=${JSON.stringify(storeResult.errors)}`);
+            
+            if (isTimeout && wave < MAX_WAVES) {
+              // Store timed out, add to retry list
+              const store = currentStores.find(s => s.storeCode === storeResult.storeCode);
+              if (store) {
+                timeoutStores.push(store);
+                logger.warn(`[Wave ${wave}] ${storeResult.storeCode} timeout - will retry in next wave`);
+              }
+            } else {
+              // Store completed (successfully or permanently failed)
+              completedStores.push(storeResult);
+              results.processedStores++;
+              
+              // Collect non-timeout errors
+              if (storeResult.errors && storeResult.errors.length > 0 && !isTimeout) {
+                storeErrors.push({
+                  store: storeResult.storeCode,
+                  storeName: storeResult.storeName,
+                  errors: storeResult.errors
+                });
+              }
+              
+              // Count successful differences
+              if (storeResult.differences && storeResult.differences.length > 0) {
+                results.storesWithDifferences++;
+                results.totalDifferences += storeResult.differences.length;
+                results.details.push({
+                  store: storeResult.storeCode,
+                  storeName: storeResult.storeName,
+                  differences: storeResult.differences.length,
+                });
+              }
+            }
+          } else if (result.status === 'rejected') {
+            logger.error(`Unexpected store processing rejection: ${result.reason}`);
             storeErrors.push({
-              store: storeResult.storeCode,
-              storeName: storeResult.storeName,
-              errors: storeResult.errors
+              store: 'unknown',
+              storeName: 'unknown',
+              errors: [`Unexpected error: ${result.reason}`]
             });
           }
-          
-          if (storeResult.differences && storeResult.differences.length > 0) {
-            results.storesWithDifferences++;
-            results.totalDifferences += storeResult.differences.length;
-            results.details.push({
-              store: storeResult.storeCode,
-              storeName: storeResult.storeName,
-              differences: storeResult.differences.length,
-            });
-          }
-        } else if (result.status === 'rejected') {
-          // This should rarely happen now since we handle errors in processStore
-          logger.error(`Unexpected store processing rejection: ${result.reason}`);
-          storeErrors.push({
-            store: 'unknown',
-            storeName: 'unknown', 
-            errors: [`Unexpected error: ${result.reason}`]
-          });
+        }
+        
+        // Save wave results
+        results.waves.push({
+          wave: wave,
+          duration: waveDuration,
+          attempted: currentStores.length,
+          completed: completedStores.length,
+          timeouts: timeoutStores.length,
+          errors: storeErrors.length
+        });
+        
+        logger.info(`🌊 Wave ${wave} completed in ${waveDuration}s: ${completedStores.length} completed, ${timeoutStores.length} timeouts, ${storeErrors.length} errors`);
+        
+        if (timeoutStores.length > 0) {
+          logger.info(`⚠️ Timeout stores in wave ${wave}: ${timeoutStores.map(s => s.storeCode).join(', ')}`);
+        }
+        
+        // Prepare for next wave with timeout stores
+        currentStores = timeoutStores;
+        wave++;
+        
+        // Add brief delay between waves to let resources recover
+        if (currentStores.length > 0) {
+          logger.info(`⏳ Waiting 2 seconds before next wave...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
       
-      // Add store errors to results if any
-      if (storeErrors.length > 0) {
-        results.storeErrors = storeErrors;
-        logger.info(`Found errors in ${storeErrors.length} stores, but processing completed`);
+      // Handle any remaining timeout stores after max waves
+      if (currentStores.length > 0) {
+        logger.warn(`⚠️ ${currentStores.length} stores still timeout after ${MAX_WAVES} waves, marking as failed`);
+        const failedStores = currentStores.map(store => ({
+          store: store.storeCode,
+          storeName: store.storeName,
+          errors: [`Failed after ${MAX_WAVES} waves - persistent timeout`]
+        }));
+        
+        if (!results.storeErrors) results.storeErrors = [];
+        results.storeErrors.push(...failedStores);
       }
-
+      
+      const totalEndTime = Date.now();
+      const totalDuration = (totalEndTime - totalStartTime) / 1000;
+      
+      logger.info(`\n🎯 All waves completed in ${totalDuration}s: ${results.processedStores}/${results.totalStores} stores processed`);
+      
       // Clean up temporary file
       try {
         await fs.unlink(wrcDataFile);
@@ -387,12 +432,12 @@ class RekonWtHarianService {
         logger.warn(`Error deleting temporary file ${wrcDataFile}: ${error.message}`);
       }
 
-      // Add timestamp to results
+      // Add timestamp and summary to results
       results.timestamp = new Date().toISOString();
       results.branch = cab;
       results.period = period;
+      results.totalDuration = totalDuration;
 
-      logger.info(`Completed processing ${results.processedStores}/${results.totalStores} stores for branch ${cab}`);
       return results;
     } catch (error) {
       logger.error(`Error reconciling data: ${error.message}`);
@@ -401,24 +446,72 @@ class RekonWtHarianService {
   }
 
   /**
+   * Process a wave of stores with controlled concurrency
+   * @param {Array} stores - Array of store objects to process
+   * @param {string} cab - Branch code
+   * @param {string} period - Period in YYMM format
+   * @param {Array} wrcData - WRC data for the branch
+   * @param {number} concurrencyLimit - Maximum concurrent stores
+   * @param {number} waveNumber - Current wave number for logging
+   * @returns {Promise<Array>} Promise.allSettled results
+   */
+  async processStoreWave(stores, cab, period, wrcData, concurrencyLimit, waveNumber) {
+    // Use a semaphore-like approach to control concurrency
+    const processConcurrentStores = async (stores, limit) => {
+      const results = [];
+      const executing = [];
+
+      for (const store of stores) {
+        const promise = this.processStoreWithTimeout(store, cab, period, wrcData, waveNumber).then(result => {
+          executing.splice(executing.indexOf(promise), 1);
+          return result;
+        });
+        
+        results.push(promise);
+        executing.push(promise);
+
+        // If we've reached the concurrency limit, wait for one to complete
+        if (executing.length >= limit) {
+          await Promise.race(executing);
+        }
+      }
+
+      // Wait for all remaining promises to complete
+      return await Promise.allSettled(results);
+    };
+
+    return await processConcurrentStores(stores, concurrencyLimit);
+  }
+
+  /**
    * Process a single store with timeout (for parallel processing)
    * @param {Object} store - Store object
    * @param {string} cab - Branch code
    * @param {string} period - Period in YYMM format
    * @param {Array} wrcData - WRC data for the branch
+   * @param {number} waveNumber - Current wave number (optional, for logging)
    * @returns {Promise<Object>} Store processing result
    */
-  async processStoreWithTimeout(store, cab, period, wrcData) {
+  async processStoreWithTimeout(store, cab, period, wrcData, waveNumber = 1) {
     const storeCode = store.storeCode;
-    const STORE_TIMEOUT = config.parallelProcessing?.storeTimeoutMs || 30000; // 30 seconds timeout
+    const STORE_TIMEOUT = config.parallelProcessing?.storeTimeoutMs || 10000; // Reduced to 10 seconds for more realistic timeout testing
     
-    logger.info(`[${storeCode}] Starting processing...`);
+    // FOR TESTING: Simulate timeout on specific stores to test wave system
+    const SIMULATE_TIMEOUT = config.testing?.simulateTimeoutStores || [];
+    const shouldSimulateTimeout = SIMULATE_TIMEOUT.includes(storeCode);
+    
+    if (shouldSimulateTimeout && waveNumber <= 2) {
+      logger.warn(`[Wave ${waveNumber}] [${storeCode}] 🧪 SIMULATING TIMEOUT for testing purposes`);
+      await new Promise(resolve => setTimeout(resolve, STORE_TIMEOUT + 1000)); // Force timeout
+    }
+    
+    logger.info(`[Wave ${waveNumber}] [${storeCode}] Starting processing...`);
     
     // Create a timeout promise that returns error info instead of rejecting
     const timeoutPromise = new Promise((resolve) => {
       setTimeout(() => {
         const errorMsg = `Processing timeout after ${STORE_TIMEOUT}ms`;
-        logger.error(`[${storeCode}] ${errorMsg}`);
+        logger.error(`[Wave ${waveNumber}] [${storeCode}] ${errorMsg}`);
         resolve({
           storeCode,
           storeName: store.storeName,
@@ -437,16 +530,16 @@ class RekonWtHarianService {
       
       // Check if result has errors (from timeout or processing)
       if (result.errors && result.errors.length > 0) {
-        logger.info(`[${storeCode}] Completed with errors: ${result.errors.join(', ')}`);
+        logger.info(`[Wave ${waveNumber}] [${storeCode}] Completed with errors: ${result.errors.join(', ')}`);
       } else {
-        logger.info(`[${storeCode}] Completed successfully`);
+        logger.info(`[Wave ${waveNumber}] [${storeCode}] Completed successfully`);
       }
       
       return result;
     } catch (error) {
       // This should rarely happen now, but keep as fallback
       const errorMsg = `Unexpected processing failure: ${error.message}`;
-      logger.error(`[${storeCode}] ${errorMsg}`);
+      logger.error(`[Wave ${waveNumber}] [${storeCode}] ${errorMsg}`);
       return {
         storeCode,
         storeName: store.storeName,
@@ -726,10 +819,50 @@ class RekonWtHarianService {
         }
       }
 
-      // Simpan semua perbedaan sekaligus jika ada
+      // Simpan semua perbedaan sekaligus jika ada dengan upsert untuk update data existing
       if (differences.length > 0) {
-        logger.info(`Saving ${differences.length} differences of ${storeCode} to database`);
-        await RekonWtHarian.bulkCreate(differences);
+        logger.info(`Saving/Updating ${differences.length} differences of ${storeCode} to database`);
+        
+        // Gunakan upsert untuk setiap record agar bisa update jika sudah ada
+        // Composite primary key: cab, periode, tipe, toko, shop, tgl1
+        const upsertPromises = differences.map(async (difference) => {
+          try {
+            const [record, created] = await RekonWtHarian.upsert(difference, {
+              returning: true // Return the record whether created or updated
+            });
+            
+            if (created) {
+              logger.debug(`[${storeCode}] Created new record for ${difference.toko}-${difference.tipe}-${difference.tgl1}`);
+            } else {
+              logger.debug(`[${storeCode}] Updated existing record for ${difference.toko}-${difference.tipe}-${difference.tgl1}`);
+            }
+            
+            return { success: true, record, created };
+          } catch (error) {
+            logger.error(`[${storeCode}] Error upserting record ${difference.toko}-${difference.tipe}-${difference.tgl1}: ${error.message}`);
+            return { success: false, error: error.message };
+          }
+        });
+        
+        // Execute all upserts in parallel with controlled concurrency
+        const UPSERT_BATCH_SIZE = 10; // Process 10 records at a time
+        const results = [];
+        
+        for (let i = 0; i < upsertPromises.length; i += UPSERT_BATCH_SIZE) {
+          const batch = upsertPromises.slice(i, i + UPSERT_BATCH_SIZE);
+          const batchResults = await Promise.allSettled(batch);
+          results.push(...batchResults);
+        }
+        
+        // Count successes and failures
+        const successes = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
+        const failures = results.length - successes;
+        
+        if (failures > 0) {
+          logger.warn(`[${storeCode}] ${successes} records saved/updated successfully, ${failures} failed`);
+        } else {
+          logger.info(`[${storeCode}] All ${successes} records saved/updated successfully`);
+        }
       } else {
         logger.info(`No significant differences found from ${storeCode}`);
       }

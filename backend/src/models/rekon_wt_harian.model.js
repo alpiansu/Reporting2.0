@@ -223,22 +223,25 @@ const RekonWtHarian = sequelize.define(
       beforeUpdate: (record, options) => {
         record.updtime = new Date();
       },
-      // Hook untuk bulk update  
+      // Hook untuk bulk update dan upsert
       beforeBulkUpdate: (options) => {
-        // Sequelize bulk update format: [values, whereClause]
-        // We need to add updtime to the values object
-        if (Array.isArray(options) && options.length >= 1) {
-          // Format: [updateValues, whereClause, options]
-          if (typeof options[0] === 'object') {
-            options[0].updtime = new Date();
-          }
-        } else if (options.attributes) {
-          // Direct attributes format
+        // Add updtime for bulk updates
+        if (options.attributes) {
           options.attributes.updtime = new Date();
         } else {
-          // Fallback - create attributes if not exists
           options.attributes = { updtime: new Date() };
         }
+      },
+      
+      // Hook untuk upsert operations
+      beforeUpsert: (values, options) => {
+        // For upsert, set updtime only if this is an update (not create)
+        // The upsert will handle addtime automatically for new records
+        if (!values.addtime) {
+          values.addtime = new Date(); // For new records
+        }
+        // Always set updtime for upsert as it could be an update
+        values.updtime = new Date();
       },
       // Hook untuk bulk create - pastikan addtime diisi
       beforeBulkCreate: (records, options) => {

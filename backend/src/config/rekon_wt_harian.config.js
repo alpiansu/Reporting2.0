@@ -70,8 +70,17 @@ module.exports = {
     // Maximum number of branches to process concurrently (for reconcileAllBranches)
     branchConcurrencyLimit: 3,
     // Timeout for individual store processing (milliseconds)
-    storeTimeoutMs: 30000, // 30 seconds
+    storeTimeoutMs: 10000, // 10 seconds - reduced for better timeout testing
     // Timeout for individual query execution (milliseconds)
-    queryTimeoutMs: 15000, // 15 seconds
+    queryTimeoutMs: 8000, // 8 seconds - reduced for better timeout testing
+  },
+
+  // Testing configuration
+  testing: {
+    // Stores that will be artificially timed out for wave system testing
+    // Add store codes here to simulate timeouts in first 2 waves
+    simulateTimeoutStores: [],
+    // Example: simulateTimeoutStores: ['0001', '0002'], 
+    // These stores will timeout in wave 1 & 2, then succeed in wave 3
   },
 };

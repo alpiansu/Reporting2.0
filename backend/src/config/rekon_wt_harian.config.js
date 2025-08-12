@@ -62,4 +62,16 @@ module.exports = {
 
   // Threshold for considering values as different (to handle floating point precision issues)
   differenceThreshold: 50.01,
+
+  // Parallel processing configuration
+  parallelProcessing: {
+    // Maximum number of stores to process concurrently
+    concurrencyLimit: 5,
+    // Maximum number of branches to process concurrently (for reconcileAllBranches)
+    branchConcurrencyLimit: 3,
+    // Timeout for individual store processing (milliseconds)
+    storeTimeoutMs: 30000, // 30 seconds
+    // Timeout for individual query execution (milliseconds)
+    queryTimeoutMs: 15000, // 15 seconds
+  },
 };

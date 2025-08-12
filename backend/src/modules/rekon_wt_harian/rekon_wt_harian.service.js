@@ -41,27 +41,61 @@ class RekonWtHarianService {
         details: [],
       };
 
-      // Process each branch
-      for (const cab of branches) {
-        try {
-          logger.info(`Processing branch ${cab}`);
-          const branchResult = await this.reconcileData(cab, period);
+      // TRULY PARALLEL PROCESSING: Process branches with controlled concurrency
+      const BRANCH_CONCURRENCY_LIMIT = config.parallelProcessing?.branchConcurrencyLimit || 3;
+      logger.info(`Processing ${branches.length} branches with concurrency limit of ${BRANCH_CONCURRENCY_LIMIT}`);
+
+      // Use semaphore-like approach for branches too
+      const processConcurrentBranches = async (branchCodes, limit) => {
+        const results = [];
+        const executing = [];
+
+        for (const cab of branchCodes) {
+          const promise = this.processBranch(cab, period).then(result => {
+            executing.splice(executing.indexOf(promise), 1);
+            return result;
+          });
           
+          results.push(promise);
+          executing.push(promise);
+
+          // If we've reached the concurrency limit, wait for one to complete
+          if (executing.length >= limit) {
+            await Promise.race(executing);
+          }
+        }
+
+        // Wait for all remaining promises to complete
+        return await Promise.allSettled(results);
+      };
+
+      logger.info(`Starting parallel processing of ${branches.length} branches...`);
+      const branchStartTime = Date.now();
+      
+      // Process all branches with controlled concurrency
+      const allBranchResults = await processConcurrentBranches(branches, BRANCH_CONCURRENCY_LIMIT);
+      
+      const branchEndTime = Date.now();
+      logger.info(`Completed branch parallel processing in ${(branchEndTime - branchStartTime) / 1000} seconds`);
+      
+      // Process branch results
+      for (const result of allBranchResults) {
+        if (result.status === 'fulfilled' && result.value) {
+          const branchResult = result.value;
           results.processedBranches++;
           
           if (branchResult.storesWithDifferences > 0) {
             results.branchesWithDifferences++;
             results.totalDifferences += branchResult.totalDifferences;
             results.details.push({
-              branch: cab,
+              branch: branchResult.branch,
               storesWithDifferences: branchResult.storesWithDifferences,
               totalDifferences: branchResult.totalDifferences,
               storeDetails: branchResult.details
             });
           }
-        } catch (error) {
-          logger.error(`Error processing branch ${cab}: ${error.message}`);
-          // Continue with next branch even if there's an error
+        } else if (result.status === 'rejected') {
+          logger.error(`Branch processing error: ${result.reason}`);
         }
       }
 
@@ -69,10 +103,28 @@ class RekonWtHarianService {
       results.timestamp = new Date().toISOString();
       results.period = period;
 
+      logger.info(`Completed processing ${results.processedBranches}/${results.totalBranches} branches`);
       return results;
     } catch (error) {
       logger.error(`Error reconciling all branches: ${error.message}`);
       throw error;
+    }
+  }
+
+  /**
+   * Process a single branch (extracted from reconcileAllBranches for parallel processing)
+   * @param {string} cab - Branch code
+   * @param {string} period - Period in YYMM format
+   * @returns {Promise<Object>} Branch processing result
+   */
+  async processBranch(cab, period) {
+    try {
+      logger.info(`Processing branch ${cab}`);
+      const branchResult = await this.reconcileData(cab, period);
+      return branchResult;
+    } catch (error) {
+      logger.error(`Error processing branch ${cab}: ${error.message}`);
+      throw error; // Let Promise.allSettled handle the rejection
     }
   }
 
@@ -248,65 +300,60 @@ class RekonWtHarianService {
         details: [],
       };
 
-      // Process each store
-      for (const store of branchStores) {
-        try {
-          const storeCode = store.storeCode;
-          const storeInfo = {
-            dbHost: store.dbHost,
-            storeName: store.storeName,
-          };
+      // TRULY PARALLEL PROCESSING: Process stores with controlled concurrency using Promise.allSettled
+      const CONCURRENCY_LIMIT = config.parallelProcessing?.concurrencyLimit || 5;
+      logger.info(`Processing ${branchStores.length} stores with concurrency limit of ${CONCURRENCY_LIMIT}`);
 
-          if (!storeInfo.dbHost) {
-            logger.warn(`No dbHost found for store ${storeCode} in branch ${cab}`);
-            continue;
+      // Use a semaphore-like approach to control concurrency
+      const processConcurrentStores = async (stores, limit) => {
+        const results = [];
+        const executing = [];
+
+        for (const store of stores) {
+          const promise = this.processStoreWithTimeout(store, cab, period, wrcData).then(result => {
+            executing.splice(executing.indexOf(promise), 1);
+            return result;
+          });
+          
+          results.push(promise);
+          executing.push(promise);
+
+          // If we've reached the concurrency limit, wait for one to complete
+          if (executing.length >= limit) {
+            await Promise.race(executing);
           }
+        }
 
-          // Connect to store database
-          const storeConnection = await dbStore.createDbStore(storeInfo.dbHost);
+        // Wait for all remaining promises to complete
+        return await Promise.allSettled(results);
+      };
 
-          if (!storeConnection) {
-            logger.warn(`Could not connect to store ${storeCode} at ${storeInfo.dbHost}`);
-            continue;
+      logger.info(`Starting parallel processing of ${branchStores.length} stores...`);
+      const startTime = Date.now();
+      
+      // Process all stores with controlled concurrency
+      const allResults = await processConcurrentStores(branchStores, CONCURRENCY_LIMIT);
+      
+      const endTime = Date.now();
+      logger.info(`Completed parallel processing in ${(endTime - startTime) / 1000} seconds`);
+      
+      // Process results
+      for (const result of allResults) {
+        if (result.status === 'fulfilled' && result.value) {
+          const storeResult = result.value;
+          results.processedStores++;
+          
+          if (storeResult.differences && storeResult.differences.length > 0) {
+            results.storesWithDifferences++;
+            results.totalDifferences += storeResult.differences.length;
+            results.details.push({
+              store: storeResult.storeCode,
+              storeName: storeResult.storeName,
+              differences: storeResult.differences.length,
+            });
           }
-
-          try {
-            // Get store data
-            const storeQuery = this.getStoreQuery(period);
-            const [storeData] = await storeConnection.query(storeQuery);
-
-            // Filter WRC data for this store
-            const storeWrcData = wrcData.filter(item => item.shop === storeCode);
-            let differences = [];
-            if (storeWrcData.length === 0) {
-              logger.info(`No WRC data found for store ${storeCode}`);
-              results.processedStores++;
-              continue;
-            } else {
-              // Compare data
-              differences = await this.compareData(cab, period, storeWrcData, storeData, storeCode);
-            }
-
-            if (differences.length > 0) {
-              results.storesWithDifferences++;
-              results.totalDifferences += differences.length;
-              results.details.push({
-                store: storeCode,
-                storeName: storeInfo.storeName,
-                differences: differences.length,
-              });
-            }
-
-            results.processedStores++;
-          } finally {
-            // Close store connection
-            if (storeConnection.end) {
-              await storeConnection.end();
-            }
-          }
-        } catch (error) {
-          logger.error(`Error processing store ${storeCode}: ${error.message}`);
-          // Continue with next store even if there's an error
+        } else if (result.status === 'rejected') {
+          logger.error(`Store processing error: ${result.reason}`);
         }
       }
 
@@ -322,10 +369,132 @@ class RekonWtHarianService {
       results.branch = cab;
       results.period = period;
 
+      logger.info(`Completed processing ${results.processedStores}/${results.totalStores} stores for branch ${cab}`);
       return results;
     } catch (error) {
       logger.error(`Error reconciling data: ${error.message}`);
       throw error;
+    }
+  }
+
+  /**
+   * Process a single store with timeout (for parallel processing)
+   * @param {Object} store - Store object
+   * @param {string} cab - Branch code
+   * @param {string} period - Period in YYMM format
+   * @param {Array} wrcData - WRC data for the branch
+   * @returns {Promise<Object>} Store processing result
+   */
+  async processStoreWithTimeout(store, cab, period, wrcData) {
+    const storeCode = store.storeCode;
+    const STORE_TIMEOUT = config.parallelProcessing?.storeTimeoutMs || 30000; // 30 seconds timeout
+    
+    logger.info(`[${storeCode}] Starting processing...`);
+    
+    // Create a timeout promise
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Store ${storeCode} processing timeout after ${STORE_TIMEOUT}ms`));
+      }, STORE_TIMEOUT);
+    });
+
+    // Create the actual processing promise
+    const processingPromise = this.processStore(store, cab, period, wrcData);
+
+    try {
+      // Race between timeout and actual processing
+      const result = await Promise.race([processingPromise, timeoutPromise]);
+      logger.info(`[${storeCode}] Completed successfully`);
+      return result;
+    } catch (error) {
+      logger.error(`[${storeCode}] Processing failed: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Process a single store (extracted from reconcileData for parallel processing)
+   * @param {Object} store - Store object
+   * @param {string} cab - Branch code
+   * @param {string} period - Period in YYMM format
+   * @param {Array} wrcData - WRC data for the branch
+   * @returns {Promise<Object>} Store processing result
+   */
+  async processStore(store, cab, period, wrcData) {
+    const storeCode = store.storeCode;
+    const storeInfo = {
+      dbHost: store.dbHost,
+      storeName: store.storeName,
+    };
+
+    try {
+      if (!storeInfo.dbHost) {
+        logger.warn(`[${storeCode}] No dbHost found in branch ${cab}`);
+        return {
+          storeCode,
+          storeName: storeInfo.storeName,
+          differences: [],
+        };
+      }
+
+      // Connect to store database with reduced retry for faster parallel processing
+      const storeConnection = await dbStore.createDbStore(storeInfo.dbHost, 1); // Only 1 retry attempt
+
+      if (!storeConnection) {
+        logger.warn(`[${storeCode}] Could not connect to ${storeInfo.dbHost}`);
+        return {
+          storeCode,
+          storeName: storeInfo.storeName,
+          differences: [],
+        };
+      }
+
+      try {
+        // Get store data with timeout
+        const storeQuery = this.getStoreQuery(period);
+        logger.debug(`[${storeCode}] Executing query...`);
+        
+        // Execute query with timeout
+        const queryTimeout = config.parallelProcessing?.queryTimeoutMs || 15000; // 15 seconds
+        const queryPromise = storeConnection.query(storeQuery);
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Query timeout')), queryTimeout);
+        });
+        
+        const [storeData] = await Promise.race([queryPromise, timeoutPromise]);
+        logger.debug(`[${storeCode}] Query completed, got ${storeData.length} records`);
+
+        // Filter WRC data for this store
+        const storeWrcData = wrcData.filter(item => item.shop === storeCode);
+        
+        if (storeWrcData.length === 0) {
+          logger.debug(`[${storeCode}] No WRC data found`);
+          return {
+            storeCode,
+            storeName: storeInfo.storeName,
+            differences: [],
+          };
+        }
+
+        // Compare data
+        logger.debug(`[${storeCode}] Comparing ${storeWrcData.length} WRC records with ${storeData.length} store records`);
+        const differences = await this.compareData(cab, period, storeWrcData, storeData, storeCode);
+        
+        logger.debug(`[${storeCode}] Found ${differences.length} differences`);
+        return {
+          storeCode,
+          storeName: storeInfo.storeName,
+          differences,
+        };
+      } finally {
+        // Close store connection
+        if (storeConnection && storeConnection.end) {
+          await storeConnection.end();
+        }
+      }
+    } catch (error) {
+      logger.error(`[${storeCode}] Error: ${error.message}`);
+      throw error; // Let Promise.allSettled handle the rejection
     }
   }
 

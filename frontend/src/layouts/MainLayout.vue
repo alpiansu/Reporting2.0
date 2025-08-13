@@ -69,12 +69,12 @@
             @click="mobileOpen = false"
           >
             <i :class="`pi ${item.icon}`"></i>
-            <span v-if="drawerOpen">{{ item.text }}</span>
+            <span v-if="drawerOpen" class="nav-text">{{ item.text }}</span>
           </router-link>
         </nav>
         <div class="sidebar-footer">
           <div class="sidebar-divider" v-if="drawerOpen"></div>
-          <button class="toggle-button" @click="handleDrawerClose">
+          <button class="toggle-button" @click="handleDrawerClose" :title="drawerOpen ? 'Minimize Sidebar' : 'Expand Sidebar'">
             <i :class="`pi ${drawerOpen ? 'pi-chevron-left' : 'pi-chevron-right'}`"></i>
           </button>
         </div>

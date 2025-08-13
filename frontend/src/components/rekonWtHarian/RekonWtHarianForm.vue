@@ -50,7 +50,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue';
 import { useToastService } from '../../utils/toast';
-import { mCabangService } from '../../services';
+import { useCabangStore } from '../../stores';
 import Dropdown from 'primevue/dropdown';
 import Calendar from 'primevue/calendar';
 
@@ -66,13 +66,14 @@ const formData = reactive({
   periode: ''
 });
 
+const cabangStore = useCabangStore();
+
 // Fetch cabang data on component mount
 onMounted(async () => {
   try {
     loading.value = true;
-    const response = await mCabangService.getAllCabang();
-    // Adjusted to handle the new API response format
-    const cabangData = response.data.data;
+    
+    const cabangData = cabangStore.allCabang;
     
     // Add 'SEMUA CABANG' option at the beginning
     cabangOptions.value = [

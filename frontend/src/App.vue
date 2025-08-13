@@ -16,15 +16,18 @@
 import { onMounted } from 'vue';
 import { useAuthStore } from './stores';
 import Toast from 'primevue/toast';
+import { useCabangStore } from './stores';
 
 // Import animations
 import './assets/styles/animations.css';
 
 const authStore = useAuthStore();
+const cabangStore = useCabangStore();
 
 onMounted(() => {
   // Initialize auth state
   authStore.initAuth();
+  cabangStore.fetchCabang();
 });
 </script>
 

@@ -12,12 +12,6 @@
       
       <!-- Results Section -->
       <div v-if="showResults" class="results-section">
-        <h2 class="section-title">Hasil Rekonsiliasi</h2>
-        <div class="section-subtitle">
-          Cabang: <strong>{{ getCabangDisplay(activeCab) }}</strong> | 
-          Periode: <strong>{{ formatPeriode(activePeriode) }}</strong>
-        </div>
-        
         <RekonWtHarianResults 
           ref="resultsComponent"
           :cab="activeCab" 

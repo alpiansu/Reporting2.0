@@ -119,7 +119,7 @@ class RekonWtHarianController {
 
       // Handle 'SEMUA CABANG' option
       let summary;
-      if (cab === "SEMUA") {
+      if (cab === "SEMUA" || cab === "All" || !cab) {
         summary = await rekonWtHarianService.getAllCabangSummary(periode);
       } else {
         summary = await rekonWtHarianService.getSummary(cab, periode);

@@ -29,7 +29,7 @@ class RekonWtHarianService {
       // Get all unique branch codes
       const allStores = storeService.stores;
       const branches = [...new Set(allStores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))];
-      
+
       logger.info(`Found ${branches.length} branches to process`);
 
       const results = {
@@ -55,7 +55,7 @@ class RekonWtHarianService {
             executing.splice(executing.indexOf(promise), 1);
             return result;
           });
-          
+
           results.push(promise);
           executing.push(promise);
 
@@ -71,19 +71,19 @@ class RekonWtHarianService {
 
       logger.info(`Starting parallel processing of ${branches.length} branches...`);
       const branchStartTime = Date.now();
-      
+
       // Process all branches with controlled concurrency
       const allBranchResults = await processConcurrentBranches(branches, BRANCH_CONCURRENCY_LIMIT);
-      
+
       const branchEndTime = Date.now();
       logger.info(`Completed branch parallel processing in ${(branchEndTime - branchStartTime) / 1000} seconds`);
-      
+
       // Process branch results
       for (const result of allBranchResults) {
-        if (result.status === 'fulfilled' && result.value) {
+        if (result.status === "fulfilled" && result.value) {
           const branchResult = result.value;
           results.processedBranches++;
-          
+
           if (branchResult.storesWithDifferences > 0) {
             results.branchesWithDifferences++;
             results.totalDifferences += branchResult.totalDifferences;
@@ -91,10 +91,10 @@ class RekonWtHarianService {
               branch: branchResult.branch,
               storesWithDifferences: branchResult.storesWithDifferences,
               totalDifferences: branchResult.totalDifferences,
-              storeDetails: branchResult.details
+              storeDetails: branchResult.details,
             });
           }
-        } else if (result.status === 'rejected') {
+        } else if (result.status === "rejected") {
           logger.error(`Branch processing error: ${result.reason}`);
         }
       }
@@ -304,40 +304,49 @@ class RekonWtHarianService {
       // WAVE-BASED PROCESSING with retry for timeouts
       const MAX_WAVES = 3;
       const CONCURRENCY_LIMIT = config.parallelProcessing?.concurrencyLimit || 5;
-      
+
       logger.info(`Starting wave-based processing of ${branchStores.length} stores with ${MAX_WAVES} waves max`);
       const totalStartTime = Date.now();
-      
+
       // Process stores in waves, retrying timeout stores
       let currentStores = branchStores.slice(); // Copy of all stores
       let wave = 1;
-      
+
       while (wave <= MAX_WAVES && currentStores.length > 0) {
         logger.info(`\n🌊 Starting Wave ${wave} with ${currentStores.length} stores...`);
         const waveStartTime = Date.now();
-        
+
         // Process current wave of stores
         const waveResults = await this.processStoreWave(currentStores, cab, period, wrcData, CONCURRENCY_LIMIT, wave);
-        
+
         const waveEndTime = Date.now();
         const waveDuration = (waveEndTime - waveStartTime) / 1000;
-        
+
         // Process wave results
         const timeoutStores = [];
         const completedStores = [];
         const storeErrors = [];
-        
+
         for (const result of waveResults) {
-          if (result.status === 'fulfilled' && result.value) {
+          if (result.status === "fulfilled" && result.value) {
             const storeResult = result.value;
-            
+
             // Check if store timed out - be more specific about timeout detection
-            const isTimeout = storeResult.errors && storeResult.errors.some(error => 
-              error.includes('Processing timeout after') || error.includes('Query timeout') || error.toLowerCase().includes('timeout')
+            const isTimeout =
+              storeResult.errors &&
+              storeResult.errors.some(
+                error =>
+                  error.includes("Processing timeout after") ||
+                  error.includes("Query timeout") ||
+                  error.toLowerCase().includes("timeout")
+              );
+
+            logger.debug(
+              `[Wave ${wave}] ${storeResult.storeCode}: isTimeout=${isTimeout}, errors=${JSON.stringify(
+                storeResult.errors
+              )}`
             );
-            
-            logger.debug(`[Wave ${wave}] ${storeResult.storeCode}: isTimeout=${isTimeout}, errors=${JSON.stringify(storeResult.errors)}`);
-            
+
             if (isTimeout && wave < MAX_WAVES) {
               // Store timed out, add to retry list
               const store = currentStores.find(s => s.storeCode === storeResult.storeCode);
@@ -349,16 +358,16 @@ class RekonWtHarianService {
               // Store completed (successfully or permanently failed)
               completedStores.push(storeResult);
               results.processedStores++;
-              
+
               // Collect non-timeout errors
               if (storeResult.errors && storeResult.errors.length > 0 && !isTimeout) {
                 storeErrors.push({
                   store: storeResult.storeCode,
                   storeName: storeResult.storeName,
-                  errors: storeResult.errors
+                  errors: storeResult.errors,
                 });
               }
-              
+
               // Count successful differences
               if (storeResult.differences && storeResult.differences.length > 0) {
                 results.storesWithDifferences++;
@@ -370,16 +379,16 @@ class RekonWtHarianService {
                 });
               }
             }
-          } else if (result.status === 'rejected') {
+          } else if (result.status === "rejected") {
             logger.error(`Unexpected store processing rejection: ${result.reason}`);
             storeErrors.push({
-              store: 'unknown',
-              storeName: 'unknown',
-              errors: [`Unexpected error: ${result.reason}`]
+              store: "unknown",
+              storeName: "unknown",
+              errors: [`Unexpected error: ${result.reason}`],
             });
           }
         }
-        
+
         // Save wave results
         results.waves.push({
           wave: wave,
@@ -387,44 +396,48 @@ class RekonWtHarianService {
           attempted: currentStores.length,
           completed: completedStores.length,
           timeouts: timeoutStores.length,
-          errors: storeErrors.length
+          errors: storeErrors.length,
         });
-        
-        logger.info(`🌊 Wave ${wave} completed in ${waveDuration}s: ${completedStores.length} completed, ${timeoutStores.length} timeouts, ${storeErrors.length} errors`);
-        
+
+        logger.info(
+          `🌊 Wave ${wave} completed in ${waveDuration}s: ${completedStores.length} completed, ${timeoutStores.length} timeouts, ${storeErrors.length} errors`
+        );
+
         if (timeoutStores.length > 0) {
-          logger.info(`⚠️ Timeout stores in wave ${wave}: ${timeoutStores.map(s => s.storeCode).join(', ')}`);
+          logger.info(`⚠️ Timeout stores in wave ${wave}: ${timeoutStores.map(s => s.storeCode).join(", ")}`);
         }
-        
+
         // Prepare for next wave with timeout stores
         currentStores = timeoutStores;
         wave++;
-        
+
         // Add brief delay between waves to let resources recover
         if (currentStores.length > 0) {
           logger.info(`⏳ Waiting 2 seconds before next wave...`);
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
-      
+
       // Handle any remaining timeout stores after max waves
       if (currentStores.length > 0) {
         logger.warn(`⚠️ ${currentStores.length} stores still timeout after ${MAX_WAVES} waves, marking as failed`);
         const failedStores = currentStores.map(store => ({
           store: store.storeCode,
           storeName: store.storeName,
-          errors: [`Failed after ${MAX_WAVES} waves - persistent timeout`]
+          errors: [`Failed after ${MAX_WAVES} waves - persistent timeout`],
         }));
-        
+
         if (!results.storeErrors) results.storeErrors = [];
         results.storeErrors.push(...failedStores);
       }
-      
+
       const totalEndTime = Date.now();
       const totalDuration = (totalEndTime - totalStartTime) / 1000;
-      
-      logger.info(`\n🎯 All waves completed in ${totalDuration}s: ${results.processedStores}/${results.totalStores} stores processed`);
-      
+
+      logger.info(
+        `\n🎯 All waves completed in ${totalDuration}s: ${results.processedStores}/${results.totalStores} stores processed`
+      );
+
       // Clean up temporary file
       try {
         await fs.unlink(wrcDataFile);
@@ -466,7 +479,7 @@ class RekonWtHarianService {
           executing.splice(executing.indexOf(promise), 1);
           return result;
         });
-        
+
         results.push(promise);
         executing.push(promise);
 
@@ -495,20 +508,20 @@ class RekonWtHarianService {
   async processStoreWithTimeout(store, cab, period, wrcData, waveNumber = 1) {
     const storeCode = store.storeCode;
     const STORE_TIMEOUT = config.parallelProcessing?.storeTimeoutMs || 10000; // Reduced to 10 seconds for more realistic timeout testing
-    
+
     // FOR TESTING: Simulate timeout on specific stores to test wave system
     const SIMULATE_TIMEOUT = config.testing?.simulateTimeoutStores || [];
     const shouldSimulateTimeout = SIMULATE_TIMEOUT.includes(storeCode);
-    
+
     if (shouldSimulateTimeout && waveNumber <= 2) {
       logger.warn(`[Wave ${waveNumber}] [${storeCode}] 🧪 SIMULATING TIMEOUT for testing purposes`);
       await new Promise(resolve => setTimeout(resolve, STORE_TIMEOUT + 1000)); // Force timeout
     }
-    
+
     logger.info(`[Wave ${waveNumber}] [${storeCode}] Starting processing...`);
-    
+
     // Create a timeout promise that returns error info instead of rejecting
-    const timeoutPromise = new Promise((resolve) => {
+    const timeoutPromise = new Promise(resolve => {
       setTimeout(() => {
         const errorMsg = `Processing timeout after ${STORE_TIMEOUT}ms`;
         logger.error(`[Wave ${waveNumber}] [${storeCode}] ${errorMsg}`);
@@ -516,7 +529,7 @@ class RekonWtHarianService {
           storeCode,
           storeName: store.storeName,
           differences: [],
-          errors: [errorMsg]
+          errors: [errorMsg],
         });
       }, STORE_TIMEOUT);
     });
@@ -527,14 +540,14 @@ class RekonWtHarianService {
     try {
       // Race between timeout and actual processing
       const result = await Promise.race([processingPromise, timeoutPromise]);
-      
+
       // Check if result has errors (from timeout or processing)
       if (result.errors && result.errors.length > 0) {
-        logger.info(`[Wave ${waveNumber}] [${storeCode}] Completed with errors: ${result.errors.join(', ')}`);
+        logger.info(`[Wave ${waveNumber}] [${storeCode}] Completed with errors: ${result.errors.join(", ")}`);
       } else {
         logger.info(`[Wave ${waveNumber}] [${storeCode}] Completed successfully`);
       }
-      
+
       return result;
     } catch (error) {
       // This should rarely happen now, but keep as fallback
@@ -544,7 +557,7 @@ class RekonWtHarianService {
         storeCode,
         storeName: store.storeName,
         differences: [],
-        errors: [errorMsg]
+        errors: [errorMsg],
       };
     }
   }
@@ -572,7 +585,7 @@ class RekonWtHarianService {
           storeCode,
           storeName: storeInfo.storeName,
           differences: [],
-          errors: [errorMsg]
+          errors: [errorMsg],
         };
       }
 
@@ -586,7 +599,7 @@ class RekonWtHarianService {
           storeCode,
           storeName: storeInfo.storeName,
           differences: [],
-          errors: [errorMsg]
+          errors: [errorMsg],
         };
       }
 
@@ -594,40 +607,42 @@ class RekonWtHarianService {
         // Get store data with timeout
         const storeQuery = this.getStoreQuery(period);
         logger.debug(`[${storeCode}] Executing query...`);
-        
+
         // Execute query with timeout
         const queryTimeout = config.parallelProcessing?.queryTimeoutMs || 15000; // 15 seconds
         const queryPromise = storeConnection.query(storeQuery);
         const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Query timeout')), queryTimeout);
+          setTimeout(() => reject(new Error("Query timeout")), queryTimeout);
         });
-        
+
         const [storeData] = await Promise.race([queryPromise, timeoutPromise]);
         logger.debug(`[${storeCode}] Query completed, got ${storeData.length} records`);
 
         // Filter WRC data for this store
         const storeWrcData = wrcData.filter(item => item.shop === storeCode);
-        
+
         if (storeWrcData.length === 0) {
           logger.debug(`[${storeCode}] No WRC data found`);
           return {
             storeCode,
             storeName: storeInfo.storeName,
             differences: [],
-            errors: []
+            errors: [],
           };
         }
 
         // Compare data
-        logger.debug(`[${storeCode}] Comparing ${storeWrcData.length} WRC records with ${storeData.length} store records`);
+        logger.debug(
+          `[${storeCode}] Comparing ${storeWrcData.length} WRC records with ${storeData.length} store records`
+        );
         const differences = await this.compareData(cab, period, storeWrcData, storeData, storeCode);
-        
+
         logger.debug(`[${storeCode}] Found ${differences.length} differences`);
         return {
           storeCode,
           storeName: storeInfo.storeName,
           differences,
-          errors: []
+          errors: [],
         };
       } finally {
         // Properly close connection pool
@@ -647,13 +662,13 @@ class RekonWtHarianService {
     } catch (error) {
       const errorMsg = `Processing error: ${error.message}`;
       logger.error(`[${storeCode}] ${errorMsg}`);
-      
+
       // Don't throw - return error info instead to prevent premature response
       return {
         storeCode,
         storeName: storeInfo.storeName,
         differences: [],
-        errors: [errorMsg]
+        errors: [errorMsg],
       };
     }
   }
@@ -822,42 +837,48 @@ class RekonWtHarianService {
       // Simpan semua perbedaan sekaligus jika ada dengan upsert untuk update data existing
       if (differences.length > 0) {
         logger.info(`Saving/Updating ${differences.length} differences of ${storeCode} to database`);
-        
+
         // Gunakan upsert untuk setiap record agar bisa update jika sudah ada
         // Composite primary key: cab, periode, tipe, toko, shop, tgl1
-        const upsertPromises = differences.map(async (difference) => {
+        const upsertPromises = differences.map(async difference => {
           try {
             const [record, created] = await RekonWtHarian.upsert(difference, {
-              returning: true // Return the record whether created or updated
+              returning: true, // Return the record whether created or updated
             });
-            
+
             if (created) {
-              logger.debug(`[${storeCode}] Created new record for ${difference.toko}-${difference.tipe}-${difference.tgl1}`);
+              logger.debug(
+                `[${storeCode}] Created new record for ${difference.toko}-${difference.tipe}-${difference.tgl1}`
+              );
             } else {
-              logger.debug(`[${storeCode}] Updated existing record for ${difference.toko}-${difference.tipe}-${difference.tgl1}`);
+              logger.debug(
+                `[${storeCode}] Updated existing record for ${difference.toko}-${difference.tipe}-${difference.tgl1}`
+              );
             }
-            
+
             return { success: true, record, created };
           } catch (error) {
-            logger.error(`[${storeCode}] Error upserting record ${difference.toko}-${difference.tipe}-${difference.tgl1}: ${error.message}`);
+            logger.error(
+              `[${storeCode}] Error upserting record ${difference.toko}-${difference.tipe}-${difference.tgl1}: ${error.message}`
+            );
             return { success: false, error: error.message };
           }
         });
-        
+
         // Execute all upserts in parallel with controlled concurrency
         const UPSERT_BATCH_SIZE = 10; // Process 10 records at a time
         const results = [];
-        
+
         for (let i = 0; i < upsertPromises.length; i += UPSERT_BATCH_SIZE) {
           const batch = upsertPromises.slice(i, i + UPSERT_BATCH_SIZE);
           const batchResults = await Promise.allSettled(batch);
           results.push(...batchResults);
         }
-        
+
         // Count successes and failures
-        const successes = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
+        const successes = results.filter(r => r.status === "fulfilled" && r.value.success).length;
         const failures = results.length - successes;
-        
+
         if (failures > 0) {
           logger.warn(`[${storeCode}] ${successes} records saved/updated successfully, ${failures} failed`);
         } else {
@@ -898,21 +919,21 @@ class RekonWtHarianService {
   async getAllCabangResults(period, options = {}) {
     try {
       const { page = 1, limit = config.pagination.defaultLimit, tipe, toko, tgl1 } = options;
-      
+
       // Ensure limit doesn't exceed maximum
       const validLimit = Math.min(limit, config.pagination.maxLimit);
       const offset = (page - 1) * validLimit;
-      
+
       // Build the query
       const query = {
-        periode: period
+        periode: period,
       };
-      
+
       // Add filters if provided
       if (tipe) query.tipe = tipe;
       if (toko) query.toko = { [Op.like]: `%${toko}%` };
       if (tgl1) query.tgl1 = tgl1;
-      
+
       // Get total count and results
       const { count, rows } = await RekonWtHarian.findAndCountAll({
         where: query,
@@ -924,7 +945,7 @@ class RekonWtHarianService {
           ["tipe", "ASC"],
         ],
       });
-      
+
       // Return in the same format as getResults method
       return {
         total: count,
@@ -1003,9 +1024,9 @@ class RekonWtHarianService {
   async deleteAllCabangResults(period) {
     try {
       const deletedCount = await RekonWtHarian.destroy({
-        where: { periode: period }
+        where: { periode: period },
       });
-      
+
       logger.info(`Deleted ${deletedCount} records for all branches in period ${period}`);
       return deletedCount;
     } catch (error) {
@@ -1045,11 +1066,24 @@ class RekonWtHarianService {
       const result = await sequelize.query(
         `
         SELECT 
-          COUNT(*) as total_records,
-          SUM(ABS(selisih_gross)) as total_selisih_gross,
-          SUM(ABS(selisih_ppn)) as total_selisih_ppn,
-          SUM(ABS(selisih_gross_idm)) as total_selisih_gross_idm,
-          SUM(ABS(selisih_ppn_idm)) as total_selisih_ppn_idm
+            COUNT(DISTINCT shop) AS jml_toko,
+            SUM(selisih_gross) AS sel_gross,
+            SUM(selisih_ppn) AS sel_ppn,
+            SUM(selisih_gross_idm) AS sel_gross_idm,
+            SUM(selisih_ppn_idm) AS sel_ppn_idm,
+
+            MAX(selisih_gross) AS max_gross,
+            MIN(selisih_gross) AS min_gross,
+
+            MAX(selisih_ppn) AS max_ppn,
+            MIN(selisih_ppn) AS min_ppn,
+
+            MAX(selisih_gross_idm) AS max_gross_idm,
+            MIN(selisih_gross_idm) AS min_gross_idm,
+
+            MAX(selisih_ppn_idm) AS max_ppn_idm,
+            MIN(selisih_ppn_idm) AS min_ppn_idm
+
         FROM rekon_wt_harian
         WHERE periode = ?
       `,
@@ -1062,40 +1096,40 @@ class RekonWtHarianService {
       // Get additional statistics for detailed reporting
       const typeStats = await RekonWtHarian.findAll({
         attributes: [
-          'tipe',
-          [sequelize.fn('COUNT', sequelize.col('id')), 'count'],
-          [sequelize.fn('SUM', sequelize.col('selisih_gross')), 'diffGross'],
-          [sequelize.fn('SUM', sequelize.col('selisih_ppn')), 'diffPpn']
+          "tipe",
+          [sequelize.fn("COUNT", sequelize.col("id")), "count"],
+          [sequelize.fn("SUM", sequelize.col("selisih_gross")), "diffGross"],
+          [sequelize.fn("SUM", sequelize.col("selisih_ppn")), "diffPpn"],
         ],
         where: {
-          periode: period
+          periode: period,
         },
-        group: ['tipe'],
-        raw: true
+        group: ["tipe"],
+        raw: true,
       });
-      
+
       // Get count by branch
       const branchStats = await RekonWtHarian.findAll({
         attributes: [
-          'cab',
-          [sequelize.fn('COUNT', sequelize.col('id')), 'count'],
-          [sequelize.fn('SUM', sequelize.col('selisih_gross')), 'diffGross'],
-          [sequelize.fn('SUM', sequelize.col('selisih_ppn')), 'diffPpn']
+          "cab",
+          [sequelize.fn("COUNT", sequelize.col("id")), "count"],
+          [sequelize.fn("SUM", sequelize.col("selisih_gross")), "diffGross"],
+          [sequelize.fn("SUM", sequelize.col("selisih_ppn")), "diffPpn"],
         ],
         where: {
-          periode: period
+          periode: period,
         },
-        group: ['cab'],
-        raw: true
+        group: ["cab"],
+        raw: true,
       });
-      
+
       // Combine the main summary with additional stats
       const summary = {
         ...result[0],
         typeStats,
-        branchStats
+        branchStats,
       };
-      
+
       return summary;
     } catch (error) {
       logger.error(`Error in getAllCabangSummary: ${error.message}`);
@@ -1114,11 +1148,24 @@ class RekonWtHarianService {
       const result = await sequelize.query(
         `
         SELECT 
-          COUNT(*) as total_records,
-          SUM(ABS(selisih_gross)) as total_selisih_gross,
-          SUM(ABS(selisih_ppn)) as total_selisih_ppn,
-          SUM(ABS(selisih_gross_idm)) as total_selisih_gross_idm,
-          SUM(ABS(selisih_ppn_idm)) as total_selisih_ppn_idm
+            COUNT(DISTINCT shop) AS jml_toko,
+            SUM(selisih_gross) AS sel_gross,
+            SUM(selisih_ppn) AS sel_ppn,
+            SUM(selisih_gross_idm) AS sel_gross_idm,
+            SUM(selisih_ppn_idm) AS sel_ppn_idm,
+
+            MAX(selisih_gross) AS max_gross,
+            MIN(selisih_gross) AS min_gross,
+
+            MAX(selisih_ppn) AS max_ppn,
+            MIN(selisih_ppn) AS min_ppn,
+
+            MAX(selisih_gross_idm) AS max_gross_idm,
+            MIN(selisih_gross_idm) AS min_gross_idm,
+
+            MAX(selisih_ppn_idm) AS max_ppn_idm,
+            MIN(selisih_ppn_idm) AS min_ppn_idm
+
         FROM rekon_wt_harian
         WHERE cab = ? AND periode = ?
       `,

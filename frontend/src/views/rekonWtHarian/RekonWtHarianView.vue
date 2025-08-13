@@ -91,7 +91,6 @@ const formatPeriode = (periode) => {
 .content-container {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
 }
 
 .section-title {

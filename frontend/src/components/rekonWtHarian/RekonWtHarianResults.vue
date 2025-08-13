@@ -769,7 +769,7 @@ defineExpose({
 <style scoped>
 /* Container */
 .results-container {
-  padding: 1rem 0;
+  padding: 0 0;
 }
 
 .loading-state,

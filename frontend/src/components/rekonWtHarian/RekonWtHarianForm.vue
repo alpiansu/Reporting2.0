@@ -176,7 +176,7 @@ const emit = defineEmits(['view-results']);
 
 <style scoped>
 .rekon-form-container {
-  margin-bottom: 2rem;
+  margin-bottom: 0;
 }
 
 .card {

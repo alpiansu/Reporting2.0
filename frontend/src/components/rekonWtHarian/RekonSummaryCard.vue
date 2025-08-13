@@ -99,6 +99,10 @@
 
 <script setup>
 import { computed } from 'vue';
+import { useCabangStore } from '../../stores';
+
+const cabangStore = useCabangStore();
+console.log('cabangStore:', cabangStore);
 
 const props = defineProps({
   summary: {
@@ -117,7 +121,8 @@ const props = defineProps({
 
 // Computed property to display cabang name
 const cabangName = computed(() => {
-  return props.cab ? props.cab : 'Semua Cabang';
+  // Menggunakan helper function getCabangName dari cabangStore
+  return cabangStore.getCabangName(props.cab);
 });
 
 // Utility functions

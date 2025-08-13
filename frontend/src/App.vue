@@ -14,9 +14,8 @@
 
 <script setup>
 import { onMounted } from 'vue';
-import { useAuthStore } from './stores';
+import { useAuthStore, useCabangStore } from './stores';
 import Toast from 'primevue/toast';
-import { useCabangStore } from './stores';
 
 // Import animations
 import './assets/styles/animations.css';
@@ -27,6 +26,8 @@ const cabangStore = useCabangStore();
 onMounted(() => {
   // Initialize auth state
   authStore.initAuth();
+  
+  // Initialize cabang data
   cabangStore.fetchCabang();
 });
 </script>

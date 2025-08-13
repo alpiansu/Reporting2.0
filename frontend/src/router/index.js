@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router";
-import { useAuthStore } from "../stores";
+import { useAuthStore, useCabangStore } from "../stores";
 
 // Layouts
 import AuthLayout from "../layouts/AuthLayout.vue";
@@ -93,20 +93,34 @@ const router = createRouter({
   },
 });
 
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore();
+  const cabangStore = useCabangStore();
   const isAuthenticated = authStore.isAuthenticated;
 
   // Check if the route requires authentication
   if (to.meta.requiresAuth && !isAuthenticated) {
     next({ name: "Login", query: { redirect: to.fullPath } });
+    return;
   }
   // Check if the route requires guest access (like login page)
   else if (to.meta.requiresGuest && isAuthenticated) {
     next({ name: "Dashboard" });
-  } else {
-    next();
+    return;
   }
+  
+  // Jika user terautentikasi, pastikan data cabang sudah dimuat
+  if (isAuthenticated && !cabangStore.isInitialized) {
+    try {
+      // Tunggu sampai data cabang dimuat
+      await cabangStore.fetchCabang();
+    } catch (error) {
+      console.error("Failed to load cabang data:", error);
+      // Lanjutkan navigasi meskipun gagal memuat data cabang
+    }
+  }
+  
+  next();
 });
 
 export default router;

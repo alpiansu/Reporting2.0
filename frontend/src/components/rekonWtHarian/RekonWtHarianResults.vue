@@ -22,63 +22,12 @@
 
     <div v-else class="results-content">
       <!-- Summary Card -->
-      <div class="summary-card" v-if="summary">
-        <div class="summary-header">
-          <h3 class="summary-title">Ringkasan Rekonsiliasi</h3>
-          <div class="summary-period">
-            <span class="period-label">Periode:</span>
-            <span class="period-value">{{ formatPeriode(periode) }}</span>
-          </div>
-        </div>
-        
-        <div class="summary-stats">
-          <div class="stat-item">
-            <div class="stat-icon total-icon">
-              <i class="pi pi-list"></i>
-            </div>
-            <div class="stat-content">
-              <span class="stat-label">Total Transaksi</span>
-              <span class="stat-value">{{ summary.totalRecords || 0 }}</span>
-            </div>
-          </div>
-          
-          <div class="stat-item">
-            <div class="stat-icon" :class="[summary.totalDiffGross !== 0 ? 'warning-icon' : 'success-icon']">
-              <i class="pi pi-dollar"></i>
-            </div>
-            <div class="stat-content">
-              <span class="stat-label">Selisih Gross</span>
-              <span class="stat-value" :class="getAmountClass(summary.totalDiffGross)">
-                {{ formatCurrency(summary.totalDiffGross || 0) }}
-              </span>
-            </div>
-          </div>
-          
-          <div class="stat-item">
-            <div class="stat-icon" :class="[summary.totalDiffPpn !== 0 ? 'warning-icon' : 'success-icon']">
-              <i class="pi pi-percentage"></i>
-            </div>
-            <div class="stat-content">
-              <span class="stat-label">Selisih PPN</span>
-              <span class="stat-value" :class="getAmountClass(summary.totalDiffPpn)">
-                {{ formatCurrency(summary.totalDiffPpn || 0) }}
-              </span>
-            </div>
-          </div>
-          
-          <div class="stat-item total-diff">
-            <div class="stat-icon" :class="[(summary.totalDiffGross + (summary.totalDiffPpn || 0)) !== 0 ? 'warning-icon' : 'success-icon']">
-              <i class="pi pi-calculator"></i>
-            </div>
-            <div class="stat-content">
-              <span class="stat-label">Selisih Total</span>
-              <span class="stat-value" :class="getAmountClass(summary.totalDiffGross + (summary.totalDiffPpn || 0))">
-                {{ formatCurrency((summary.totalDiffGross || 0) + (summary.totalDiffPpn || 0)) }}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <RekonSummaryCard 
+        v-if="summary" 
+        :summary="summary" 
+        :periode="periode" 
+        :cab="cab"
+      />
 
       <!-- Filters -->
       <div class="filters-container">
@@ -301,6 +250,7 @@
 import { ref, computed, watch } from 'vue';
 import { useToastService } from '../../utils/toast';
 import { rekonWtHarianService } from '../../services';
+import RekonSummaryCard from './RekonSummaryCard.vue';
 
 const props = defineProps({
   cab: {
@@ -583,8 +533,19 @@ const printResults = () => {
     // Create a new window for printing
     const printWindow = window.open('', '_blank');
     
+    if (!printWindow) {
+      toast.add({
+        severity: 'error',
+        summary: 'Cetak Gagal',
+        detail: 'Popup diblokir oleh browser. Mohon izinkan popup untuk mencetak.',
+        life: 5000
+      });
+      return;
+    }
+    
     // Generate HTML content for printing
     let printContent = `
+      <!DOCTYPE html>
       <html>
       <head>
         <title>Rekonsiliasi WT Harian - ${props.cab === 'SEMUA' ? 'SEMUA CABANG' : props.cab} - ${formatPeriode(props.periode)}</title>
@@ -602,6 +563,10 @@ const printResults = () => {
           .positive-amount { color: #e74c3c; }
           .negative-amount { color: #2ecc71; }
           .footer { margin-top: 20px; font-size: 12px; text-align: center; }
+          .badge { display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 12px; font-weight: bold; }
+          .badge-cash { background-color: #e8f5e9; color: #4caf50; }
+          .badge-non-cash { background-color: #e3f2fd; color: #2196f3; }
+          .has-diff { background-color: #fff8e1; }
         </style>
       </head>
       <body>
@@ -613,10 +578,13 @@ const printResults = () => {
         
         <h2>Ringkasan</h2>
         <div class="summary">
-          <div class="summary-item"><strong>Total Transaksi:</strong> ${summary.value?.totalRecords || 0}</div>
-          <div class="summary-item"><strong>Selisih Gross:</strong> ${formatCurrency(summary.value?.totalDiffGross || 0)}</div>
-          <div class="summary-item"><strong>Selisih PPN:</strong> ${formatCurrency(summary.value?.totalDiffPpn || 0)}</div>
-          <div class="summary-item"><strong>Selisih Total:</strong> ${formatCurrency((summary.value?.totalDiffGross || 0) + (summary.value?.totalDiffPpn || 0))}</div>
+          <div class="summary-item"><strong>Jumlah Toko:</strong> ${summary.value?.jml_toko || 0}</div>
+          <div class="summary-item"><strong>Selisih Gross:</strong> ${formatCurrency(summary.value?.sel_gross || 0)}</div>
+          <div class="summary-item"><strong>Selisih PPN:</strong> ${formatCurrency(summary.value?.sel_ppn || 0)}</div>
+          <div class="summary-item"><strong>Selisih Total:</strong> ${formatCurrency((summary.value?.sel_gross || 0) + (summary.value?.sel_ppn || 0))}</div>
+          <div class="summary-item"><strong>Selisih Gross IDM:</strong> ${formatCurrency(summary.value?.sel_gross_idm || 0)}</div>
+          <div class="summary-item"><strong>Selisih PPN IDM:</strong> ${formatCurrency(summary.value?.sel_ppn_idm || 0)}</div>
+          <div class="summary-item"><strong>Selisih Total IDM:</strong> ${formatCurrency((summary.value?.sel_gross_idm || 0) + (summary.value?.sel_ppn_idm || 0))}</div>
         </div>
         
         <h2>Detail Transaksi</h2>
@@ -805,203 +773,7 @@ defineExpose({
 }
 
 /* Summary Card */
-.summary-card {
-  background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-  transition: box-shadow 0.3s ease, transform 0.3s ease;
-  border-top: 3px solid transparent;
-}
-
-.summary-card:hover {
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-  border-top: 3px solid var(--primary-color);
-}
-
-.summary-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid #eee;
-  position: relative;
-}
-
-.summary-header::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 1px;
-  background: linear-gradient(to right, rgba(var(--primary-color-rgb), 0.1), rgba(var(--primary-color-rgb), 0.3), rgba(var(--primary-color-rgb), 0.1));
-  transform: scaleX(0.8);
-  opacity: 0;
-  transition: transform 0.3s ease, opacity 0.3s ease;
-}
-
-.summary-card:hover .summary-header::after {
-  transform: scaleX(1);
-  opacity: 1;
-}
-
-.summary-title {
-  font-size: 1.25rem;
-  margin: 0;
-  color: var(--primary-color);
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  transition: transform 0.3s ease, color 0.3s ease;
-}
-
-.summary-title::before {
-  content: '\f0ae'; /* pi-chart-bar icon */
-  font-family: 'primeicons';
-  font-size: 1.125rem;
-  color: var(--primary-color);
-  opacity: 0.8;
-}
-
-.summary-card:hover .summary-title {
-  transform: translateX(3px);
-  color: var(--primary-color-darken);
-}
-
-.summary-period {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-}
-
-.period-label {
-  color: #666;
-}
-
-.period-value {
-  font-weight: 600;
-  color: #333;
-  background-color: #f5f5f5;
-  padding: 0.375rem 0.75rem;
-  border-radius: 20px;
-  border: 1px solid #eee;
-  transition: all 0.3s ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-
-.summary-card:hover .period-value {
-  background-color: var(--primary-light);
-  color: var(--primary-color-darken);
-  border-color: rgba(var(--primary-color-rgb), 0.2);
-  box-shadow: 0 2px 5px rgba(var(--primary-color-rgb), 0.15);
-}
-
-.summary-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1.5rem;
-}
-
-.stat-item {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  border-radius: 8px;
-  background-color: #f9f9f9;
-  transition: transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease;
-  border-left: 3px solid transparent;
-}
-
-.stat-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  background-color: #f5f9ff;
-  border-left: 3px solid var(--primary-color);
-}
-
-.total-diff {
-  grid-column: 1 / -1;
-  background-color: #f5f5f5;
-  border-top: 2px solid #eee;
-}
-
-.stat-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background-color: #e3f2fd;
-  color: #2196f3;
-  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.15);
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.stat-item:hover .stat-icon {
-  transform: scale(1.1);
-  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.25);
-}
-
-.total-icon {
-  background-color: #e8f5e9;
-  color: #4caf50;
-  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.15);
-}
-
-.stat-item:hover .total-icon {
-  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.25);
-}
-
-.warning-icon {
-  background-color: #fff3e0;
-  color: #ff9800;
-  box-shadow: 0 2px 8px rgba(255, 152, 0, 0.15);
-}
-
-.stat-item:hover .warning-icon {
-  box-shadow: 0 4px 12px rgba(255, 152, 0, 0.25);
-}
-
-.success-icon {
-  background-color: #e8f5e9;
-  color: #4caf50;
-  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.15);
-}
-
-.stat-item:hover .success-icon {
-  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.25);
-}
-
-.stat-content {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-}
-
-.stat-label {
-  font-size: 0.875rem;
-  color: #666;
-  margin-bottom: 0.25rem;
-}
-
-.stat-value {
-  font-size: 1.5rem;
-  font-weight: 600;
-  line-height: 1.2;
-  transition: color 0.3s ease, transform 0.3s ease;
-}
-
-.stat-item:hover .stat-value {
-  color: var(--primary-color);
-  transform: scale(1.05);
-}
+/* Summary card styles moved to RekonSummaryCard.vue */
 
 /* Filters */
 .filters-container {

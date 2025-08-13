@@ -58,33 +58,11 @@
 
     <div class="main-container">
       <!-- Sidebar -->
-      <aside class="sidebar" :class="{ 'sidebar-open': drawerOpen, 'sidebar-mobile-open': mobileOpen }">
-        <nav class="sidebar-nav">
-          <div v-for="(category, categoryIndex) in menuCategories" :key="categoryIndex" class="menu-category">
-            <div v-if="drawerOpen" class="category-header">
-              <span class="category-name">{{ category.name }}</span>
-            </div>
-            <router-link 
-              v-for="item in category.items" 
-              :key="item.path" 
-              :to="item.path"
-              class="nav-item"
-              :class="{ 'active': isActive(item.path) }"
-              @click="mobileOpen = false"
-            >
-              <i :class="`pi ${item.icon}`"></i>
-              <span v-if="drawerOpen" class="nav-text">{{ item.text }}</span>
-            </router-link>
-            <div v-if="categoryIndex < menuCategories.length - 1" class="category-divider"></div>
-          </div>
-        </nav>
-        <div class="sidebar-footer">
-          <div class="sidebar-divider" v-if="drawerOpen"></div>
-          <button class="toggle-button" @click="handleDrawerClose" :title="drawerOpen ? 'Minimize Sidebar' : 'Expand Sidebar'">
-            <i :class="`pi ${drawerOpen ? 'pi-chevron-left' : 'pi-chevron-right'}`"></i>
-          </button>
-        </div>
-      </aside>
+      <AppSidebar 
+        :menu-categories="menuCategories" 
+        v-model:mobile-open="mobileOpen" 
+        v-model:drawer-open="drawerOpen" 
+      />
 
       <!-- Main Content -->
       <main class="main-content">
@@ -129,6 +107,7 @@ import { useToastService } from '../utils/toast';
 import ConfirmDialog from '../components/common/ConfirmDialog.vue';
 import FormDialog from '../components/common/FormDialog.vue';
 import ChangePasswordForm from '../components/auth/ChangePasswordForm.vue';
+import AppSidebar from '../components/sidebar/AppSidebar.vue';
 import api from '../services/api';
 
 const toast = useToastService();
@@ -176,10 +155,6 @@ const menuCategories = [
 
 const toggleMobileDrawer = () => {
   mobileOpen.value = !mobileOpen.value;
-};
-
-const handleDrawerClose = () => {
-  drawerOpen.value = !drawerOpen.value; // Toggle sidebar state
 };
 
 const toggleUserMenu = () => {
@@ -337,9 +312,7 @@ const navigateTo = (path) => {
   userMenuOpen.value = false;
 };
 
-const isActive = (path) => {
-  return route.path === path || route.path.startsWith(`${path}/`);
-};
+// isActive function moved to AppSidebar component
 
 const getProfileImageUrl = (imagePath) => {
   if (!imagePath) return null;

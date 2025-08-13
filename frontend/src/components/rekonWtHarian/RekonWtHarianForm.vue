@@ -32,6 +32,7 @@
             dateFormat="mm/yy" 
             placeholder="Pilih Bulan/Tahun"
             :disabled="loading"
+            :maxDate="today"
             showIcon
             class="w-full"
             @date-select="updatePeriode"
@@ -58,6 +59,7 @@ const loading = ref(false);
 const errors = reactive({});
 const cabangOptions = ref([]);
 const selectedDate = ref(null);
+const today = ref(new Date()); // Tanggal hari ini sebagai batas maksimal calendar
 
 const formData = reactive({
   cab: '', // Default to 'SEMUA' for all branches

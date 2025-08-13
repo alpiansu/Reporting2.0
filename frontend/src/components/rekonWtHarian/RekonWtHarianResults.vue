@@ -134,6 +134,7 @@
                 v-model="filters.tgl1" 
                 @change="applyFilters"
                 class="filter-control"
+                :max="today"
               />
             </div>
           </div>
@@ -297,7 +298,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useToastService } from '../../utils/toast';
 import { rekonWtHarianService } from '../../services';
 
@@ -325,6 +326,9 @@ const results = ref([]);
 const summary = ref(null);
 const currentPage = ref(1);
 const itemsPerPage = ref(10);
+
+// Tanggal hari ini untuk batasan input tanggal
+const today = ref(new Date().toISOString().split('T')[0]); // Format YYYY-MM-DD untuk input type="date"
 
 // Filters
 const filters = ref({

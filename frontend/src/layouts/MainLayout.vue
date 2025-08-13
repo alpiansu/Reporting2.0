@@ -60,17 +60,23 @@
       <!-- Sidebar -->
       <aside class="sidebar" :class="{ 'sidebar-open': drawerOpen, 'sidebar-mobile-open': mobileOpen }">
         <nav class="sidebar-nav">
-          <router-link 
-            v-for="item in menuItems" 
-            :key="item.path" 
-            :to="item.path"
-            class="nav-item"
-            :class="{ 'active': isActive(item.path) }"
-            @click="mobileOpen = false"
-          >
-            <i :class="`pi ${item.icon}`"></i>
-            <span v-if="drawerOpen" class="nav-text">{{ item.text }}</span>
-          </router-link>
+          <div v-for="(category, categoryIndex) in menuCategories" :key="categoryIndex" class="menu-category">
+            <div v-if="drawerOpen" class="category-header">
+              <span class="category-name">{{ category.name }}</span>
+            </div>
+            <router-link 
+              v-for="item in category.items" 
+              :key="item.path" 
+              :to="item.path"
+              class="nav-item"
+              :class="{ 'active': isActive(item.path) }"
+              @click="mobileOpen = false"
+            >
+              <i :class="`pi ${item.icon}`"></i>
+              <span v-if="drawerOpen" class="nav-text">{{ item.text }}</span>
+            </router-link>
+            <div v-if="categoryIndex < menuCategories.length - 1" class="category-divider"></div>
+          </div>
         </nav>
         <div class="sidebar-footer">
           <div class="sidebar-divider" v-if="drawerOpen"></div>
@@ -137,11 +143,35 @@ const drawerOpen = ref(true);
 const userMenuOpen = ref(false);
 const notificationsOpen = ref(false);
 
-const menuItems = [
-  { text: 'Dashboard', icon: 'pi-home', path: '/dashboard' },
-  { text: 'Stores', icon: 'pi-shopping-bag', path: '/stores' },
-  { text: 'Screenings', icon: 'pi-chart-bar', path: '/screenings' },
-  { text: 'Rekonsiliasi WT Harian', icon: 'pi-sync', path: '/rekon-wt-harian' },
+const menuCategories = [
+  {
+    name: 'Main',
+    items: [
+      { text: 'Dashboard', icon: 'pi-home', path: '/dashboard' },
+    ]
+  },
+  {
+    name: 'Data Management',
+    items: [
+      { text: 'Stores', icon: 'pi-shopping-bag', path: '/stores' },
+      { text: 'Screenings', icon: 'pi-chart-bar', path: '/screenings' },
+    ]
+  },
+  {
+    name: 'Reports',
+    items: [
+      { text: 'Rekonsiliasi WT Harian', icon: 'pi-sync', path: '/rekon-wt-harian' },
+      { text: 'Sales Report', icon: 'pi-chart-line', path: '/sales-report' },
+      { text: 'Inventory Report', icon: 'pi-box', path: '/inventory-report' },
+    ]
+  },
+  {
+    name: 'Administration',
+    items: [
+      { text: 'User Management', icon: 'pi-users', path: '/users' },
+      { text: 'Settings', icon: 'pi-cog', path: '/settings' },
+    ]
+  }
 ];
 
 const toggleMobileDrawer = () => {

@@ -77,27 +77,31 @@
         @click="navigateToStoreDetails(store.id)"
       >
         <div class="store-header">
-          <h2 class="store-name">{{ store.name }}</h2>
-          <span class="store-status" :class="getStatusClass(store.status)">{{ store.status }}</span>
+          <h2 class="store-name">{{ store.storeName }}</h2>
+          <span class="store-status" :class="getStatusClass(store.isActive ? 'Active' : 'Inactive')">{{ store.isActive ? 'Active' : 'Inactive' }}</span>
         </div>
         <div class="store-info">
           <div class="info-item">
+            <i class="pi pi-tag"></i>
+            <span>{{ store.storeCode }}</span>
+          </div>
+          <div class="info-item" v-if="store.address">
             <i class="pi pi-map-marker"></i>
             <span>{{ store.address }}</span>
           </div>
-          <div class="info-item">
+          <div class="info-item" v-if="store.region">
             <i class="pi pi-globe"></i>
             <span>{{ store.region }}</span>
           </div>
-          <div class="info-item">
+          <div class="info-item" v-if="store.phone">
             <i class="pi pi-phone"></i>
             <span>{{ store.phone }}</span>
           </div>
         </div>
         <div class="store-footer">
           <div class="screening-info">
-            <span class="screening-label">Last Screening:</span>
-            <span class="screening-value">{{ store.lastScreening ? formatDate(store.lastScreening) : 'Never' }}</span>
+            <span class="screening-label">Last Updated:</span>
+            <span class="screening-value">{{ formatDate(store.updatedAt) }}</span>
           </div>
           <button class="view-button">
             <i class="pi pi-arrow-right"></i>
@@ -121,6 +125,36 @@
       </button>
     </div>
     
+    <!-- Pagination controls -->
+    <div v-if="stores.length > 0 && pagination" class="pagination-container">
+      <div class="pagination-info">
+        Showing {{ (pagination.currentPage - 1) * pagination.pageSize + 1 }} to 
+        {{ Math.min(pagination.currentPage * pagination.pageSize, pagination.totalItems) }} 
+        of {{ pagination.totalItems }} stores
+      </div>
+      <div class="pagination-controls">
+        <button 
+          class="pagination-button" 
+          :disabled="pagination.currentPage === 1" 
+          @click="handlePageChange(pagination.currentPage - 1)"
+        >
+          <i class="pi pi-chevron-left"></i>
+        </button>
+        
+        <span class="pagination-pages">
+          Page {{ pagination.currentPage }} of {{ pagination.totalPages }}
+        </span>
+        
+        <button 
+          class="pagination-button" 
+          :disabled="pagination.currentPage === pagination.totalPages" 
+          @click="handlePageChange(pagination.currentPage + 1)"
+        >
+          <i class="pi pi-chevron-right"></i>
+        </button>
+      </div>
+    </div>
+    
     <!-- Add Store Dialog (would use a modal component in a real app) -->
     <div v-if="showAddStoreDialog" class="dialog-overlay" @click="closeAddStoreDialog">
       <div class="dialog-content" @click.stop>
@@ -134,7 +168,7 @@
           <form @submit.prevent="handleAddStore" class="store-form">
             <div class="form-group">
               <label for="storeName">Store Name</label>
-              <input id="storeName" v-model="newStore.name" type="text" placeholder="Enter store name" required />
+              <input id="storeName" v-model="newStore.storeName" type="text" placeholder="Enter store name" required />
             </div>
             
             <div class="form-group">
@@ -144,7 +178,7 @@
             
             <div class="form-group">
               <label for="storeRegion">Region</label>
-              <select id="storeRegion" v-model="newStore.regionId" required>
+              <select id="storeRegion" v-model="newStore.region" required>
                 <option value="" disabled>Select a region</option>
                 <option v-for="region in regions" :key="region.id" :value="region.id">{{ region.name }}</option>
               </select>
@@ -170,14 +204,16 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import { useStoreStore } from '../../stores';
+import { useToastService } from '../../utils/toast';
 
 const router = useRouter();
+const storeStore = useStoreStore();
+const toast = useToastService();
 
 // State
-const stores = ref([]);
-const loading = ref(true);
 const searchQuery = ref('');
 const showFilterMenu = ref(false);
 const selectedRegions = ref([]);
@@ -185,19 +221,25 @@ const selectedStatuses = ref([]);
 const showAddStoreDialog = ref(false);
 const addStoreLoading = ref(false);
 const newStore = ref({
-  name: '',
+  storeName: '',
   address: '',
-  regionId: '',
+  region: '',
   phone: ''
 });
 
-// Mock data
+// Get data from store
+const stores = computed(() => storeStore.allStores);
+const loading = computed(() => storeStore.isLoading);
+const error = computed(() => storeStore.error);
+const pagination = computed(() => storeStore.getPagination);
+
+// Mock data for regions until we have a proper region service
 const regions = ref([
-  { id: 1, name: 'North' },
-  { id: 2, name: 'South' },
-  { id: 3, name: 'East' },
-  { id: 4, name: 'West' },
-  { id: 5, name: 'Central' }
+  { id: 'North', name: 'North' },
+  { id: 'South', name: 'South' },
+  { id: 'East', name: 'East' },
+  { id: 'West', name: 'West' },
+  { id: 'Central', name: 'Central' }
 ]);
 
 const statuses = ref([
@@ -209,123 +251,87 @@ const statuses = ref([
 // Fetch stores
 onMounted(async () => {
   try {
-    // In a real app, this would be an API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    stores.value = [
-      {
-        id: 1,
-        name: 'Store Alpha',
-        address: '123 Main St, City A',
-        region: 'North',
-        regionId: 1,
-        phone: '(123) 456-7890',
-        status: 'Active',
-        lastScreening: '2023-11-28'
-      },
-      {
-        id: 2,
-        name: 'Store Beta',
-        address: '456 Oak Ave, City B',
-        region: 'South',
-        regionId: 2,
-        phone: '(234) 567-8901',
-        status: 'Active',
-        lastScreening: '2023-11-25'
-      },
-      {
-        id: 3,
-        name: 'Store Gamma',
-        address: '789 Pine Rd, City C',
-        region: 'East',
-        regionId: 3,
-        phone: '(345) 678-9012',
-        status: 'Inactive',
-        lastScreening: '2023-11-22'
-      },
-      {
-        id: 4,
-        name: 'Store Delta',
-        address: '101 Elm Blvd, City D',
-        region: 'West',
-        regionId: 4,
-        phone: '(456) 789-0123',
-        status: 'Active',
-        lastScreening: '2023-11-20'
-      },
-      {
-        id: 5,
-        name: 'Store Epsilon',
-        address: '202 Cedar Ln, City E',
-        region: 'Central',
-        regionId: 5,
-        phone: '(567) 890-1234',
-        status: 'Pending',
-        lastScreening: null
-      }
-    ];
+    // Fetch stores from the API using the store
+    await storeStore.fetchStores({
+      page: 1,
+      limit: 10
+    });
   } catch (error) {
     console.error('Error fetching stores:', error);
-  } finally {
-    loading.value = false;
+    toast.showError('Error', 'Failed to load stores');
   }
 });
 
+// Watch for search and filter changes to update the store list
+watch([searchQuery, selectedRegions, selectedStatuses], () => {
+  // Debounce the search to avoid too many API calls
+  if (searchTimeout) clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    applyFilters();
+  }, 300);
+}, { deep: true });
+
+// Search timeout for debouncing
+let searchTimeout = null;
+
 // Computed properties
 const filteredStores = computed(() => {
-  let result = [...stores.value];
-  
-  // Apply search filter
-  if (searchQuery.value) {
-    const query = searchQuery.value.toLowerCase();
-    result = result.filter(store => 
-      store.name.toLowerCase().includes(query) ||
-      store.address.toLowerCase().includes(query) ||
-      store.region.toLowerCase().includes(query)
-    );
-  }
-  
-  // Apply region filter
-  if (selectedRegions.value.length > 0) {
-    result = result.filter(store => selectedRegions.value.includes(store.regionId));
-  }
-  
-  // Apply status filter
-  if (selectedStatuses.value.length > 0) {
-    result = result.filter(store => 
-      selectedStatuses.value.includes(store.status.toLowerCase())
-    );
-  }
-  
-  return result;
+  return stores.value;
 });
 
 // Methods
 const handleSearch = () => {
-  // In a real app, you might want to debounce this
+  // Debouncing is handled by the watch
   console.log('Searching for:', searchQuery.value);
 };
 
 const clearSearch = () => {
   searchQuery.value = '';
+  applyFilters();
 };
 
 const toggleFilterMenu = () => {
   showFilterMenu.value = !showFilterMenu.value;
 };
 
-const applyFilters = () => {
-  console.log('Applied filters:', { regions: selectedRegions.value, statuses: selectedStatuses.value });
-  showFilterMenu.value = false;
+const applyFilters = async () => {
+  try {
+    // Build filter options
+    const options = {
+      page: 1,
+      limit: 10,
+      search: searchQuery.value || ''
+    };
+    
+    // Add region filter if selected
+    if (selectedRegions.value.length > 0) {
+      options.region = selectedRegions.value.join(',');
+    }
+    
+    // Add status filter if selected
+    if (selectedStatuses.value.length > 0) {
+      options.status = selectedStatuses.value.join(',');
+    }
+    
+    // Fetch filtered stores
+    await storeStore.fetchStores(options);
+    showFilterMenu.value = false;
+  } catch (error) {
+    console.error('Error applying filters:', error);
+    toast.showError('Error', 'Failed to apply filters');
+  }
 };
 
 const clearFilters = () => {
   selectedRegions.value = [];
   selectedStatuses.value = [];
+  searchQuery.value = '';
   applyFilters();
 };
 
 const getStatusClass = (status) => {
+  if (!status) return '';
+  
   switch (status.toLowerCase()) {
     case 'active':
       return 'status-active';
@@ -339,6 +345,7 @@ const getStatusClass = (status) => {
 };
 
 const formatDate = (dateString) => {
+  if (!dateString) return 'Never';
   const options = { year: 'numeric', month: 'short', day: 'numeric' };
   return new Date(dateString).toLocaleDateString(undefined, options);
 };
@@ -355,9 +362,9 @@ const closeAddStoreDialog = () => {
   showAddStoreDialog.value = false;
   // Reset form
   newStore.value = {
-    name: '',
+    storeName: '',
     address: '',
-    regionId: '',
+    region: '',
     phone: ''
   };
 };
@@ -366,28 +373,58 @@ const handleAddStore = async () => {
   addStoreLoading.value = true;
   
   try {
-    // In a real app, this would be an API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const regionObj = regions.value.find(r => r.id === newStore.value.regionId);
-    
-    const newStoreObj = {
-      id: stores.value.length + 1,
-      name: newStore.value.name,
+    // Create store data object
+    const storeData = {
+      storeCode: `ST${Date.now().toString().slice(-6)}`, // Generate a unique store code
+      storeName: newStore.value.storeName,
       address: newStore.value.address,
-      region: regionObj.name,
-      regionId: newStore.value.regionId,
+      region: newStore.value.region,
       phone: newStore.value.phone,
-      status: 'Active',
-      lastScreening: null
+      isActive: true,
+      notes: 'INDUK' // Set as main store
     };
     
-    stores.value.unshift(newStoreObj);
+    // Call the store service to create the store
+    await storeStore.createStore(storeData);
+    
+    // Show success message using toast service
+    toast.showSuccess('Success', 'Store created successfully');
+    
+    // Close the dialog
     closeAddStoreDialog();
   } catch (error) {
     console.error('Error adding store:', error);
+    toast.showError('Error', 'Failed to create store');
   } finally {
     addStoreLoading.value = false;
+  }
+};
+
+// Handle pagination page change
+const handlePageChange = async (page) => {
+  try {
+    // Build filter options with current search and filters
+    const options = {
+      page,
+      limit: 10,
+      search: searchQuery.value || ''
+    };
+    
+    // Add region filter if selected
+    if (selectedRegions.value.length > 0) {
+      options.region = selectedRegions.value.join(',');
+    }
+    
+    // Add status filter if selected
+    if (selectedStatuses.value.length > 0) {
+      options.status = selectedStatuses.value.join(',');
+    }
+    
+    // Fetch stores for the selected page
+    await storeStore.fetchStores(options);
+  } catch (error) {
+    console.error('Error changing page:', error);
+    toast.showError('Error', 'Failed to load page');
   }
 };
 </script>
@@ -763,13 +800,65 @@ const handleAddStore = async () => {
 }
 
 .dialog-body {
-  padding: 20px;
+  padding: 16px;
 }
 
 .store-form {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+/* Pagination styles */
+.pagination-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 24px;
+  padding: 16px;
+  background-color: var(--surface-card, #ffffff);
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.pagination-info {
+  font-size: 0.875rem;
+  color: var(--text-color-secondary, #6c757d);
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pagination-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--surface-border, #dee2e6);
+  border-radius: 4px;
+  background-color: var(--surface-card, #ffffff);
+  color: var(--text-color, #495057);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pagination-button:hover:not(:disabled) {
+  background-color: var(--surface-hover, #f8f9fa);
+  border-color: var(--primary-color-lighter, #a7d8ff);
+}
+
+.pagination-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pagination-pages {
+  font-size: 0.875rem;
+  color: var(--text-color, #495057);
 }
 
 .form-group {

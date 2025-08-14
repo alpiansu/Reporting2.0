@@ -18,8 +18,8 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hb
 }
 
 ### Test get reconciliation results with token from login
-GET http://localhost:3000/api/rekon-wt-harian/2508/All
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1NDk3MjM1MSwiZXhwIjoxNzU1MDU4NzUxfQ.PlsGiqGkDyN8ly5yEqsQRPBRBtk8-qmUPJI87y6UHmM
+GET http://localhost:3000/api/rekon-wt-harian/2508/All?page=2&limit=10
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1NTE2MTI3OCwiZXhwIjoxNzU1MjQ3Njc4fQ.eZGPdM15tYu5SJA5s0MGCmlLhdPBPYBJdUYWruiQBgM
 
 ### Test get summary of reconciliation results with token from login
 GET http://localhost:3000/api/rekon-wt-harian/G001/2507/summary

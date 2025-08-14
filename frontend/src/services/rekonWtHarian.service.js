@@ -20,10 +20,10 @@ export default {
    * @param {Object} params - Query parameters (page, limit, tipe, toko, tgl1)
    * @returns {Promise}
    */
-  getResults(cab, periode) {
+  getResults(cab, periode, params = {}) {
     // Jika cab kosong, gunakan 'SEMUA' sebagai nilai default
     const cabParam = cab || "All";
-    return api.get(`/rekon-wt-harian/${periode}/${cabParam}`);
+    return api.get(`/rekon-wt-harian/${periode}/${cabParam}`, { params });
   },
 
   /**

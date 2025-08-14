@@ -635,7 +635,7 @@ onMounted(async () => {
           {
             id: 2,
             author: 'Regional Manager',
-            text: 'I've reviewed the initial findings. Please prioritize the expired products issue immediately. I'll be visiting the store tomorrow to follow up on progress.',
+            text: 'I have reviewed the initial findings. Please prioritize the expired products issue immediately. I will be visiting the store tomorrow to follow up on progress.',
             date: '2023-11-22T14:15:00'
           }
         ]

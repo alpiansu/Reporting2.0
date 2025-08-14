@@ -1,5 +1,6 @@
 import authService from './auth.service';
 import rekonWtHarianService from './rekonWtHarian.service';
 import mCabangService from './m_cabang.service';
+import storeService from './store.service';
 
-export { authService, rekonWtHarianService, mCabangService };
+export { authService, rekonWtHarianService, mCabangService, storeService };

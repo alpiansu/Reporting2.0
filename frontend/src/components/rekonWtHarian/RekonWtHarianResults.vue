@@ -22,12 +22,7 @@
 
     <div v-else class="results-content">
       <!-- Summary Card -->
-      <RekonSummaryCard 
-        v-if="summary" 
-        :summary="summary" 
-        :periode="periode" 
-        :cab="cab"
-      />
+      <RekonSummaryCard v-if="summary" :summary="summary" :periode="periode" :cab="cab" />
 
       <!-- Filters -->
       <div class="filters-container">
@@ -39,18 +34,13 @@
             <i class="pi pi-filter-slash"></i> Reset
           </button>
         </div>
-        
+
         <div class="filters-body">
           <div class="filter-group">
             <label for="tipe-filter">Tipe Transaksi</label>
             <div class="filter-input-wrapper">
               <i class="pi pi-tag filter-icon"></i>
-              <select 
-                id="tipe-filter" 
-                v-model="filters.tipe" 
-                @change="applyFilters"
-                class="filter-control"
-              >
+              <select id="tipe-filter" v-model="filters.tipe" @change="applyFilters" class="filter-control">
                 <option value="">Semua Tipe</option>
                 <option value="TUNAI">TUNAI</option>
                 <option value="NON TUNAI">NON TUNAI</option>
@@ -62,14 +52,8 @@
             <label for="toko-filter">Nama Toko</label>
             <div class="filter-input-wrapper">
               <i class="pi pi-shopping-bag filter-icon"></i>
-              <input 
-                type="text" 
-                id="toko-filter" 
-                v-model="filters.toko" 
-                @input="applyFilters"
-                placeholder="Cari berdasarkan nama toko"
-                class="filter-control"
-              />
+              <input type="text" id="toko-filter" v-model="filters.toko" @input="applyFilters"
+                placeholder="Cari berdasarkan nama toko" class="filter-control" />
             </div>
           </div>
 
@@ -77,17 +61,11 @@
             <label for="tanggal-filter">Tanggal Transaksi</label>
             <div class="filter-input-wrapper">
               <i class="pi pi-calendar filter-icon"></i>
-              <input 
-                type="date" 
-                id="tanggal-filter" 
-                v-model="filters.tgl1" 
-                @change="applyFilters"
-                class="filter-control"
-                :max="today"
-              />
+              <input type="date" id="tanggal-filter" v-model="filters.tgl1" @change="applyFilters"
+                class="filter-control" :max="today" />
             </div>
           </div>
-          
+
           <div class="filter-stats">
             <div class="filter-stat-item">
               <span class="filter-stat-label">Total Data:</span>
@@ -114,7 +92,7 @@
             </button>
           </div>
         </div>
-        
+
         <div class="table-responsive">
           <table class="results-table">
             <thead>
@@ -130,7 +108,12 @@
                 <th class="text-right">PPN WRC</th>
                 <th class="text-right">PPN Toko</th>
                 <th class="text-right">Selisih PPN</th>
-                <th class="text-right">Total Selisih</th>
+                <th class="text-right">Gross Idm WRC</th>
+                <th class="text-right">Gross Idm Toko</th>
+                <th class="text-right">Selisih Gross Idm</th>
+                <th class="text-right">PPN Idm WRC</th>
+                <th class="text-right">PPN Idm Toko</th>
+                <th class="text-right">Selisih PPN Idm</th>
               </tr>
             </thead>
             <tbody>
@@ -140,20 +123,27 @@
                 <td>{{ formatDate(item.tgl1) }}</td>
                 <td>{{ item.shop }}</td>
                 <td>
-                    {{ item.tipe }}
+                  {{ item.tipe }}
                 </td>
                 <td class="text-right">{{ formatCurrency(item.gross_wrc) }}</td>
                 <td class="text-right">{{ formatCurrency(item.gross_store) }}</td>
-                <td class="text-right" :class="getAmountClass(item.diffGross)">
-                  {{ formatCurrency(item.diffGross) }}
+                <td class="text-right" :class="getAmountClass(item.selisih_gross)">
+                  {{ formatCurrency(item.selisih_gross) }}
                 </td>
                 <td class="text-right">{{ formatCurrency(item.ppn_wrc) }}</td>
                 <td class="text-right">{{ formatCurrency(item.ppn_store) }}</td>
-                <td class="text-right" :class="getAmountClass(item.diffPpn)">
-                  {{ formatCurrency(item.diffPpn) }}
+                <td class="text-right" :class="getAmountClass(item.selisih_ppn)">
+                  {{ formatCurrencyDecimal(item.selisih_ppn) }}
                 </td>
-                <td class="text-right" :class="getAmountClass(item.diffGross + item.diffPpn)">
-                  {{ formatCurrency(item.diffGross + item.diffPpn) }}
+                <td class="text-right">{{ formatCurrency(item.gross_idm_wrc) }}</td>
+                <td class="text-right">{{ formatCurrency(item.gross_idm_store) }}</td>
+                <td class="text-right" :class="getAmountClass(item.selisih_gross_idm)">
+                  {{ formatCurrency(item.selisih_gross_idm) }}
+                </td>
+                <td class="text-right">{{ formatCurrency(item.ppn_idm_wrc) }}</td>
+                <td class="text-right">{{ formatCurrency(item.ppn_idm_store) }}</td>
+                <td class="text-right" :class="getAmountClass(item.selisih_ppn_idm)">
+                  {{ formatCurrencyDecimal(item.selisih_ppn_idm) }}
                 </td>
               </tr>
             </tbody>
@@ -164,68 +154,44 @@
       <!-- Pagination -->
       <div class="pagination-container" v-if="totalPages > 0">
         <div class="pagination-info">
-          <span class="records-info">Menampilkan {{ startIndex + 1 }}-{{ endIndex }} dari {{ filteredResults.length }} data</span>
+          <span class="records-info">Menampilkan {{ startIndex + 1 }}-{{ endIndex }} dari {{ filteredResults.length }}
+            data</span>
         </div>
-        
+
         <div class="pagination-controls">
-          <button 
-            @click="() => currentPage = 1" 
-            :disabled="currentPage === 1"
-            class="btn btn-icon"
-            title="Halaman pertama"
-          >
+          <button @click="() => currentPage = 1" :disabled="currentPage === 1" class="btn btn-icon"
+            title="Halaman pertama">
             <i class="pi pi-angle-double-left"></i>
           </button>
-          
-          <button 
-            @click="prevPage" 
-            :disabled="currentPage === 1"
-            class="btn btn-icon"
-            title="Halaman sebelumnya"
-          >
+
+          <button @click="prevPage" :disabled="currentPage === 1" class="btn btn-icon" title="Halaman sebelumnya">
             <i class="pi pi-angle-left"></i>
           </button>
-          
+
           <div class="page-numbers">
             <template v-for="pageNum in displayedPageNumbers" :key="pageNum">
-              <button 
-                v-if="pageNum !== '...'"
-                @click="currentPage = pageNum" 
-                :class="['btn', 'btn-page', currentPage === pageNum ? 'btn-active' : '']"
-              >
+              <button v-if="pageNum !== '...'" @click="currentPage = pageNum"
+                :class="['btn', 'btn-page', currentPage === pageNum ? 'btn-active' : '']">
                 {{ pageNum }}
               </button>
               <span v-else class="ellipsis">...</span>
             </template>
           </div>
-          
-          <button 
-            @click="nextPage" 
-            :disabled="currentPage === totalPages"
-            class="btn btn-icon"
-            title="Halaman selanjutnya"
-          >
+
+          <button @click="nextPage" :disabled="currentPage === totalPages" class="btn btn-icon"
+            title="Halaman selanjutnya">
             <i class="pi pi-angle-right"></i>
           </button>
-          
-          <button 
-            @click="() => currentPage = totalPages" 
-            :disabled="currentPage === totalPages"
-            class="btn btn-icon"
-            title="Halaman terakhir"
-          >
+
+          <button @click="() => currentPage = totalPages" :disabled="currentPage === totalPages" class="btn btn-icon"
+            title="Halaman terakhir">
             <i class="pi pi-angle-double-right"></i>
           </button>
         </div>
-        
+
         <div class="items-per-page">
           <label for="items-per-page-select">Per halaman:</label>
-          <select 
-            id="items-per-page-select"
-            v-model="itemsPerPage"
-            @change="currentPage = 1"
-            class="items-select"
-          >
+          <select id="items-per-page-select" v-model="itemsPerPage" @change="currentPage = 1" class="items-select">
             <option :value="10">10</option>
             <option :value="25">25</option>
             <option :value="50">50</option>
@@ -560,8 +526,7 @@ const printResults = () => {
           th { background-color: #f2f2f2; }
           .text-right { text-align: right; }
           .text-center { text-align: center; }
-          .positive-amount { color: #e74c3c; }
-          .negative-amount { color: #2ecc71; }
+          .different-amount { color: #e74c3c; }
           .footer { margin-top: 20px; font-size: 12px; text-align: center; }
           .badge { display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 12px; font-weight: bold; }
           .badge-cash { background-color: #e8f5e9; color: #4caf50; }
@@ -609,9 +574,9 @@ const printResults = () => {
     
     // Add table rows
     filteredResults.value.forEach((item, index) => {
-      const diffGrossClass = item.diffGross > 0 ? 'positive-amount' : item.diffGross < 0 ? 'negative-amount' : '';
-      const diffPpnClass = item.diffPpn > 0 ? 'positive-amount' : item.diffPpn < 0 ? 'negative-amount' : '';
-      const totalDiffClass = (item.diffGross + item.diffPpn) > 0 ? 'positive-amount' : (item.diffGross + item.diffPpn) < 0 ? 'negative-amount' : '';
+      const diffGrossClass = item.diffGross > 0 ? 'different-amount' : item.diffGross < 0 ? 'different-amount' : '';
+      const diffPpnClass = item.diffPpn > 0 ? 'different-amount' : item.diffPpn < 0 ? 'different-amount' : '';
+      const totalDiffClass = (item.diffGross + item.diffPpn) > 0 ? 'different-amount' : (item.diffGross + item.diffPpn) < 0 ? 'different-amount' : '';
       
       printContent += `
         <tr>
@@ -680,6 +645,15 @@ const formatCurrency = (value) => {
   }).format(value || 0);
 };
 
+const formatCurrencyDecimal = (value) => {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(value || `0,00`);
+};
+
 const formatDate = (dateString) => {
   if (!dateString) return '-';
   
@@ -707,7 +681,7 @@ const formatPeriode = (periode) => {
 
 const getAmountClass = (amount) => {
   if (!amount) return '';
-  return amount < 0 ? 'negative-amount' : amount > 0 ? 'positive-amount' : '';
+  return amount < -5 || amount > 5 ? 'different-amount' : 'same-amount';
 };
 
 const hasDifference = (item) => {
@@ -1096,16 +1070,16 @@ defineExpose({
   position: relative;
 }
 
-.positive-amount {
+.different-amount {
   color: #e74c3c;
   font-weight: 600;
   text-shadow: 0 0 1px rgba(231, 76, 60, 0.2);
 }
 
-.negative-amount {
+.same-amount {
   color: #2ecc71;
   font-weight: 600;
-  text-shadow: 0 0 1px rgba(46, 204, 113, 0.2);
+  text-shadow: 0 0 1px rgba(231, 76, 60, 0.2);
 }
 
 /* Highlight row with differences */

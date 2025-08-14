@@ -120,8 +120,9 @@
             <thead>
               <tr>
                 <th class="text-center">No</th>
+                <th>Cab</th>
                 <th>Tanggal</th>
-                <th>Toko</th>
+                <th>Shop</th>
                 <th>Tipe</th>
                 <th class="text-right">Gross WRC</th>
                 <th class="text-right">Gross Toko</th>
@@ -135,20 +136,19 @@
             <tbody>
               <tr v-for="(item, index) in paginatedResults" :key="index" :class="{ 'has-diff': hasDifference(item) }">
                 <td class="text-center">{{ (currentPage - 1) * itemsPerPage + index + 1 }}</td>
+                <td>{{ item.cab }}</td>
                 <td>{{ formatDate(item.tgl1) }}</td>
-                <td>{{ item.toko }}</td>
+                <td>{{ item.shop }}</td>
                 <td>
-                  <span class="badge" :class="item.tipe === 'TUNAI' ? 'badge-cash' : 'badge-non-cash'">
                     {{ item.tipe }}
-                  </span>
                 </td>
-                <td class="text-right">{{ formatCurrency(item.grossWrc) }}</td>
-                <td class="text-right">{{ formatCurrency(item.grossToko) }}</td>
+                <td class="text-right">{{ formatCurrency(item.gross_wrc) }}</td>
+                <td class="text-right">{{ formatCurrency(item.gross_store) }}</td>
                 <td class="text-right" :class="getAmountClass(item.diffGross)">
                   {{ formatCurrency(item.diffGross) }}
                 </td>
-                <td class="text-right">{{ formatCurrency(item.ppnWrc) }}</td>
-                <td class="text-right">{{ formatCurrency(item.ppnToko) }}</td>
+                <td class="text-right">{{ formatCurrency(item.ppn_wrc) }}</td>
+                <td class="text-right">{{ formatCurrency(item.ppn_store) }}</td>
                 <td class="text-right" :class="getAmountClass(item.diffPpn)">
                   {{ formatCurrency(item.diffPpn) }}
                 </td>
@@ -460,7 +460,7 @@ const exportToExcel = () => {
     
     // Prepare headers
     const headers = [
-      'No', 'Tanggal', 'Toko', 'Tipe', 
+      'No', 'Tanggal', 'Shop', 'Tipe', 
       'Gross WRC', 'Gross Toko', 'Selisih Gross',
       'PPN WRC', 'PPN Toko', 'Selisih PPN',
       'Total Selisih'
@@ -470,13 +470,13 @@ const exportToExcel = () => {
     const data = filteredResults.value.map((item, index) => [
       index + 1,
       formatDate(item.tgl1),
-      item.toko,
+      item.shop,
       item.tipe,
-      item.grossWrc,
-      item.grossToko,
+      item.gross_wrc,
+      item.gross_store,
       item.diffGross,
-      item.ppnWrc,
-      item.ppnToko,
+      item.ppn_wrc,
+      item.ppn_store,
       item.diffPpn,
       item.diffGross + item.diffPpn
     ]);
@@ -619,11 +619,11 @@ const printResults = () => {
           <td>${formatDate(item.tgl1)}</td>
           <td>${item.toko}</td>
           <td>${item.tipe}</td>
-          <td class="text-right">${formatCurrency(item.grossWrc)}</td>
-          <td class="text-right">${formatCurrency(item.grossToko)}</td>
+          <td class="text-right">${formatCurrency(item.gross_wrc)}</td>
+          <td class="text-right">${formatCurrency(item.gross_store)}</td>
           <td class="text-right ${diffGrossClass}">${formatCurrency(item.diffGross)}</td>
-          <td class="text-right">${formatCurrency(item.ppnWrc)}</td>
-          <td class="text-right">${formatCurrency(item.ppnToko)}</td>
+          <td class="text-right">${formatCurrency(item.ppn_wrc)}</td>
+          <td class="text-right">${formatCurrency(item.ppn_store)}</td>
           <td class="text-right ${diffPpnClass}">${formatCurrency(item.diffPpn)}</td>
           <td class="text-right ${totalDiffClass}">${formatCurrency(item.diffGross + item.diffPpn)}</td>
         </tr>
@@ -769,7 +769,7 @@ defineExpose({
 .results-content {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 10px;
 }
 
 /* Summary Card */
@@ -777,7 +777,7 @@ defineExpose({
 
 /* Filters */
 .filters-container {
-  margin-bottom: 1.5rem;
+  margin-bottom: 5px;
   background-color: #fff;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
@@ -806,7 +806,7 @@ defineExpose({
 .filters-body {
   display: flex;
   flex-wrap: wrap;
-  gap: 1.5rem;
+  gap: 0.5rem;
   padding: 1.5rem;
 }
 
@@ -870,8 +870,7 @@ defineExpose({
 
 .filter-stats {
   display: flex;
-  gap: 1.5rem;
-  margin-top: 1rem;
+  margin-top: 1px;
   padding-top: 1rem;
   border-top: 1px dashed #eee;
   width: 100%;
@@ -909,7 +908,7 @@ defineExpose({
 
 /* Results Table */
 .table-container {
-  margin-top: 1.5rem;
+  margin-top: 5px;
   background-color: #fff;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -918,7 +917,7 @@ defineExpose({
 }
 
 .table-container:hover {
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
 }
 
 .table-header {
@@ -1167,7 +1166,6 @@ defineExpose({
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 1.5rem;
   padding: 1rem 1.5rem;
   background-color: #fff;
   border-radius: 8px;

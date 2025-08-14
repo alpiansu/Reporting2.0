@@ -210,6 +210,62 @@ class StoreService {
   }
 
   /**
+   * Get stores by branch with pagination
+   * @param {string} branchCode - Branch code
+   * @param {Object} options - Query options
+   * @returns {Object} Paginated stores by branch
+   */
+  async getStoresByBranchPaginated(branchCode, options = {}) {
+    const { page = 1, limit = 10, search = "", onlyInduk = true, status } = options;
+
+    try {
+      await this.ensureInitialized();
+
+      // Filter stores by branch
+      let filteredStores = this.stores.filter(store => store.branch === branchCode || store.cab === branchCode);
+
+      // Filter by induk if specified
+      if (onlyInduk) {
+        filteredStores = filteredStores.filter(store => store.notes === "INDUK");
+      }
+
+      // Filter by search term
+      if (search) {
+        const searchLower = search.toLowerCase();
+        filteredStores = filteredStores.filter(
+          store =>
+            store.storeCode.toLowerCase().includes(searchLower) || 
+            store.storeName.toLowerCase().includes(searchLower)
+        );
+      }
+
+      // Filter by status
+      if (status) {
+        const isActive = status === "active";
+        filteredStores = filteredStores.filter(store => store.isActive === isActive);
+      }
+
+      // Sort by updatedAt in descending order
+      filteredStores.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+
+      // Apply pagination
+      const offset = (page - 1) * limit;
+      const paginatedStores = filteredStores.slice(offset, offset + limit);
+
+      return {
+        stores: paginatedStores,
+        totalItems: filteredStores.length,
+        totalPages: Math.ceil(filteredStores.length / limit),
+        currentPage: page,
+        branchCode: branchCode
+      };
+    } catch (error) {
+      logger.error(`Failed to get stores by branch with pagination: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * Create a new store
    * @param {Object} storeData - Store data
    * @returns {Object} Created store

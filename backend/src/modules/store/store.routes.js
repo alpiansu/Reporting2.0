@@ -59,6 +59,13 @@ const router = express.Router();
 router.get("/", authenticateJWT, storeController.getAllStores);
 
 /**
+ * @route GET /api/stores/branch/:branchCode
+ * @desc Get stores by branch with pagination
+ * @access Private
+ */
+router.get("/branch/:branchCode", authenticateJWT, storeController.getStoresByBranch);
+
+/**
  * @route GET /api/stores/:id
  * @desc Get store by ID
  * @access Private

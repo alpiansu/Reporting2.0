@@ -1,0 +1,138 @@
+### Variables
+@baseUrl = http://localhost:3000
+@token = your_jwt_token_here
+
+### Login first to get token
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin123"
+}
+
+### Get all stores with pagination (default: page=1, limit=10)
+GET {{baseUrl}}/api/stores
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1NTE1MzQ2NCwiZXhwIjoxNzU1MjM5ODY0fQ.LyMu2IFUtFmvrXN97I0NUJjCN1SjwRygl0oAUsVy8Kc
+
+### Get all stores with custom pagination
+GET {{baseUrl}}/api/stores?page=2&limit=5
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1NTE1MzQ2NCwiZXhwIjoxNzU1MjM5ODY0fQ.LyMu2IFUtFmvrXN97I0NUJjCN1SjwRygl0oAUsVy8Kc
+
+### Get all stores with search filter
+GET {{baseUrl}}/api/stores?search=toko&page=1&limit=10
+Authorization: Bearer {{token}}
+
+### Get all stores with region filter
+GET {{baseUrl}}/api/stores?region=Jakarta&page=1&limit=10
+Authorization: Bearer {{token}}
+
+### Get all stores with status filter (active stores only)
+GET {{baseUrl}}/api/stores?status=active&page=1&limit=10
+Authorization: Bearer {{token}}
+
+### Get stores by branch code with pagination (default: page=1, limit=10, onlyInduk=true)
+GET {{baseUrl}}/api/stores/branch/001
+Authorization: Bearer {{token}}
+
+### Get stores by branch code with custom pagination
+GET {{baseUrl}}/api/stores/branch/001?page=2&limit=5
+Authorization: Bearer {{token}}
+
+### Get stores by branch code with search filter
+GET {{baseUrl}}/api/stores/branch/001?search=induk&page=1&limit=10
+Authorization: Bearer {{token}}
+
+### Get stores by branch code including non-induk stores
+GET {{baseUrl}}/api/stores/branch/001?onlyInduk=false&page=1&limit=10
+Authorization: Bearer {{token}}
+
+### Get stores by branch code with status filter (active stores only)
+GET {{baseUrl}}/api/stores/branch/001?status=active&page=1&limit=10
+Authorization: Bearer {{token}}
+
+### Get stores by branch code with multiple filters
+GET {{baseUrl}}/api/stores/branch/001?page=1&limit=5&search=toko&onlyInduk=true&status=active
+Authorization: Bearer {{token}}
+
+### Get store by ID
+GET {{baseUrl}}/api/stores/1
+Authorization: Bearer {{token}}
+
+### Create new store (Admin/Manager only)
+POST {{baseUrl}}/api/stores
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "storeCode": "T001",
+  "storeName": "Toko Contoh",
+  "branch": "001",
+  "cab": "001",
+  "notes": "INDUK",
+  "region": "Jakarta",
+  "city": "Jakarta Pusat",
+  "address": "Jl. Contoh No. 123",
+  "dbHost": "localhost",
+  "dbUser": "user",
+  "dbPassword": "password",
+  "dbName": "database_name",
+  "isActive": true
+}
+
+### Update store (Admin/Manager only)
+PUT {{baseUrl}}/api/stores/1
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "storeName": "Toko Contoh Updated",
+  "address": "Jl. Contoh Updated No. 456",
+  "isActive": true
+}
+
+### Delete store (Admin only)
+DELETE {{baseUrl}}/api/stores/1
+Authorization: Bearer {{token}}
+
+### Test database connection
+POST {{baseUrl}}/api/stores/test-connection
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "host": "localhost",
+  "username": "user",
+  "password": "password",
+  "database": "database_name"
+}
+
+### ===== PAGINATION EXAMPLES =====
+
+### Example: Get first page (page 1) with 10 items per page
+GET {{baseUrl}}/api/stores/branch/001?page=1&limit=10
+Authorization: Bearer {{token}}
+
+### Example: Get second page (page 2) with 10 items per page
+GET {{baseUrl}}/api/stores/branch/001?page=2&limit=10
+Authorization: Bearer {{token}}
+
+### Example: Get third page (page 3) with 5 items per page
+GET {{baseUrl}}/api/stores/branch/001?page=3&limit=5
+Authorization: Bearer {{token}}
+
+### ===== RESPONSE FORMAT EXPLANATION =====
+# The response will include:
+# {
+#   "stores": [...],           // Array of store objects
+#   "totalItems": 25,          // Total number of stores matching criteria
+#   "totalPages": 3,           // Total number of pages (totalItems / limit)
+#   "currentPage": 1,          // Current page number
+#   "branchCode": "001"        // Branch code used for filtering
+# }
+#
+# To navigate pages:
+# - Use 'page' parameter to specify which page you want
+# - Use 'limit' parameter to specify how many items per page
+# - Check 'totalPages' to know the maximum page number available
+# - Use 'totalItems' to know total records matching your criteria

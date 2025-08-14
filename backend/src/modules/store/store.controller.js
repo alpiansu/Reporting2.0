@@ -56,6 +56,33 @@ class StoreController {
   }
   
   /**
+   * Get stores by branch with pagination
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @param {Function} next - Express next middleware function
+   */
+  async getStoresByBranch(req, res, next) {
+    try {
+      const { branchCode } = req.params;
+      const { page, limit, search, onlyInduk, status } = req.query;
+      
+      const options = {
+        page: parseInt(page) || 1,
+        limit: parseInt(limit) || 10,
+        search: search || '',
+        onlyInduk: onlyInduk !== 'false', // default true, false only if explicitly set to 'false'
+        status,
+      };
+      
+      const result = await storeService.getStoresByBranchPaginated(branchCode, options);
+      
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+  
+  /**
    * Create a new store
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object

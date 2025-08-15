@@ -47,11 +47,17 @@ const handleViewResults = (data) => {
   activePeriode.value = data.periode;
   
   // Force refresh of results component if it exists
+  // Gunakan nextTick untuk memastikan komponen sudah dirender
   if (resultsComponent.value) {
     console.log('Calling loadResults on resultsComponent');
+    // Pastikan komponen sudah dirender dan fungsi loadResults tersedia
     setTimeout(() => {
-      resultsComponent.value.loadResults();
-    }, 100);
+      if (resultsComponent.value && typeof resultsComponent.value.loadResults === 'function') {
+        resultsComponent.value.loadResults();
+      } else {
+        console.warn('loadResults function not available on resultsComponent');
+      }
+    }, 200);
   }
 };
 

@@ -11,7 +11,7 @@
           type="text" 
           v-model="searchQuery" 
           @input="handleSearch"
-          placeholder="Cari berdasarkan toko, tipe, atau tanggal..."
+          placeholder="Cari Data ..."
           class="search-input"
         />
         <button v-if="searchQuery" @click="clearSearch" class="clear-button">
@@ -77,6 +77,7 @@ const pagination = ref({
 const searchTimeout = ref(null);
 
 // Methods
+// Ekspos fungsi loadResults ke komponen induk
 const loadResults = async () => {
   // Hanya memeriksa periode, karena cabang bisa kosong (untuk semua cabang)
   if (!props.periode) return;
@@ -172,6 +173,11 @@ watch(() => props.periode, (newPeriode) => {
     loadResults();
   }
 }, { immediate: true });
+
+// Ekspos fungsi loadResults ke komponen induk
+defineExpose({
+  loadResults
+});
 </script>
 
 <style scoped>

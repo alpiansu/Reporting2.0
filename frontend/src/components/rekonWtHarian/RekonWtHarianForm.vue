@@ -18,7 +18,7 @@
             placeholder="Pilih Cabang" 
             :disabled="loading"
             class="w-full"
-            @change="emitViewResults"
+            @change="handleCabChange"
           />
           <small v-if="errors.cab" class="error-text">{{ errors.cab }}</small>
         </div>
@@ -109,7 +109,7 @@ const updatePeriode = () => {
     formData.periode = year + month;
     
     // Automatically emit view-results when periode changes
-    if (formData.cab && formData.periode) {
+    if (formData.periode) {
       emitViewResults();
     }
   }
@@ -164,10 +164,26 @@ const emitViewResults = () => {
   // Jika cabang adalah 'SEMUA', kirim string kosong sebagai parameter cab
   const cabParam = formData.cab === 'SEMUA' ? '' : formData.cab;
   
-  emit('view-results', {
-    cab: cabParam,
-    periode: formData.periode
-  });
+  // Pastikan periode tidak kosong sebelum emit event
+  if (formData.periode) {
+    console.log('Emitting view-results with cab:', cabParam, 'periode:', formData.periode);
+    emit('view-results', {
+      cab: cabParam,
+      periode: formData.periode
+    });
+  }
+};
+
+// Handler untuk perubahan cabang
+const handleCabChange = () => {
+  console.log('Cabang changed to:', formData.cab);
+  // Pastikan periode sudah ada sebelum emit event
+  if (formData.periode) {
+    // Berikan sedikit delay untuk memastikan komponen sudah terupdate
+    setTimeout(() => {
+      emitViewResults();
+    }, 50);
+  }
 };
 
 // Define emits

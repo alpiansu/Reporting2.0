@@ -17,14 +17,6 @@
   >
     <!-- Filters -->
     <template #filters>
-      <FilterGroup label="Tipe Transaksi" icon="pi-tag" id="tipe-filter">
-        <select id="tipe-filter" v-model="filters.tipe" @change="applyFilters" class="filter-control">
-          <option value="">Semua Tipe</option>
-          <option value="TUNAI">TUNAI</option>
-          <option value="NON TUNAI">NON TUNAI</option>
-        </select>
-      </FilterGroup>
-
       <FilterGroup label="Nama Toko" icon="pi-shopping-bag" id="toko-filter">
         <input type="text" id="toko-filter" v-model="filters.toko" @input="applyFilters"
           placeholder="Cari berdasarkan nama toko" class="filter-control" />
@@ -179,7 +171,7 @@ const hasDifference = (item) => {
 
 const getAmountClass = (amount) => {
   if (!amount) return '';
-  return amount !== 0 ? 'different-amount' : '';
+  return amount > 5 || amount < -5 ? 'different-amount' : 'same-amount';
 };
 
 const formatDate = (dateString) => {
@@ -443,6 +435,23 @@ const printResults = () => {
 </script>
 
 <style scoped>
+.same-amount {
+  color: #61CE70;
+  font-weight: 600;
+  position: relative;
+}
+
+.same-amount::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background-color: #40894A;
+  border-radius: 1px;
+}
+
 .different-amount {
   color: #e74c3c;
   font-weight: 600;

@@ -14,6 +14,7 @@
       @refresh="handleRefresh"
       @page-change="handlePageChange"
       @items-per-page-change="handleItemsPerPageChange"
+      @sort-change="handleSortChange"
     />
     
     <!-- Pagination Info sudah ditampilkan di dalam DataTable -->
@@ -52,6 +53,8 @@ const pagination = ref({
   total: 0,
   totalPages: 0
 });
+const sortColumn = ref(null);
+const sortOrder = ref('asc');
 
 // Methods
 // Ekspos fungsi loadResults ke komponen induk
@@ -72,6 +75,12 @@ const loadResults = async (options = {}) => {
     // Add search params if provided from table component
     if (options.searchQuery) {
       params.searchQuery = options.searchQuery;
+    }
+
+    // Add sorting parameters if available
+    if (sortColumn.value) {
+      params.sortColumn = sortColumn.value;
+      params.sortOrder = sortOrder.value;
     }
     
     // Load results
@@ -145,6 +154,17 @@ const handleItemsPerPageChange = (data) => {
   pagination.value.itemsPerPage = data.itemsPerPage;
   pagination.value.currentPage = data.page; // Reset to first page
   // Explicitly load results with new pagination settings
+  loadResults();
+};
+
+// Handle sort change
+const handleSortChange = (data) => {
+  console.log('RekonWtHarianResults handleSortChange:', data);
+  sortColumn.value = data.sortColumn;
+  sortOrder.value = data.sortOrder;
+  // Reset to first page when sorting changes
+  pagination.value.currentPage = 1;
+  // Load results with new sorting parameters
   loadResults();
 };
 

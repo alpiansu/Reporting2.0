@@ -61,10 +61,10 @@ class RekonWtHarianController {
    * @param {Object} res - Express response object
    * @param {Function} next - Express next middleware function
    */
-  async getResults(req, res, next) {
+  async getResults(req, res) {
     try {
-      const { periode, cab } = req.params;
-      const { page, limit, tipe, toko, tgl1, searchQuery } = req.query;
+      const { cab, periode } = req.params;
+      const { page, limit, tipe, toko, tgl1, searchQuery, sortColumn, sortOrder } = req.query;
 
       if (!periode) {
         return res.status(400).json({
@@ -76,13 +76,15 @@ class RekonWtHarianController {
       // Handle 'SEMUA CABANG' option
       if (cab === "All") {
         const results = await rekonWtHarianService.getAllCabangResults(periode, {
-          page: parseInt(page) || 1,
-          limit: parseInt(limit) || config.pagination.defaultLimit,
-          tipe,
-          toko,
-          tgl1,
-          searchQuery,
-        });
+        page: parseInt(page) || 1,
+        limit: parseInt(limit) || config.pagination.defaultLimit,
+        tipe,
+        toko,
+        tgl1,
+        searchQuery,
+        sortColumn,
+        sortOrder,
+      });
         return res.status(200).json(results);
       }
 
@@ -93,6 +95,8 @@ class RekonWtHarianController {
         toko,
         tgl1,
         searchQuery,
+        sortColumn,
+        sortOrder,
       });
 
       res.status(200).json(results);

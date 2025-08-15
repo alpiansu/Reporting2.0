@@ -6,7 +6,7 @@
     :pagination="pagination"
     :tableTitle="'Detail Transaksi'" :rowClass="getRowClass" @refresh="$emit('refresh')" @reset-filters="resetFilters"
     @export="exportToExcel" @print="printResults" @page-change="handlePageChange"
-    @items-per-page-change="handleItemsPerPageChange">
+    @items-per-page-change="handleItemsPerPageChange" @sort-change="handleSortChange">
     <!-- Search Component -->
     <template #filters>
       <div class="search-container">
@@ -23,24 +23,72 @@
       </div>
     </template>
 
-    <!-- Table Header -->
-    <template #table-header>
-      <th>Cab</th>
-      <th>Tanggal</th>
-      <th>Shop</th>
-      <th>Tipe</th>
-      <th class="text-right">Gross WRC</th>
-      <th class="text-right">Gross Toko</th>
-      <th class="text-right">Selisih Gross</th>
-      <th class="text-right">PPN WRC</th>
-      <th class="text-right">PPN Toko</th>
-      <th class="text-right">Selisih PPN</th>
-      <th class="text-right">Gross Idm WRC</th>
-      <th class="text-right">Gross Idm Toko</th>
-      <th class="text-right">Selisih Gross Idm</th>
-      <th class="text-right">PPN Idm WRC</th>
-      <th class="text-right">PPN Idm Toko</th>
-      <th class="text-right">Selisih PPN Idm</th>
+    <!-- Table Header with Sorting -->
+    <template #table-header-sortable="{ sortColumn, sortOrder, handleSort }">
+      <th class="sortable" :class="{ 'sort-asc': sortColumn === 'cab' && sortOrder === 'asc', 'sort-desc': sortColumn === 'cab' && sortOrder === 'desc' }" @click="handleSort('cab')">
+        Cab
+        <i v-if="sortColumn === 'cab'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+      </th>
+      <th class="sortable" :class="{ 'sort-asc': sortColumn === 'tgl1' && sortOrder === 'asc', 'sort-desc': sortColumn === 'tgl1' && sortOrder === 'desc' }" @click="handleSort('tgl1')">
+        Tanggal
+        <i v-if="sortColumn === 'tgl1'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+      </th>
+      <th class="sortable" :class="{ 'sort-asc': sortColumn === 'shop' && sortOrder === 'asc', 'sort-desc': sortColumn === 'shop' && sortOrder === 'desc' }" @click="handleSort('shop')">
+        Shop
+        <i v-if="sortColumn === 'shop'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+      </th>
+      <th class="sortable" :class="{ 'sort-asc': sortColumn === 'tipe' && sortOrder === 'asc', 'sort-desc': sortColumn === 'tipe' && sortOrder === 'desc' }" @click="handleSort('tipe')">
+        Tipe
+        <i v-if="sortColumn === 'tipe'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+      </th>
+      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'gross_wrc' && sortOrder === 'asc', 'sort-desc': sortColumn === 'gross_wrc' && sortOrder === 'desc' }" @click="handleSort('gross_wrc')">
+        Gross WRC
+        <i v-if="sortColumn === 'gross_wrc'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+      </th>
+      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'gross_store' && sortOrder === 'asc', 'sort-desc': sortColumn === 'gross_store' && sortOrder === 'desc' }" @click="handleSort('gross_store')">
+        Gross Toko
+        <i v-if="sortColumn === 'gross_store'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+      </th>
+      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'selisih_gross' && sortOrder === 'asc', 'sort-desc': sortColumn === 'selisih_gross' && sortOrder === 'desc' }" @click="handleSort('selisih_gross')">
+        Selisih Gross
+        <i v-if="sortColumn === 'selisih_gross'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+      </th>
+      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'ppn_wrc' && sortOrder === 'asc', 'sort-desc': sortColumn === 'ppn_wrc' && sortOrder === 'desc' }" @click="handleSort('ppn_wrc')">
+        PPN WRC
+        <i v-if="sortColumn === 'ppn_wrc'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+      </th>
+      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'ppn_store' && sortOrder === 'asc', 'sort-desc': sortColumn === 'ppn_store' && sortOrder === 'desc' }" @click="handleSort('ppn_store')">
+        PPN Toko
+        <i v-if="sortColumn === 'ppn_store'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+      </th>
+      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'selisih_ppn' && sortOrder === 'asc', 'sort-desc': sortColumn === 'selisih_ppn' && sortOrder === 'desc' }" @click="handleSort('selisih_ppn')">
+        Selisih PPN
+        <i v-if="sortColumn === 'selisih_ppn'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+      </th>
+      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'gross_idm_wrc' && sortOrder === 'asc', 'sort-desc': sortColumn === 'gross_idm_wrc' && sortOrder === 'desc' }" @click="handleSort('gross_idm_wrc')">
+        Gross Idm WRC
+        <i v-if="sortColumn === 'gross_idm_wrc'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+      </th>
+      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'gross_idm_store' && sortOrder === 'asc', 'sort-desc': sortColumn === 'gross_idm_store' && sortOrder === 'desc' }" @click="handleSort('gross_idm_store')">
+        Gross Idm Toko
+        <i v-if="sortColumn === 'gross_idm_store'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+      </th>
+      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'selisih_gross_idm' && sortOrder === 'asc', 'sort-desc': sortColumn === 'selisih_gross_idm' && sortOrder === 'desc' }" @click="handleSort('selisih_gross_idm')">
+        Selisih Gross Idm
+        <i v-if="sortColumn === 'selisih_gross_idm'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+      </th>
+      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'ppn_idm_wrc' && sortOrder === 'asc', 'sort-desc': sortColumn === 'ppn_idm_wrc' && sortOrder === 'desc' }" @click="handleSort('ppn_idm_wrc')">
+        PPN Idm WRC
+        <i v-if="sortColumn === 'ppn_idm_wrc'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+      </th>
+      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'ppn_idm_store' && sortOrder === 'asc', 'sort-desc': sortColumn === 'ppn_idm_store' && sortOrder === 'desc' }" @click="handleSort('ppn_idm_store')">
+        PPN Idm Toko
+        <i v-if="sortColumn === 'ppn_idm_store'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+      </th>
+      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'selisih_ppn_idm' && sortOrder === 'asc', 'sort-desc': sortColumn === 'selisih_ppn_idm' && sortOrder === 'desc' }" @click="handleSort('selisih_ppn_idm')">
+        Selisih PPN Idm
+        <i v-if="sortColumn === 'selisih_ppn_idm'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+      </th>
     </template>
 
     <!-- Table Row -->
@@ -110,7 +158,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['refresh', 'page-change', 'items-per-page-change']);
+const emit = defineEmits(['refresh', 'page-change', 'items-per-page-change', 'sort-change']);
 const toast = useToastService();
 
 // Search functionality
@@ -182,6 +230,14 @@ const handlePageChange = (data) => {
 // Handle items per page change
 const handleItemsPerPageChange = (data) => {
   emit('items-per-page-change', data);
+};
+
+// Handle sort change
+const handleSortChange = (data) => {
+  console.log('Sort changed:', data);
+  emit('sort-change', data);
+  // Reset to page 1 when sorting changes
+  emit('page-change', { page: 1, itemsPerPage: props.pagination.itemsPerPage || 10 });
 };
 
 // Reset filters (for compatibility with DataTable component)

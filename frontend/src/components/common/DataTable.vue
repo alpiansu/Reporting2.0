@@ -69,7 +69,7 @@
             <thead>
               <tr>
                 <th v-if="showRowNumbers" class="text-center">No</th>
-                <slot name="table-header"></slot>
+                <slot name="table-header-sortable" :sort-column="sortColumn" :sort-order="sortOrder" :handle-sort="handleSort"></slot>
               </tr>
             </thead>
             <tbody>
@@ -197,6 +197,10 @@ const props = defineProps({
     type: Boolean,
     default: true
   },
+  showSorting: {
+    type: Boolean,
+    default: true
+  },
   showRefreshButton: {
     type: Boolean,
     default: true
@@ -230,11 +234,14 @@ const emit = defineEmits([
   'export', 
   'print', 
   'page-change', 
-  'items-per-page-change'
+  'items-per-page-change',
+  'sort-change'
 ]);
 
 // State
 const currentPage = ref(props.pagination?.currentPage || 1);
+const sortColumn = ref(null);
+const sortOrder = ref('asc'); // 'asc' or 'desc'
 const itemsPerPage = ref(props.pagination?.itemsPerPage || props.defaultItemsPerPage);
 
 // Computed properties
@@ -411,7 +418,32 @@ const handleRefreshClick = (event) => {
   if (event) event.preventDefault();
   
   // Emit refresh event with current pagination state
-  emit('refresh', { page: currentPage.value, itemsPerPage: itemsPerPage.value });
+  emit('refresh', { 
+    page: currentPage.value, 
+    itemsPerPage: itemsPerPage.value,
+    sortColumn: sortColumn.value,
+    sortOrder: sortOrder.value
+  });
+};
+
+// Handle sorting when a column header is clicked
+const handleSort = (column) => {
+  // If clicking the same column, toggle sort order
+  if (sortColumn.value === column) {
+    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc';
+  } else {
+    // If clicking a new column, set it as sort column and default to ascending
+    sortColumn.value = column;
+    sortOrder.value = 'asc';
+  }
+  
+  // Emit sort-change event with sort parameters
+  emit('sort-change', { 
+    sortColumn: sortColumn.value, 
+    sortOrder: sortOrder.value,
+    page: currentPage.value,
+    itemsPerPage: itemsPerPage.value
+  });
 };
 
 // Watch for data changes to reset pagination if needed
@@ -494,7 +526,30 @@ watch(() => props.filteredData, (newData) => {
   background-color: #f8f9fa;
   border-bottom: 1px solid #e9ecef;
   padding: 1rem;
-  margin-bottom: 1rem;
+}
+
+/* Sorting */
+.sortable {
+  cursor: pointer;
+  position: relative;
+  user-select: none;
+}
+
+.sortable:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.sort-icon {
+  margin-left: 5px;
+  transition: transform 0.2s ease;
+}
+
+.sort-asc .sort-icon {
+  transform: rotate(0deg);
+}
+
+.sort-desc .sort-icon {
+  transform: rotate(180deg);
 }
 
 .filters-header {
@@ -515,13 +570,10 @@ watch(() => props.filteredData, (newData) => {
 .filters-body {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
 }
 
 .filter-stats {
   display: flex;
-  gap: 1rem;
-  margin-top: 1rem;
   width: 100%;
   font-size: 0.875rem;
 }

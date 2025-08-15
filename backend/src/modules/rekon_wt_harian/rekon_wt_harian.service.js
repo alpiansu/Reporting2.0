@@ -918,7 +918,16 @@ class RekonWtHarianService {
    */
   async getAllCabangResults(period, options = {}) {
     try {
-      const { page = 1, limit = config.pagination.defaultLimit, tipe, toko, tgl1, searchQuery } = options;
+      const {
+        page = 1,
+        limit = config.pagination.defaultLimit,
+        tipe,
+        toko,
+        tgl1,
+        searchQuery,
+        sortColumn,
+        sortOrder,
+      } = options;
 
       // Ensure limit doesn't exceed maximum
       const validLimit = Math.min(limit, config.pagination.maxLimit);
@@ -933,15 +942,38 @@ class RekonWtHarianService {
       if (tipe) query.tipe = tipe;
       if (toko) query.toko = { [Op.like]: `%${toko}%` };
       if (tgl1) query.tgl1 = tgl1;
-      
+
       // Add search query if provided (search across multiple columns)
       if (searchQuery) {
         query[Op.or] = [
           { shop: { [Op.like]: `%${searchQuery}%` } },
           { toko: { [Op.like]: `%${searchQuery}%` } },
           { tipe: { [Op.like]: `%${searchQuery}%` } },
-          { cab: { [Op.like]: `%${searchQuery}%` } }
+          { cab: { [Op.like]: `%${searchQuery}%` } },
+          { tgl1: { [Op.like]: `%${searchQuery}%` } },
+          { gross_wrc: { [Op.like]: `%${searchQuery}%` } },
+          { gross_store: { [Op.like]: `%${searchQuery}%` } },
+          { gross_idm_wrc: { [Op.like]: `%${searchQuery}%` } },
+          { gross_idm_store: { [Op.like]: `%${searchQuery}%` } },
+          { ppn_wrc: { [Op.like]: `%${searchQuery}%` } },
+          { ppn_store: { [Op.like]: `%${searchQuery}%` } },
+          { ppn_idm_wrc: { [Op.like]: `%${searchQuery}%` } },
+          { ppn_idm_store: { [Op.like]: `%${searchQuery}%` } },
         ];
+      }
+
+      // Define default order or use provided sort parameters
+      let orderConfig = [
+        ["tgl1", "ASC"],
+        ["toko", "ASC"],
+        ["tipe", "ASC"],
+      ];
+
+      // If sortColumn and sortOrder are provided, use them as primary sort
+      if (sortColumn && sortOrder) {
+        // Validate sortOrder value
+        const validSortOrder = ["ASC", "DESC"].includes(sortOrder.toUpperCase()) ? sortOrder.toUpperCase() : "ASC";
+        orderConfig = [[sortColumn, validSortOrder], ...orderConfig];
       }
 
       // Get total count and results
@@ -949,11 +981,7 @@ class RekonWtHarianService {
         where: query,
         limit: validLimit,
         offset,
-        order: [
-          ["tgl1", "ASC"],
-          ["toko", "ASC"],
-          ["tipe", "ASC"],
-        ],
+        order: orderConfig,
       });
 
       // Return in the same format as getResults method
@@ -979,7 +1007,16 @@ class RekonWtHarianService {
    */
   async getResults(cab, period, options = {}) {
     try {
-      const { page = 1, limit = config.pagination.defaultLimit, tipe, toko, tgl1, searchQuery } = options;
+      const {
+        page = 1,
+        limit = config.pagination.defaultLimit,
+        tipe,
+        toko,
+        tgl1,
+        searchQuery,
+        sortColumn,
+        sortOrder,
+      } = options;
 
       // Ensure limit doesn't exceed maximum
       const validLimit = Math.min(limit, config.pagination.maxLimit);
@@ -1001,25 +1038,45 @@ class RekonWtHarianService {
       if (tgl1) {
         whereClause.tgl1 = tgl1;
       }
-      
+
       // Add search query if provided (search across multiple columns)
       if (searchQuery) {
         whereClause[Op.or] = [
           { shop: { [Op.like]: `%${searchQuery}%` } },
           { toko: { [Op.like]: `%${searchQuery}%` } },
-          { tipe: { [Op.like]: `%${searchQuery}%` } }
+          { tipe: { [Op.like]: `%${searchQuery}%` } },
+          { tgl1: { [Op.like]: `%${searchQuery}%` } },
+          { cab: { [Op.like]: `%${searchQuery}%` } },
+          { gross_wrc: { [Op.like]: `%${searchQuery}%` } },
+          { gross_store: { [Op.like]: `%${searchQuery}%` } },
+          { gross_idm_wrc: { [Op.like]: `%${searchQuery}%` } },
+          { gross_idm_store: { [Op.like]: `%${searchQuery}%` } },
+          { ppn_wrc: { [Op.like]: `%${searchQuery}%` } },
+          { ppn_store: { [Op.like]: `%${searchQuery}%` } },
+          { ppn_idm_wrc: { [Op.like]: `%${searchQuery}%` } },
+          { ppn_idm_store: { [Op.like]: `%${searchQuery}%` } },
         ];
+      }
+
+      // Define default order or use provided sort parameters
+      let orderConfig = [
+        ["tgl1", "ASC"],
+        ["shop", "ASC"],
+        ["tipe", "ASC"],
+      ];
+
+      // If sortColumn and sortOrder are provided, use them as primary sort
+      if (sortColumn && sortOrder) {
+        // Validate sortOrder value
+        const validSortOrder = ["ASC", "DESC"].includes(sortOrder.toUpperCase()) ? sortOrder.toUpperCase() : "ASC";
+        orderConfig = [[sortColumn, validSortOrder], ...orderConfig];
       }
 
       const { count, rows } = await RekonWtHarian.findAndCountAll({
         where: whereClause,
         limit: validLimit,
         offset,
-        order: [
-          ["tgl1", "ASC"],
-          ["toko", "ASC"],
-          ["tipe", "ASC"],
-        ],
+        order: orderConfig,
       });
 
       return {

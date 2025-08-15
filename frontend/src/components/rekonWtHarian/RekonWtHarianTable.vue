@@ -10,14 +10,16 @@
     <!-- Search Component -->
     <template #filters>
       <div class="search-container">
-        <div class="search-box">
-          <i class="pi pi-search search-icon"></i>
-          <input type="text" v-model="searchQuery" @input="handleSearch" placeholder="Cari Data ..."
-            class="search-input" />
-          <button v-if="searchQuery" @click="clearSearch" class="clear-button">
-            <i class="pi pi-times"></i>
-          </button>
-        </div>
+        <form @submit.prevent="handleSearch" class="search-form">
+          <div class="search-box">
+            <i class="pi pi-search search-icon"></i>
+            <input type="text" v-model="searchQuery" @input="handleSearch" placeholder="Cari Data ..."
+              class="search-input" />
+            <button type="button" v-if="searchQuery" @click="clearSearch" class="clear-button">
+              <i class="pi pi-times"></i>
+            </button>
+          </div>
+        </form>
       </div>
     </template>
 
@@ -137,7 +139,10 @@ watch(() => props.pagination, (newPagination) => {
 }, { immediate: true, deep: true });
 
 // Handle search with debounce
-const handleSearch = () => {
+const handleSearch = (event) => {
+  // Prevent default browser behavior to avoid page refresh
+  if (event && event.type === 'submit') event.preventDefault();
+  
   // Clear any existing timeout
   if (searchTimeout.value) {
     clearTimeout(searchTimeout.value);
@@ -156,7 +161,10 @@ const handleSearch = () => {
 };
 
 // Clear search
-const clearSearch = () => {
+const clearSearch = (event) => {
+  // Prevent default browser behavior to avoid page refresh
+  if (event) event.preventDefault();
+  
   searchQuery.value = '';
   // Emit event to parent component to refresh data without search query
   // Gabungkan reset halaman dalam satu emit refresh
@@ -177,7 +185,10 @@ const handleItemsPerPageChange = (data) => {
 };
 
 // Reset filters (for compatibility with DataTable component)
-const resetFilters = () => {
+const resetFilters = (event) => {
+  // Prevent default browser behavior to avoid page refresh
+  if (event) event.preventDefault();
+  
   searchQuery.value = '';
   // Gabungkan reset halaman dalam satu emit refresh
   emit('refresh', {

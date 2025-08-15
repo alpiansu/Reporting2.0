@@ -9,7 +9,7 @@
     <div v-else-if="error" class="error-state">
       <i class="pi pi-exclamation-triangle" style="font-size: 2rem; color: #e74c3c;"></i>
       <p>{{ error }}</p>
-      <button @click="$emit('refresh')" class="btn btn-secondary">
+      <button @click="handleRefreshClick" class="btn btn-secondary btn-sm">
         <i class="pi pi-refresh"></i> Coba Lagi
       </button>
     </div>
@@ -27,7 +27,7 @@
           <h3 class="filters-title">
             <i class="pi pi-filter"></i> Filter Data
           </h3>
-          <button @click="$emit('reset-filters')" class="btn btn-secondary btn-sm">
+          <button @click.prevent="$emit('reset-filters')" class="btn btn-secondary btn-sm">
             <i class="pi pi-filter-slash"></i> Reset
           </button>
         </div>
@@ -54,10 +54,10 @@
           <h3 class="table-title">{{ tableTitle }}</h3>
           <div class="table-actions">
             <slot name="table-actions">
-              <button v-if="showExportButton" class="btn btn-secondary btn-sm" @click="$emit('export')" title="Ekspor ke Excel">
+              <button v-if="showExportButton" class="btn btn-secondary btn-sm" @click.prevent="$emit('export')" title="Ekspor ke Excel">
                 <i class="pi pi-file-excel"></i> Ekspor Data
               </button>
-              <button v-if="showPrintButton" class="btn btn-secondary btn-sm" @click="$emit('print')" title="Cetak hasil">
+              <button v-if="showPrintButton" class="btn btn-secondary btn-sm" @click.prevent="$emit('print')" title="Cetak hasil">
                 <i class="pi pi-print"></i> Cetak
               </button>
             </slot>
@@ -89,18 +89,18 @@
         </div>
 
         <div class="pagination-controls">
-          <button @click="goToFirstPage" :disabled="currentPage === 1" class="btn btn-icon"
+          <button @click.prevent="goToFirstPage" :disabled="currentPage === 1" class="btn btn-icon"
             title="Halaman pertama">
             <i class="pi pi-angle-double-left"></i>
           </button>
 
-          <button @click="prevPage" :disabled="currentPage === 1" class="btn btn-icon" title="Halaman sebelumnya">
+          <button @click.prevent="prevPage" :disabled="currentPage === 1" class="btn btn-icon" title="Halaman sebelumnya">
             <i class="pi pi-angle-left"></i>
           </button>
 
           <div class="page-numbers">
             <template v-for="pageNum in displayedPageNumbers" :key="pageNum">
-              <button v-if="pageNum !== '...'" @click="goToPage(pageNum)"
+              <button v-if="pageNum !== '...'" @click.prevent="goToPage(pageNum)"
                 :class="['btn', 'btn-page', currentPage === pageNum ? 'btn-active' : '']">
                 {{ pageNum }}
               </button>
@@ -108,12 +108,12 @@
             </template>
           </div>
 
-          <button @click="nextPage" :disabled="currentPage === totalPages" class="btn btn-icon"
+          <button @click.prevent="nextPage" :disabled="currentPage === totalPages" class="btn btn-icon"
             title="Halaman selanjutnya">
             <i class="pi pi-angle-right"></i>
           </button>
 
-          <button @click="goToLastPage" :disabled="currentPage === totalPages" class="btn btn-icon"
+          <button @click.prevent="goToLastPage" :disabled="currentPage === totalPages" class="btn btn-icon"
             title="Halaman terakhir">
             <i class="pi pi-angle-double-right"></i>
           </button>
@@ -129,7 +129,7 @@
 
       <!-- Actions -->
       <div v-if="showRefreshButton" class="actions-section">
-        <button @click="$emit('refresh')" class="btn btn-secondary">
+        <button @click="handleRefreshClick" class="btn btn-secondary">
           <i class="pi pi-refresh"></i> Refresh Data
         </button>
       </div>
@@ -370,36 +370,48 @@ const getRowClass = (item, index) => {
   return props.rowClass(item, index);
 };
 
-const prevPage = () => {
+const prevPage = (event) => {
+  if (event) event.preventDefault();
   if (currentPage.value > 1) {
     goToPage(currentPage.value - 1);
   }
 };
 
-const nextPage = () => {
+const nextPage = (event) => {
+  if (event) event.preventDefault();
   if (currentPage.value < totalPages.value) {
     goToPage(currentPage.value + 1);
   }
 };
 
-const goToPage = (page) => {
+const goToPage = (page, event) => {
+  if (event) event.preventDefault();
   currentPage.value = page;
   emit('page-change', { page: page, itemsPerPage: itemsPerPage.value });
 };
 
-const goToFirstPage = () => {
+const goToFirstPage = (event) => {
+  if (event) event.preventDefault();
   goToPage(1);
 };
 
-const goToLastPage = () => {
+const goToLastPage = (event) => {
+  if (event) event.preventDefault();
   goToPage(totalPages.value);
 };
 
 const handleItemsPerPageChange = () => {
   currentPage.value = 1; // Reset to first page
   emit('items-per-page-change', { page: 1, itemsPerPage: itemsPerPage.value });
-  // Trigger refresh to fetch data with new limit
-  emit('refresh', { itemsPerPage: itemsPerPage.value });
+};
+
+// Handle refresh button click without causing full page refresh
+const handleRefreshClick = (event) => {
+  // Prevent default browser behavior to avoid page refresh
+  if (event) event.preventDefault();
+  
+  // Emit refresh event with current pagination state
+  emit('refresh', { page: currentPage.value, itemsPerPage: itemsPerPage.value });
 };
 
 // Watch for data changes to reset pagination if needed

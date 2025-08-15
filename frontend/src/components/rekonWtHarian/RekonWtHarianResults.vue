@@ -117,7 +117,10 @@ console.log('RekonWtHarianResults updated pagination:', pagination.value);
 
 
 // Handle refresh event from table component
-const handleRefresh = (data = {}) => {
+const handleRefresh = (data = {}, event) => {
+  // Prevent default browser behavior to avoid page refresh
+  if (event) event.preventDefault();
+  
   // Update pagination settings if provided
   if (data.page) {
     pagination.value.currentPage = data.page;

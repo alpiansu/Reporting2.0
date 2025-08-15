@@ -1,31 +1,24 @@
 <template>
-  <DataTable
-    :data="data"
-    :filteredData="filteredData"
-    :loading="loading"
-    :error="error"
-    :loadingMessage="'Memuat data rekonsiliasi...'"
-    :loadingHelpText="'Mohon tunggu sebentar...'"
+  <DataTable :data="data" :filteredData="filteredData" :loading="loading" :error="error"
+    :loadingMessage="'Memuat data rekonsiliasi...'" :loadingHelpText="'Mohon tunggu sebentar...'"
     :emptyMessage="'Tidak ada data rekonsiliasi untuk ditampilkan.'"
     :emptyHelpText="'Tidak ditemukan data rekonsiliasi untuk cabang dan periode yang dipilih.'"
-    :tableTitle="'Detail Transaksi'"
-    :rowClass="getRowClass"
-    @refresh="$emit('refresh')"
-    @reset-filters="resetFilters"
-    @export="exportToExcel"
-    @print="printResults"
-  >
-    <!-- Filters -->
+    :pagination="pagination"
+    :tableTitle="'Detail Transaksi'" :rowClass="getRowClass" @refresh="$emit('refresh')" @reset-filters="resetFilters"
+    @export="exportToExcel" @print="printResults" @page-change="handlePageChange"
+    @items-per-page-change="handleItemsPerPageChange">
+    <!-- Search Component -->
     <template #filters>
-      <FilterGroup label="Nama Toko" icon="pi-shopping-bag" id="toko-filter">
-        <input type="text" id="toko-filter" v-model="filters.toko" @input="applyFilters"
-          placeholder="Cari berdasarkan nama toko" class="filter-control" />
-      </FilterGroup>
-
-      <FilterGroup label="Tanggal Transaksi" icon="pi-calendar" id="tanggal-filter">
-        <input type="date" id="tanggal-filter" v-model="filters.tgl1" @change="applyFilters"
-          class="filter-control" :max="today" />
-      </FilterGroup>
+      <div class="search-container">
+        <div class="search-box">
+          <i class="pi pi-search search-icon"></i>
+          <input type="text" v-model="searchQuery" @input="handleSearch" placeholder="Cari Data ..."
+            class="search-input" />
+          <button v-if="searchQuery" @click="clearSearch" class="clear-button">
+            <i class="pi pi-times"></i>
+          </button>
+        </div>
+      </div>
     </template>
 
     <!-- Table Header -->
@@ -79,10 +72,9 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useToastService } from '../../utils/toast';
 import DataTable from '../common/DataTable.vue';
-import FilterGroup from '../common/FilterGroup.vue';
 
 const props = defineProps({
   data: {
@@ -104,58 +96,94 @@ const props = defineProps({
   periode: {
     type: String,
     required: true
+  },
+  pagination: {
+    type: Object,
+    default: () => ({
+      currentPage: 1,
+      itemsPerPage: 10,
+      total: 0,
+      totalPages: 0
+    })
   }
 });
 
-const emit = defineEmits(['refresh']);
+const emit = defineEmits(['refresh', 'page-change', 'items-per-page-change']);
 const toast = useToastService();
 
-// Tanggal hari ini untuk batasan input tanggal
-const today = ref(new Date().toISOString().split('T')[0]); // Format YYYY-MM-DD untuk input type="date"
-
-// Filters
-const filters = ref({
-  tipe: '',
-  toko: '',
-  tgl1: ''
-});
+// Search functionality
+const searchQuery = ref('');
+const searchTimeout = ref(null);
 
 // Computed properties
 const filteredData = computed(() => {
-  let filtered = [...props.data];
-  
-  if (filters.value.tipe) {
-    filtered = filtered.filter(item => item.tipe === filters.value.tipe);
+  // Pastikan kita mengembalikan array, bukan objek pagination
+  if (Array.isArray(props.data)) {
+    return props.data;
+  } else if (props.data && Array.isArray(props.data.data)) {
+    // Jika data adalah objek pagination dari backend
+    return props.data.data;
   }
-  
-  if (filters.value.toko) {
-    filtered = filtered.filter(item => 
-      item.toko.toLowerCase().includes(filters.value.toko.toLowerCase())
-    );
-  }
-  
-  if (filters.value.tgl1) {
-    const filterDate = new Date(filters.value.tgl1).toISOString().split('T')[0];
-    filtered = filtered.filter(item => {
-      const itemDate = new Date(item.tgl1).toISOString().split('T')[0];
-      return itemDate === filterDate;
-    });
-  }
-  
-  return filtered;
+  return [];
 });
 
-// Methods
-const applyFilters = () => {
-  // Filters are applied automatically through the computed property
+// Debug untuk melihat data yang diterima
+watch(() => props.data, (newData) => {
+  console.log('RekonWtHarianTable received data:', newData);
+}, { immediate: true, deep: true });
+
+watch(() => props.pagination, (newPagination) => {
+  console.log('RekonWtHarianTable received pagination:', newPagination);
+}, { immediate: true, deep: true });
+
+// Handle search with debounce
+const handleSearch = () => {
+  // Clear any existing timeout
+  if (searchTimeout.value) {
+    clearTimeout(searchTimeout.value);
+  }
+  
+  // Set a new timeout to debounce the search
+  searchTimeout.value = setTimeout(() => {
+    // Emit event to parent component to refresh data with search query
+    // Hanya emit refresh dengan searchQuery, tidak perlu emit page-change
+    emit('refresh', { 
+      searchQuery: searchQuery.value,
+      page: 1,
+      itemsPerPage: props.pagination.itemsPerPage || 10
+    });
+  }, 500); // 500ms debounce
 };
 
+// Clear search
+const clearSearch = () => {
+  searchQuery.value = '';
+  // Emit event to parent component to refresh data without search query
+  // Gabungkan reset halaman dalam satu emit refresh
+  emit('refresh', {
+    page: 1,
+    itemsPerPage: props.pagination.itemsPerPage || 10
+  });
+};
+
+// Handle page change
+const handlePageChange = (data) => {
+  emit('page-change', data);
+};
+
+// Handle items per page change
+const handleItemsPerPageChange = (data) => {
+  emit('items-per-page-change', data);
+};
+
+// Reset filters (for compatibility with DataTable component)
 const resetFilters = () => {
-  filters.value = {
-    tipe: '',
-    toko: '',
-    tgl1: ''
-  };
+  searchQuery.value = '';
+  // Gabungkan reset halaman dalam satu emit refresh
+  emit('refresh', {
+    page: 1,
+    itemsPerPage: props.pagination.itemsPerPage || 10
+  });
 };
 
 const getRowClass = (item) => {
@@ -435,6 +463,59 @@ const printResults = () => {
 </script>
 
 <style scoped>
+.search-container {
+  margin-bottom: 1rem;
+  width: 100%;
+  max-width: 500px;
+}
+
+.search-box {
+  position: relative;
+  width: 100%;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #666;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 40px 10px 35px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.search-input:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.2);
+  outline: none;
+}
+
+.clear-button {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.clear-button:hover {
+  color: #333;
+}
+
 .same-amount {
   color: #61CE70;
   font-weight: 600;

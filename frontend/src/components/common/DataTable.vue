@@ -85,8 +85,7 @@
       <!-- Pagination -->
       <div class="pagination-container" v-if="totalPages > 0 && showPagination">
         <div class="pagination-info">
-          <span class="records-info">Menampilkan {{ startIndex + 1 }}-{{ endIndex }} dari {{ filteredItems }}
-            data</span>
+          <span class="records-info">Menampilkan {{ startIndex + 1 }}-{{ endIndex }} dari {{ filteredItems }} data <strong>(Halaman {{ currentPage }} dari {{ totalPages }})</strong></span>
         </div>
 
         <div class="pagination-controls">
@@ -204,7 +203,7 @@ const props = defineProps({
   },
   itemsPerPageOptions: {
     type: Array,
-    default: () => [10, 25, 50, 100]
+    default: () => [5, 10, 25, 50, 100]
   },
   defaultItemsPerPage: {
     type: Number,
@@ -213,6 +212,15 @@ const props = defineProps({
   rowClass: {
     type: Function,
     default: () => ''
+  },
+  pagination: {
+    type: Object,
+    default: () => ({
+      currentPage: 1,
+      itemsPerPage: 10,
+      total: 0,
+      totalPages: 0
+    })
   }
 });
 
@@ -226,12 +234,16 @@ const emit = defineEmits([
 ]);
 
 // State
-const currentPage = ref(1);
-const itemsPerPage = ref(props.defaultItemsPerPage);
+const currentPage = ref(props.pagination?.currentPage || 1);
+const itemsPerPage = ref(props.pagination?.itemsPerPage || props.defaultItemsPerPage);
 
 // Computed properties
 const totalItems = computed(() => {
-  // Check if data has pagination info from backend
+  // Prioritaskan menggunakan props.pagination jika tersedia
+  if (props.pagination && props.pagination.total !== undefined) {
+    return props.pagination.total;
+  }
+  // Fallback ke props.data jika memiliki info pagination dari backend
   if (props.data && props.data.total !== undefined) {
     return props.data.total;
   }
@@ -239,10 +251,14 @@ const totalItems = computed(() => {
 });
 
 const filteredItems = computed(() => {
+  // Prioritaskan menggunakan props.pagination jika tersedia
+  if (props.pagination && props.pagination.total !== undefined) {
+    return props.pagination.total;
+  }
   if (props.filteredData && props.filteredData.length) {
     return props.filteredData.length;
   }
-  // Check if data has pagination info from backend
+  // Fallback ke props.data jika memiliki info pagination dari backend
   if (props.data && props.data.total !== undefined) {
     return props.data.total;
   }
@@ -250,10 +266,15 @@ const filteredItems = computed(() => {
 });
 
 const totalPages = computed(() => {
-  // Check if data has pagination info from backend
+  // Prioritaskan menggunakan props.pagination jika tersedia
+  if (props.pagination && props.pagination.totalPages !== undefined) {
+    return props.pagination.totalPages;
+  }
+  // Fallback ke props.data jika memiliki info pagination dari backend
   if (props.data && props.data.totalPages !== undefined) {
     return props.data.totalPages;
   }
+  // Hanya hitung manual jika tidak ada data totalPages dari backend
   return Math.ceil(filteredItems.value / itemsPerPage.value);
 });
 
@@ -271,10 +292,38 @@ const paginatedData = computed(() => {
     return props.data.data;
   }
   
+  // If filteredData is provided, use it directly as it's already processed
+  if (props.filteredData && Array.isArray(props.filteredData)) {
+    return props.filteredData;
+  }
+  
   // Otherwise, paginate on the client side
-  const dataToUse = props.filteredData.length ? props.filteredData : props.data;
-  return dataToUse.slice(startIndex.value, endIndex.value);
+  return props.data.slice(startIndex.value, endIndex.value);
 });
+
+// Sync currentPage and itemsPerPage with backend pagination if available
+watch(() => props.data, (newData) => {
+  console.log('DataTable watch props.data:', newData);
+  if (newData && newData.page !== undefined) {
+    currentPage.value = newData.page;
+  }
+  if (newData && newData.limit !== undefined) {
+    itemsPerPage.value = newData.limit;
+  }
+}, { immediate: true, deep: true });
+
+// Sync with props.pagination when it changes
+watch(() => props.pagination, (newPagination) => {
+  console.log('DataTable watch props.pagination:', newPagination);
+  if (newPagination) {
+    if (newPagination.currentPage !== undefined) {
+      currentPage.value = newPagination.currentPage;
+    }
+    if (newPagination.itemsPerPage !== undefined) {
+      itemsPerPage.value = newPagination.itemsPerPage;
+    }
+  }
+}, { immediate: true, deep: true });
 
 const displayedPageNumbers = computed(() => {
   const total = totalPages.value;
@@ -349,18 +398,46 @@ const goToLastPage = () => {
 const handleItemsPerPageChange = () => {
   currentPage.value = 1; // Reset to first page
   emit('items-per-page-change', { page: 1, itemsPerPage: itemsPerPage.value });
+  // Trigger refresh to fetch data with new limit
+  emit('refresh', { itemsPerPage: itemsPerPage.value });
 };
 
 // Watch for data changes to reset pagination if needed
-watch(() => props.data, () => {
-  if (currentPage.value > totalPages.value && totalPages.value > 0) {
-    currentPage.value = totalPages.value;
+watch(() => props.data, (newData) => {
+  // If we have backend pagination data, use it
+  if (newData && newData.totalPages !== undefined) {
+    // Sync pagination with backend data
+    if (newData.page !== undefined) {
+      currentPage.value = newData.page;
+    }
+    if (newData.limit !== undefined) {
+      itemsPerPage.value = newData.limit;
+    }
+    
+    // Check if current page exceeds total pages
+    if (currentPage.value > newData.totalPages && newData.totalPages > 0) {
+      currentPage.value = newData.totalPages;
+      emit('page-change', { page: currentPage.value, itemsPerPage: itemsPerPage.value });
+    }
+  } else {
+    // Client-side pagination
+    if (currentPage.value > totalPages.value && totalPages.value > 0) {
+      currentPage.value = totalPages.value;
+      emit('page-change', { page: currentPage.value, itemsPerPage: itemsPerPage.value });
+    }
   }
 }, { deep: true });
 
-watch(() => props.filteredData, () => {
-  if (currentPage.value > totalPages.value && totalPages.value > 0) {
+watch(() => props.filteredData, (newData) => {
+  // Periksa jika props.pagination tersedia dan memiliki totalPages
+  if (props.pagination && props.pagination.totalPages !== undefined) {
+    if (currentPage.value > props.pagination.totalPages && props.pagination.totalPages > 0) {
+      currentPage.value = props.pagination.totalPages;
+      emit('page-change', { page: currentPage.value, itemsPerPage: itemsPerPage.value });
+    }
+  } else if (currentPage.value > totalPages.value && totalPages.value > 0) {
     currentPage.value = totalPages.value;
+    emit('page-change', { page: currentPage.value, itemsPerPage: itemsPerPage.value });
   }
 }, { deep: true });
 
@@ -480,6 +557,7 @@ watch(() => props.filteredData, () => {
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
 }
 
 /* Definisi sudah ada di atas */
@@ -531,6 +609,8 @@ watch(() => props.filteredData, () => {
   vertical-align: middle;
   white-space: nowrap;
   position: relative;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .results-table th {
@@ -587,22 +667,31 @@ watch(() => props.filteredData, () => {
   padding: 1rem;
   border-top: 1px solid #e9ecef;
   font-size: 0.875rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
 }
 
 .pagination-info {
   color: #666;
+  flex: 1 1 100%;
+  order: 1;
 }
 
 .pagination-controls {
   display: flex;
   align-items: center;
   gap: 0.25rem;
+  flex: 2 1 auto;
+  order: 2;
+  justify-content: center;
 }
 
 .page-numbers {
   display: flex;
   align-items: center;
   gap: 0.25rem;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .btn-page {
@@ -624,6 +713,9 @@ watch(() => props.filteredData, () => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex: 1 1 auto;
+  order: 3;
+  justify-content: flex-end;
 }
 
 .items-select {
@@ -719,19 +811,59 @@ watch(() => props.filteredData, () => {
   }
   
   .pagination-container {
-    flex-direction: column;
-    gap: 1rem;
-    align-items: flex-start;
+    row-gap: 1rem;
+  }
+  
+  .pagination-info {
+    text-align: center;
   }
   
   .pagination-controls {
+    order: 3;
     width: 100%;
-    justify-content: space-between;
+    justify-content: center;
   }
   
   .items-per-page {
+    order: 2;
     width: 100%;
-    justify-content: flex-end;
+    justify-content: center;
+  }
+  
+  .btn-page {
+    min-width: 1.75rem;
+    height: 1.75rem;
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .page-numbers {
+    gap: 0.15rem;
+  }
+  
+  .btn-page {
+    min-width: 1.5rem;
+    height: 1.5rem;
+    font-size: 0.7rem;
+  }
+  
+  .btn-icon {
+    padding: 0.15rem 0.35rem;
+  }
+  
+  .ellipsis {
+    padding: 0 0.25rem;
+  }
+  
+  .results-table th,
+  .results-table td {
+    padding: 0.6rem 0.5rem;
+    font-size: 0.8rem;
+  }
+  
+  .results-table th {
+    font-size: 0.7rem;
   }
 }
 </style>

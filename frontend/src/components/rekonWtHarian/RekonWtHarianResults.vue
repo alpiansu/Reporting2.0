@@ -2,24 +2,7 @@
   <div class="results-container">
     <!-- Summary Card -->
     <RekonSummaryCard v-if="summary && !loading && !error" :summary="summary" :periode="periode" :cab="cab" />
-    
-    <!-- Search Component -->
-    <div class="search-container">
-      <div class="search-box">
-        <i class="pi pi-search search-icon"></i>
-        <input 
-          type="text" 
-          v-model="searchQuery" 
-          @input="handleSearch"
-          placeholder="Cari Data ..."
-          class="search-input"
-        />
-        <button v-if="searchQuery" @click="clearSearch" class="clear-button">
-          <i class="pi pi-times"></i>
-        </button>
-      </div>
-    </div>
-    
+
     <!-- Table Component -->
     <RekonWtHarianTable 
       :data="results" 
@@ -27,15 +10,13 @@
       :error="error"
       :cab="cab"
       :periode="periode"
-      @refresh="loadResults"
+      :pagination="pagination"
+      @refresh="handleRefresh"
       @page-change="handlePageChange"
       @items-per-page-change="handleItemsPerPageChange"
     />
     
-    <!-- Pagination Info -->
-    <div v-if="!loading && !error && pagination.totalPages > 0" class="pagination-info">
-      <span>Halaman {{ pagination.currentPage }} dari {{ pagination.totalPages }} (Total: {{ pagination.total }} data)</span>
-    </div>
+    <!-- Pagination Info sudah ditampilkan di dalam DataTable -->
   </div>
 </template>
 
@@ -65,7 +46,6 @@ const loading = ref(false);
 const error = ref(null);
 const results = ref([]);
 const summary = ref(null);
-const searchQuery = ref('');
 const pagination = ref({
   currentPage: 1,
   itemsPerPage: 10,
@@ -73,12 +53,9 @@ const pagination = ref({
   totalPages: 0
 });
 
-// Debounce function for search
-const searchTimeout = ref(null);
-
 // Methods
 // Ekspos fungsi loadResults ke komponen induk
-const loadResults = async () => {
+const loadResults = async (options = {}) => {
   // Hanya memeriksa periode, karena cabang bisa kosong (untuk semua cabang)
   if (!props.periode) return;
   
@@ -92,26 +69,32 @@ const loadResults = async () => {
       limit: pagination.value.itemsPerPage
     };
     
-    // Add search params if there's a query
-    if (searchQuery.value) {
-      params.toko = searchQuery.value;
+    // Add search params if provided from table component
+    if (options.searchQuery) {
+      params.searchQuery = options.searchQuery;
     }
     
     // Load results
-    const resultsResponse = await rekonWtHarianService.getResults(
-      props.cab, 
-      props.periode,
-      params
-    );
-    
-    // Update results and pagination info
-    results.value = resultsResponse.data.data || [];
-    pagination.value = {
-      ...pagination.value,
-      total: resultsResponse.data.total || 0,
-      totalPages: resultsResponse.data.totalPages || 0,
-      currentPage: resultsResponse.data.page || 1
-    };
+const resultsResponse = await rekonWtHarianService.getResults(
+  props.cab, 
+  props.periode,
+  params
+);
+
+console.log('RekonWtHarianResults loadResults response:', resultsResponse.data);
+
+// Update results and pagination info
+results.value = resultsResponse.data.data || [];
+pagination.value = {
+  ...pagination.value,
+  total: resultsResponse.data.total || 0,
+  totalPages: resultsResponse.data.totalPages || 0,
+  currentPage: resultsResponse.data.page || 1,
+  itemsPerPage: resultsResponse.data.limit || pagination.value.itemsPerPage
+};
+
+console.log('RekonWtHarianResults updated results:', results.value);
+console.log('RekonWtHarianResults updated pagination:', pagination.value);
     
     // Load summary
     const summaryResponse = await rekonWtHarianService.getSummary(
@@ -131,30 +114,24 @@ const loadResults = async () => {
   }
 };
 
-// Handle search with debounce
-const handleSearch = () => {
-  // Clear any existing timeout
-  if (searchTimeout.value) {
-    clearTimeout(searchTimeout.value);
-  }
-  
-  // Set a new timeout to debounce the search
-  searchTimeout.value = setTimeout(() => {
-    // Reset to first page when searching
-    pagination.value.currentPage = 1;
-    loadResults();
-  }, 500); // 500ms debounce
-};
 
-// Clear search
-const clearSearch = () => {
-  searchQuery.value = '';
-  pagination.value.currentPage = 1;
-  loadResults();
+
+// Handle refresh event from table component
+const handleRefresh = (data = {}) => {
+  // Update pagination settings if provided
+  if (data.page) {
+    pagination.value.currentPage = data.page;
+  }
+  if (data.itemsPerPage) {
+    pagination.value.itemsPerPage = data.itemsPerPage;
+  }
+  // Pass all parameters to loadResults
+  loadResults(data);
 };
 
 // Handle page change
 const handlePageChange = (data) => {
+  console.log('RekonWtHarianResults handlePageChange:', data);
   pagination.value.currentPage = data.page;
   pagination.value.itemsPerPage = data.itemsPerPage;
   loadResults();
@@ -164,6 +141,7 @@ const handlePageChange = (data) => {
 const handleItemsPerPageChange = (data) => {
   pagination.value.itemsPerPage = data.itemsPerPage;
   pagination.value.currentPage = data.page; // Reset to first page
+  // Explicitly load results with new pagination settings
   loadResults();
 };
 
@@ -188,56 +166,7 @@ defineExpose({
   width: 100%;
 }
 
-.search-container {
-  margin-bottom: 1rem;
-}
 
-.search-box {
-  position: relative;
-  max-width: 500px;
-}
-
-.search-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #666;
-}
-
-.search-input {
-  width: 100%;
-  padding: 10px 40px 10px 35px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-  transition: all 0.3s ease;
-}
-
-.search-input:focus {
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.2);
-  outline: none;
-}
-
-.clear-button {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: none;
-  border: none;
-  color: #666;
-  cursor: pointer;
-  padding: 5px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.clear-button:hover {
-  color: #333;
-}
 
 .pagination-info {
   text-align: center;

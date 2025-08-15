@@ -918,7 +918,7 @@ class RekonWtHarianService {
    */
   async getAllCabangResults(period, options = {}) {
     try {
-      const { page = 1, limit = config.pagination.defaultLimit, tipe, toko, tgl1 } = options;
+      const { page = 1, limit = config.pagination.defaultLimit, tipe, toko, tgl1, searchQuery } = options;
 
       // Ensure limit doesn't exceed maximum
       const validLimit = Math.min(limit, config.pagination.maxLimit);
@@ -933,6 +933,16 @@ class RekonWtHarianService {
       if (tipe) query.tipe = tipe;
       if (toko) query.toko = { [Op.like]: `%${toko}%` };
       if (tgl1) query.tgl1 = tgl1;
+      
+      // Add search query if provided (search across multiple columns)
+      if (searchQuery) {
+        query[Op.or] = [
+          { shop: { [Op.like]: `%${searchQuery}%` } },
+          { toko: { [Op.like]: `%${searchQuery}%` } },
+          { tipe: { [Op.like]: `%${searchQuery}%` } },
+          { cab: { [Op.like]: `%${searchQuery}%` } }
+        ];
+      }
 
       // Get total count and results
       const { count, rows } = await RekonWtHarian.findAndCountAll({
@@ -969,7 +979,7 @@ class RekonWtHarianService {
    */
   async getResults(cab, period, options = {}) {
     try {
-      const { page = 1, limit = config.pagination.defaultLimit, tipe, toko, tgl1 } = options;
+      const { page = 1, limit = config.pagination.defaultLimit, tipe, toko, tgl1, searchQuery } = options;
 
       // Ensure limit doesn't exceed maximum
       const validLimit = Math.min(limit, config.pagination.maxLimit);
@@ -990,6 +1000,15 @@ class RekonWtHarianService {
 
       if (tgl1) {
         whereClause.tgl1 = tgl1;
+      }
+      
+      // Add search query if provided (search across multiple columns)
+      if (searchQuery) {
+        whereClause[Op.or] = [
+          { shop: { [Op.like]: `%${searchQuery}%` } },
+          { toko: { [Op.like]: `%${searchQuery}%` } },
+          { tipe: { [Op.like]: `%${searchQuery}%` } }
+        ];
       }
 
       const { count, rows } = await RekonWtHarian.findAndCountAll({

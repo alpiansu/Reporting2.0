@@ -64,7 +64,7 @@ class RekonWtHarianController {
   async getResults(req, res, next) {
     try {
       const { periode, cab } = req.params;
-      const { page, limit, tipe, toko, tgl1 } = req.query;
+      const { page, limit, tipe, toko, tgl1, searchQuery } = req.query;
 
       if (!periode) {
         return res.status(400).json({
@@ -81,6 +81,7 @@ class RekonWtHarianController {
           tipe,
           toko,
           tgl1,
+          searchQuery,
         });
         return res.status(200).json(results);
       }
@@ -91,6 +92,7 @@ class RekonWtHarianController {
         tipe,
         toko,
         tgl1,
+        searchQuery,
       });
 
       res.status(200).json(results);

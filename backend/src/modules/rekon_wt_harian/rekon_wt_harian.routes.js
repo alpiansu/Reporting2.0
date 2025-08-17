@@ -5,6 +5,7 @@ const express = require("express");
 const router = express.Router();
 const rekonWtHarianController = require("./rekon_wt_harian.controller");
 const { authenticateJWT, authorizeRole } = require("../../middlewares/auth.middleware");
+const rekonWebSocketService = require("./rekon_websocket.service");
 
 /**
  * @swagger
@@ -101,6 +102,20 @@ const { authenticateJWT, authorizeRole } = require("../../middlewares/auth.middl
  * @access Private (Admin/Manager only)
  */
 router.post("/", authenticateJWT, authorizeRole(["admin", "manager"]), rekonWtHarianController.startReconciliation);
+
+/**
+ * @route GET /api/rekon-wt-harian/progress/:progressId
+ * @desc Get reconciliation progress
+ * @access Private
+ */
+router.get("/progress/:progressId", authenticateJWT, rekonWtHarianController.getProgress);
+
+/**
+ * @route GET /api/rekon-wt-harian/latest-progress/:cab/:periode
+ * @desc Get latest reconciliation progress for a branch and period
+ * @access Private
+ */
+router.get("/latest-progress/:cab/:periode", authenticateJWT, rekonWtHarianController.getLatestProgress);
 
 /**
  * @swagger
@@ -330,5 +345,35 @@ router.delete(
   authorizeRole(["admin", "manager"]),
   rekonWtHarianController.deleteResults
 );
+
+/**
+ * @swagger
+ * /rekon-wt-harian/progress-updates/{progressId}:
+ *   get:
+ *     summary: Get real-time progress updates via SSE
+ *     description: Establishes a Server-Sent Events connection to receive real-time updates on reconciliation progress
+ *     tags: [RekonWtHarian]
+ *     parameters:
+ *       - in: path
+ *         name: progressId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Progress ID to subscribe to
+ *     responses:
+ *       200:
+ *         description: SSE connection established
+ *         content:
+ *           text/event-stream:
+ *             schema:
+ *               type: string
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Progress ID not found
+ *       500:
+ *         description: Server error
+ */
+// This endpoint is handled by rekonWebSocketService in server.js
 
 module.exports = router;

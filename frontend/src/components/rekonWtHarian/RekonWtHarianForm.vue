@@ -16,7 +16,7 @@
             optionLabel="namacab" 
             optionValue="kdcab"
             placeholder="Pilih Cabang" 
-            :disabled="loading"
+            :disabled="loading || isReconciling"
             class="w-full"
             @change="handleCabChange"
           />
@@ -31,28 +31,52 @@
             view="month" 
             dateFormat="mm/yy" 
             placeholder="Pilih Bulan/Tahun"
-            :disabled="loading"
+            :disabled="loading || isReconciling"
             :maxDate="today"
             showIcon
             class="w-full"
             @date-select="updatePeriode"
           />
           <small v-if="errors.periode" class="error-text">{{ errors.periode }}</small>
-          <!-- <small class="help-text">Pilih bulan dan tahun untuk periode rekonsiliasi</small> -->
         </div>
 
-        <!-- Tombol Lihat Hasil dihilangkan karena data sudah dimuat otomatis saat cabang atau periode berubah -->
+        <div class="form-actions">
+          <Button 
+            type="button" 
+            label="Mulai Rekonsiliasi" 
+            icon="pi pi-refresh" 
+            class="p-button-primary" 
+            @click="startReconciliation"
+            :loading="isReconciling"
+            :disabled="loading || isReconciling"
+          />
+        </div>
       </form>
+
+      <!-- Progress Bar Component -->
+      <ProgressBar 
+        :visible="showProgressBar"
+        :status="progressStatus"
+        :processed="processedItems"
+        :total="totalItems"
+        :differences="totalDifferences"
+        :timeElapsed="timeElapsed"
+        :message="progressMessage"
+        @close="hideProgressBar"
+      />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, onBeforeUnmount } from 'vue';
 import { useToastService } from '../../utils/toast';
 import { useCabangStore } from '../../stores';
 import Dropdown from 'primevue/dropdown';
 import Calendar from 'primevue/calendar';
+import Button from 'primevue/button';
+import ProgressBar from './ProgressBar.vue';
+import rekonWtHarianService from '../../services/rekonWtHarian.service';
 
 const toast = useToastService();
 const loading = ref(false);
@@ -60,6 +84,19 @@ const errors = reactive({});
 const cabangOptions = ref([]);
 const selectedDate = ref(null);
 const today = ref(new Date()); // Tanggal hari ini sebagai batas maksimal calendar
+
+// Progress tracking variables
+const isReconciling = ref(false);
+const showProgressBar = ref(false);
+const progressStatus = ref('pending');
+const processedItems = ref(0);
+const totalItems = ref(0);
+const totalDifferences = ref(0);
+const timeElapsed = ref(0);
+const progressMessage = ref('');
+const progressId = ref('');
+const progressTimer = ref(null);
+const webSocket = ref(null);
 
 const formData = reactive({
   cab: '', // Default to 'SEMUA' for all branches
@@ -88,6 +125,9 @@ onMounted(async () => {
     const now = new Date();
     selectedDate.value = now;
     updatePeriode();
+    
+    // Check for existing reconciliation
+    await checkExistingReconciliation();
     
     // Emit view-results event with default values
     if (formData.periode) {
@@ -188,6 +228,164 @@ const handleCabChange = () => {
 
 // Define emits
 const emit = defineEmits(['view-results']);
+
+// Function to start reconciliation process
+const startReconciliation = async () => {
+  if (!validateForm()) return;
+  
+  try {
+    isReconciling.value = true;
+    showProgressBar.value = true;
+    progressStatus.value = 'in_progress';
+    processedItems.value = 0;
+    totalItems.value = 0;
+    totalDifferences.value = 0;
+    timeElapsed.value = 0;
+    progressMessage.value = 'Memulai proses rekonsiliasi...';
+    
+    // Start timer for elapsed time
+    startProgressTimer();
+    
+    // Call API to start reconciliation
+    const response = await rekonWtHarianService.startReconciliation({
+      cab: formData.cab,
+      periode: formData.periode
+    });
+    
+    console.log('Reconciliation started:', response.data);
+    
+    // Get progress ID from response
+    if (response.data && response.data.progressId) {
+      progressId.value = response.data.progressId;
+      totalItems.value = response.data.totalStores || response.data.totalBranches || 0;
+      
+      // Connect to WebSocket for real-time updates
+      connectToWebSocket();
+      
+      toast.showSuccess('Sukses', 'Proses rekonsiliasi dimulai');
+    } else {
+      throw new Error('Tidak dapat memulai rekonsiliasi');
+    }
+  } catch (error) {
+    console.error('Error starting reconciliation:', error);
+    progressStatus.value = 'error';
+    progressMessage.value = `Error: ${error.message || 'Terjadi kesalahan saat memulai rekonsiliasi'}`;
+    toast.showError('Error', error.message || 'Terjadi kesalahan saat memulai rekonsiliasi');
+    stopProgressTracking();
+  }
+};
+
+// Connect to SSE for real-time progress updates
+const connectToWebSocket = () => {
+  // Close existing SSE connection if any
+  if (webSocket.value) {
+    webSocket.value.close();
+  }
+  
+  // Create new SSE connection
+  webSocket.value = rekonWtHarianService.createProgressWebSocket(
+    progressId.value,
+    handleProgressUpdate
+  );
+};
+
+// Handle progress updates from SSE
+const handleProgressUpdate = (data) => {
+  console.log('Progress update from SSE:', data);
+  
+  if (data.progressId === progressId.value) {
+    processedItems.value = data.processed || 0;
+    totalItems.value = data.total || totalItems.value;
+    totalDifferences.value = data.differences || 0;
+    progressStatus.value = data.status || 'in_progress';
+    progressMessage.value = data.message || '';
+    
+    // If reconciliation is complete, stop tracking
+    if (data.status === 'completed' || data.status === 'error') {
+      stopProgressTracking();
+      
+      if (data.status === 'completed') {
+        toast.showSuccess('Sukses', 'Rekonsiliasi selesai');
+        // Emit view-results to refresh the results
+        emitViewResults();
+      } else if (data.status === 'error') {
+        toast.showError('Error', data.message || 'Terjadi kesalahan saat rekonsiliasi');
+      }
+    }
+  }
+};
+
+// Start timer for tracking elapsed time
+const startProgressTimer = () => {
+  // Clear existing timer if any
+  if (progressTimer.value) {
+    clearInterval(progressTimer.value);
+  }
+  
+  // Reset elapsed time
+  timeElapsed.value = 0;
+  
+  // Start new timer
+  progressTimer.value = setInterval(() => {
+    timeElapsed.value++;
+  }, 1000);
+};
+
+// Stop progress tracking
+const stopProgressTracking = () => {
+  isReconciling.value = false;
+  
+  // Stop timer
+  if (progressTimer.value) {
+    clearInterval(progressTimer.value);
+    progressTimer.value = null;
+  }
+  
+  // Close WebSocket
+  if (webSocket.value) {
+    webSocket.value.close();
+    webSocket.value = null;
+  }
+};
+
+// Hide progress bar
+const hideProgressBar = () => {
+  showProgressBar.value = false;
+};
+
+// Check for existing reconciliation on component mount
+const checkExistingReconciliation = async () => {
+  try {
+    if (formData.cab && formData.periode) {
+      const response = await rekonWtHarianService.getLatestProgress(
+        formData.cab,
+        formData.periode
+      );
+      
+      if (response.data && response.data.progressId && response.data.status === 'in_progress') {
+        // There is an ongoing reconciliation, show progress bar
+        progressId.value = response.data.progressId;
+        progressStatus.value = response.data.status;
+        processedItems.value = response.data.processed || 0;
+        totalItems.value = response.data.total || 0;
+        totalDifferences.value = response.data.differences || 0;
+        progressMessage.value = response.data.message || 'Rekonsiliasi sedang berjalan...';
+        
+        isReconciling.value = true;
+        showProgressBar.value = true;
+        startProgressTimer();
+        connectToWebSocket();
+      }
+    }
+  } catch (error) {
+    console.error('Error checking existing reconciliation:', error);
+  }
+};
+
+// Clean up on component unmount
+onBeforeUnmount(() => {
+  stopProgressTracking();
+});
 </script>
 
 <style scoped>
@@ -198,8 +396,14 @@ const emit = defineEmits(['view-results']);
 .card {
   background-color: #fff;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.form-actions {
+  margin-top: 1.5rem;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .form-title {

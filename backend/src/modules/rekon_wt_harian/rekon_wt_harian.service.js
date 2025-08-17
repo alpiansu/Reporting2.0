@@ -11,6 +11,7 @@ const RekonWtHarian = require("../../models/rekon_wt_harian.model");
 const { sequelize } = require("../../config/database");
 const { Op } = require("sequelize");
 const config = require("../../config/rekon_wt_harian.config");
+const rekonProgressService = require("./rekon_progress.service");
 
 class RekonWtHarianService {
   /**
@@ -32,6 +33,10 @@ class RekonWtHarianService {
 
       logger.info(`Found ${branches.length} branches to process`);
 
+      // Initialize progress tracking
+      const progressId = rekonProgressService.initProgress('All', period, branches.length);
+      logger.info(`Initialized progress tracking with ID: ${progressId}`);
+
       const results = {
         success: true,
         totalBranches: branches.length,
@@ -39,6 +44,7 @@ class RekonWtHarianService {
         branchesWithDifferences: 0,
         totalDifferences: 0,
         details: [],
+        progressId, // Include progress ID in results
       };
 
       // TRULY PARALLEL PROCESSING: Process branches with controlled concurrency
@@ -49,10 +55,19 @@ class RekonWtHarianService {
       const processConcurrentBranches = async (branchCodes, limit) => {
         const results = [];
         const executing = [];
+        let processedCount = 0;
 
         for (const cab of branchCodes) {
           const promise = this.processBranch(cab, period).then(result => {
             executing.splice(executing.indexOf(promise), 1);
+            
+            // Update progress after each branch is processed
+            processedCount++;
+            rekonProgressService.updateProgress(progressId, {
+              processedItems: processedCount,
+              details: { lastProcessedBranch: cab }
+            });
+            
             return result;
           });
 
@@ -103,10 +118,30 @@ class RekonWtHarianService {
       results.timestamp = new Date().toISOString();
       results.period = period;
 
+      // Mark progress as completed
+      rekonProgressService.updateProgress(progressId, {
+        processedItems: results.totalBranches,
+        completedItems: results.totalBranches,
+        status: 'completed',
+        details: {
+          branchesWithDifferences: results.branchesWithDifferences,
+          totalDifferences: results.totalDifferences
+        }
+      });
+
       logger.info(`Completed processing ${results.processedBranches}/${results.totalBranches} branches`);
       return results;
     } catch (error) {
       logger.error(`Error reconciling all branches: ${error.message}`);
+      
+      // Mark progress as failed
+      if (progressId) {
+        rekonProgressService.updateProgress(progressId, {
+          status: 'failed',
+          errors: [error.message]
+        });
+      }
+      
       throw error;
     }
   }
@@ -125,6 +160,75 @@ class RekonWtHarianService {
     } catch (error) {
       logger.error(`Error processing branch ${cab}: ${error.message}`);
       throw error; // Let Promise.allSettled handle the rejection
+    }
+  }
+
+  /**
+   * Reconcile all branches with progress tracking (non-blocking)
+   * @param {string} period - Period in YYMM format
+   * @param {string} progressId - Progress tracking ID
+   */
+  async reconcileAllBranchesWithProgress(period, progressId) {
+    try {
+      // Run in background (non-blocking)
+      setTimeout(async () => {
+        try {
+          await this.reconcileAllBranches(period);
+        } catch (error) {
+          logger.error(`Error in background reconciliation: ${error.message}`);
+          // Progress status will be updated to 'failed' by reconcileAllBranches
+        }
+      }, 0);
+      
+      logger.info(`Started non-blocking reconciliation for all branches with progress ID: ${progressId}`);
+    } catch (error) {
+      logger.error(`Error starting non-blocking reconciliation: ${error.message}`);
+      rekonProgressService.updateProgress(progressId, {
+        status: 'failed',
+        errors: [error.message]
+      });
+    }
+  }
+
+  /**
+   * Reconcile data for a single branch with progress tracking (non-blocking)
+   * @param {string} cab - Branch code
+   * @param {string} period - Period in YYMM format
+   * @param {string} progressId - Progress tracking ID
+   */
+  async reconcileDataWithProgress(cab, period, progressId) {
+    try {
+      // Run in background (non-blocking)
+      setTimeout(async () => {
+        try {
+          const result = await this.reconcileData(cab, period);
+          
+          // Update progress to completed
+          rekonProgressService.updateProgress(progressId, {
+            processedItems: result.totalStores,
+            completedItems: result.totalStores,
+            status: 'completed',
+            details: {
+              storesWithDifferences: result.storesWithDifferences,
+              totalDifferences: result.totalDifferences
+            }
+          });
+        } catch (error) {
+          logger.error(`Error in background reconciliation: ${error.message}`);
+          rekonProgressService.updateProgress(progressId, {
+            status: 'failed',
+            errors: [error.message]
+          });
+        }
+      }, 0);
+      
+      logger.info(`Started non-blocking reconciliation for branch ${cab} with progress ID: ${progressId}`);
+    } catch (error) {
+      logger.error(`Error starting non-blocking reconciliation: ${error.message}`);
+      rekonProgressService.updateProgress(progressId, {
+        status: 'failed',
+        errors: [error.message]
+      });
     }
   }
 

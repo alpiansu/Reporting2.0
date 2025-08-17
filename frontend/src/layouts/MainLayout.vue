@@ -66,6 +66,8 @@
 
       <!-- Main Content -->
       <main class="main-content">
+        <!-- Loading overlay for page navigation -->
+        <loading-overlay :is-loading="isNavigating" />
         <page-transition name="fade" mode="out-in">
           <router-view />
         </page-transition>
@@ -108,6 +110,7 @@ import ConfirmDialog from '../components/common/ConfirmDialog.vue';
 import FormDialog from '../components/common/FormDialog.vue';
 import ChangePasswordForm from '../components/auth/ChangePasswordForm.vue';
 import AppSidebar from '../components/sidebar/AppSidebar.vue';
+import LoadingOverlay from '../components/common/LoadingOverlay.vue';
 import api from '../services/api';
 
 const toast = useToastService();
@@ -121,6 +124,22 @@ const mobileOpen = ref(false);
 const drawerOpen = ref(true);
 const userMenuOpen = ref(false);
 const notificationsOpen = ref(false);
+
+// Navigation loading state
+const isNavigating = ref(false);
+
+// Setup navigation loading indicator
+router.beforeEach((to, from, next) => {
+  isNavigating.value = true;
+  next();
+});
+
+router.afterEach(() => {
+  // Add a small delay to make the loading animation visible
+  setTimeout(() => {
+    isNavigating.value = false;
+  }, 300);
+});
 
 const menuCategories = [
   {

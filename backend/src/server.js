@@ -1,4 +1,5 @@
 const app = require("./app");
+const http = require("http");
 const { sequelize } = require("./models");
 const config = require("./config");
 const logger = require("./config/logger");
@@ -53,9 +54,17 @@ async function startServer() {
     // Store service and scheduler are now initialized in app.js through modules
     logger.info("Services initialized through module system");
 
+    // Create HTTP server
+    const server = http.createServer(app);
+    
+    // Initialize SSE endpoints for progress updates
+    const rekonWebSocketService = require('./modules/rekon_wt_harian/rekon_websocket.service');
+    rekonWebSocketService.initialize(app);
+    
     // Start listening for requests
-    app.listen(PORT, () => {
+    server.listen(PORT, () => {
       logger.info(`Server running in ${config.nodeEnv} mode on port ${PORT}`);
+      logger.info(`SSE endpoints initialized for progress updates`);
     });
   } catch (error) {
     logger.error(`Server startup error: ${error.message}`);

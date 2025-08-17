@@ -48,7 +48,8 @@ const authorizeRole = (roles) => {
     const requiredRoles = Array.isArray(roles) ? roles : [roles];
     
     if (!requiredRoles.includes(userRole)) {
-      logger.warn(`User ${req.user.username} (${req.user.id}) attempted to access restricted route with insufficient permissions`);
+      //logger berikan informasi lebih detail terkait requiredRoles dan userRole
+      logger.warn(`User ${req.user.username} (${req.user.id}) with role ${userRole} attempted to access restricted route with insufficient permissions. Required roles: ${requiredRoles}`);
       return res.status(403).json({ message: 'Insufficient permissions to access this resource' });
     }
     

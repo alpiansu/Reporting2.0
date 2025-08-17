@@ -4,6 +4,11 @@ const path = require("path");
 // Load environment variables
 dotenv.config({ path: path.join(__dirname, "../../.env") });
 
+const allowedOrigins = [
+  "http://localhost",
+  "http://192.168.61.228"
+];
+
 module.exports = {
   // Server configuration
   port: process.env.PORT || 3000,
@@ -23,7 +28,17 @@ module.exports = {
 
   // CORS configuration
   corsOptions: {
-    origin: [process.env.CORS_ORIGIN || "http://localhost:5173", "http://localhost:3001", "http://localhost:5174"],
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true); // allow non-browser tools (Postman, curl, etc)
+      console.log("origin", origin);
+      // cek apakah origin ada di whitelist (mulai dengan localhost atau 192.168.61.228)
+      if (allowedOrigins.some(allowed => origin.startsWith(allowed))) {
+        return callback(null, true);
+      } else {
+        console.warn(`Blocked by CORS: ${origin}`);
+        return callback(null, false); // tolak tanpa throw error
+      }
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,

@@ -1,4 +1,5 @@
 import api from "./api";
+import { EventSourcePolyfill } from 'event-source-polyfill';
 
 /**
  * Service for WT Harian reconciliation
@@ -36,9 +37,16 @@ export default {
     // Get the API URL
     const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
     
-    // Create SSE connection
+    // Get auth token
+    const token = localStorage.getItem("token");
+    
+    // Create SSE connection with authorization header
     const sseUrl = `${apiUrl}/rekon-wt-harian/progress-updates/${progressId}`;
-    const eventSource = new EventSource(sseUrl);
+    const eventSource = new EventSourcePolyfill(sseUrl, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
     
     eventSource.onopen = () => {
       console.log("SSE connection established");

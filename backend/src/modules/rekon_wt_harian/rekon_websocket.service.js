@@ -2,6 +2,7 @@
 const http = require('http');
 const logger = require('../../config/logger');
 const rekonProgressService = require('./rekon_progress.service');
+const { authenticateJWT } = require('../../middlewares/auth.middleware');
 
 class RekonWebSocketService {
   constructor() {
@@ -23,7 +24,7 @@ class RekonWebSocketService {
 
     try {
       // Gunakan endpoint HTTP untuk SSE (Server-Sent Events)
-      app.get('/api/rekon-wt-harian/progress-updates/:progressId', (req, res) => {
+      app.get('/api/rekon-wt-harian/progress-updates/:progressId', authenticateJWT, (req, res) => {
         const progressId = req.params.progressId;
         
         // Set headers untuk SSE

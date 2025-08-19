@@ -19,6 +19,9 @@ module.exports = {
     // Register routes
     app.use("/api/rekon-wt-harian", rekonWtHarianRoutes);
 
+    // Initialize SSE endpoints
+    RekonWebSocketService.initialize(app);
+
     // Initialize services
     const rekonProgressService = RekonProgressService; // Already a singleton instance
     const rekonWtHarianProgressService = RekonWtHarianProgressService; // Already a singleton instance
@@ -26,7 +29,8 @@ module.exports = {
     return {
       rekonWtHarianService: RekonWtHarianService,
       rekonProgressService,
-      rekonWtHarianProgressService
+      rekonWtHarianProgressService,
+      rekonWebSocketService: RekonWebSocketService
     };
   },
 };

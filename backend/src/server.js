@@ -57,10 +57,6 @@ async function startServer() {
     // Create HTTP server
     const server = http.createServer(app);
     
-    // Initialize SSE endpoints for progress updates
-    const rekonWebSocketService = require('./modules/rekon_wt_harian/rekon_websocket.service');
-    rekonWebSocketService.initialize(app);
-    
     // Start listening for requests
     server.listen(PORT, () => {
       logger.info(`Server running in ${config.nodeEnv} mode on port ${PORT}`);

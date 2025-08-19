@@ -2,7 +2,6 @@
 const http = require('http');
 const logger = require('../../config/logger');
 const rekonProgressService = require('./rekon_progress.service');
-const { authenticateJWT } = require('../../middlewares/auth.middleware');
 
 class RekonWebSocketService {
   constructor() {
@@ -23,8 +22,42 @@ class RekonWebSocketService {
     }
 
     try {
+      // Custom authentication middleware for SSE
+      const authenticateSSE = (req, res, next) => {
+        const authHeader = req.headers.authorization;
+        
+        if (!authHeader) {
+          res.setHeader('Content-Type', 'text/event-stream');
+          res.status(401);
+          res.write(`data: ${JSON.stringify({ error: 'Authorization header missing' })}\n\n`);
+          return res.end();
+        }
+        
+        const parts = authHeader.split(' ');
+        if (parts.length !== 2 || parts[0] !== 'Bearer') {
+          res.setHeader('Content-Type', 'text/event-stream');
+          res.status(401);
+          res.write(`data: ${JSON.stringify({ error: 'Invalid authorization format' })}\n\n`);
+          return res.end();
+        }
+        
+        const token = parts[1];
+        const { jwt } = require('../../config');
+        const decoded = jwt.verifyToken(token);
+        
+        if (!decoded) {
+          res.setHeader('Content-Type', 'text/event-stream');
+          res.status(401);
+          res.write(`data: ${JSON.stringify({ error: 'Invalid or expired token' })}\n\n`);
+          return res.end();
+        }
+        
+        req.user = decoded;
+        next();
+      };
+
       // Gunakan endpoint HTTP untuk SSE (Server-Sent Events)
-      app.get('/api/rekon-wt-harian/progress-updates/:progressId', authenticateJWT, (req, res) => {
+      app.get('/api/rekon-wt-harian/progress-updates/:progressId', authenticateSSE, (req, res) => {
         const progressId = req.params.progressId;
         
         // Set headers untuk SSE

@@ -3,6 +3,7 @@
  */
 const fs = require("fs").promises;
 const path = require("path");
+const os = require("os");
 const mysql = require("mysql2/promise");
 const logger = require("../../config/logger");
 const wrcService = require("../../services/wrc.service");
@@ -432,10 +433,10 @@ class RekonWtHarianService {
       }
 
       // Create temporary file to store WRC data
-      const tempDir = path.join(process.cwd(), config.tempStorage.filePath, "..");
+      const tempDir = path.join(os.tmpdir());
       const tempFile = path.join(
-        process.cwd(),
-        config.tempStorage.filePath.replace("wrc_data.json", `wrc_data_${cab}_${period}.json`)
+        tempDir,
+        `wrc_data_${cab}_${period}_${Date.now()}.json`
       );
 
       // Ensure temp directory exists

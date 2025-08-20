@@ -73,17 +73,21 @@ updateProgress(progressId, update) {
 
   this.progressMap.set(progressId, updatedProgress);
 
-  // Calculate percentage if not provided, based on total processed items
+  // Calculate percentage if not provided, based on processed items and failed items
   let percentage = update.percentage;
   if (percentage === undefined) {
-    // Simple percentage calculation based on processed items vs total items
-    // This avoids the wave-based calculation that causes progress bar instability
+    // Percentage calculation based on successfully processed items + permanently failed items
+    // This ensures progress doesn't get stuck at 33%
+    const processedCount = updatedProgress.processedItems || 0;
+    const permanentlyFailedCount = updatedProgress.permanentlyFailedItems || 0;
+    const totalProcessed = processedCount + permanentlyFailedCount;
+    
     percentage = updatedProgress.totalItems > 0 
-      ? Math.round((updatedProgress.processedItems / updatedProgress.totalItems) * 100) 
+      ? Math.round((totalProcessed / updatedProgress.totalItems) * 100) 
       : 0;
     
     // Log percentage calculation for debugging
-    logger.debug(`Percentage calculation: ${updatedProgress.processedItems}/${updatedProgress.totalItems} items processed, total=${percentage}%`);
+    logger.debug(`Percentage calculation: (${processedCount} processed + ${permanentlyFailedCount} failed)/${updatedProgress.totalItems} items, total=${percentage}%`);
   }
   
   // Ensure percentage is a number and between 0-100

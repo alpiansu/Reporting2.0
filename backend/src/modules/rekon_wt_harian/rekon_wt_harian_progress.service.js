@@ -298,22 +298,32 @@ class RekonWtHarianProgressService {
         logger.info(`🌊 Starting wave ${wave} with ${currentStores.length} stores`);
 
         // Process this wave of stores
-        const waveResults = await this.processStoreWaveWithProgress(
-          currentStores,
-          cab,
-          period,
-          wrcDataParsed,
-          this.STORE_CONCURRENCY_LIMIT,
-          wave,
-          results,
-          progressId,
-          parentProgressId
-        );
+      const waveResults = await this.processStoreWaveWithProgress(
+        currentStores,
+        cab,
+        period,
+        wrcDataParsed,
+        this.STORE_CONCURRENCY_LIMIT,
+        wave,
+        results,
+        progressId,
+        parentProgressId
+      );
+      
+      // Update progress with real store count
+      if (progressId) {
+        rekonProgressService.updateProgress(progressId, {
+          message: `${results.processedStores}/${results.totalStores} toko diproses`,
+          processedItems: results.processedStores,
+          totalItems: results.totalStores
+        });
+      }
 
         // Separate completed stores from timeout stores for next wave
         const completedStores = [];
         const timeoutStores = [];
         const storeErrors = [];
+        let newlyProcessedStores = 0; // Track only newly processed stores in this wave
 
         waveResults.forEach((result, index) => {
           const store = currentStores[index];
@@ -329,8 +339,8 @@ class RekonWtHarianProgressService {
             } else {
               completedStores.push(store);
 
-              // Add to results if not a timeout
-              results.processedStores++;
+              // Count newly processed stores instead of directly incrementing results
+              newlyProcessedStores++;
 
               // Check for differences
               if (storeResult.differences && storeResult.differences.length > 0) {
@@ -376,9 +386,12 @@ class RekonWtHarianProgressService {
             });
 
             // Count as processed but with error
-            results.processedStores++;
+            newlyProcessedStores++;
           }
         });
+        
+        // Update total processed stores only once after processing all results
+        results.processedStores += newlyProcessedStores;
 
         // Update progress if this is a standalone reconciliation
         if (progressId) {
@@ -435,6 +448,19 @@ class RekonWtHarianProgressService {
 
         if (!results.storeErrors) results.storeErrors = [];
         results.storeErrors.push(...failedStores);
+        
+        // Update progress with permanently failed stores
+        if (progressId) {
+          const progress = rekonProgressService.getProgress(progressId);
+          if (progress) {
+            // Add to any existing permanently failed items
+            const totalPermanentlyFailed = (progress.permanentlyFailedItems || 0) + currentStores.length;
+            rekonProgressService.updateProgress(progressId, {
+              permanentlyFailedItems: totalPermanentlyFailed,
+              message: `${results.processedStores}/${results.totalStores} toko diproses, ${totalPermanentlyFailed} toko gagal permanen`
+            });
+          }
+        }
       }
 
       const totalEndTime = Date.now();

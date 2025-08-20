@@ -95,10 +95,17 @@ class RekonWtHarianService {
       logger.info(`Completed branch parallel processing in ${(branchEndTime - branchStartTime) / 1000} seconds`);
 
       // Process branch results
+      let totalProcessedStores = 0;
+      let totalStoresWithDifferences = 0;
+      
       for (const result of allBranchResults) {
         if (result.status === "fulfilled" && result.value) {
           const branchResult = result.value;
           results.processedBranches++;
+          
+          // Count total processed stores across all branches
+          totalProcessedStores += branchResult.processedStores || 0;
+          totalStoresWithDifferences += branchResult.storesWithDifferences || 0;
 
           if (branchResult.storesWithDifferences > 0) {
             results.branchesWithDifferences++;
@@ -114,20 +121,27 @@ class RekonWtHarianService {
           logger.error(`Branch processing error: ${result.reason}`);
         }
       }
+      
+      // Store total processed stores in results
+      results.totalProcessedStores = totalProcessedStores;
+      results.totalStoresWithDifferences = totalStoresWithDifferences;
 
       // Add timestamp to results
       results.timestamp = new Date().toISOString();
       results.period = period;
 
-      // Mark progress as completed
+      // Mark progress as completed with total store count instead of branch count
       rekonProgressService.updateProgress(progressId, {
-        processedItems: results.totalBranches,
-        completedItems: results.totalBranches,
+        processedItems: results.totalProcessedStores,
+        completedItems: results.totalProcessedStores,
+        itemsWithDifferences: results.totalStoresWithDifferences,
         status: 'completed',
         details: {
           branchesWithDifferences: results.branchesWithDifferences,
-          totalDifferences: results.totalDifferences
-        }
+          totalDifferences: results.totalDifferences,
+          totalProcessedStores: results.totalProcessedStores
+        },
+        message: `Rekonsiliasi selesai: ${results.totalProcessedStores} toko diproses, ${results.totalStoresWithDifferences} toko memiliki perbedaan`
       });
 
       logger.info(`Completed processing ${results.processedBranches}/${results.totalBranches} branches`);
@@ -997,10 +1011,10 @@ class RekonWtHarianService {
       const storeMap = new Map();
       
       // Buat path untuk file temporary
-      const tempDir = path.dirname(path.join(process.cwd(), config.tempStorage.filePath));
+      const tempDir = os.tmpdir();
       const tempFile = path.join(
-        process.cwd(),
-        config.tempStorage.filePath.replace("wrc_data.json", `differences_${cab}_${period}_${storeCode}.json`)
+        tempDir,
+        `differences_${cab}_${period}_${storeCode}_${Date.now()}.json`
       );
       
       // Ensure temp directory exists
@@ -1188,7 +1202,7 @@ class RekonWtHarianService {
       logger.info(`Saving all differences for ${cab} ${period} from temporary files to database`);
       
       // Buat path untuk direktori temporary
-      const tempDir = path.dirname(path.join(process.cwd(), config.tempStorage.filePath));
+      const tempDir = os.tmpdir();
       const filePattern = `differences_${cab}_${period}_*.json`;
       
       // Cari semua file temporary yang sesuai dengan pola

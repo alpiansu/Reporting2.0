@@ -104,6 +104,10 @@ class RekonWtHarianProgressService {
       const endTime = Date.now();
       const duration = (endTime - startTime) / 1000;
 
+      // Hapus data lama untuk semua cabang setelah proses rekon selesai
+      logger.info(`Deleting old data for all branches for period ${period}`);
+      await this.baseService.deleteAllCabangResults(period);
+
       // Prepare final results
       const results = {
         totalBranches,
@@ -491,6 +495,10 @@ class RekonWtHarianProgressService {
           // Menghilangkan informasi wave dari frontend
         });
         
+        // Hapus data lama sebelum menyimpan data baru
+        logger.info(`Deleting old data for branch ${cab} and period ${period}`);
+        await this.baseService.deleteResults(cab, period);
+        
         const saveResult = await this.baseService.saveDifferencesToDatabase(cab, period);
         logger.info(`Save result: ${JSON.stringify(saveResult)}`);
         
@@ -565,25 +573,29 @@ class RekonWtHarianProgressService {
         const promise = this.baseService.processStoreWithTimeout(store, cab, period, wrcData, waveNumber).then(result => {
           // Update progress after each store completes if this is a standalone reconciliation
           if (progressId) {
+            // Hanya hitung toko yang berhasil diproses (tidak timeout dan tidak error)
+            // Store yang gagal tidak dihitung sebagai toko terproses sampai berhasil di retry atau gagal permanen
+            const isSuccessful = !result.errors || result.errors.length === 0;
+            
             const currentProcessed = results.processedStores + storeResults.filter(r => 
               r.status === 'fulfilled' && 
-              !r.value.errors?.some(err => err.includes('timeout'))
-            ).length + 1;
+              (!r.value.errors || r.value.errors.length === 0)
+            ).length + (isSuccessful ? 1 : 0);
 
             const currentWithDiff = results.storesWithDifferences + 
               storeResults.filter(r => 
                 r.status === 'fulfilled' && 
                 r.value.differences?.length > 0 && 
-                !r.value.errors?.some(err => err.includes('timeout'))
+                (!r.value.errors || r.value.errors.length === 0)
               ).length + 
-              (result.differences?.length > 0 ? 1 : 0);
+              (isSuccessful && result.differences?.length > 0 ? 1 : 0);
 
             const currentTotalDiff = results.totalDifferences + 
               storeResults.reduce((sum, r) => 
                 r.status === 'fulfilled' && 
-                !r.value.errors?.some(err => err.includes('timeout')) ? 
+                (!r.value.errors || r.value.errors.length === 0) ? 
                 sum + (r.value.differences?.length || 0) : sum, 0) + 
-              (result.differences?.length || 0);
+              (isSuccessful ? (result.differences?.length || 0) : 0);
 
             rekonProgressService.updateProgress(progressId, {
               processedItems: currentProcessed,

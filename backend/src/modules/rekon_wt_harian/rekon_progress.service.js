@@ -10,7 +10,6 @@ class RekonProgressService {
     this.eventEmitter = new EventEmitter();
   }
 
-  /**
  * Initialize progress tracking for a reconciliation process
  * @param {string} cab - Branch code (or 'All' for all branches)
  * @param {string} periode - Period in YYMM format
@@ -19,7 +18,7 @@ class RekonProgressService {
  * @returns {string} - Progress ID
  */
 initProgress(cab, periode, totalItems, maxWaves = 3) {
-  const progressId = `${cab}_${periode}_${Date.now()}`;
+  const progressId = `${cab}_${periode}`;
   
   this.progressMap.set(progressId, {
     id: progressId,

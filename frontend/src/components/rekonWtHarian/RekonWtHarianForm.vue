@@ -69,6 +69,16 @@
         :currentItem="currentItem"
         @close="hideProgressBar"
       />
+      
+      <!-- Confirmation Dialog -->
+      <ConfirmDialog
+        v-model="showConfirmDialog"
+        :title="confirmDialogTitle"
+        :message="confirmDialogMessage"
+        :confirm-text="confirmDialogConfirmText"
+        :cancel-text="confirmDialogCancelText"
+        @confirm="handleConfirmDialogConfirm"
+      />
     </div>
   </div>
 </template>
@@ -81,6 +91,7 @@ import Dropdown from 'primevue/dropdown';
 import Calendar from 'primevue/calendar';
 import Button from 'primevue/button';
 import ProgressBar from './ProgressBar.vue';
+import ConfirmDialog from '../common/ConfirmDialog.vue';
 import rekonWtHarianService from '../../services/rekonWtHarian.service';
 
 const toast = useToastService();
@@ -107,6 +118,14 @@ const maxWaves = ref(1);
 const currentBranch = ref('');
 const currentItem = ref('');
 const progressPercentage = ref(0);
+
+// Confirm dialog variables
+const showConfirmDialog = ref(false);
+const confirmDialogTitle = ref('');
+const confirmDialogMessage = ref('');
+const confirmDialogConfirmText = ref('Ya');
+const confirmDialogCancelText = ref('Tidak');
+const confirmDialogCallback = ref(null);
 
 const formData = reactive({
   cab: '', // Default to 'SEMUA' for all branches
@@ -293,10 +312,14 @@ const startReconciliation = async () => {
       
       // If we have an active process ID, we can connect to it
       if (activeProcess && activeProcess.id) {
-        // Ask user if they want to view the running process
-        const confirmView = confirm(`${progressMessage.value}\n\nApakah Anda ingin melihat progress proses yang sedang berjalan?`);
+        // Ask user if they want to view the running process using ConfirmDialog
+        confirmDialogTitle.value = 'Proses Rekonsiliasi Sedang Berjalan';
+        confirmDialogMessage.value = `${progressMessage.value}\n\nApakah Anda ingin melihat progress proses yang sedang berjalan?`;
+        confirmDialogConfirmText.value = 'Ya, Lihat Progress';
+        confirmDialogCancelText.value = 'Tidak';
         
-        if (confirmView) {
+        // Set callback function for confirmation
+        confirmDialogCallback.value = () => {
           // Connect to the existing process
           progressId.value = activeProcess.id;
           totalItems.value = activeProcess.totalItems || 0;
@@ -305,8 +328,11 @@ const startReconciliation = async () => {
           connectToWebSocket();
           
           toast.showInfo('Info', 'Menampilkan progress proses yang sedang berjalan');
-          return; // Exit early since we're now tracking the existing process
-        }
+        };
+        
+        // Show the confirm dialog
+        showConfirmDialog.value = true;
+        return; // Exit early since we're waiting for user confirmation
       }
       
       toast.showWarning('Perhatian', error.response.data.message || 'Proses rekonsiliasi sedang berjalan');
@@ -477,6 +503,14 @@ const stopProgressTracking = () => {
 // Hide progress bar
 const hideProgressBar = () => {
   showProgressBar.value = false;
+};
+
+// Handle confirm dialog confirmation
+const handleConfirmDialogConfirm = () => {
+  if (confirmDialogCallback.value) {
+    confirmDialogCallback.value();
+    confirmDialogCallback.value = null;
+  }
 };
 
 // Check for existing reconciliation on component mount

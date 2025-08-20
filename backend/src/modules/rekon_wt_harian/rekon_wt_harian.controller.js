@@ -53,29 +53,28 @@ class RekonWtHarianController {
 
       // Handle 'SEMUA CABANG' option
       if (cabParam === "All") {
-        // Delete existing results for all branches in this period
-        await rekonWtHarianService.deleteAllCabangResults(periode);
-
         // Initialize progress tracking
         const storeService = require("../../modules/store/storeService");
         await storeService.ensureInitialized();
         const allStores = storeService.stores;
         const branches = [...new Set(allStores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))];
-        const progressId = rekonProgressService.initProgress("All", periode, branches.length);
+        
+        // Count total stores across all branches instead of just branch count
+        const totalStores = allStores.filter(s => s.notes === "INDUK").length;
+        const progressId = rekonProgressService.initProgress("All", periode, totalStores);
 
         // Start reconciliation process for all branches (non-blocking)
+        // Data lama akan dihapus setelah proses rekon selesai, bukan di awal
         rekonWtHarianService.reconcileAllBranchesWithProgress(periode, progressId);
 
         return res.status(200).json({
           success: true,
           message: "Proses rekonsiliasi dimulai",
           progressId,
-          totalBranches: branches.length
+          totalBranches: branches.length,
+          totalStores: totalStores
         });
       }
-
-      // Delete existing results for this cab and period
-      await rekonWtHarianService.deleteResults(cab, periode);
 
       // Initialize progress tracking
       const storeService = require("../../modules/store/storeService");
@@ -84,6 +83,7 @@ class RekonWtHarianController {
       const progressId = rekonProgressService.initProgress(cab, periode, branchStores.length);
 
       // Start reconciliation process (non-blocking)
+      // Data lama akan dihapus setelah proses rekon selesai, bukan di awal
       rekonWtHarianService.reconcileDataWithProgress(cab, periode, progressId);
 
       res.status(200).json({

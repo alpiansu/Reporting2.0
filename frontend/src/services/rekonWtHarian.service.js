@@ -1,12 +1,10 @@
 import api from "./api";
-import { EventSourcePolyfill } from 'event-source-polyfill';
+import { EventSourcePolyfill } from "event-source-polyfill";
 
 /**
  * Service for WT Harian reconciliation
  */
 export default {
-
-
   /**
    * Get latest reconciliation progress
    * @param {String} cab - Branch code (empty string for all branches)
@@ -28,25 +26,25 @@ export default {
   createProgressWebSocket(progressId, onMessage) {
     // Get the API URL
     const apiUrl = import.meta.env.VITE_API_URL;
-    
+
     // Get auth token
     const token = localStorage.getItem("token");
-    
+
     // Create SSE connection with authorization header
-    const sseUrl = `${apiUrl}/rekon-wt-harian/progress/${progressId}`;
+    const sseUrl = `${apiUrl}/rekon-wt-harian/progress-updatese/${progressId}`;
     const eventSource = new EventSourcePolyfill(sseUrl, {
       headers: {
-        Authorization: `Bearer ${token}`
-      }
+        Authorization: `Bearer ${token}`,
+      },
     });
-    
+
     eventSource.onopen = () => {
       console.log("SSE connection established");
     };
-    
+
     // No need to send subscription message as the endpoint is already specific to the progressId
-     
-     eventSource.onmessage = (event) => {
+
+    eventSource.onmessage = event => {
       try {
         const data = JSON.parse(event.data);
         if (onMessage && typeof onMessage === "function") {
@@ -56,19 +54,19 @@ export default {
         console.error("Error parsing WebSocket message:", error);
       }
     };
-    
-    eventSource.onerror = (error) => {
+
+    eventSource.onerror = error => {
       console.error("SSE connection error:", error);
       // Auto-reconnect is handled by the browser for SSE
     };
-    
+
     // Return the EventSource with a custom close method for consistency
     return {
       ...eventSource,
       close: () => {
         console.log("Closing SSE connection");
         eventSource.close();
-      }
+      },
     };
   },
   /**

@@ -1,7 +1,7 @@
 // Menggunakan HTTP server untuk komunikasi karena ws tidak tersedia
-const http = require('http');
-const logger = require('../../config/logger');
-const rekonProgressService = require('./rekon_progress.service');
+const http = require("http");
+const logger = require("../../config/logger");
+const rekonProgressService = require("./rekon_progress.service");
 
 class RekonWebSocketService {
   constructor() {
@@ -17,7 +17,7 @@ class RekonWebSocketService {
    */
   initialize(app) {
     if (this.initialized) {
-      logger.info('Progress update server already initialized');
+      logger.info("Progress update server already initialized");
       return;
     }
 
@@ -25,72 +25,72 @@ class RekonWebSocketService {
       // Custom authentication middleware for SSE
       const authenticateSSE = (req, res, next) => {
         const authHeader = req.headers.authorization;
-        
+
         if (!authHeader) {
-          res.setHeader('Content-Type', 'text/event-stream');
+          res.setHeader("Content-Type", "text/event-stream");
           res.status(401);
-          res.write(`data: ${JSON.stringify({ error: 'Authorization header missing' })}\n\n`);
+          res.write(`data: ${JSON.stringify({ error: "Authorization header missing" })}\n\n`);
           return res.end();
         }
-        
-        const parts = authHeader.split(' ');
-        if (parts.length !== 2 || parts[0] !== 'Bearer') {
-          res.setHeader('Content-Type', 'text/event-stream');
+
+        const parts = authHeader.split(" ");
+        if (parts.length !== 2 || parts[0] !== "Bearer") {
+          res.setHeader("Content-Type", "text/event-stream");
           res.status(401);
-          res.write(`data: ${JSON.stringify({ error: 'Invalid authorization format' })}\n\n`);
+          res.write(`data: ${JSON.stringify({ error: "Invalid authorization format" })}\n\n`);
           return res.end();
         }
-        
+
         const token = parts[1];
-        const { jwt } = require('../../config');
+        const { jwt } = require("../../config");
         const decoded = jwt.verifyToken(token);
-        
+
         if (!decoded) {
-          res.setHeader('Content-Type', 'text/event-stream');
+          res.setHeader("Content-Type", "text/event-stream");
           res.status(401);
-          res.write(`data: ${JSON.stringify({ error: 'Invalid or expired token' })}\n\n`);
+          res.write(`data: ${JSON.stringify({ error: "Invalid or expired token" })}\n\n`);
           return res.end();
         }
-        
+
         req.user = decoded;
         next();
       };
 
       // Gunakan endpoint HTTP untuk SSE (Server-Sent Events)
-      app.get('/api/rekon-wt-harian/progress-updates/:progressId', authenticateSSE, (req, res) => {
+      app.get("/api/rekon-wt-harian/sse/progress-updates/:progressId", authenticateSSE, (req, res) => {
         const progressId = req.params.progressId;
-        
+
         // Set headers untuk SSE
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
-        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Connection", "keep-alive");
+        res.setHeader("Access-Control-Allow-Origin", "*");
         res.flushHeaders();
-        
+
         // Kirim event awal
-        res.write(`data: ${JSON.stringify({ type: 'connected', progressId })}\n\n`);
-        
+        res.write(`data: ${JSON.stringify({ type: "connected", progressId })}\n\n`);
+
         // Simpan connection
         const clientId = `client-${Date.now()}`;
         this.clients.set(clientId, {
           id: clientId,
           response: res,
           subscriptions: new Set([progressId]),
-          connectedAt: Date.now()
+          connectedAt: Date.now(),
         });
-        
+
         // Subscribe ke progress events
         this.subscribeToProgress(clientId, progressId);
-        
+
         // Handle client disconnect
-        req.on('close', () => {
+        req.on("close", () => {
           logger.info(`SSE client disconnected: ${clientId}`);
           this.clients.delete(clientId);
         });
       });
-      
+
       this.initialized = true;
-      logger.info('SSE endpoints initialized for progress updates');
+      logger.info("SSE endpoints initialized for progress updates");
     } catch (error) {
       logger.error(`Error initializing SSE server: ${error.message}`);
       throw error;
@@ -113,14 +113,16 @@ class RekonWebSocketService {
     // Get current progress if available
     const currentProgress = rekonProgressService.getProgress(progressId);
     if (currentProgress && clientData.response) {
-      clientData.response.write(`data: ${JSON.stringify({
-        type: 'progress',
-        data: currentProgress
-      })}\n\n`);
+      clientData.response.write(
+        `data: ${JSON.stringify({
+          type: "progress",
+          data: currentProgress,
+        })}\n\n`
+      );
     }
 
     // Set up listener for this specific progress ID
-    rekonProgressService.on(`progress:${progressId}`, (progressData) => {
+    rekonProgressService.on(`progress:${progressId}`, progressData => {
       this.sendProgressUpdate(clientId, progressId, progressData);
     });
   }
@@ -137,11 +139,13 @@ class RekonWebSocketService {
 
     if (clientData.subscriptions.has(progressId)) {
       try {
-        clientData.response.write(`data: ${JSON.stringify({
-          type: 'progress',
-          progressId,
-          data: progressData
-        })}\n\n`);
+        clientData.response.write(
+          `data: ${JSON.stringify({
+            type: "progress",
+            progressId,
+            data: progressData,
+          })}\n\n`
+        );
       } catch (error) {
         logger.error(`Error sending progress update to client ${clientId}: ${error.message}`);
         // Remove client if connection is broken
@@ -158,7 +162,7 @@ class RekonWebSocketService {
   sendToClient(clientId, data) {
     const clientData = this.clients.get(clientId);
     if (!clientData || !clientData.response) return;
-    
+
     try {
       clientData.response.write(`data: ${JSON.stringify(data)}\n\n`);
     } catch (error) {
@@ -175,8 +179,8 @@ class RekonWebSocketService {
    */
   sendErrorToClient(clientId, message) {
     this.sendToClient(clientId, {
-      type: 'error',
-      message
+      type: "error",
+      message,
     });
   }
 
@@ -189,9 +193,9 @@ class RekonWebSocketService {
     this.clients.forEach((clientData, ws) => {
       if (clientData.subscriptions.has(progressId)) {
         this.sendToClient(ws, {
-          type: 'progress',
+          type: "progress",
           progressId,
-          data: progressData
+          data: progressData,
         });
       }
     });
@@ -206,7 +210,7 @@ class RekonWebSocketService {
       this.wss = null;
       this.clients.clear();
       this.initialized = false;
-      logger.info('WebSocket server closed');
+      logger.info("WebSocket server closed");
     }
   }
 }

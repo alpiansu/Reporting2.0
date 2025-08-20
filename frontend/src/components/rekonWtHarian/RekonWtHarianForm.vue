@@ -62,6 +62,11 @@
         :differences="totalDifferences"
         :timeElapsed="timeElapsed"
         :message="progressMessage"
+        :percentage="progressPercentage"
+        :currentWave="currentWave"
+        :maxWaves="maxWaves"
+        :currentBranch="currentBranch"
+        :currentItem="currentItem"
         @close="hideProgressBar"
       />
     </div>
@@ -97,6 +102,11 @@ const progressMessage = ref('');
 const progressId = ref('');
 const progressTimer = ref(null);
 const webSocket = ref(null);
+const currentWave = ref(1);
+const maxWaves = ref(1);
+const currentBranch = ref('');
+const currentItem = ref('');
+const progressPercentage = ref(0);
 
 const formData = reactive({
   cab: '', // Default to 'SEMUA' for all branches
@@ -273,8 +283,39 @@ const startReconciliation = async () => {
   } catch (error) {
     console.error('Error starting reconciliation:', error);
     progressStatus.value = 'error';
-    progressMessage.value = `Error: ${error.message || 'Terjadi kesalahan saat memulai rekonsiliasi'}`;
-    toast.showError('Error', error.message || 'Terjadi kesalahan saat memulai rekonsiliasi');
+    
+    // Handle case where another reconciliation process is already running (409 Conflict)
+    if (error.response && error.response.status === 409) {
+      const activeProcess = error.response.data.activeProcess;
+      
+      // Show more detailed error message
+      progressMessage.value = `Proses rekonsiliasi untuk ${activeProcess.cab === 'All' ? 'semua cabang' : `cabang ${activeProcess.cab}`} periode ${activeProcess.periode} sedang berjalan.`;
+      
+      // If we have an active process ID, we can connect to it
+      if (activeProcess && activeProcess.id) {
+        // Ask user if they want to view the running process
+        const confirmView = confirm(`${progressMessage.value}\n\nApakah Anda ingin melihat progress proses yang sedang berjalan?`);
+        
+        if (confirmView) {
+          // Connect to the existing process
+          progressId.value = activeProcess.id;
+          totalItems.value = activeProcess.totalItems || 0;
+          
+          // Connect to WebSocket for the running process
+          connectToWebSocket();
+          
+          toast.showInfo('Info', 'Menampilkan progress proses yang sedang berjalan');
+          return; // Exit early since we're now tracking the existing process
+        }
+      }
+      
+      toast.showWarning('Perhatian', error.response.data.message || 'Proses rekonsiliasi sedang berjalan');
+    } else {
+      // Handle other errors
+      progressMessage.value = `Error: ${error.message || 'Terjadi kesalahan saat memulai rekonsiliasi'}`;
+      toast.showError('Error', error.message || 'Terjadi kesalahan saat memulai rekonsiliasi');
+    }
+    
     stopProgressTracking();
   }
 };
@@ -369,10 +410,15 @@ const handleProgressUpdate = (data) => {
     // Update progress message
     progressMessage.value = detailMessage || progressData.message || '';
     
-    // Update progress percentage
-    const percentage = progressData.percentage || 
-      (totalItems.value > 0 ? Math.round((processedItems.value / totalItems.value) * 100) : 0);
+    // Update wave and branch information
+    currentWave.value = progressData.currentWave || 1;
+    maxWaves.value = progressData.maxWaves || 1;
+    currentBranch.value = progressData.currentBranch || '';
+    currentItem.value = progressData.currentItem || '';
     
+    // Update progress percentage
+    progressPercentage.value = progressData.percentage !== undefined ? progressData.percentage : 
+      (totalItems.value > 0 ? Math.round((processedItems.value / totalItems.value) * 100) : 0);
     // If reconciliation is complete, stop tracking
     if (progressData.status === 'completed' || progressData.status === 'failed' || progressData.status === 'error') {
       stopProgressTracking();

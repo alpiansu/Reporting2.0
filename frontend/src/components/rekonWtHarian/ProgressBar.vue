@@ -22,6 +22,14 @@
             <span class="detail-label">Diproses:</span>
             <span class="detail-value">{{ processed }} / {{ total }}</span>
           </div>
+          <div class="detail-item" v-if="showWaveInfo && currentWave && maxWaves">
+            <span class="detail-label">Wave:</span>
+            <span class="detail-value">{{ currentWave }} / {{ maxWaves }}</span>
+          </div>
+          <div class="detail-item" v-if="showBranchInfo && currentBranch">
+            <span class="detail-label">Cabang:</span>
+            <span class="detail-value">{{ currentBranch }}</span>
+          </div>
           <div class="detail-item" v-if="showDifferences">
             <span class="detail-label">Perbedaan:</span>
             <span class="detail-value">{{ differences }}</span>
@@ -84,6 +92,26 @@ const props = defineProps({
     type: String,
     default: ''
   },
+  percentage: {
+    type: Number,
+    default: undefined
+  },
+  currentWave: {
+    type: Number,
+    default: 1
+  },
+  maxWaves: {
+    type: Number,
+    default: 1
+  },
+  currentBranch: {
+    type: String,
+    default: ''
+  },
+  currentItem: {
+    type: String,
+    default: ''
+  },
   showCloseButton: {
     type: Boolean,
     default: true
@@ -100,6 +128,14 @@ const props = defineProps({
     type: Boolean,
     default: true
   },
+  showWaveInfo: {
+    type: Boolean,
+    default: true
+  },
+  showBranchInfo: {
+    type: Boolean,
+    default: true
+  },
   indeterminate: {
     type: Boolean,
     default: false
@@ -110,6 +146,12 @@ const emit = defineEmits(['close']);
 
 // Computed properties
 const progressPercentage = computed(() => {
+  // Jika percentage disediakan sebagai prop, gunakan itu
+  if (props.percentage !== undefined) {
+    return Math.min(Math.max(0, props.percentage), 100);
+  }
+  
+  // Jika tidak, hitung berdasarkan processed dan total
   if (props.total === 0) return 0;
   return Math.min(Math.round((props.processed / props.total) * 100), 100);
 });

@@ -174,16 +174,12 @@ class RekonWebSocketService {
           // Include status and message
           status: progressData.status || 'running',
           message: progressData.message || '',
-          // Ensure details are included for wave and branch information
-          details: {
-            ...(progressData.details || {}),
-            // Ensure these fields are always present for frontend
-            currentBranch: progressData.details?.currentBranch || progressData.cab || '',
-            currentWave: progressData.details?.currentWave || 1,
-            totalWaves: progressData.details?.totalWaves || 1,
-            currentStore: progressData.details?.currentStore || '',
-            waveProgress: progressData.details?.waveProgress || ''
-          }
+          // Include wave information
+          currentWave: progressData.currentWave || 1,
+          maxWaves: progressData.maxWaves || 1,
+          // Include branch and item information
+          currentBranch: progressData.currentBranch || '',
+          currentItem: progressData.currentItem || ''
         };
         
         // Send formatted progress data

@@ -201,7 +201,48 @@ class RekonWtHarianService {
       // Run in background (non-blocking)
       setTimeout(async () => {
         try {
+          // Get stores for this branch to track progress
+          const storeService = require("../../modules/store/storeService");
+          await storeService.ensureInitialized();
+          const branchStores = await storeService.getStoresByBranch(cab, true);
+          const totalStores = branchStores.length;
+          
+          // Set up progress tracking variables
+          let processedStores = 0;
+          let lastProgressUpdate = Date.now();
+          const PROGRESS_UPDATE_INTERVAL = 2000; // Update progress every 2 seconds
+          
+          // Set up progress update interval
+          const progressInterval = setInterval(() => {
+            // Only update if there's actual progress and we haven't completed yet
+            if (processedStores > 0 && processedStores < totalStores) {
+              rekonProgressService.updateProgress(progressId, {
+                processedItems: processedStores,
+                message: `Memproses toko: ${processedStores}/${totalStores}`,
+                details: {
+                  currentProgress: `${processedStores}/${totalStores} toko`
+                }
+              });
+              logger.debug(`Progress update: ${processedStores}/${totalStores} stores processed`);
+            }
+          }, PROGRESS_UPDATE_INTERVAL);
+          
+          // Override the processStore method to track progress
+          const originalProcessStore = this.processStore;
+          this.processStore = async (...args) => {
+            const result = await originalProcessStore.apply(this, args);
+            processedStores++;
+            return result;
+          };
+          
+          // Run the reconciliation
           const result = await this.reconcileData(cab, period);
+          
+          // Restore original method
+          this.processStore = originalProcessStore;
+          
+          // Clear the interval
+          clearInterval(progressInterval);
           
           // Update progress to completed
           rekonProgressService.updateProgress(progressId, {

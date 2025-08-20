@@ -293,25 +293,55 @@ const connectToWebSocket = () => {
 const handleProgressUpdate = (data) => {
   console.log('Progress update from SSE:', data);
   
-  if (data.progressId === progressId.value) {
-    processedItems.value = data.processed || 0;
-    totalItems.value = data.total || totalItems.value;
-    totalDifferences.value = data.differences || 0;
-    progressStatus.value = data.status || 'in_progress';
-    progressMessage.value = data.message || '';
+  // Check if this is a progress update
+  if (data.type === 'progress' && data.data) {
+    const progressData = data.data;
+    console.log('Progress data received:', progressData);
+    
+    // Log detailed progress information for debugging
+    console.log('Progress details:', {
+      processedItems: progressData.processedItems,
+      totalItems: progressData.totalItems,
+      percentage: progressData.percentage,
+      status: progressData.status,
+      message: progressData.message,
+      details: progressData.details,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Update progress values
+    processedItems.value = progressData.processedItems || 0;
+    totalItems.value = progressData.totalItems || totalItems.value;
+    totalDifferences.value = progressData.totalDifferences || progressData.itemsWithDifferences || 0;
+    progressStatus.value = progressData.status || 'running';
+    progressMessage.value = progressData.message || '';
+    
+    // Update progress percentage
+    const percentage = progressData.percentage || 
+      (totalItems.value > 0 ? Math.round((processedItems.value / totalItems.value) * 100) : 0);
+    
+    console.log(`Progress update: ${percentage}% (${processedItems.value}/${totalItems.value})`);
     
     // If reconciliation is complete, stop tracking
-    if (data.status === 'completed' || data.status === 'error') {
+    if (progressData.status === 'completed' || progressData.status === 'failed' || progressData.status === 'error') {
+      console.log(`Reconciliation ${progressData.status}: stopping progress tracking`);
       stopProgressTracking();
       
-      if (data.status === 'completed') {
+      if (progressData.status === 'completed') {
         toast.showSuccess('Sukses', 'Rekonsiliasi selesai');
         // Emit view-results to refresh the results
         emitViewResults();
-      } else if (data.status === 'error') {
-        toast.showError('Error', data.message || 'Terjadi kesalahan saat rekonsiliasi');
+      } else {
+        toast.showError('Error', progressData.message || 'Terjadi kesalahan saat rekonsiliasi');
       }
     }
+  } else if (data.type === 'connected') {
+    console.log('Connected to progress updates for:', data.progressId);
+  } else if (data.type === 'error') {
+    console.error('SSE error:', data.message);
+    toast.showError('Error', data.message || 'Terjadi kesalahan pada koneksi progress');
+  } else {
+    console.log('Unknown message type received:', data.type, data);
   }
 };
 

@@ -69,6 +69,11 @@ class RekonWebSocketService {
 
         // Kirim event awal
         res.write(`data: ${JSON.stringify({ type: "connected", progressId })}\n\n`);
+        
+        // Implement heartbeat to keep connection alive
+        const heartbeatInterval = setInterval(() => {
+          res.write(":heartbeat\n\n");
+        }, 30000); // Send heartbeat every 30 seconds
 
         // Simpan connection
         const clientId = `client-${Date.now()}`;
@@ -77,6 +82,7 @@ class RekonWebSocketService {
           response: res,
           subscriptions: new Set([progressId]),
           connectedAt: Date.now(),
+          heartbeatInterval: heartbeatInterval
         });
 
         // Subscribe ke progress events
@@ -85,6 +91,10 @@ class RekonWebSocketService {
         // Handle client disconnect
         req.on("close", () => {
           logger.info(`SSE client disconnected: ${clientId}`);
+          // Clear heartbeat interval when client disconnects
+          if (this.clients.get(clientId)?.heartbeatInterval) {
+            clearInterval(this.clients.get(clientId).heartbeatInterval);
+          }
           this.clients.delete(clientId);
         });
       });
@@ -139,13 +149,25 @@ class RekonWebSocketService {
 
     if (clientData.subscriptions.has(progressId)) {
       try {
+        // Ensure we're sending percentage as a number between 0-100
+        const percentage = progressData.percentage || 
+          (progressData.totalItems > 0 ? 
+            Math.round((progressData.processedItems / progressData.totalItems) * 100) : 0);
+
+        // Send formatted progress data
         clientData.response.write(
           `data: ${JSON.stringify({
             type: "progress",
             progressId,
-            data: progressData,
+            data: {
+              ...progressData,
+              percentage: percentage
+            },
           })}\n\n`
         );
+
+        // Log progress update for debugging
+        logger.debug(`Progress update sent to client ${clientId}: ${percentage}%`);
       } catch (error) {
         logger.error(`Error sending progress update to client ${clientId}: ${error.message}`);
         // Remove client if connection is broken

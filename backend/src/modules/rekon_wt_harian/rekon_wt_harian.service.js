@@ -315,7 +315,10 @@ class RekonWtHarianService {
               storesWithDifferences: result.storesWithDifferences,
               totalDifferences: result.totalDifferences,
               percentage: 100,
-              completed: true
+              completed: true,
+              // Include wave information in final update
+              totalWaves: result.waves ? result.waves.length : 1,
+              waveDetails: result.waves || []
             }
           });
           
@@ -531,6 +534,21 @@ class RekonWtHarianService {
       while (wave <= MAX_WAVES && currentStores.length > 0) {
         logger.info(`\n🌊 Starting Wave ${wave} with ${currentStores.length} stores...`);
         const waveStartTime = Date.now();
+        
+        // Update progress to show current wave
+        if (progressId) {
+          const progress = rekonProgressService.getProgress(progressId);
+          if (progress) {
+            rekonProgressService.updateProgress(progressId, {
+              details: {
+                ...progress.details,
+                currentWave: wave,
+                totalWaves: MAX_WAVES,
+                waveProgress: `${currentStores.length} toko`
+              }
+            });
+          }
+        }
 
         // Process current wave of stores
         const waveResults = await this.processStoreWave(currentStores, cab, period, wrcData, CONCURRENCY_LIMIT, wave);
@@ -735,6 +753,27 @@ class RekonWtHarianService {
     }
 
     logger.info(`[Wave ${waveNumber}] [${storeCode}] Starting processing...`);
+    
+    // Update progress to show current store being processed
+    // Find the progress ID for this branch and period
+    const progressEntries = Array.from(rekonProgressService.progressMap.entries());
+    const progressEntry = progressEntries.find(([_, progress]) => 
+      progress.cab === cab && 
+      progress.periode === period && 
+      progress.status === 'running'
+    );
+    
+    if (progressEntry) {
+      const [progressId, progress] = progressEntry;
+      rekonProgressService.updateProgress(progressId, {
+        details: {
+          ...progress.details,
+          currentStore: storeCode,
+          currentStoreName: store.storeName,
+          currentWave: waveNumber
+        }
+      });
+    }
 
     // Create a timeout promise that returns error info instead of rejecting
     const timeoutPromise = new Promise(resolve => {

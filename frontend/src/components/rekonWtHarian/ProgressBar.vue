@@ -160,8 +160,10 @@ const statusText = computed(() => {
   switch (props.status) {
     case 'pending': return 'Menunggu';
     case 'in_progress': return 'Sedang Berjalan';
+    case 'running': return 'On Process';
     case 'completed': return 'Selesai';
     case 'error': return 'Error';
+    case 'failed': return 'Gagal';
     default: return 'Tidak Diketahui';
   }
 });
@@ -263,13 +265,13 @@ const formattedTimeElapsed = computed(() => {
   background-color: #94a3b8;
 }
 
-.status-in_progress {
+.status-in_progress, .status-running {
   background-color: #eff6ff;
   color: #1e40af;
   border: 1px solid #dbeafe;
 }
 
-.status-in_progress::before {
+.status-in_progress::before, .status-running::before {
   background-color: #3b82f6;
 }
 
@@ -283,13 +285,13 @@ const formattedTimeElapsed = computed(() => {
   background-color: #22c55e;
 }
 
-.status-error {
+.status-error, .status-failed {
   background-color: #fef2f2;
   color: #b91c1c;
   border: 1px solid #fee2e2;
 }
 
-.status-error::before {
+.status-error::before, .status-failed::before {
   background-color: #ef4444;
 }
 

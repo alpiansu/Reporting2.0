@@ -206,7 +206,6 @@ const emitViewResults = () => {
   
   // Pastikan periode tidak kosong sebelum emit event
   if (formData.periode) {
-    console.log('Emitting view-results with cab:', cabParam, 'periode:', formData.periode);
     emit('view-results', {
       cab: cabParam,
       periode: formData.periode
@@ -216,7 +215,6 @@ const emitViewResults = () => {
 
 // Handler untuk perubahan cabang
 const handleCabChange = () => {
-  console.log('Cabang changed to:', formData.cab);
   // Pastikan periode sudah ada sebelum emit event
   if (formData.periode) {
     // Berikan sedikit delay untuk memastikan komponen sudah terupdate
@@ -260,8 +258,6 @@ const startReconciliation = async () => {
       periode: formData.periode
     });
     
-    console.log('Reconciliation started:', response.data);
-    
     // Get progress ID from response
     if (response.data && response.data.progressId) {
       progressId.value = response.data.progressId;
@@ -290,13 +286,18 @@ const connectToWebSocket = () => {
     webSocket.value.close();
   }
   
-  // Pastikan progressId selalu didefinisikan
-  if (!progressId.value) {
+  // Pastikan progressId selalu didefinisikan dengan format yang konsisten
+  if (!progressId.value || progressId.value === '') {
     // Gunakan ID yang tetap berdasarkan cabang dan periode yang dipilih
     progressId.value = `rekon_${formData.cab}_${formData.periode}`;
   }
   
-  console.log('Connecting to WebSocket with progressId:', progressId.value);
+  // Validasi progressId sebelum membuat koneksi
+  if (!progressId.value || progressId.value === 'rekon__' || progressId.value.includes('undefined')) {
+    console.error('Invalid progressId:', progressId.value);
+    toast.showError('Error', 'Progress ID tidak valid');
+    return;
+  }
   
   // Create new SSE connection
   webSocket.value = rekonWtHarianService.createProgressWebSocket(
@@ -307,23 +308,9 @@ const connectToWebSocket = () => {
 
 // Handle progress updates from SSE
 const handleProgressUpdate = (data) => {
-  console.log('Progress update from SSE:', data);
-  
   // Check if this is a progress update
   if (data.type === 'progress' && data.data) {
     const progressData = data.data;
-    console.log('Progress data received:', progressData);
-    
-    // Log detailed progress information for debugging
-    console.log('Progress details:', {
-      processedItems: progressData.processedItems,
-      totalItems: progressData.totalItems,
-      percentage: progressData.percentage,
-      status: progressData.status,
-      message: progressData.message,
-      details: progressData.details,
-      timestamp: new Date().toISOString()
-    });
     
     // Update progress values
     processedItems.value = progressData.processedItems || 0;
@@ -386,11 +373,8 @@ const handleProgressUpdate = (data) => {
     const percentage = progressData.percentage || 
       (totalItems.value > 0 ? Math.round((processedItems.value / totalItems.value) * 100) : 0);
     
-    console.log(`Progress update: ${percentage}% (${processedItems.value}/${totalItems.value})`);
-    
     // If reconciliation is complete, stop tracking
     if (progressData.status === 'completed' || progressData.status === 'failed' || progressData.status === 'error') {
-      console.log(`Reconciliation ${progressData.status}: stopping progress tracking`);
       stopProgressTracking();
       
       if (progressData.status === 'completed') {
@@ -402,7 +386,7 @@ const handleProgressUpdate = (data) => {
       }
     }
   } else if (data.type === 'connected') {
-    console.log('Connected to progress updates for:', data.progressId);
+    // Connected to progress updates
   } else if (data.type === 'error') {
     console.error('SSE error:', data.message);
     toast.showError('Error', data.message || 'Terjadi kesalahan pada koneksi progress');
@@ -452,6 +436,11 @@ const hideProgressBar = () => {
 // Check for existing reconciliation on component mount
 const checkExistingReconciliation = async () => {
   try {
+    // Validasi formData sebelum membuat progressId
+    if (!formData.cab || !formData.periode) {
+      return false;
+    }
+    
     // Buat progressId yang tetap berdasarkan cabang dan periode yang dipilih
     const fixedProgressId = `rekon_${formData.cab || 'All'}_${formData.periode || ''}`;
     
@@ -461,8 +450,7 @@ const checkExistingReconciliation = async () => {
       formData.periode || ''
     );
     
-    console.log('Checking existing reconciliation:', response.data);
-    console.log('Fixed progressId:', fixedProgressId);
+    // Check for existing reconciliation progress
     
     // Cek apakah ada proses rekonsiliasi yang sedang berjalan
     if (response.data && 

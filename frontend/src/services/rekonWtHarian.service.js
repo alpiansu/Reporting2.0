@@ -27,7 +27,6 @@ export default {
     // Get the API URL
     const apiUrl = import.meta.env.VITE_API_URL;
     console.log('Creating SSE connection for progress ID:', progressId);
-    console.log('SSE URL:', `${apiUrl}/rekon-wt-harian/sse/progress-updates/${progressId}`);
 
     // Get auth token
     const token = localStorage.getItem("token");
@@ -41,23 +40,15 @@ export default {
       heartbeatTimeout: 60000, // 60 seconds
     });
 
-    console.log('SSE connection options:', {
-      heartbeatTimeout: 60000,
-      headers: 'Auth headers included (not shown for security)',
-      timestamp: new Date().toISOString()
-    });
-
     eventSource.onopen = () => {
-      console.log("SSE connection opened successfully for progress ID:", progressId, "at", new Date().toISOString());
+      console.log("SSE connection opened for progress ID:", progressId);
     };
 
     // No need to send subscription message as the endpoint is already specific to the progressId
 
     eventSource.onmessage = event => {
       try {
-        console.log('SSE message received at', new Date().toISOString(), ':', event.data);
         const data = JSON.parse(event.data);
-        console.log('Parsed SSE data:', data);
         if (onMessage && typeof onMessage === "function") {
           onMessage(data);
         }
@@ -68,34 +59,25 @@ export default {
 
     // Handle heartbeat messages (empty comments)
     eventSource.addEventListener('heartbeat', event => {
-      console.log("Heartbeat received at", new Date().toISOString());
+      // Heartbeat received - no logging needed
     });
 
     // Listen for specific message types
     eventSource.addEventListener('progress', event => {
-      console.log('Progress event received at', new Date().toISOString());
+      // Progress event received - handled by onmessage
     });
 
     eventSource.addEventListener('connected', event => {
-      console.log('Connected event received at', new Date().toISOString());
+      console.log('Connected to SSE');
     });
 
     eventSource.addEventListener('error', event => {
-      console.log('Error event received at', new Date().toISOString());
+      console.log('SSE error event received');
     });
 
     eventSource.onerror = error => {
-      console.error("SSE connection error:", error);
-      console.error('Error details:', {
-        type: error.type,
-        target: error.target ? 'EventSource' : 'Unknown',
-        timestamp: new Date().toISOString()
-      });
-      if (error && error.message) {
-        console.error('Error message:', error.message);
-      }
+      console.error("SSE connection error:", error.type || 'Unknown error');
       // Auto-reconnect is handled by EventSourcePolyfill
-      // But we can add additional error handling if needed
     };
 
     // Return the EventSource with a custom close method for consistency

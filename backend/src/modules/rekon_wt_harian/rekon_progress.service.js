@@ -18,7 +18,8 @@ class RekonProgressService {
    * @returns {string} - Progress ID
    */
   initProgress(cab, periode, totalItems) {
-    const progressId = `${cab}_${periode}_${Date.now()}`;
+    // Gunakan ID yang tetap untuk memudahkan deteksi
+    const progressId = `rekon_${cab}_${periode}`;
     
     this.progressMap.set(progressId, {
       id: progressId,

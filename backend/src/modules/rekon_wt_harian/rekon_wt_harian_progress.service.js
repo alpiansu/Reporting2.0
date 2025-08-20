@@ -408,6 +408,16 @@ class RekonWtHarianProgressService {
         // Prepare for next wave with timeout stores
         currentStores = timeoutStores;
         wave++;
+        
+        // Update progress with new wave information if this is a standalone reconciliation
+        if (progressId && currentStores.length > 0) {
+          rekonProgressService.updateProgress(progressId, {
+            message: `Memulai wave ${wave} dengan ${currentStores.length} toko`,
+            currentWave: wave,
+            currentBranch: cab,
+            currentItem: `Wave ${wave}`
+          });
+        }
 
         // Add brief delay between waves to let resources recover
         if (currentStores.length > 0) {
@@ -449,18 +459,46 @@ class RekonWtHarianProgressService {
       results.period = period;
       results.totalDuration = totalDuration;
 
-      // Update final progress if this is a standalone reconciliation
-      if (progressId) {
+      // Save differences to database
+      try {
+        logger.info(`Saving differences to database for branch ${cab} and period ${period}`);
         rekonProgressService.updateProgress(progressId, {
-          status: 'completed',
-          message: `Rekonsiliasi selesai: ${results.storesWithDifferences} dari ${results.totalStores} toko memiliki perbedaan`,
-          processedItems: results.totalStores,
-          itemsWithDifferences: results.storesWithDifferences,
-          totalDifferences: results.totalDifferences,
-          endTime: totalEndTime,
-          duration: totalDuration,
-          currentWave: this.MAX_WAVES // Mark as completed all waves
+          message: `Menyimpan data perbedaan ke database...`,
+          currentWave: this.MAX_WAVES
         });
+        
+        const saveResult = await this.baseService.saveDifferencesToDatabase(cab, period);
+        logger.info(`Save result: ${JSON.stringify(saveResult)}`);
+        
+        // Update final progress if this is a standalone reconciliation
+        if (progressId) {
+          rekonProgressService.updateProgress(progressId, {
+            status: 'completed',
+            message: `Rekonsiliasi selesai: ${results.storesWithDifferences} dari ${results.totalStores} toko memiliki perbedaan. ${saveResult.savedCount || 0} data disimpan ke database.`,
+            processedItems: results.totalStores,
+            itemsWithDifferences: results.storesWithDifferences,
+            totalDifferences: results.totalDifferences,
+            endTime: totalEndTime,
+            duration: totalDuration,
+            currentWave: this.MAX_WAVES // Mark as completed all waves
+          });
+        }
+      } catch (error) {
+        logger.error(`Error saving differences to database: ${error.message}`);
+        
+        // Still update progress as completed, but with error message
+        if (progressId) {
+          rekonProgressService.updateProgress(progressId, {
+            status: 'completed',
+            message: `Rekonsiliasi selesai dengan ${results.storesWithDifferences} perbedaan, tetapi gagal menyimpan ke database: ${error.message}`,
+            processedItems: results.totalStores,
+            itemsWithDifferences: results.storesWithDifferences,
+            totalDifferences: results.totalDifferences,
+            endTime: totalEndTime,
+            duration: totalDuration,
+            currentWave: this.MAX_WAVES
+          });
+        }
       }
 
       return results;

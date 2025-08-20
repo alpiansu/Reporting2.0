@@ -40,9 +40,8 @@ class RekonWtHarianProgressService {
         processedItems: 0,
         itemsWithDifferences: 0,
         totalDifferences: 0,
-        startTime,
-        currentWave: 1,
-        maxWaves: this.MAX_WAVES
+        startTime
+        // Removed wave information
       });
 
       // Process branches with controlled concurrency
@@ -125,8 +124,8 @@ class RekonWtHarianProgressService {
         itemsWithDifferences: branchesWithDifferences,
         totalDifferences: totalDifferences,
         endTime,
-        duration,
-        currentWave: this.MAX_WAVES // Mark as completed all waves
+        duration
+        // Removed wave information
       });
 
       logger.info(`Reconciliation completed for all branches in ${duration}s`);
@@ -284,9 +283,8 @@ class RekonWtHarianProgressService {
           itemsWithDifferences: 0,
           totalDifferences: 0,
           startTime: totalStartTime,
-          currentWave: 1,
-          maxWaves: this.MAX_WAVES,
           currentBranch: cab
+          // Menghilangkan informasi wave dari frontend
         });
       }
 
@@ -300,22 +298,32 @@ class RekonWtHarianProgressService {
         logger.info(`🌊 Starting wave ${wave} with ${currentStores.length} stores`);
 
         // Process this wave of stores
-        const waveResults = await this.processStoreWaveWithProgress(
-          currentStores,
-          cab,
-          period,
-          wrcDataParsed,
-          this.STORE_CONCURRENCY_LIMIT,
-          wave,
-          results,
-          progressId,
-          parentProgressId
-        );
+      const waveResults = await this.processStoreWaveWithProgress(
+        currentStores,
+        cab,
+        period,
+        wrcDataParsed,
+        this.STORE_CONCURRENCY_LIMIT,
+        wave,
+        results,
+        progressId,
+        parentProgressId
+      );
+      
+      // Update progress with real store count
+      if (progressId) {
+        rekonProgressService.updateProgress(progressId, {
+          message: `${results.processedStores}/${results.totalStores} toko diproses`,
+          processedItems: results.processedStores,
+          totalItems: results.totalStores
+        });
+      }
 
         // Separate completed stores from timeout stores for next wave
         const completedStores = [];
         const timeoutStores = [];
         const storeErrors = [];
+        let newlyProcessedStores = 0; // Track only newly processed stores in this wave
 
         waveResults.forEach((result, index) => {
           const store = currentStores[index];
@@ -331,8 +339,8 @@ class RekonWtHarianProgressService {
             } else {
               completedStores.push(store);
 
-              // Add to results if not a timeout
-              results.processedStores++;
+              // Count newly processed stores instead of directly incrementing results
+              newlyProcessedStores++;
 
               // Check for differences
               if (storeResult.differences && storeResult.differences.length > 0) {
@@ -378,9 +386,12 @@ class RekonWtHarianProgressService {
             });
 
             // Count as processed but with error
-            results.processedStores++;
+            newlyProcessedStores++;
           }
         });
+        
+        // Update total processed stores only once after processing all results
+        results.processedStores += newlyProcessedStores;
 
         // Update progress if this is a standalone reconciliation
         if (progressId) {
@@ -388,10 +399,10 @@ class RekonWtHarianProgressService {
             processedItems: results.processedStores,
             itemsWithDifferences: results.storesWithDifferences,
             totalDifferences: results.totalDifferences,
-            message: `Wave ${wave}: ${results.processedStores}/${results.totalStores} toko diproses`,
-            currentWave: wave,
+            message: `${results.processedStores}/${results.totalStores} toko diproses`,
             currentBranch: cab,
-            currentItem: `Wave ${wave}`
+            currentItem: storeErrors.length > 0 ? storeErrors[storeErrors.length - 1].store : ''
+            // Menghilangkan informasi wave dari frontend
           });
         }
 
@@ -409,13 +420,13 @@ class RekonWtHarianProgressService {
         currentStores = timeoutStores;
         wave++;
         
-        // Update progress with new wave information if this is a standalone reconciliation
+        // Update progress with retry information if this is a standalone reconciliation
         if (progressId && currentStores.length > 0) {
           rekonProgressService.updateProgress(progressId, {
-            message: `Memulai wave ${wave} dengan ${currentStores.length} toko`,
-            currentWave: wave,
+            message: `Mencoba ulang ${currentStores.length} toko yang timeout`,
             currentBranch: cab,
-            currentItem: `Wave ${wave}`
+            currentItem: currentStores.length > 0 ? currentStores[0].storeCode : ''
+            // Menghilangkan informasi wave dari frontend
           });
         }
 
@@ -437,6 +448,19 @@ class RekonWtHarianProgressService {
 
         if (!results.storeErrors) results.storeErrors = [];
         results.storeErrors.push(...failedStores);
+        
+        // Update progress with permanently failed stores
+        if (progressId) {
+          const progress = rekonProgressService.getProgress(progressId);
+          if (progress) {
+            // Add to any existing permanently failed items
+            const totalPermanentlyFailed = (progress.permanentlyFailedItems || 0) + currentStores.length;
+            rekonProgressService.updateProgress(progressId, {
+              permanentlyFailedItems: totalPermanentlyFailed,
+              message: `${results.processedStores}/${results.totalStores} toko diproses, ${totalPermanentlyFailed} toko gagal permanen`
+            });
+          }
+        }
       }
 
       const totalEndTime = Date.now();
@@ -463,8 +487,8 @@ class RekonWtHarianProgressService {
       try {
         logger.info(`Saving differences to database for branch ${cab} and period ${period}`);
         rekonProgressService.updateProgress(progressId, {
-          message: `Menyimpan data perbedaan ke database...`,
-          currentWave: this.MAX_WAVES
+          message: `Menyimpan data perbedaan ke database...`
+          // Menghilangkan informasi wave dari frontend
         });
         
         const saveResult = await this.baseService.saveDifferencesToDatabase(cab, period);
@@ -479,8 +503,8 @@ class RekonWtHarianProgressService {
             itemsWithDifferences: results.storesWithDifferences,
             totalDifferences: results.totalDifferences,
             endTime: totalEndTime,
-            duration: totalDuration,
-            currentWave: this.MAX_WAVES // Mark as completed all waves
+            duration: totalDuration
+            // Menghilangkan informasi wave dari frontend
           });
         }
       } catch (error) {
@@ -495,8 +519,8 @@ class RekonWtHarianProgressService {
             itemsWithDifferences: results.storesWithDifferences,
             totalDifferences: results.totalDifferences,
             endTime: totalEndTime,
-            duration: totalDuration,
-            currentWave: this.MAX_WAVES
+            duration: totalDuration
+            // Menghilangkan informasi wave dari frontend
           });
         }
       }
@@ -565,10 +589,10 @@ class RekonWtHarianProgressService {
               processedItems: currentProcessed,
               itemsWithDifferences: currentWithDiff,
               totalDifferences: currentTotalDiff,
-              message: `Wave ${waveNumber}: ${currentProcessed}/${results.totalStores} toko diproses`,
-              currentWave: waveNumber,
+              message: `${currentProcessed}/${results.totalStores} toko diproses`,
               currentBranch: cab,
               currentItem: store.storeCode
+              // Removed wave information from progress update
             });
           }
 

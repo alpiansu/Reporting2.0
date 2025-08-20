@@ -174,9 +174,7 @@ class RekonWebSocketService {
           // Include status and message
           status: progressData.status || 'running',
           message: progressData.message || '',
-          // Include wave information
-          currentWave: progressData.currentWave || 1,
-          maxWaves: progressData.maxWaves || 1,
+          // Wave information removed
           // Include branch and item information
           currentBranch: progressData.currentBranch || '',
           currentItem: progressData.currentItem || ''

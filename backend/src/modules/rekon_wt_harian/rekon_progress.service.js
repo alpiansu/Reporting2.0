@@ -33,10 +33,7 @@ initProgress(cab, periode, totalItems, maxWaves = 3) {
     errors: [],
     details: [],
     lastUpdate: Date.now(),
-    // Wave tracking
-    currentWave: 1,
-    maxWaves: maxWaves,
-    waveProgress: {},
+    // Wave tracking removed
     currentBranch: cab, // Track current branch being processed
   });
 
@@ -72,41 +69,21 @@ updateProgress(progressId, update) {
     updatedProgress.endTime = Date.now();
   }
 
-  // Update wave information if provided
-  if (update.currentWave && update.currentWave !== progress.currentWave) {
-    // Store progress for the previous wave
-    updatedProgress.waveProgress[progress.currentWave] = {
-      processedItems: progress.processedItems,
-      totalItems: progress.totalItems,
-      completedAt: Date.now()
-    };
-    
-    // Update current wave
-    updatedProgress.currentWave = update.currentWave;
-    
-    logger.info(`Progress ${progressId} moved to wave ${update.currentWave} of ${updatedProgress.maxWaves}`);
-  }
+  // Wave information update removed
 
   this.progressMap.set(progressId, updatedProgress);
 
-  // Calculate percentage if not provided, accounting for waves
+  // Calculate percentage if not provided, based on total processed items
   let percentage = update.percentage;
   if (percentage === undefined) {
-    // Adjust percentage calculation to account for multiple waves
-    // Each wave gets an equal portion of the progress bar
-    const waveSize = 100 / updatedProgress.maxWaves;
-    const basePercentage = (updatedProgress.currentWave - 1) * waveSize;
-    
-    // Calculate percentage within current wave
-    const wavePercentage = updatedProgress.totalItems > 0 
-      ? (updatedProgress.processedItems / updatedProgress.totalItems) * waveSize 
+    // Simple percentage calculation based on processed items vs total items
+    // This avoids the wave-based calculation that causes progress bar instability
+    percentage = updatedProgress.totalItems > 0 
+      ? Math.round((updatedProgress.processedItems / updatedProgress.totalItems) * 100) 
       : 0;
     
-    percentage = Math.round(basePercentage + wavePercentage);
-    
-    // Log detailed percentage calculation for debugging
-    logger.debug(`Percentage calculation: ${updatedProgress.currentWave}/${updatedProgress.maxWaves} waves, ` +
-      `base=${basePercentage.toFixed(2)}%, wave=${wavePercentage.toFixed(2)}%, total=${percentage}%`);
+    // Log percentage calculation for debugging
+    logger.debug(`Percentage calculation: ${updatedProgress.processedItems}/${updatedProgress.totalItems} items processed, total=${percentage}%`);
   }
   
   // Ensure percentage is a number and between 0-100
@@ -124,7 +101,7 @@ updateProgress(progressId, update) {
   // Emit progress-specific event
   this.eventEmitter.emit(`progress:${progressId}`, progressData);
 
-  logger.debug(`Updated progress for ${progressId}: ${percentage}% (Wave ${updatedProgress.currentWave}/${updatedProgress.maxWaves}, ${updatedProgress.processedItems}/${updatedProgress.totalItems})`);
+  logger.debug(`Updated progress for ${progressId}: ${percentage}% (${updatedProgress.processedItems}/${updatedProgress.totalItems})`);
 }
 
   /**
@@ -139,13 +116,11 @@ updateProgress(progressId, update) {
 
     const progress = this.progressMap.get(progressId);
     
-    // Use existing percentage if available, otherwise calculate
-    let percentage = progress.percentage;
-    if (percentage === undefined) {
-      percentage = progress.totalItems > 0 
-        ? Math.round((progress.processedItems / progress.totalItems) * 100) 
-        : 0;
-    }
+    // Always calculate percentage based on processed items vs total items
+    // This ensures consistency with the updateProgress method
+    let percentage = progress.totalItems > 0 
+      ? Math.round((progress.processedItems / progress.totalItems) * 100) 
+      : 0;
     
     // Ensure percentage is a number and between 0-100
     percentage = Number(percentage) || 0;
@@ -178,13 +153,11 @@ updateProgress(progressId, update) {
       return null;
     }
 
-    // Use existing percentage if available, otherwise calculate
-    let percentage = latestProgress.percentage;
-    if (percentage === undefined) {
-      percentage = latestProgress.totalItems > 0 
-        ? Math.round((latestProgress.processedItems / latestProgress.totalItems) * 100) 
-        : 0;
-    }
+    // Always calculate percentage based on processed items vs total items
+    // This ensures consistency with the updateProgress method
+    let percentage = latestProgress.totalItems > 0 
+      ? Math.round((latestProgress.processedItems / latestProgress.totalItems) * 100) 
+      : 0;
     
     // Ensure percentage is a number and between 0-100
     percentage = Number(percentage) || 0;

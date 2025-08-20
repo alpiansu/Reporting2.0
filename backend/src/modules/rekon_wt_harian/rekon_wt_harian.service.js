@@ -537,16 +537,15 @@ class RekonWtHarianService {
         logger.info(`\n🌊 Starting Wave ${wave} with ${currentStores.length} stores...`);
         const waveStartTime = Date.now();
         
-        // Update progress to show current wave
+        // Update progress without wave information
         if (progressId) {
           const progress = rekonProgressService.getProgress(progressId);
           if (progress) {
             rekonProgressService.updateProgress(progressId, {
               details: {
                 ...progress.details,
-                currentWave: wave,
-                totalWaves: MAX_WAVES,
-                waveProgress: `${currentStores.length} toko`
+                // Removed wave information
+                storeProgress: `${currentStores.length} toko`
               }
             });
           }
@@ -784,8 +783,8 @@ class RekonWtHarianService {
         details: {
           ...progress.details,
           currentStore: storeCode,
-          currentStoreName: store.storeName,
-          currentWave: waveNumber
+          currentStoreName: store.storeName
+          // Removed wave information
         }
       });
     }

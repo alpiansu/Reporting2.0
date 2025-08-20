@@ -173,7 +173,13 @@ class RekonWebSocketService {
           totalItems: Number(progressData.totalItems) || 0,
           // Include status and message
           status: progressData.status || 'running',
-          message: progressData.message || ''
+          message: progressData.message || '',
+          // Include wave information
+          currentWave: progressData.currentWave || 1,
+          maxWaves: progressData.maxWaves || 1,
+          // Include branch and item information
+          currentBranch: progressData.currentBranch || '',
+          currentItem: progressData.currentItem || ''
         };
         
         // Send formatted progress data

@@ -32,8 +32,27 @@ class RekonWtHarianController {
         });
       }
 
+      // Check if there is already an active reconciliation process
+      const cabParam = cab === "SEMUA" || !cab ? "All" : cab;
+      const activeProcess = rekonProgressService.getActiveProcess(cabParam, periode);
+      
+      if (activeProcess) {
+        return res.status(409).json({
+          success: false,
+          message: `Proses rekonsiliasi untuk ${activeProcess.cab === 'All' ? 'semua cabang' : `cabang ${activeProcess.cab}`} periode ${periode} sedang berjalan. Silakan tunggu hingga proses selesai.`,
+          activeProcess: {
+            id: activeProcess.id,
+            cab: activeProcess.cab,
+            periode: activeProcess.periode,
+            status: activeProcess.status,
+            percentage: activeProcess.percentage,
+            startTime: activeProcess.startTime
+          }
+        });
+      }
+
       // Handle 'SEMUA CABANG' option
-      if (cab === "All" || !cab) {
+      if (cabParam === "All") {
         // Delete existing results for all branches in this period
         await rekonWtHarianService.deleteAllCabangResults(periode);
 

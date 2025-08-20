@@ -40,7 +40,9 @@ class RekonWtHarianProgressService {
         processedItems: 0,
         itemsWithDifferences: 0,
         totalDifferences: 0,
-        startTime
+        startTime,
+        currentWave: 1,
+        maxWaves: this.MAX_WAVES
       });
 
       // Process branches with controlled concurrency
@@ -77,6 +79,7 @@ class RekonWtHarianProgressService {
               itemsWithDifferences: branchesWithDifferences,
               totalDifferences: totalDifferences,
               message: `Memproses cabang ${processedBranches}/${totalBranches}`,
+              currentBranch: branch.cab,
               currentItem: branch.cab
             });
 
@@ -122,7 +125,8 @@ class RekonWtHarianProgressService {
         itemsWithDifferences: branchesWithDifferences,
         totalDifferences: totalDifferences,
         endTime,
-        duration
+        duration,
+        currentWave: this.MAX_WAVES // Mark as completed all waves
       });
 
       logger.info(`Reconciliation completed for all branches in ${duration}s`);
@@ -279,7 +283,10 @@ class RekonWtHarianProgressService {
           processedItems: 0,
           itemsWithDifferences: 0,
           totalDifferences: 0,
-          startTime: totalStartTime
+          startTime: totalStartTime,
+          currentWave: 1,
+          maxWaves: this.MAX_WAVES,
+          currentBranch: cab
         });
       }
 
@@ -382,6 +389,8 @@ class RekonWtHarianProgressService {
             itemsWithDifferences: results.storesWithDifferences,
             totalDifferences: results.totalDifferences,
             message: `Wave ${wave}: ${results.processedStores}/${results.totalStores} toko diproses`,
+            currentWave: wave,
+            currentBranch: cab,
             currentItem: `Wave ${wave}`
           });
         }
@@ -449,7 +458,8 @@ class RekonWtHarianProgressService {
           itemsWithDifferences: results.storesWithDifferences,
           totalDifferences: results.totalDifferences,
           endTime: totalEndTime,
-          duration: totalDuration
+          duration: totalDuration,
+          currentWave: this.MAX_WAVES // Mark as completed all waves
         });
       }
 
@@ -518,6 +528,8 @@ class RekonWtHarianProgressService {
               itemsWithDifferences: currentWithDiff,
               totalDifferences: currentTotalDiff,
               message: `Wave ${waveNumber}: ${currentProcessed}/${results.totalStores} toko diproses`,
+              currentWave: waveNumber,
+              currentBranch: cab,
               currentItem: store.storeCode
             });
           }

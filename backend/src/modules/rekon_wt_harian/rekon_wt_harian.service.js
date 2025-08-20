@@ -286,7 +286,7 @@ class RekonWtHarianService {
             });
             
             // Log detailed progress information
-            logger.debug(`Store ${store.storeCode} processed. Progress: ${processedStores}/${totalStores} (${percentage}%)`);}
+            logger.debug(`Store ${store.storeCode} processed. Progress: ${processedStores}/${totalStores} (${percentage}%)`);
             
             return result;
           };
@@ -320,7 +320,7 @@ class RekonWtHarianService {
           });
           
           // Log final progress
-          logger.info(`Reconciliation completed for ${cab}: ${totalStores}/${totalStores} stores processed (100%)`);}
+          logger.info(`Reconciliation completed for ${cab}: ${totalStores}/${totalStores} stores processed (100%)`);
           
           logger.info(`Completed reconciliation for ${cab}: ${result.storesWithDifferences}/${totalStores} stores with differences`);
         } catch (error) {

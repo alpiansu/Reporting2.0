@@ -58,7 +58,7 @@ class RekonWtHarianService {
         let processedCount = 0;
 
         for (const cab of branchCodes) {
-          const promise = this.processBranch(cab, period).then(result => {
+          const promise = this.processBranch(cab, period, progressId).then(result => {
             executing.splice(executing.indexOf(promise), 1);
             
             // Update progress after each branch is processed
@@ -150,12 +150,13 @@ class RekonWtHarianService {
    * Process a single branch (extracted from reconcileAllBranches for parallel processing)
    * @param {string} cab - Branch code
    * @param {string} period - Period in YYMM format
+   * @param {string} progressId - Progress ID for tracking reconciliation progress
    * @returns {Promise<Object>} Branch processing result
    */
-  async processBranch(cab, period) {
+  async processBranch(cab, period, progressId) {
     try {
       logger.info(`Processing branch ${cab}`);
-      const branchResult = await this.reconcileData(cab, period);
+      const branchResult = await this.reconcileData(cab, period, progressId);
       return branchResult;
     } catch (error) {
       logger.error(`Error processing branch ${cab}: ${error.message}`);
@@ -292,7 +293,7 @@ class RekonWtHarianService {
           };
           
           // Run the reconciliation
-          const result = await this.reconcileData(cab, period);
+          const result = await this.reconcileData(cab, period, progressId);
           
           // Restore original method
           this.processStore = originalProcessStore;
@@ -484,9 +485,10 @@ class RekonWtHarianService {
    * Get store data and compare with WRC data
    * @param {string} cab - Branch code
    * @param {string} period - Period in YYMM format
+   * @param {string} progressId - Progress ID for tracking reconciliation progress
    * @returns {Promise<Object>} Reconciliation results
    */
-  async reconcileData(cab, period) {
+  async reconcileData(cab, period, progressId) {
     try {
       // Get WRC data
       const wrcDataFile = await this.getWrcData(cab, period);

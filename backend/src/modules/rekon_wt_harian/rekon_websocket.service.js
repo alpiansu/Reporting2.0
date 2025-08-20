@@ -150,26 +150,46 @@ class RekonWebSocketService {
     if (clientData.subscriptions.has(progressId)) {
       try {
         // Ensure we're sending percentage as a number between 0-100
-        const percentage = progressData.percentage || 
-          (progressData.totalItems > 0 ? 
-            Math.round((progressData.processedItems / progressData.totalItems) * 100) : 0);
-
+        let percentage = progressData.percentage;
+        
+        // If percentage is not provided or is 0 but we have processed items, calculate it
+        if ((percentage === undefined || percentage === 0) && progressData.processedItems > 0) {
+          percentage = progressData.totalItems > 0 ? 
+            Math.round((progressData.processedItems / progressData.totalItems) * 100) : 0;
+        }
+        
+        // Ensure percentage is a number
+        percentage = Number(percentage) || 0;
+        
+        // Ensure percentage is between 0-100
+        percentage = Math.max(0, Math.min(100, percentage));
+        
+        // Create a clean copy of progress data with percentage
+        const cleanProgressData = {
+          ...progressData,
+          percentage: percentage,
+          // Ensure these fields are always numbers
+          processedItems: Number(progressData.processedItems) || 0,
+          totalItems: Number(progressData.totalItems) || 0,
+          // Include status and message
+          status: progressData.status || 'running',
+          message: progressData.message || ''
+        };
+        
         // Send formatted progress data
         clientData.response.write(
           `data: ${JSON.stringify({
             type: "progress",
             progressId,
-            data: {
-              ...progressData,
-              percentage: percentage
-            },
+            data: cleanProgressData,
           })}\n\n`
         );
 
         // Log progress update for debugging
-        logger.debug(`Progress update sent to client ${clientId}: ${percentage}%`);
+        logger.debug(`Progress update sent to client ${clientId}: ${percentage}% (${cleanProgressData.processedItems}/${cleanProgressData.totalItems})`);
       } catch (error) {
         logger.error(`Error sending progress update to client ${clientId}: ${error.message}`);
+        logger.error(`Progress data that caused error: ${JSON.stringify(progressData)}`);
         // Remove client if connection is broken
         this.clients.delete(clientId);
       }

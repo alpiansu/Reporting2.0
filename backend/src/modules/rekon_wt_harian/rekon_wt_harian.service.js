@@ -207,31 +207,87 @@ class RekonWtHarianService {
           const branchStores = await storeService.getStoresByBranch(cab, true);
           const totalStores = branchStores.length;
           
+          // Inisialisasi progress dengan nilai awal yang benar
+          rekonProgressService.updateProgress(progressId, {
+            totalItems: totalStores,
+            processedItems: 0,
+            percentage: 0, // Explicitly set initial percentage to 0
+            message: `Memulai proses rekonsiliasi untuk ${totalStores} toko`,
+            details: {
+              totalStores: totalStores,
+              processedStores: 0
+            }
+          });
+          
+          // Log initialization with explicit percentage
+          logger.info(`Starting reconciliation for ${cab} with ${totalStores} stores (0%)`);
+          
           // Set up progress tracking variables
           let processedStores = 0;
-          let lastProgressUpdate = Date.now();
-          const PROGRESS_UPDATE_INTERVAL = 2000; // Update progress every 2 seconds
+          let storesWithDifferences = 0;
+          let totalDifferences = 0;
           
-          // Set up progress update interval
+          // Set up progress update interval - update every 2 seconds
+          const PROGRESS_UPDATE_INTERVAL = 2000;
           const progressInterval = setInterval(() => {
-            // Only update if there's actual progress and we haven't completed yet
-            if (processedStores > 0 && processedStores < totalStores) {
-              rekonProgressService.updateProgress(progressId, {
-                processedItems: processedStores,
-                message: `Memproses toko: ${processedStores}/${totalStores}`,
-                details: {
-                  currentProgress: `${processedStores}/${totalStores} toko`
-                }
-              });
-              logger.debug(`Progress update: ${processedStores}/${totalStores} stores processed`);
-            }
+            // Calculate percentage directly here
+            const percentage = totalStores > 0 ? Math.round((processedStores / totalStores) * 100) : 0;
+            
+            // Update progress even if no new stores have been processed
+            rekonProgressService.updateProgress(progressId, {
+              processedItems: processedStores,
+              totalItems: totalStores,
+              percentage: percentage, // Explicitly set percentage
+              message: `Memproses toko: ${processedStores}/${totalStores} (${percentage}%)`,
+              details: {
+                currentProgress: `${processedStores}/${totalStores} toko`,
+                percentage: percentage,
+                storesWithDifferences: storesWithDifferences,
+                totalDifferences: totalDifferences
+              }
+            });
+            
+            logger.debug(`Progress update: ${processedStores}/${totalStores} stores processed (${percentage}%)`);
           }, PROGRESS_UPDATE_INTERVAL);
           
           // Override the processStore method to track progress
           const originalProcessStore = this.processStore;
-          this.processStore = async (...args) => {
-            const result = await originalProcessStore.apply(this, args);
+          this.processStore = async (store, wrcData) => {
+            logger.debug(`Processing store ${store.storeCode}`);
+            
+            // Process the store
+            const result = await originalProcessStore.apply(this, [store, wrcData]);
+            
+            // Update progress tracking variables
             processedStores++;
+            
+            // Update differences if any
+            if (result && result.differences && result.differences.length > 0) {
+              storesWithDifferences++;
+              totalDifferences += result.differences.length;
+            }
+            
+            // Calculate percentage directly
+            const percentage = totalStores > 0 ? Math.round((processedStores / totalStores) * 100) : 0;
+            
+            // Update progress immediately for each store
+            rekonProgressService.updateProgress(progressId, {
+              processedItems: processedStores,
+              totalItems: totalStores,
+              percentage: percentage, // Explicitly set percentage
+              message: `Memproses toko: ${processedStores}/${totalStores} (${percentage}%)`,
+              details: {
+                currentStore: store.storeCode,
+                currentProgress: `${processedStores}/${totalStores} toko`,
+                percentage: percentage,
+                storesWithDifferences: storesWithDifferences,
+                totalDifferences: totalDifferences
+              }
+            });
+            
+            // Log detailed progress information
+            logger.debug(`Store ${store.storeCode} processed. Progress: ${processedStores}/${totalStores} (${percentage}%)`);}
+            
             return result;
           };
           
@@ -244,20 +300,34 @@ class RekonWtHarianService {
           // Clear the interval
           clearInterval(progressInterval);
           
-          // Update progress to completed
+          // Simpan semua perbedaan dari file temporary ke database
+          await this.saveDifferencesToDatabase(cab, period);
+          
+          // Final progress update
           rekonProgressService.updateProgress(progressId, {
-            processedItems: result.totalStores,
-            completedItems: result.totalStores,
+            processedItems: totalStores,
+            totalItems: totalStores,
+            completedItems: totalStores,
+            percentage: 100, // Explicitly set to 100% when completed
             status: 'completed',
+            message: `Rekonsiliasi selesai: ${result.storesWithDifferences} dari ${totalStores} toko memiliki perbedaan`,
             details: {
               storesWithDifferences: result.storesWithDifferences,
-              totalDifferences: result.totalDifferences
+              totalDifferences: result.totalDifferences,
+              percentage: 100,
+              completed: true
             }
           });
+          
+          // Log final progress
+          logger.info(`Reconciliation completed for ${cab}: ${totalStores}/${totalStores} stores processed (100%)`);}
+          
+          logger.info(`Completed reconciliation for ${cab}: ${result.storesWithDifferences}/${totalStores} stores with differences`);
         } catch (error) {
           logger.error(`Error in background reconciliation: ${error.message}`);
           rekonProgressService.updateProgress(progressId, {
             status: 'failed',
+            message: `Error: ${error.message}`,
             errors: [error.message]
           });
         }
@@ -268,6 +338,7 @@ class RekonWtHarianService {
       logger.error(`Error starting non-blocking reconciliation: ${error.message}`);
       rekonProgressService.updateProgress(progressId, {
         status: 'failed',
+        message: `Error: ${error.message}`,
         errors: [error.message]
       });
     }
@@ -870,6 +941,22 @@ class RekonWtHarianService {
       // Buat struktur data untuk mempercepat lookup
       const wrcMap = new Map();
       const storeMap = new Map();
+      
+      // Buat path untuk file temporary
+      const tempDir = path.dirname(path.join(process.cwd(), config.tempStorage.filePath));
+      const tempFile = path.join(
+        process.cwd(),
+        config.tempStorage.filePath.replace("wrc_data.json", `differences_${cab}_${period}_${storeCode}.json`)
+      );
+      
+      // Ensure temp directory exists
+      try {
+        await fs.mkdir(tempDir, { recursive: true });
+      } catch (error) {
+        if (error.code !== "EEXIST") {
+          throw error;
+        }
+      }
 
       // Normalisasi data WRC dan simpan ke Map
       const taskWrc = wrcData.map(async item => {
@@ -979,55 +1066,36 @@ class RekonWtHarianService {
         }
       }
 
-      // Simpan semua perbedaan sekaligus jika ada dengan upsert untuk update data existing
+      // Simpan semua perbedaan ke file temporary jika ada
       if (differences.length > 0) {
-        logger.info(`Saving/Updating ${differences.length} differences of ${storeCode} to database`);
-
-        // Gunakan upsert untuk setiap record agar bisa update jika sudah ada
-        // Composite primary key: cab, periode, tipe, toko, shop, tgl1
-        const upsertPromises = differences.map(async difference => {
+        logger.info(`Saving ${differences.length} differences of ${storeCode} to temporary file`);
+        
+        try {
+          // Baca file jika sudah ada untuk menambahkan data baru
+          let existingDifferences = [];
           try {
-            const [record, created] = await RekonWtHarian.upsert(difference, {
-              returning: true, // Return the record whether created or updated
-            });
-
-            if (created) {
-              logger.debug(
-                `[${storeCode}] Created new record for ${difference.toko}-${difference.tipe}-${difference.tgl1}`
-              );
-            } else {
-              logger.debug(
-                `[${storeCode}] Updated existing record for ${difference.toko}-${difference.tipe}-${difference.tgl1}`
-              );
-            }
-
-            return { success: true, record, created };
+            const existingData = await fs.readFile(tempFile, 'utf8');
+            existingDifferences = JSON.parse(existingData);
+            logger.debug(`Read ${existingDifferences.length} existing differences from temporary file`);
           } catch (error) {
-            logger.error(
-              `[${storeCode}] Error upserting record ${difference.toko}-${difference.tipe}-${difference.tgl1}: ${error.message}`
-            );
-            return { success: false, error: error.message };
+            // File mungkin belum ada, lanjutkan dengan array kosong
+            if (error.code !== 'ENOENT') {
+              logger.warn(`Error reading temporary file: ${error.message}`);
+            }
           }
-        });
-
-        // Execute all upserts in parallel with controlled concurrency
-        const UPSERT_BATCH_SIZE = 10; // Process 10 records at a time
-        const results = [];
-
-        for (let i = 0; i < upsertPromises.length; i += UPSERT_BATCH_SIZE) {
-          const batch = upsertPromises.slice(i, i + UPSERT_BATCH_SIZE);
-          const batchResults = await Promise.allSettled(batch);
-          results.push(...batchResults);
-        }
-
-        // Count successes and failures
-        const successes = results.filter(r => r.status === "fulfilled" && r.value.success).length;
-        const failures = results.length - successes;
-
-        if (failures > 0) {
-          logger.warn(`[${storeCode}] ${successes} records saved/updated successfully, ${failures} failed`);
-        } else {
-          logger.info(`[${storeCode}] All ${successes} records saved/updated successfully`);
+          
+          // Gabungkan perbedaan yang ada dengan yang baru
+          const allDifferences = [...existingDifferences, ...differences];
+          
+          // Simpan ke file temporary
+          await fs.writeFile(tempFile, JSON.stringify(allDifferences));
+          
+          logger.info(`[${storeCode}] Saved ${differences.length} differences to temporary file (total: ${allDifferences.length})`);
+          
+          return differences;
+        } catch (error) {
+          logger.error(`[${storeCode}] Error saving differences to temporary file: ${error.message}`);
+          throw error;
         }
       } else {
         logger.info(`No significant differences found from ${storeCode}`);
@@ -1052,6 +1120,110 @@ class RekonWtHarianService {
     } catch (error) {
       logger.error(`Error saving difference: ${error.message}`);
       throw error;
+    }
+  }
+  
+  /**
+   * Save all differences from temporary files to database
+   * @param {string} cab - Branch code
+   * @param {string} period - Period in YYMM format
+   * @returns {Promise<Object>} Result of database save operation
+   */
+  async saveDifferencesToDatabase(cab, period) {
+    try {
+      logger.info(`Saving all differences for ${cab} ${period} from temporary files to database`);
+      
+      // Buat path untuk direktori temporary
+      const tempDir = path.dirname(path.join(process.cwd(), config.tempStorage.filePath));
+      const filePattern = `differences_${cab}_${period}_*.json`;
+      
+      // Cari semua file temporary yang sesuai dengan pola
+      const files = await fs.readdir(tempDir);
+      const differenceFiles = files.filter(file => {
+        return file.startsWith(`differences_${cab}_${period}_`) && file.endsWith('.json');
+      });
+      
+      if (differenceFiles.length === 0) {
+        logger.info(`No difference files found for ${cab} ${period}`);
+        return { success: true, message: 'No differences to save', savedCount: 0 };
+      }
+      
+      logger.info(`Found ${differenceFiles.length} difference files for ${cab} ${period}`);
+      
+      let totalDifferences = 0;
+      let totalSaved = 0;
+      let totalErrors = 0;
+      
+      // Proses setiap file perbedaan
+      for (const file of differenceFiles) {
+        try {
+          const filePath = path.join(tempDir, file);
+          const fileContent = await fs.readFile(filePath, 'utf8');
+          const differences = JSON.parse(fileContent);
+          
+          if (differences.length === 0) {
+            continue;
+          }
+          
+          totalDifferences += differences.length;
+          logger.info(`Processing ${differences.length} differences from ${file}`);
+          
+          // Simpan perbedaan ke database dalam batch
+          const BATCH_SIZE = 100;
+          for (let i = 0; i < differences.length; i += BATCH_SIZE) {
+            const batch = differences.slice(i, i + BATCH_SIZE);
+            try {
+              // Gunakan upsert untuk setiap record agar bisa update jika sudah ada
+              const upsertPromises = batch.map(async difference => {
+                try {
+                  const [record, created] = await RekonWtHarian.upsert(difference, {
+                    returning: true, // Return the record whether created or updated
+                  });
+                  return { success: true, created };
+                } catch (error) {
+                  logger.error(`Error upserting record: ${error.message}`);
+                  return { success: false, error: error.message };
+                }
+              });
+              
+              const results = await Promise.allSettled(upsertPromises);
+              const successes = results.filter(r => r.status === "fulfilled" && r.value.success).length;
+              const failures = results.length - successes;
+              
+              totalSaved += successes;
+              totalErrors += failures;
+              
+              logger.info(`Batch saved: ${successes} successful, ${failures} failed`);
+            } catch (error) {
+              logger.error(`Error saving batch to database: ${error.message}`);
+              totalErrors += batch.length;
+            }
+          }
+          
+          // Hapus file temporary setelah berhasil disimpan ke database
+          await fs.unlink(filePath);
+          logger.info(`Deleted temporary file ${file} after saving to database`);
+        } catch (error) {
+          logger.error(`Error processing file ${file}: ${error.message}`);
+        }
+      }
+      
+      logger.info(`Completed saving differences to database: ${totalSaved} saved, ${totalErrors} errors out of ${totalDifferences} total`);
+      
+      return {
+        success: true,
+        message: `Saved ${totalSaved} differences to database`,
+        savedCount: totalSaved,
+        errorCount: totalErrors,
+        totalCount: totalDifferences
+      };
+    } catch (error) {
+      logger.error(`Error saving differences to database: ${error.message}`);
+      return {
+        success: false,
+        message: `Error saving differences to database: ${error.message}`,
+        error: error.message
+      };
     }
   }
 

@@ -45,6 +45,7 @@ class RekonProgressService {
    * @param {Object} update - Progress update
    * @param {number} update.processedItems - Number of processed items
    * @param {number} update.completedItems - Number of completed items
+   * @param {number} update.percentage - Percentage of completion (0-100)
    * @param {string} update.status - Status of the process
    * @param {Array} update.errors - Errors encountered
    * @param {Object} update.details - Additional details
@@ -65,10 +66,17 @@ class RekonProgressService {
 
     this.progressMap.set(progressId, updatedProgress);
 
-    // Calculate percentage
-    const percentage = updatedProgress.totalItems > 0 
-      ? Math.round((updatedProgress.processedItems / updatedProgress.totalItems) * 100) 
-      : 0;
+    // Calculate percentage if not provided
+    let percentage = update.percentage;
+    if (percentage === undefined) {
+      percentage = updatedProgress.totalItems > 0 
+        ? Math.round((updatedProgress.processedItems / updatedProgress.totalItems) * 100) 
+        : 0;
+    }
+    
+    // Ensure percentage is a number and between 0-100
+    percentage = Number(percentage) || 0;
+    percentage = Math.max(0, Math.min(100, percentage));
 
     const progressData = {
       ...updatedProgress,
@@ -81,7 +89,7 @@ class RekonProgressService {
     // Emit progress-specific event
     this.eventEmitter.emit(`progress:${progressId}`, progressData);
 
-    logger.debug(`Updated progress for ${progressId}: ${percentage}%`);
+    logger.debug(`Updated progress for ${progressId}: ${percentage}% (${updatedProgress.processedItems}/${updatedProgress.totalItems})`);
   }
 
   /**
@@ -95,9 +103,18 @@ class RekonProgressService {
     }
 
     const progress = this.progressMap.get(progressId);
-    const percentage = progress.totalItems > 0 
-      ? Math.round((progress.processedItems / progress.totalItems) * 100) 
-      : 0;
+    
+    // Use existing percentage if available, otherwise calculate
+    let percentage = progress.percentage;
+    if (percentage === undefined) {
+      percentage = progress.totalItems > 0 
+        ? Math.round((progress.processedItems / progress.totalItems) * 100) 
+        : 0;
+    }
+    
+    // Ensure percentage is a number and between 0-100
+    percentage = Number(percentage) || 0;
+    percentage = Math.max(0, Math.min(100, percentage));
 
     return {
       ...progress,
@@ -126,9 +143,17 @@ class RekonProgressService {
       return null;
     }
 
-    const percentage = latestProgress.totalItems > 0 
-      ? Math.round((latestProgress.processedItems / latestProgress.totalItems) * 100) 
-      : 0;
+    // Use existing percentage if available, otherwise calculate
+    let percentage = latestProgress.percentage;
+    if (percentage === undefined) {
+      percentage = latestProgress.totalItems > 0 
+        ? Math.round((latestProgress.processedItems / latestProgress.totalItems) * 100) 
+        : 0;
+    }
+    
+    // Ensure percentage is a number and between 0-100
+    percentage = Number(percentage) || 0;
+    percentage = Math.max(0, Math.min(100, percentage));
 
     return {
       ...latestProgress,

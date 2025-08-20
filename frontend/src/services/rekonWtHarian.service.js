@@ -5,15 +5,7 @@ import { EventSourcePolyfill } from 'event-source-polyfill';
  * Service for WT Harian reconciliation
  */
 export default {
-  /**
-   * Get reconciliation progress
-   * @param {String} cab - Branch code (empty string for all branches)
-   * @param {String} periode - Period in YYMM format
-   * @returns {Promise}
-   */
-  getProgress(progressId) {
-    return api.get(`/rekon-wt-harian/progress/${progressId}`);
-  },
+
 
   /**
    * Get latest reconciliation progress
@@ -35,13 +27,13 @@ export default {
    */
   createProgressWebSocket(progressId, onMessage) {
     // Get the API URL
-    const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
+    const apiUrl = import.meta.env.VITE_API_URL;
     
     // Get auth token
     const token = localStorage.getItem("token");
     
     // Create SSE connection with authorization header
-    const sseUrl = `${apiUrl}/rekon-wt-harian/progress-updates/${progressId}`;
+    const sseUrl = `${apiUrl}/rekon-wt-harian/progress/${progressId}`;
     const eventSource = new EventSourcePolyfill(sseUrl, {
       headers: {
         Authorization: `Bearer ${token}`

@@ -233,6 +233,14 @@ const emit = defineEmits(['view-results']);
 const startReconciliation = async () => {
   if (!validateForm()) return;
   
+  // Check if reconciliation is already running
+  await checkExistingReconciliation();
+  
+  if (isReconciling.value) {
+    toast.showWarning('Perhatian', 'Proses rekonsiliasi sedang berjalan. Harap tunggu hingga selesai.');
+    return;
+  }
+  
   try {
     isReconciling.value = true;
     showProgressBar.value = true;
@@ -312,9 +320,52 @@ const handleProgressUpdate = (data) => {
     // Update progress values
     processedItems.value = progressData.processedItems || 0;
     totalItems.value = progressData.totalItems || totalItems.value;
-    totalDifferences.value = progressData.totalDifferences || progressData.itemsWithDifferences || 0;
+    
+    // Update differences count from details if available
+    if (progressData.details) {
+      totalDifferences.value = progressData.details.totalDifferences || 
+                              progressData.details.storesWithDifferences || 
+                              progressData.totalDifferences || 
+                              progressData.itemsWithDifferences || 0;
+    }
+    
+    // Update status
     progressStatus.value = progressData.status || 'running';
-    progressMessage.value = progressData.message || '';
+    
+    // Create detailed message with wave and branch information
+    let detailMessage = progressData.message || '';
+    
+    // Add wave and branch information if available
+    if (progressData.details) {
+      // If we have a current branch being processed
+      if (progressData.details.currentBranch) {
+        if (!detailMessage) {
+          detailMessage = `Memproses cabang: ${progressData.details.currentBranch}`;
+        }
+      }
+      
+      // If we have wave information
+      if (progressData.details.currentWave) {
+        // If we're processing a specific wave
+        const waveInfo = ` (Wave ${progressData.details.currentWave})`;
+        
+        // Add wave progress if available
+        if (progressData.details.waveProgress) {
+          detailMessage += `${waveInfo}: ${progressData.details.waveProgress}`;
+        } else {
+          detailMessage += waveInfo;
+        }
+      }
+      
+      // If we have current store information
+      if (progressData.details.currentStore && !detailMessage.includes('Toko:')) {
+        detailMessage += detailMessage ? `, Toko: ${progressData.details.currentStore}` : 
+                                       `Memproses toko: ${progressData.details.currentStore}`;
+      }
+    }
+    
+    // Update progress message
+    progressMessage.value = detailMessage || progressData.message || '';
     
     // Update progress percentage
     const percentage = progressData.percentage || 
@@ -386,29 +437,84 @@ const hideProgressBar = () => {
 // Check for existing reconciliation on component mount
 const checkExistingReconciliation = async () => {
   try {
-    if (formData.cab && formData.periode) {
-      const response = await rekonWtHarianService.getLatestProgress(
-        formData.cab,
-        formData.periode
-      );
+    // Cek untuk semua cabang dan periode yang dipilih
+    const response = await rekonWtHarianService.getLatestProgress(
+      formData.cab || 'All',
+      formData.periode || ''
+    );
+    
+    console.log('Checking existing reconciliation:', response.data);
+    
+    // Cek apakah ada proses rekonsiliasi yang sedang berjalan
+    if (response.data && 
+        (response.data.status === 'in_progress' || 
+         response.data.status === 'running' || 
+         response.data.status === 'pending')) {
       
-      if (response.data && response.data.progressId && response.data.status === 'in_progress') {
-        // There is an ongoing reconciliation, show progress bar
-        progressId.value = response.data.progressId;
-        progressStatus.value = response.data.status;
-        processedItems.value = response.data.processed || 0;
-        totalItems.value = response.data.total || 0;
-        totalDifferences.value = response.data.differences || 0;
-        progressMessage.value = response.data.message || 'Rekonsiliasi sedang berjalan...';
+      // Ada rekonsiliasi yang sedang berjalan, tampilkan progress bar
+      progressId.value = response.data.id || response.data.progressId;
+      progressStatus.value = response.data.status;
+      processedItems.value = response.data.processedItems || 0;
+      totalItems.value = response.data.totalItems || 0;
+      
+      // Update differences count if available
+      if (response.data.details) {
+        totalDifferences.value = response.data.details.totalDifferences || 
+                                response.data.details.storesWithDifferences || 0;
+      }
+      
+      // Create detailed message with wave and branch information
+      let detailMessage = response.data.message || 'Rekonsiliasi sedang berjalan...';
+      
+      // Add wave and branch information if available
+      if (response.data.details) {
+        // If we have a current branch being processed
+        if (response.data.details.currentBranch) {
+          detailMessage = `Memproses cabang: ${response.data.details.currentBranch}`;
+        }
         
-        isReconciling.value = true;
-        showProgressBar.value = true;
-        startProgressTimer();
+        // If we have wave information
+        if (response.data.details.currentWave) {
+          // If we're processing a specific wave
+          const waveInfo = ` (Wave ${response.data.details.currentWave}/${response.data.details.totalWaves || '?'})`;
+          
+          // Add wave progress if available
+          if (response.data.details.waveProgress) {
+            detailMessage += `${waveInfo}: ${response.data.details.waveProgress}`;
+          } else {
+            detailMessage += waveInfo;
+          }
+        }
+        
+        // If we have current store information
+        if (response.data.details.currentStore && !detailMessage.includes('Toko:')) {
+          detailMessage += detailMessage ? `, Toko: ${response.data.details.currentStore}` : 
+                                         `Memproses toko: ${response.data.details.currentStore}`;
+        }
+      }
+      
+      progressMessage.value = detailMessage;
+      
+      // Aktifkan tracking progress
+      isReconciling.value = true;
+      showProgressBar.value = true;
+      startProgressTimer();
+      
+      // Connect to WebSocket for real-time updates
+      if (progressId.value) {
         connectToWebSocket();
       }
+      
+      // Tampilkan pesan info untuk user
+      toast.showInfo('Info', 'Proses rekonsiliasi sedang berjalan. Anda dapat melihat progress rekonsiliasi yang sedang berlangsung.');
+      
+      return true; // Ada rekonsiliasi yang sedang berjalan
     }
+    
+    return false; // Tidak ada rekonsiliasi yang sedang berjalan
   } catch (error) {
     console.error('Error checking existing reconciliation:', error);
+    return false;
   }
 };
 

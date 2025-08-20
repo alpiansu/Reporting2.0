@@ -9,7 +9,7 @@ class RekonProgressService {
     this.progressMap = new Map();
     this.eventEmitter = new EventEmitter();
   }
-
+/** 
  * Initialize progress tracking for a reconciliation process
  * @param {string} cab - Branch code (or 'All' for all branches)
  * @param {string} periode - Period in YYMM format
@@ -103,6 +103,10 @@ updateProgress(progressId, update) {
       : 0;
     
     percentage = Math.round(basePercentage + wavePercentage);
+    
+    // Log detailed percentage calculation for debugging
+    logger.debug(`Percentage calculation: ${updatedProgress.currentWave}/${updatedProgress.maxWaves} waves, ` +
+      `base=${basePercentage.toFixed(2)}%, wave=${wavePercentage.toFixed(2)}%, total=${percentage}%`);
   }
   
   // Ensure percentage is a number and between 0-100

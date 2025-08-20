@@ -686,6 +686,19 @@ class RekonWtHarianService {
       results.branch = cab;
       results.period = period;
       results.totalDuration = totalDuration;
+      
+      // Save differences to database
+      try {
+        logger.info(`Saving differences to database for branch ${cab} and period ${period}`);
+        const saveResult = await this.saveDifferencesToDatabase(cab, period);
+        logger.info(`Save result: ${JSON.stringify(saveResult)}`);
+        
+        // Add save result to results
+        results.saveResult = saveResult;
+      } catch (error) {
+        logger.error(`Error saving differences to database: ${error.message}`);
+        results.saveError = error.message;
+      }
 
       return results;
     } catch (error) {

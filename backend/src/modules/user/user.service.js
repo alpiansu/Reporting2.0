@@ -404,6 +404,55 @@ class UserService {
       return false;
     }
   }
+
+  /**
+   * Membersihkan data pengujian dengan menyimpan hanya pengguna admin
+   * @returns {Promise<Object>} Hasil pembersihan data
+   */
+  async cleanupTestData() {
+    try {
+      await this.ensureInitialized();
+      
+      // Hitung jumlah pengguna sebelum pembersihan
+      const beforeCount = this.userList.length;
+      
+      // Filter hanya pengguna admin (username: "admin")
+      const adminUsers = this.userList.filter(user => user.username === "admin");
+      
+      // Jika tidak ada admin, pertahankan data yang ada
+      if (adminUsers.length === 0) {
+        logger.warn("Tidak ada pengguna admin ditemukan, data tidak dibersihkan");
+        return {
+          success: false,
+          message: "Tidak ada pengguna admin ditemukan, data tidak dibersihkan",
+          beforeCount,
+          afterCount: beforeCount
+        };
+      }
+      
+      // Simpan hanya pengguna admin
+      this.userList = adminUsers;
+      
+      // Simpan ke file
+      await this.saveToFile();
+      
+      logger.info(`Data pengujian dibersihkan: ${beforeCount - adminUsers.length} pengguna dihapus, ${adminUsers.length} pengguna admin dipertahankan`);
+      
+      return {
+        success: true,
+        message: `Data pengujian dibersihkan: ${beforeCount - adminUsers.length} pengguna dihapus, ${adminUsers.length} pengguna admin dipertahankan`,
+        beforeCount,
+        afterCount: adminUsers.length
+      };
+    } catch (error) {
+      logger.error(`Error dalam cleanupTestData: ${error.message}`);
+      return {
+        success: false,
+        message: `Error dalam cleanupTestData: ${error.message}`,
+        error: error.message
+      };
+    }
+  }
 }
 
 module.exports = UserService;

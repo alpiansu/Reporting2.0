@@ -96,6 +96,26 @@ class ExternalDbService {
       await this.disconnect();
     }
   }
+
+  /**
+   * Fetch user data from external database
+   * @returns {Promise<Array>} Array of user data
+   */
+  async fetchUserData() {
+    try {
+      const conn = await this.connect();
+
+      const query = `SELECT username, fullname, email, role FROM tb_user;`;
+      const [rows] = await conn.execute(query);
+
+      return rows;
+    } catch (error) {
+      logger.error(`Failed to fetch user data: ${error.message}`);
+      throw error;
+    } finally {
+      await this.disconnect();
+    }
+  }
 }
 
 module.exports = ExternalDbService;

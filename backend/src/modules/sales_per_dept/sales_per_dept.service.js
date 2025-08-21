@@ -2,7 +2,6 @@
  * Service for sales per department data
  */
 const SalesPerDept = require("../../models/sales_per_dept.model");
-const MDept = require("../../models/m_dept.model");
 const logger = require("../../config/logger");
 const ExternalDbService = require("./external-db.service");
 
@@ -215,7 +214,10 @@ class SalesPerDeptService {
    */
   async updateDepartmentName(dep_kd) {
     try {
-      // Find department in m_dept table
+      // Import MDept model here to avoid circular dependency
+      const MDept = require("../../models/m_dept.model");
+      
+      // Find department in m_dept table (now JSON-based)
       const department = await MDept.findByPk(dep_kd);
 
       if (department) {

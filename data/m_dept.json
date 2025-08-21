@@ -1,0 +1,26 @@
+[
+  {
+    "dep_kd": "D001",
+    "dep_nm": "FRESH",
+    "div_kd": "DIV01",
+    "dep_mgr": "Manager Fresh"
+  },
+  {
+    "dep_kd": "D002",
+    "dep_nm": "GROCERY",
+    "div_kd": "DIV01",
+    "dep_mgr": "Manager Grocery"
+  },
+  {
+    "dep_kd": "D003",
+    "dep_nm": "FASHION",
+    "div_kd": "DIV02",
+    "dep_mgr": "Manager Fashion"
+  },
+  {
+    "dep_kd": "D004",
+    "dep_nm": "ELECTRONIC",
+    "div_kd": "DIV03",
+    "dep_mgr": "Manager Electronic"
+  }
+]

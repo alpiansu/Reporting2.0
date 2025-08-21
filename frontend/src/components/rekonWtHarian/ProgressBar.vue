@@ -22,10 +22,6 @@
             <span class="detail-label">Diproses:</span>
             <span class="detail-value">{{ processed }} / {{ total }}</span>
           </div>
-          <div class="detail-item" v-if="showWaveInfo && currentWave && maxWaves">
-            <span class="detail-label">Wave:</span>
-            <span class="detail-value">{{ currentWave }} / {{ maxWaves }}</span>
-          </div>
           <div class="detail-item" v-if="showBranchInfo && currentBranch">
             <span class="detail-label">Cabang:</span>
             <span class="detail-value">{{ currentBranch }}</span>
@@ -95,10 +91,6 @@ const props = defineProps({
   percentage: {
     type: Number,
     default: undefined
-  },
-  currentWave: {
-    type: Number,
-    default: 1
   },
   maxWaves: {
     type: Number,

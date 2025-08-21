@@ -4,10 +4,7 @@ const path = require("path");
 // Load environment variables
 dotenv.config({ path: path.join(__dirname, "../../.env") });
 
-const allowedOrigins = [
-  "http://localhost",
-  "http://192.168.61.228"
-];
+const allowedOrigins = ["http://localhost", "http://192.168.61.228", "http://192.168.133.10"];
 
 module.exports = {
   // Server configuration

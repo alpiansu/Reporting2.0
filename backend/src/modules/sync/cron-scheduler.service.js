@@ -1,17 +1,17 @@
 /**
  * Service for scheduling synchronization tasks
  */
-const cron = require('node-cron');
-const SyncService = require('./sync.service');
+const cron = require("node-cron");
+const SyncService = require("./sync.service");
 const syncService = new SyncService();
-const syncConfig = require('../../config/sync.config');
-const logger = require('../../config/logger');
+const syncConfig = require("../../config/sync.config");
+const logger = require("../../config/logger");
 
 class CronScheduler {
   constructor() {
     this.jobs = [];
   }
-  
+
   /**
    * Initialize the scheduler
    * Alias for initialize() for compatibility with server.js
@@ -25,11 +25,11 @@ class CronScheduler {
    * Initialize and start all scheduled jobs
    */
   initialize() {
-    logger.info('Initializing synchronization scheduler');
-    
+    logger.info("Initializing synchronization scheduler");
+
     // Clear any existing jobs
     this.stopAll();
-    
+
     // Schedule jobs based on configuration
     this.scheduleJobs();
   }
@@ -39,39 +39,43 @@ class CronScheduler {
    */
   scheduleJobs() {
     const { schedules } = syncConfig;
-    
+
     if (!schedules || !Array.isArray(schedules) || schedules.length === 0) {
-      logger.warn('No synchronization schedules configured');
+      logger.warn("No synchronization schedules configured");
       return;
     }
-    
+
     schedules.forEach((schedule, index) => {
       const { hour, minute, description } = schedule;
-      
+
       // Validate schedule
       if (hour === undefined || minute === undefined) {
         logger.warn(`Invalid schedule at index ${index}: hour and minute must be specified`);
         return;
       }
-      
+
       // Create cron expression
       const cronExpression = `${minute} ${hour} * * *`;
-      
+
       // Schedule job
       try {
         const job = cron.schedule(cronExpression, async () => {
-          logger.info(`Running scheduled synchronization: ${description || 'Unnamed schedule'}`);
+          logger.info(`Running scheduled synchronization: ${description || "Unnamed schedule"}`);
           await this.runSynchronization();
         });
-        
+
         this.jobs.push(job);
-        
-        logger.info(`Scheduled synchronization at ${hour}:${minute < 10 ? '0' + minute : minute} (${description || 'Unnamed schedule'})`);
+
+        logger.info(
+          `Scheduled synchronization at ${hour}:${minute < 10 ? "0" + minute : minute} (${
+            description || "Unnamed schedule"
+          })`
+        );
       } catch (error) {
         logger.error(`Failed to schedule job: ${error.message}`);
       }
     });
-    
+
     logger.info(`Scheduled ${this.jobs.length} synchronization jobs`);
   }
 
@@ -80,21 +84,32 @@ class CronScheduler {
    */
   async runSynchronization() {
     try {
-      const result = await syncService.synchronizeStores();
-      
+      const storeResult = await syncService.synchronizeStores();
+      const deptResult = await syncService.synchronizeDept();
+
+      const result = {
+        success: storeResult.success && deptResult.success,
+        message: "All scheduled synchronizations completed",
+        store: storeResult,
+        dept: deptResult,
+      };
+
       if (result.success) {
-        logger.info(`Scheduled synchronization completed: ${result.updated} updated, ${result.created} created`);
+        logger.info(
+          `Scheduled synchronization completed: stores (${storeResult.updated} updated, ${storeResult.created} created), ` +
+            `departments (${deptResult.updated} updated, ${deptResult.created} created)`
+        );
       } else {
         logger.error(`Scheduled synchronization failed: ${result.message}`);
       }
-      
+
       return result;
     } catch (error) {
       logger.error(`Error in scheduled synchronization: ${error.message}`);
       return {
         success: false,
         message: `Synchronization error: ${error.message}`,
-        error: error.message
+        error: error.message,
       };
     }
   }
@@ -105,7 +120,7 @@ class CronScheduler {
   stopAll() {
     this.jobs.forEach(job => job.stop());
     this.jobs = [];
-    logger.info('All synchronization jobs stopped');
+    logger.info("All synchronization jobs stopped");
   }
 }
 

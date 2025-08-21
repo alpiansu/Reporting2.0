@@ -74,6 +74,29 @@ const User = {
   },
 
   /**
+   * Find a user by where clause
+   * @param {Object} options - Query options with where clause
+   * @returns {Promise<Object|null>} User object or null if not found
+   */
+  findOne: async (options = {}) => {
+    await userService.init();
+    const users = await userService.getAllUsers();
+    
+    if (!options.where) {
+      return users[0] || null;
+    }
+    
+    // Simple implementation to match the first user that satisfies all conditions in where clause
+    const whereConditions = options.where;
+    
+    return users.find(user => {
+      return Object.keys(whereConditions).every(key => {
+        return user[key] === whereConditions[key];
+      });
+    }) || null;
+  },
+
+  /**
    * Create a new user
    * @param {Object} userData - User data
    * @returns {Promise<Object>} Created user

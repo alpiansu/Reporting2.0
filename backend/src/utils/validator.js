@@ -69,37 +69,10 @@ const validateConnectionParams = (connectionParams) => {
   };
 };
 
-/**
- * Validate screening parameters
- * @param {object} screeningParams - Screening parameters
- * @returns {object} - Validation result with isValid and errors
- */
-const validateScreeningParams = (screeningParams) => {
-  const errors = {};
-  const { storeId, screeningType } = screeningParams;
 
-  if (!storeId) {
-    errors.storeId = 'Store ID is required';
-  }
-
-  if (!screeningType) {
-    errors.screeningType = 'Screening type is required';
-  } else {
-    const validTypes = ['full', 'quick', 'custom'];
-    if (!validTypes.includes(screeningType)) {
-      errors.screeningType = `Screening type must be one of: ${validTypes.join(', ')}`;
-    }
-  }
-
-  return {
-    isValid: Object.keys(errors).length === 0,
-    errors,
-  };
-};
 
 module.exports = {
   isValidEmail,
   validatePassword,
   validateConnectionParams,
-  validateScreeningParams,
 };

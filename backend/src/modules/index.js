@@ -7,7 +7,6 @@ const authModule = require('./auth');
 const storeModule = require('./store');
 const syncModule = require('./sync');
 const userActivityModule = require('./userActivity');
-const screeningModule = require('./screening');
 const salesPerDeptModule = require('./sales_per_dept');
 const mDeptModule = require('./m_dept');
 const rekonWtHarianModule = require('./rekon_wt_harian');
@@ -19,7 +18,6 @@ module.exports = {
   storeModule,
   syncModule,
   userActivityModule,
-  screeningModule,
   salesPerDeptModule,
   mDeptModule,
   rekonWtHarianModule,
@@ -32,7 +30,6 @@ module.exports = {
     const store = storeModule.initialize(app);
     const sync = syncModule.initialize(app);
     const userActivity = userActivityModule.initialize(app);
-    const screening = screeningModule.initialize(app);
     const salesPerDept = salesPerDeptModule.initialize(app);
     const mDept = mDeptModule.initialize(app);
     const rekonWtHarian = rekonWtHarianModule.initialize(app);
@@ -43,7 +40,6 @@ module.exports = {
       store,
       sync,
       userActivity,
-      screening,
       salesPerDept,
       mDept,
       rekonWtHarian,

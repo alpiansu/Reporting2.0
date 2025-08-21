@@ -1,4 +1,4 @@
-const { User } = require("../../models");
+const User = require("../../models/user.model");
 const logger = require("../../config/logger");
 const fs = require("fs");
 const path = require("path");
@@ -177,9 +177,7 @@ class UserActivityService {
       const paginatedActivities = filteredActivities.slice(offset, offset + limit);
 
       // Get user data for each activity
-      const user = await User.findByPk(userId, {
-        attributes: ["id", "username", "fullName"],
-      });
+      const user = await User.findByPk(userId);
 
       // Add user data to each activity
       const activitiesWithUser = paginatedActivities.map(activity => ({

@@ -1,4 +1,4 @@
-const { User } = require('../../models');
+const User = require('../../models/user.model');
 const { jwt } = require('../../config');
 const logger = require('../../config/logger');
 const UserActivityService = require('../userActivity/userActivity.service');
@@ -63,8 +63,10 @@ class AuthService {
       }
       
       // Update last login timestamp
-      user.lastLogin = new Date();
-      await user.save();
+      await User.update(
+        { lastLogin: new Date() },
+        { where: { id: user.id } }
+      );
       
       // Log login activity
       await userActivityService.logActivity({
@@ -141,9 +143,7 @@ class AuthService {
    */
   async getProfile(userId) {
     try {
-      const user = await User.findByPk(userId, {
-        attributes: { exclude: ['password'] },
-      });
+      const user = await User.findByPk(userId);
       
       if (!user) {
         throw new Error('User not found');
@@ -165,21 +165,21 @@ class AuthService {
    */
   async changePassword(userId, currentPassword, newPassword) {
     try {
-      const user = await User.findByPk(userId);
+      const user = await User.findByCredentials(userId);
       
       if (!user) {
         throw new Error('User not found');
       }
       
-      // Verify current password
-      const isPasswordValid = await user.comparePassword(currentPassword);
-      if (!isPasswordValid) {
-        throw new Error('Current password is incorrect');
-      }
+      // Change password using service method
+      const success = await User.update(
+        { password: newPassword },
+        { where: { id: user.id } }
+      );
       
-      // Update password
-      user.password = newPassword;
-      await user.save();
+      if (!success) {
+        throw new Error('Failed to update password');
+      }
       
       // Log password change activity
       await userActivityService.logActivity({
@@ -219,17 +219,18 @@ class AuthService {
       
       // Update allowed fields
       const allowedFields = ['fullName', 'email', 'profileImage'];
+      const updateData = {};
       let updated = false;
       
       for (const field of allowedFields) {
         if (profileData[field] !== undefined && user[field] !== profileData[field]) {
-          user[field] = profileData[field];
+          updateData[field] = profileData[field];
           updated = true;
         }
       }
       
       if (updated) {
-        await user.save();
+        await User.update(updateData, { where: { id: userId } });
         
         // Log profile update activity
         await userActivityService.logActivity({

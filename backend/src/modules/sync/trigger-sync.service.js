@@ -7,29 +7,21 @@ class TriggerSyncService {
    * @param {string} type - Type of sync ("store" | "dept" | "all")
    * @returns {Promise<Object>} Synchronization results
    */
-  async triggerManualSync(type = "all") {
+  async triggerManualSync() {
     logger.info(`Manual synchronization triggered for: ${type}`);
 
     try {
       const syncService = new SyncService();
 
       let result = {};
-
-      if (type === "store") {
-        result = await syncService.synchronizeStores();
-      } else if (type === "dept") {
-        result = await syncService.synchronizeDept();
-      } else if (type === "all") {
-        const storeResult = await syncService.synchronizeStores();
-        const deptResult = await syncService.synchronizeDept();
-
-        result = {
-          success: storeResult.success && deptResult.success,
-          message: "All synchronizations completed",
-          store: storeResult,
-          dept: deptResult,
-        };
-      }
+      const storeResult = await syncService.synchronizeStores();
+      const deptResult = await syncService.synchronizeDept();
+      result = {
+        success: storeResult.success && deptResult.success,
+        message: "All synchronizations completed",
+        store: storeResult,
+        dept: deptResult,
+      };
 
       if (result.success) {
         logger.info(`Manual synchronization completed: ${JSON.stringify(result)}`);

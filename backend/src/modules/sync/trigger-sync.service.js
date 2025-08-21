@@ -8,7 +8,7 @@ class TriggerSyncService {
    * @returns {Promise<Object>} Synchronization results
    */
   async triggerManualSync() {
-    logger.info(`Manual synchronization triggered for: ${type}`);
+    logger.info(`Manual synchronization triggered at ${new Date().toISOString()}`);
 
     try {
       const syncService = new SyncService();

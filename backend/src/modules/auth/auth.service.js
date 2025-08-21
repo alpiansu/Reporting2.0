@@ -2,8 +2,10 @@ const User = require('../../models/user.model');
 const { jwt } = require('../../config');
 const logger = require('../../config/logger');
 const UserActivityService = require('../userActivity/userActivity.service');
+const UserService = require('../user/user.service');
 
 const userActivityService = new UserActivityService();
+const userService = new UserService();
 
 /**
  * Service for handling authentication related operations
@@ -50,23 +52,20 @@ class AuthService {
   async login(login, password) {
     try {
       // Find user by username or email
-      const user = await User.findByCredentials(login);
+      const user = await userService.findByCredentials(login);
       
       if (!user) {
         throw new Error('User not found');
       }
       
       // Check if password is correct
-      const isPasswordValid = await user.comparePassword(password);
+      const isPasswordValid = await userService.comparePassword(password, user.password);
       if (!isPasswordValid) {
         throw new Error('Invalid password');
       }
       
       // Update last login timestamp
-      await User.update(
-        { lastLogin: new Date() },
-        { where: { id: user.id } }
-      );
+      await userService.updateLastLogin(user.id);
       
       // Log login activity
       await userActivityService.logActivity({
@@ -82,8 +81,7 @@ class AuthService {
       const token = jwt.generateToken(user);
       
       // Return user data (excluding password) and token
-      const userData = user.toJSON();
-      delete userData.password;
+      const { password: _, ...userData } = user;
       
       logger.info(`User ${user.username} logged in successfully`);
       
@@ -105,14 +103,10 @@ class AuthService {
   async register(userData) {
     try {
       // Create new user
-      const user = await User.create(userData);
+      const user = await userService.createUser(userData);
       
       // Generate JWT token
       const token = jwt.generateToken(user);
-      
-      // Return user data (excluding password) and token
-      const createdUser = user.toJSON();
-      delete createdUser.password;
       
       logger.info(`New user registered: ${user.username}`);
       
@@ -127,7 +121,7 @@ class AuthService {
       });
       
       return {
-        user: createdUser,
+        user,
         token,
       };
     } catch (error) {
@@ -143,7 +137,7 @@ class AuthService {
    */
   async getProfile(userId) {
     try {
-      const user = await User.findByPk(userId);
+      const user = await userService.getUserById(userId);
       
       if (!user) {
         throw new Error('User not found');
@@ -165,17 +159,20 @@ class AuthService {
    */
   async changePassword(userId, currentPassword, newPassword) {
     try {
-      const user = await User.findByCredentials(userId);
+      const user = await userService.getUserWithPasswordById(userId);
       
       if (!user) {
         throw new Error('User not found');
       }
       
+      // Verify current password
+      const isPasswordValid = await userService.comparePassword(currentPassword, user.password);
+      if (!isPasswordValid) {
+        throw new Error('Current password is incorrect');
+      }
+      
       // Change password using service method
-      const success = await User.update(
-        { password: newPassword },
-        { where: { id: user.id } }
-      );
+      const success = await userService.changePassword(userId, currentPassword, newPassword);
       
       if (!success) {
         throw new Error('Failed to update password');
@@ -184,7 +181,7 @@ class AuthService {
       // Log password change activity
       await userActivityService.logActivity({
         userId: user.id,
-        type: 'password',
+        type: 'password_change',
         description: 'Changed account password',
         ipAddress: null, // In a real app, this would come from the request
         userAgent: null, // In a real app, this would come from the request
@@ -211,7 +208,7 @@ class AuthService {
    */
   async updateProfile(userId, profileData) {
     try {
-      const user = await User.findByPk(userId);
+      const user = await userService.getUserById(userId);
       
       if (!user) {
         throw new Error('User not found');
@@ -230,12 +227,12 @@ class AuthService {
       }
       
       if (updated) {
-        await User.update(updateData, { where: { id: userId } });
+        await userService.updateUser(userId, updateData);
         
         // Log profile update activity
         await userActivityService.logActivity({
           userId: user.id,
-          type: 'profile',
+          type: 'profile_update',
           description: 'Updated profile information',
           ipAddress: null, // In a real app, this would come from the request
           userAgent: null, // In a real app, this would come from the request
@@ -245,11 +242,10 @@ class AuthService {
         logger.info(`Profile updated for user ${user.username}`);
       }
       
-      // Return user data without password
-      const userData = user.toJSON();
-      delete userData.password;
+      // Get updated user data
+      const updatedUser = await userService.getUserById(userId);
       
-      return userData;
+      return updatedUser;
     } catch (error) {
       logger.error(`Update profile failed: ${error.message}`);
       throw error;

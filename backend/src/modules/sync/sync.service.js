@@ -17,16 +17,16 @@ class SyncService {
     try {
       // Create instance of external DB service
       const externalDbService = new ExternalDbService();
-      
-      // Fetch data from external database
-      const externalData = await externalDbService.fetchStoreData();
 
-      if (!externalData || externalData.length === 0) {
+      // Fetch data from external database
+      const externalDataStore = await externalDbService.fetchStoreData();
+
+      if (!externalDataStore || externalDataStore.length === 0) {
         logger.warn("No data found in external database");
         return { success: false, message: "No data found in external database", updated: 0, created: 0 };
       }
 
-      logger.info(`Processing ${externalData.length} records from external database`);
+      logger.info(`Processing ${externalDataStore.length} records from external database`);
 
       // Get field mappings from config
       const {
@@ -40,7 +40,7 @@ class SyncService {
       let updated = 0;
       let created = 0;
 
-      for (const record of externalData) {
+      for (const record of externalDataStore) {
         // Extract and map fields from external data
         const storeData = {
           storeCode: record[storeCodeField],

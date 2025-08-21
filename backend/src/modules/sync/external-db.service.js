@@ -88,8 +88,6 @@ class ExternalDbService {
       const query = `SELECT * FROM db_edp.m_dept;`;
       const [rows] = await conn.execute(query);
 
-      // logger.info(`Fetched ${rows.length} department records from external database`);
-
       return rows;
     } catch (error) {
       logger.error(`Failed to fetch department data: ${error.message}`);

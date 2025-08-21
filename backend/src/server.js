@@ -11,15 +11,20 @@ const PORT = config.port;
 
 // Create dummy user
 async function createDummyUser() {
-  const username = "admin";
-  const password = "admin123"; // jangan di-hash manual
-  const email = "admin@example.com";
+  // Default admin credentials - mudah dihapus karena terisolasi di satu tempat
+  const defaultAdmin = {
+    username: "admin",
+    password: "admin123", // jangan di-hash manual
+    email: "admin@example.com",
+    fullName: "Administrator",
+    role: "admin"
+  };
 
   // Check if user already exists and is active
-  const existing = await User.findOne({ where: { username } });
+  const existing = await User.findOne({ where: { username: defaultAdmin.username } });
   if (!existing) {
-    await User.create({ username, password, email }); // biarkan hook model yang hash
-    logger.info("Dummy user created: admin/admin123");
+    await User.create(defaultAdmin); // biarkan hook model yang hash
+    logger.info(`Dummy user created: ${defaultAdmin.username}/${defaultAdmin.password}`);
   } else {
     // Pastikan user aktif
     if (!existing.isActive) {

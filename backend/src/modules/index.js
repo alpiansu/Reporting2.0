@@ -11,6 +11,7 @@ const salesPerDeptModule = require('./sales_per_dept');
 const mDeptModule = require('./m_dept');
 const rekonWtHarianModule = require('./rekon_wt_harian');
 const mCabangModule = require('./m_cabang');
+const userModule = require('./user');
 
 module.exports = {
   // Export all modules
@@ -22,6 +23,7 @@ module.exports = {
   mDeptModule,
   rekonWtHarianModule,
   mCabangModule,
+  userModule,
   
   // Initialize all modules
   initialize: (app) => {
@@ -34,6 +36,7 @@ module.exports = {
     const mDept = mDeptModule.initialize(app);
     const rekonWtHarian = rekonWtHarianModule.initialize(app);
     const mCabang = mCabangModule.initialize(app);
+    const user = userModule.initialize(app);
     
     return {
       auth,
@@ -43,7 +46,8 @@ module.exports = {
       salesPerDept,
       mDept,
       rekonWtHarian,
-      mCabang
+      mCabang,
+      user
     };
   }
 };

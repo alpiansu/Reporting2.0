@@ -14,15 +14,19 @@ class SyncController {
    */
   async triggerSync(req, res, next) {
     try {
-      const result = await triggerSyncService.triggerManualSync();
+      const { type = 'all' } = req.body;
+      const validTypes = ['store', 'dept', 'user', 'all'];
+      
+      if (!validTypes.includes(type)) {
+        return apiResponse.badRequest(res, `Invalid sync type. Must be one of: ${validTypes.join(', ')}`);
+      }
+      
+      const result = await triggerSyncService.triggerManualSync(type);
       
       if (result.success) {
         return apiResponse.success(res, {
           message: 'Synchronization completed successfully',
-          data: {
-            updated: result.updated,
-            created: result.created
-          }
+          data: result
         });
       } else {
         return apiResponse.error(res, result.message, 500);

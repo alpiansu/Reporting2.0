@@ -4,6 +4,7 @@
 const ExternalDbService = require("./external-db.service");
 const storeService = require("../store/storeService");
 const MDeptService = require("../m_dept/m_dept.service");
+const UserService = require("../user/user.service");
 const logger = require("../../config/logger");
 const syncConfig = require("../../config/sync.config");
 
@@ -141,6 +142,82 @@ class SyncService {
       return {
         success: false,
         message: `Synchronization failed: ${error.message}`,
+        error: error.message,
+      };
+    }
+  }
+
+  /**
+   * Synchronize user data from external database to local JSON storage
+   * @returns {Promise<Object>} Synchronization results
+   */
+  async synchronizeUsers() {
+    logger.info("Starting user data synchronization");
+
+    try {
+      const externalDbService = new ExternalDbService();
+      const externalData = await externalDbService.fetchUserData();
+
+      if (!externalData || externalData.length === 0) {
+        logger.warn("No user data found in external database");
+        return { success: false, message: "No user data found in external database", updated: 0, created: 0 };
+      }
+
+      logger.info(`Processing ${externalData.length} user records from external database`);
+
+      const userService = new UserService();
+      await userService.init();
+      
+      let updated = 0;
+      let created = 0;
+
+      for (const record of externalData) {
+        const userData = {
+          username: record.username,
+          fullName: record.fullname,
+          email: record.email || `${record.username}@example.com`,
+          role: record.role || "user",
+        };
+
+        // Check if user already exists by username
+        const existingUser = await userService.findByCredentials(userData.username);
+
+        if (existingUser) {
+          // Update existing user (only update fullName, email, and role)
+          await userService.updateUser(existingUser.id, {
+            fullName: userData.fullName,
+            email: userData.email,
+            role: userData.role
+          });
+          updated++;
+        } else {
+          try {
+            // Create new user with default password
+            await userService.createUser({
+              ...userData,
+              password: "123456", // Default password
+              isActive: true
+            });
+            created++;
+          } catch (error) {
+            logger.warn(`Failed to create user ${userData.username}: ${error.message}`);
+          }
+        }
+      }
+
+      logger.info(`User synchronization completed: ${updated} updated, ${created} created`);
+
+      return {
+        success: true,
+        message: "User synchronization completed successfully",
+        updated,
+        created,
+      };
+    } catch (error) {
+      logger.error(`User synchronization failed: ${error.message}`);
+      return {
+        success: false,
+        message: `User synchronization failed: ${error.message}`,
         error: error.message,
       };
     }

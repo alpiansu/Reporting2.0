@@ -86,18 +86,21 @@ class CronScheduler {
     try {
       const storeResult = await syncService.synchronizeStores();
       const deptResult = await syncService.synchronizeDept();
+      const userResult = await syncService.synchronizeUsers();
 
       const result = {
-        success: storeResult.success && deptResult.success,
+        success: storeResult.success && deptResult.success && userResult.success,
         message: "All scheduled synchronizations completed",
         store: storeResult,
         dept: deptResult,
+        user: userResult
       };
 
       if (result.success) {
         logger.info(
           `Scheduled synchronization completed: stores (${storeResult.updated} updated, ${storeResult.created} created), ` +
-            `departments (${deptResult.updated} updated, ${deptResult.created} created)`
+            `departments (${deptResult.updated} updated, ${deptResult.created} created), ` +
+            `users (${userResult.updated} updated, ${userResult.created} created)`
         );
       } else {
         logger.error(`Scheduled synchronization failed: ${result.message}`);

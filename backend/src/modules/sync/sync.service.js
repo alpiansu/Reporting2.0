@@ -3,6 +3,7 @@
  */
 const ExternalDbService = require("./external-db.service");
 const storeService = require("../store/storeService");
+const MDeptService = require("../m_dept/m_dept.service");
 const logger = require("../../config/logger");
 const syncConfig = require("../../config/sync.config");
 
@@ -19,14 +20,14 @@ class SyncService {
       const externalDbService = new ExternalDbService();
 
       // Fetch data from external database
-      const externalDataStore = await externalDbService.fetchStoreData();
+      const externalData = await externalDbService.fetchStoreData();
 
-      if (!externalDataStore || externalDataStore.length === 0) {
+      if (!externalData || externalData.length === 0) {
         logger.warn("No data found in external database");
         return { success: false, message: "No data found in external database", updated: 0, created: 0 };
       }
 
-      logger.info(`Processing ${externalDataStore.length} records from external database`);
+      logger.info(`Processing ${externalData.length} records from external database`);
 
       // Get field mappings from config
       const {
@@ -40,7 +41,7 @@ class SyncService {
       let updated = 0;
       let created = 0;
 
-      for (const record of externalDataStore) {
+      for (const record of externalData) {
         // Extract and map fields from external data
         const storeData = {
           storeCode: record[storeCodeField],
@@ -78,6 +79,65 @@ class SyncService {
       };
     } catch (error) {
       logger.error(`Synchronization failed: ${error.message}`);
+      return {
+        success: false,
+        message: `Synchronization failed: ${error.message}`,
+        error: error.message,
+      };
+    }
+  }
+
+  /**
+   * Synchronize department data from external database to local JSON storage
+   * @returns {Promise<Object>} Synchronization results
+   */
+  async synchronizeDept() {
+    logger.info("Starting department data synchronization");
+
+    try {
+      const externalDbService = new ExternalDbService();
+      const externalData = await externalDbService.fetchDeptData();
+
+      if (!externalData || externalData.length === 0) {
+        logger.warn("No department data found in external database");
+        return { success: false, message: "No data found in external database", updated: 0, created: 0 };
+      }
+
+      logger.info(`Processing ${externalData.length} department records from external database`);
+
+      const mDeptService = new MDeptService();
+      let updated = 0;
+      let created = 0;
+
+      for (const record of externalData) {
+        const deptData = {
+          dep_kd: record.dep_kd,
+          dep_nm: record.dep_nm,
+          div_kd: record.div_kd,
+          dep_mgr: record.dep_mgr || "",
+        };
+
+        const existingDept = await mDeptService.getDepartmentByCode(deptData.dep_kd);
+
+        if (existingDept) {
+          await mDeptService.updateDepartment(deptData.dep_kd, deptData);
+          updated++;
+        } else {
+          await mDeptService.createDepartment(deptData);
+          created++;
+        }
+      }
+
+      logger.info(`Department synchronization completed: ${updated} updated, ${created} created`);
+
+      return {
+        success: true,
+        message: "Department synchronization completed successfully",
+        updated,
+        created,
+      };
+    } catch (error) {
+      logger.error(`Department synchronization failed: ${error.message}`);
       return {
         success: false,
         message: `Synchronization failed: ${error.message}`,

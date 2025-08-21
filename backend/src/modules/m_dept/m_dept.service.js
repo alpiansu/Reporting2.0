@@ -13,9 +13,6 @@ class MDeptService {
     this.filePath = path.join(process.cwd(), "data/m_dept.json");
     this.deptList = [];
     this.initialized = false;
-
-    // Initialize department data if not exists
-    this.initDeptData();
   }
 
   /**
@@ -78,36 +75,6 @@ class MDeptService {
   async ensureInitialized() {
     if (!this.initialized) {
       await this.initialize();
-    }
-  }
-
-  /**
-   * Initialize department data from JSON file or create default data
-   */
-  async initDeptData() {
-    try {
-      await this.ensureInitialized();
-
-      // If department list is empty, add default data
-      if (this.deptList.length === 0) {
-        // Default department data
-        const defaultDeptData = [
-          { dep_kd: "D001", dep_nm: "FRESH", div_kd: "DIV01", dep_mgr: "Manager Fresh" },
-          { dep_kd: "D002", dep_nm: "GROCERY", div_kd: "DIV01", dep_mgr: "Manager Grocery" },
-          { dep_kd: "D003", dep_nm: "FASHION", div_kd: "DIV02", dep_mgr: "Manager Fashion" },
-          { dep_kd: "D004", dep_nm: "ELECTRONIC", div_kd: "DIV03", dep_mgr: "Manager Electronic" },
-        ];
-
-        // Add to department list
-        this.deptList = defaultDeptData;
-
-        // Save to file
-        await this.saveToFile();
-        logger.info("Default department data initialized");
-      }
-    } catch (error) {
-      logger.error(`Error initializing department data: ${error.message}`);
-      throw error;
     }
   }
 
@@ -236,7 +203,7 @@ class MDeptService {
 
         createReadStream(file.path)
           .pipe(csv())
-          .on("data", async (data) => {
+          .on("data", async data => {
             try {
               // Validate required fields
               if (!data.dep_kd || !data.dep_nm || !data.div_kd) {
@@ -284,7 +251,7 @@ class MDeptService {
               errors,
             });
           })
-          .on("error", (error) => {
+          .on("error", error => {
             // Delete temporary file
             fs.unlink(file.path).catch(err => {
               logger.error(`Error deleting temporary file: ${err.message}`);
@@ -309,7 +276,7 @@ class MDeptService {
       // In the JSON-based implementation, we'll just log this operation
       // since we're not using MySQL anymore
       logger.info(`Would update department name for dep_kd: ${dep_kd} to ${dep_nm} in sales_per_dept`);
-      
+
       // Note: In a real implementation, you might want to update a sales_per_dept.json file
       // if that module is also converted to use JSON files
     } catch (error) {

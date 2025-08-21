@@ -76,6 +76,28 @@ class ExternalDbService {
       await this.disconnect();
     }
   }
+
+  /**
+   * Fetch department data from external database
+   * @returns {Promise<Array>} Array of department data
+   */
+  async fetchDeptData() {
+    try {
+      const conn = await this.connect();
+
+      const query = `SELECT * FROM db_edp.m_dept;`;
+      const [rows] = await conn.execute(query);
+
+      // logger.info(`Fetched ${rows.length} department records from external database`);
+
+      return rows;
+    } catch (error) {
+      logger.error(`Failed to fetch department data: ${error.message}`);
+      throw error;
+    } finally {
+      await this.disconnect();
+    }
+  }
 }
 
 module.exports = ExternalDbService;

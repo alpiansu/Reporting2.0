@@ -13,6 +13,8 @@ const { sequelize } = require("../../config/database");
 const { Op } = require("sequelize");
 const config = require("../../config/rekon_wt_harian.config");
 const rekonProgressService = require("./rekon_progress.service");
+const dbEdpUtils = require("../../utils/db_edp.utils");
+const wrcUtils = require("../../utils/wrc.utils");
 
 class RekonWtHarianService {
   /**
@@ -371,38 +373,17 @@ class RekonWtHarianService {
    * @returns {Array} Array of dates in YYYY-MM-DD format
    */
   getAllDatesInMonth(year, month, untilYesterday = false) {
-    const dates = [];
-    const daysInMonth = new Date(year, month, 0).getDate();
-
-    let lastDay = daysInMonth;
-    if (untilYesterday) {
-      const today = new Date();
-      const currentYear = today.getFullYear();
-      const currentMonth = today.getMonth() + 1;
-
-      if (parseInt(year) === currentYear && parseInt(month) === currentMonth) {
-        lastDay = today.getDate() - 1;
-        if (lastDay <= 0) {
-          return [];
-        }
-      }
-    }
-
-    for (let i = 1; i <= lastDay; i++) {
-      const day = i.toString().padStart(2, "0");
-      dates.push(`${year}-${month}-${day}`);
-    }
-
-    return dates;
+    return wrcUtils.getAllDatesInMonth(year, month, untilYesterday);
   }
 
   /**
    * Get query for WRC data
    * @param {string} tableName - WT table name
+   * @param {string} tableType - Table type (wt, dt, pr)
    * @returns {string} SQL query
    */
-  getWrcQuery(tableName) {
-    return config.queries.wrc.replace("{date}", tableName.substring(3));
+  getWrcQuery(tableName, tableType = 'wt') {
+    return wrcUtils.getWrcQuery(tableName, tableType);
   }
 
   /**
@@ -411,89 +392,18 @@ class RekonWtHarianService {
    * @returns {string} SQL query
    */
   getStoreQuery(period) {
-    const year = "20" + period.substring(0, 2);
-    const month = period.substring(2, 4);
-    const periodStr = `${year}-${month}`;
-
-    return config.queries.store.replace("{period}", periodStr);
+    return wrcUtils.getStoreQuery(period);
   }
 
   /**
    * Get data from WRC for a specific period
    * @param {string} cab - Branch code
    * @param {string} period - Period in YYMM format
+   * @param {string} tableType - Table type (wt, dt, pr)
    * @returns {Promise<Array>} Array of WRC data
    */
-  async getWrcData(cab, period) {
-    const wrcInstance = new wrcService();
-    const wrcConfig = await wrcInstance.getConnWRC(cab);
-    const connection = await mysql.createConnection(wrcConfig);
-
-    try {
-      logger.info(`Getting WRC data for cab: ${cab}, period: ${period} ...`);
-      const year = "20" + period.substring(0, 2);
-      const month = period.substring(2, 4);
-
-      // Get all dates in the month
-      const currentDate = new Date();
-      const currentYear = currentDate.getFullYear();
-      const currentMonth = currentDate.getMonth() + 1;
-      const isCurrentMonth = parseInt(year) === currentYear && parseInt(month) === currentMonth;
-
-      const dates = this.getAllDatesInMonth(year, month, isCurrentMonth);
-
-      if (dates.length === 0) {
-        return [];
-      }
-
-      // Create temporary file to store WRC data
-      const tempDir = path.join(os.tmpdir());
-      const tempFile = path.join(
-        tempDir,
-        `wrc_data_${cab}_${period}_${Date.now()}.json`
-      );
-
-      // Ensure temp directory exists
-      try {
-        await fs.mkdir(tempDir, { recursive: true });
-      } catch (error) {
-        if (error.code !== "EEXIST") {
-          throw error;
-        }
-      }
-
-      // Initialize empty array for all WRC data
-      const allWrcData = [];
-
-      // Query each WT table for each date
-      for (const date of dates) {
-        const dateParts = date.split("-");
-        const tableDate = dateParts[0].substring(2) + dateParts[1] + dateParts[2];
-        const tableName = `wt_${tableDate}`;
-
-        try {
-          const query = this.getWrcQuery(tableName);
-          const [rows] = await connection.execute(query);
-
-          if (rows && rows.length > 0) {
-            allWrcData.push(...rows);
-          }
-        } catch (error) {
-          logger.error(`Error querying ${tableName}: ${error.message}`);
-          // Continue with next date even if there's an error
-        }
-      }
-
-      // Save data to temporary file
-      await fs.writeFile(tempFile, JSON.stringify(allWrcData));
-
-      return tempFile;
-    } catch (error) {
-      logger.error(`Error getting WRC data: ${error.message}`);
-      throw error;
-    } finally {
-      await connection.end();
-    }
+  async getWrcData(cab, period, tableType = 'wt') {
+    return wrcUtils.getWrcData(cab, period, tableType);
   }
 
   /**
@@ -964,34 +874,7 @@ class RekonWtHarianService {
    * @returns {Promise<Object>} Store information
    */
   async getStoreIp(storeCode, cab) {
-    try {
-      // Import storeService directly from the singleton instance
-      const storeService = require("../../modules/store/storeService");
-
-      // Ensure storeService is initialized
-      await storeService.ensureInitialized();
-
-      // Get all stores and filter by store code, branch code, and notes = 'INDUK'
-      const allStores = storeService.stores;
-      const store = allStores.find(
-        s => s.storeCode === storeCode && s.notes === "INDUK" && (s.branch === cab || s.cab === cab) // Check both branch and cab fields for compatibility
-      );
-
-      if (!store) {
-        logger.warn(`Store not found or not an INDUK store for branch ${cab}: ${storeCode}`);
-        return null;
-      }
-
-      logger.info(`Found INDUK store for branch ${cab}: ${storeCode} (${store.storeName}) at ${store.dbHost}`);
-
-      return {
-        dbHost: store.dbHost,
-        storeName: store.storeName,
-      };
-    } catch (error) {
-      logger.error(`Error getting store IP for branch ${cab}: ${error.message}`);
-      throw error;
-    }
+    return dbEdpUtils.getStoreIp(storeCode, cab);
   }
 
   /**

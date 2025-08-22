@@ -13,7 +13,8 @@ const { sequelize } = require("../../config/database");
 const { Op } = require("sequelize");
 const config = require("../../config/rekon_wt_harian.config");
 const rekonProgressService = require("./rekon_progress.service");
-const dbEdpUtils = require("../../utils/db_edp.utils");
+// Import storeService directly from the singleton instance
+const storeService = require("../../modules/store/storeService");
 const wrcUtils = require("../../utils/wrc.utils");
 
 class RekonWtHarianService {
@@ -24,9 +25,6 @@ class RekonWtHarianService {
    */
   async reconcileAllBranches(period) {
     try {
-      // Import storeService directly from the singleton instance
-      const storeService = require("../../modules/store/storeService");
-
       // Ensure storeService is initialized
       await storeService.ensureInitialized();
 
@@ -219,8 +217,6 @@ class RekonWtHarianService {
       // Run in background (non-blocking)
       setTimeout(async () => {
         try {
-          // Get stores for this branch to track progress
-          const storeService = require("../../modules/store/storeService");
           await storeService.ensureInitialized();
           const branchStores = await storeService.getStoresByBranch(cab, true);
           const totalStores = branchStores.length;
@@ -425,9 +421,6 @@ class RekonWtHarianService {
       // Read WRC data from file
       const wrcDataRaw = await fs.readFile(wrcDataFile, "utf8");
       const wrcData = JSON.parse(wrcDataRaw);
-
-      // Import storeService directly from the singleton instance
-      const storeService = require("../../modules/store/storeService");
 
       // Ensure storeService is initialized
       await storeService.ensureInitialized();
@@ -873,9 +866,6 @@ class RekonWtHarianService {
    * @param {string} cab - Branch code
    * @returns {Promise<Object>} Store information
    */
-  async getStoreIp(storeCode, cab) {
-    return dbEdpUtils.getStoreIp(storeCode, cab);
-  }
 
   /**
    * Compare WRC and store data

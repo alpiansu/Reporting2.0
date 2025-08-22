@@ -39,7 +39,25 @@ class RekonWtHarianService {
       try {
         // Try to read the file
         const data = await fs.readFile(REKON_WT_HARIAN_JSON_PATH, "utf8");
-        this.rekonData = JSON.parse(data);
+        const rawData = JSON.parse(data);
+        
+        // Ensure numeric fields are numbers when loading from JSON
+        this.rekonData = rawData.map(item => ({
+          ...item,
+          gross_wrc: Number(item.gross_wrc) || 0,
+          gross_store: Number(item.gross_store) || 0,
+          gross_idm_wrc: Number(item.gross_idm_wrc) || 0,
+          gross_idm_store: Number(item.gross_idm_store) || 0,
+          ppn_wrc: Number(item.ppn_wrc) || 0,
+          ppn_store: Number(item.ppn_store) || 0,
+          ppn_idm_wrc: Number(item.ppn_idm_wrc) || 0,
+          ppn_idm_store: Number(item.ppn_idm_store) || 0,
+          selisih_gross: Number(item.selisih_gross) || 0,
+          selisih_ppn: Number(item.selisih_ppn) || 0,
+          selisih_gross_idm: Number(item.selisih_gross_idm) || 0,
+          selisih_ppn_idm: Number(item.selisih_ppn_idm) || 0
+        }));
+        
         logger.info(`Loaded ${this.rekonData.length} rekon_wt_harian records from JSON file`);
       } catch (error) {
         // If file doesn't exist or is invalid, create an empty file
@@ -89,8 +107,27 @@ class RekonWtHarianService {
       // Get all data from database
       const dbData = await RekonWtHarian.findAll();
 
-      // Convert to plain objects
-      this.rekonData = dbData.map(item => item.get({ plain: true }));
+      // Convert to plain objects and ensure numeric fields are numbers
+      this.rekonData = dbData.map(item => {
+        const plainItem = item.get({ plain: true });
+        
+        // Convert numeric fields to numbers to prevent string conversion
+        return {
+          ...plainItem,
+          gross_wrc: Number(plainItem.gross_wrc) || 0,
+          gross_store: Number(plainItem.gross_store) || 0,
+          gross_idm_wrc: Number(plainItem.gross_idm_wrc) || 0,
+          gross_idm_store: Number(plainItem.gross_idm_store) || 0,
+          ppn_wrc: Number(plainItem.ppn_wrc) || 0,
+          ppn_store: Number(plainItem.ppn_store) || 0,
+          ppn_idm_wrc: Number(plainItem.ppn_idm_wrc) || 0,
+          ppn_idm_store: Number(plainItem.ppn_idm_store) || 0,
+          selisih_gross: Number(plainItem.selisih_gross) || 0,
+          selisih_ppn: Number(plainItem.selisih_ppn) || 0,
+          selisih_gross_idm: Number(plainItem.selisih_gross_idm) || 0,
+          selisih_ppn_idm: Number(plainItem.selisih_ppn_idm) || 0
+        };
+      });
 
       // Save to file
       await this.saveToFile();

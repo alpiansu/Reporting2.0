@@ -1211,10 +1211,15 @@ class RekonWtHarianService {
       let totalErrors = 0;
 
       // Hapus data existing untuk cab + periode
-      await RekonWtHarian.destroy({
+      const deletedCount = await RekonWtHarian.destroy({
         where: { cab, periode: period },
       });
-      logger.info(`Deleted existing records for ${cab} ${period}`);
+
+      if (deletedCount > 0) {
+        logger.info(`🗑️ Deleted ${deletedCount} existing record(s) for cab=${cab}, periode=${period}`);
+      } else {
+        logger.warn(`⚠️ No existing records found to delete for cab=${cab}, periode=${period}`);
+      }
 
       // Proses setiap file perbedaan
       for (const file of differenceFiles) {

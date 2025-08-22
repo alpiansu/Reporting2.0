@@ -35,19 +35,21 @@ class RekonWtHarianController {
       // Check if there is already an active reconciliation process
       const cabParam = cab === "SEMUA" || !cab ? "All" : cab;
       const activeProcess = rekonProgressService.getActiveProcess(cabParam, periode);
-      
+
       if (activeProcess) {
         return res.status(409).json({
           success: false,
-          message: `Proses rekonsiliasi untuk ${activeProcess.cab === 'All' ? 'semua cabang' : `cabang ${activeProcess.cab}`} periode ${periode} sedang berjalan. Silakan tunggu hingga proses selesai.`,
+          message: `Proses rekonsiliasi untuk ${
+            activeProcess.cab === "All" ? "semua cabang" : `cabang ${activeProcess.cab}`
+          } periode ${periode} sedang berjalan. Silakan tunggu hingga proses selesai.`,
           activeProcess: {
             id: activeProcess.id,
             cab: activeProcess.cab,
             periode: activeProcess.periode,
             status: activeProcess.status,
             percentage: activeProcess.percentage,
-            startTime: activeProcess.startTime
-          }
+            startTime: activeProcess.startTime,
+          },
         });
       }
 
@@ -58,7 +60,7 @@ class RekonWtHarianController {
         await storeService.ensureInitialized();
         const allStores = storeService.stores;
         const branches = [...new Set(allStores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))];
-        
+
         // Count total stores across all branches instead of just branch count
         const totalStores = allStores.filter(s => s.notes === "INDUK").length;
         const progressId = rekonProgressService.initProgress("All", periode, totalStores);
@@ -72,7 +74,7 @@ class RekonWtHarianController {
           message: "Proses rekonsiliasi dimulai",
           progressId,
           totalBranches: branches.length,
-          totalStores: totalStores
+          totalStores: totalStores,
         });
       }
 
@@ -90,7 +92,7 @@ class RekonWtHarianController {
         success: true,
         message: "Proses rekonsiliasi dimulai",
         progressId,
-        totalStores: branchStores.length
+        totalStores: branchStores.length,
       });
     } catch (error) {
       logger.error(`Error in startReconciliation: ${error.message}`);
@@ -118,16 +120,16 @@ class RekonWtHarianController {
 
       // Handle 'SEMUA CABANG' option
       if (cab === "All") {
-        const results = await rekonWtHarianService.getAllCabangResults(periode, {
-        page: parseInt(page) || 1,
-        limit: parseInt(limit) || config.pagination.defaultLimit,
-        tipe,
-        toko,
-        tgl1,
-        searchQuery,
-        sortColumn,
-        sortOrder,
-      });
+        const results = await rekonWtHarianService.getResults(cab, periode, {
+          page: parseInt(page) || 1,
+          limit: parseInt(limit) || config.pagination.defaultLimit,
+          tipe,
+          toko,
+          tgl1,
+          searchQuery,
+          sortColumn,
+          sortOrder,
+        });
         return res.status(200).json(results);
       }
 

@@ -4,16 +4,12 @@
 const fs = require("fs").promises;
 const path = require("path");
 const os = require("os");
-const mysql = require("mysql2/promise");
 const logger = require("../../config/logger");
-const wrcService = require("../../services/wrc.service");
 const dbStore = require("../../config/db_store");
 const RekonWtHarian = require("../../models/rekon_wt_harian.model");
-const { sequelize } = require("../../config/database");
 const { Op } = require("sequelize");
 const config = require("../../config/rekon_wt_harian.config");
 const rekonProgressService = require("./rekon_progress.service");
-// Import storeService directly from the singleton instance
 const storeService = require("../../modules/store/storeService");
 const wrcUtils = require("../../utils/wrc.utils");
 
@@ -40,7 +36,7 @@ class RekonWtHarianService {
         // Try to read the file
         const data = await fs.readFile(REKON_WT_HARIAN_JSON_PATH, "utf8");
         const rawData = JSON.parse(data);
-        
+
         // Ensure numeric fields are numbers when loading from JSON
         this.rekonData = rawData.map(item => ({
           ...item,
@@ -55,9 +51,9 @@ class RekonWtHarianService {
           selisih_gross: Number(item.selisih_gross) || 0,
           selisih_ppn: Number(item.selisih_ppn) || 0,
           selisih_gross_idm: Number(item.selisih_gross_idm) || 0,
-          selisih_ppn_idm: Number(item.selisih_ppn_idm) || 0
+          selisih_ppn_idm: Number(item.selisih_ppn_idm) || 0,
         }));
-        
+
         logger.info(`Loaded ${this.rekonData.length} rekon_wt_harian records from JSON file`);
       } catch (error) {
         // If file doesn't exist or is invalid, create an empty file
@@ -110,7 +106,7 @@ class RekonWtHarianService {
       // Convert to plain objects and ensure numeric fields are numbers
       this.rekonData = dbData.map(item => {
         const plainItem = item.get({ plain: true });
-        
+
         // Convert numeric fields to numbers to prevent string conversion
         return {
           ...plainItem,
@@ -125,7 +121,7 @@ class RekonWtHarianService {
           selisih_gross: Number(plainItem.selisih_gross) || 0,
           selisih_ppn: Number(plainItem.selisih_ppn) || 0,
           selisih_gross_idm: Number(plainItem.selisih_gross_idm) || 0,
-          selisih_ppn_idm: Number(plainItem.selisih_ppn_idm) || 0
+          selisih_ppn_idm: Number(plainItem.selisih_ppn_idm) || 0,
         };
       });
 
@@ -691,7 +687,7 @@ class RekonWtHarianService {
 
         // Add brief delay between waves to let resources recover
         if (currentStores.length > 0) {
-          logger.info(`⏳ Waiting 2 seconds before next wave...`);
+          logger.info(`⏳ Waiting 2 seconds before next wave... (${currentStores.length} stores will be retried)`);
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
@@ -900,7 +896,7 @@ class RekonWtHarianService {
       }
 
       // Connect to store database with reduced retry for faster parallel processing
-      const storeConnection = await dbStore.createDbStore(storeInfo.dbHost, 1); // Only 1 retry attempt
+      const storeConnection = await dbStore.createDbStore(storeInfo.dbHost, 2);
 
       if (!storeConnection) {
         const errorMsg = `Could not connect to ${storeInfo.dbHost}`;
@@ -982,13 +978,6 @@ class RekonWtHarianService {
       };
     }
   }
-
-  /**
-   * Get store IP address
-   * @param {string} storeCode - Store code
-   * @param {string} cab - Branch code
-   * @returns {Promise<Object>} Store information
-   */
 
   /**
    * Compare WRC and store data
@@ -1302,94 +1291,6 @@ class RekonWtHarianService {
         message: `Error saving differences to database: ${error.message}`,
         error: error.message,
       };
-    }
-  }
-
-  /**
-   * Get reconciliation results for all branches
-   * @param {string} period - Period in YYMM format
-   * @param {Object} options - Query options
-   * @returns {Promise<Object>} Reconciliation results for all branches
-   */
-  async getAllCabangResults(period, options = {}) {
-    try {
-      const {
-        page = 1,
-        limit = config.pagination.defaultLimit,
-        tipe,
-        toko,
-        tgl1,
-        searchQuery,
-        sortColumn,
-        sortOrder,
-      } = options;
-
-      // Ensure limit doesn't exceed maximum
-      const validLimit = Math.min(limit, config.pagination.maxLimit);
-      const offset = (page - 1) * validLimit;
-
-      // Build the query
-      const query = {
-        periode: period,
-      };
-
-      // Add filters if provided
-      if (tipe) query.tipe = tipe;
-      if (toko) query.toko = { [Op.like]: `%${toko}%` };
-      if (tgl1) query.tgl1 = tgl1;
-
-      // Add search query if provided (search across multiple columns)
-      if (searchQuery) {
-        query[Op.or] = [
-          { shop: { [Op.like]: `%${searchQuery}%` } },
-          { toko: { [Op.like]: `%${searchQuery}%` } },
-          { tipe: { [Op.like]: `%${searchQuery}%` } },
-          { cab: { [Op.like]: `%${searchQuery}%` } },
-          { tgl1: { [Op.like]: `%${searchQuery}%` } },
-          { gross_wrc: { [Op.like]: `%${searchQuery}%` } },
-          { gross_store: { [Op.like]: `%${searchQuery}%` } },
-          { gross_idm_wrc: { [Op.like]: `%${searchQuery}%` } },
-          { gross_idm_store: { [Op.like]: `%${searchQuery}%` } },
-          { ppn_wrc: { [Op.like]: `%${searchQuery}%` } },
-          { ppn_store: { [Op.like]: `%${searchQuery}%` } },
-          { ppn_idm_wrc: { [Op.like]: `%${searchQuery}%` } },
-          { ppn_idm_store: { [Op.like]: `%${searchQuery}%` } },
-        ];
-      }
-
-      // Define default order or use provided sort parameters
-      let orderConfig = [
-        ["tgl1", "ASC"],
-        ["toko", "ASC"],
-        ["tipe", "ASC"],
-      ];
-
-      // If sortColumn and sortOrder are provided, use them as primary sort
-      if (sortColumn && sortOrder) {
-        // Validate sortOrder value
-        const validSortOrder = ["ASC", "DESC"].includes(sortOrder.toUpperCase()) ? sortOrder.toUpperCase() : "ASC";
-        orderConfig = [[sortColumn, validSortOrder], ...orderConfig];
-      }
-
-      // Get total count and results
-      const { count, rows } = await RekonWtHarian.findAndCountAll({
-        where: query,
-        limit: validLimit,
-        offset,
-        order: orderConfig,
-      });
-
-      // Return in the same format as getResults method
-      return {
-        total: count,
-        page,
-        limit: validLimit,
-        totalPages: Math.ceil(count / validLimit),
-        data: rows,
-      };
-    } catch (error) {
-      logger.error(`Error in getAllCabangResults: ${error.message}`);
-      throw error;
     }
   }
 

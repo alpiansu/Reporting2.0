@@ -3,15 +3,16 @@ import api from './api';
 class StoreService {
   /**
    * Get all stores with pagination
-   * @param {Object} options - Query options (page, limit, search, region, status)
+   * @param {Object} options - Query options (page, limit, search, region, city, status)
    * @returns {Promise} Promise with paginated stores data
    */
   getAllStores(options = {}) {
-    const { page = 1, limit = 10, search = '', region = '', status = '' } = options;
+    const { page = 1, limit = 10, search = '', region = '', city = '', status = '' } = options;
     let url = `/stores?page=${page}&limit=${limit}`;
     
     if (search) url += `&search=${encodeURIComponent(search)}`;
     if (region) url += `&region=${encodeURIComponent(region)}`;
+    if (city) url += `&city=${encodeURIComponent(city)}`;
     if (status) url += `&status=${encodeURIComponent(status)}`;
     
     return api.get(url);

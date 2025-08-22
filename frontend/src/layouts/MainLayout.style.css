@@ -110,6 +110,13 @@
   z-index: 100;
 }
 
+/* Position notifications dropdown to align with bell icon */
+.notifications-dropdown {
+  right: auto;
+  transform: translateX(-50%);
+  margin-left: 20px; /* Adjust this value to fine-tune alignment */
+}
+
 /* Sidebar styles moved to AppSidebar.style.css */
 
 /* Nav items styles moved to AppSidebar.style.css */

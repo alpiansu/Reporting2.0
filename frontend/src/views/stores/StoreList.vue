@@ -47,6 +47,21 @@
           </div>
           
           <div class="filter-group">
+            <h3 class="filter-title">City</h3>
+            <div class="filter-options">
+              <label v-for="city in cities" :key="city.id" class="filter-option">
+                <input 
+                  type="checkbox" 
+                  :value="city.id" 
+                  v-model="selectedCities"
+                  @change="applyFilters"
+                />
+                <span>{{ city.name }}</span>
+              </label>
+            </div>
+          </div>
+          
+          <div class="filter-group">
             <h3 class="filter-title">Status</h3>
             <div class="filter-options">
               <label v-for="status in statuses" :key="status.id" class="filter-option">
@@ -217,6 +232,7 @@ const toast = useToastService();
 const searchQuery = ref('');
 const showFilterMenu = ref(false);
 const selectedRegions = ref([]);
+const selectedCities = ref([]);
 const selectedStatuses = ref([]);
 const showAddStoreDialog = ref(false);
 const addStoreLoading = ref(false);
@@ -242,6 +258,15 @@ const regions = ref([
   { id: 'Central', name: 'Central' }
 ]);
 
+// Mock data for cities until we have a proper city service
+const cities = ref([
+  { id: 'Jakarta', name: 'Jakarta' },
+  { id: 'Surabaya', name: 'Surabaya' },
+  { id: 'Bandung', name: 'Bandung' },
+  { id: 'Medan', name: 'Medan' },
+  { id: 'Makassar', name: 'Makassar' }
+]);
+
 const statuses = ref([
   { id: 'active', name: 'Active' },
   { id: 'inactive', name: 'Inactive' },
@@ -263,7 +288,7 @@ onMounted(async () => {
 });
 
 // Watch for search and filter changes to update the store list
-watch([searchQuery, selectedRegions, selectedStatuses], () => {
+watch([searchQuery, selectedRegions, selectedCities, selectedStatuses], () => {
   // Debounce the search to avoid too many API calls
   if (searchTimeout) clearTimeout(searchTimeout);
   searchTimeout = setTimeout(() => {
@@ -308,6 +333,11 @@ const applyFilters = async () => {
       options.region = selectedRegions.value.join(',');
     }
     
+    // Add city filter if selected
+    if (selectedCities.value.length > 0) {
+      options.city = selectedCities.value.join(',');
+    }
+    
     // Add status filter if selected
     if (selectedStatuses.value.length > 0) {
       options.status = selectedStatuses.value.join(',');
@@ -324,6 +354,7 @@ const applyFilters = async () => {
 
 const clearFilters = () => {
   selectedRegions.value = [];
+  selectedCities.value = [];
   selectedStatuses.value = [];
   searchQuery.value = '';
   applyFilters();

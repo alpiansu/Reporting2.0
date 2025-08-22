@@ -262,15 +262,21 @@ const regions = ref([
   { id: 5, name: 'Central' }
 ]);
 
+// Import store service
+import StoreService from '@/services/store.service';
+const storeService = new StoreService();
+
 // Fetch store details
 onMounted(async () => {
   const storeId = parseInt(route.params.id);
   
   try {
-    // In a real app, this would be an API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    loading.value = true;
+    const response = await storeService.getStoreById(storeId);
+    store.value = response.data;
     
-    // Mock store data
+    // For now, we'll keep the mock screening data
+    // In a real app, this would be another API call to get screenings by store ID
     if (storeId === 1) {
       store.value = {
         id: 1,
@@ -531,17 +537,18 @@ const handleEditStore = async () => {
   editLoading.value = true;
   
   try {
-    // In a real app, this would be an API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Update store data
+    // Prepare store data for update
     const regionObj = regions.value.find(r => r.id === editedStore.value.regionId);
-    
-    store.value = {
+    const storeData = {
       ...editedStore.value,
-      region: regionObj.name,
-      updatedAt: new Date().toISOString()
+      region: regionObj.name
     };
+    
+    // Call the store service to update the store
+    const response = await storeService.updateStore(store.value.id, storeData);
+    
+    // Update local store data with response
+    store.value = response.data;
     
     closeEditDialog();
   } catch (error) {
@@ -563,8 +570,8 @@ const handleDelete = async () => {
   deleteLoading.value = true;
   
   try {
-    // In a real app, this would be an API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Call the store service to delete the store
+    await storeService.deleteStore(store.value.id);
     
     // Redirect to store list after successful deletion
     router.push('/stores');

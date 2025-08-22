@@ -1,5 +1,32 @@
 <template>
   <div class="data-table-container">
+    <!-- Filters - Always visible regardless of data state -->
+    <div v-if="showFilters" class="filters-container">
+      <div class="filters-header">
+        <h3 class="filters-title">
+          <i class="pi pi-filter"></i> Filter Data
+        </h3>
+        <button @click.prevent="$emit('reset-filters')" class="btn btn-secondary btn-sm">
+          <i class="pi pi-filter-slash"></i> Reset
+        </button>
+      </div>
+
+      <div class="filters-body">
+        <slot name="filters"></slot>
+
+        <div class="filter-stats">
+          <div class="filter-stat-item">
+            <span class="filter-stat-label">Total Data:</span>
+            <span class="filter-stat-value">{{ totalItems }}</span>
+          </div>
+          <div class="filter-stat-item" v-if="filteredItems !== totalItems">
+            <span class="filter-stat-label">Terfilter:</span>
+            <span class="filter-stat-value">{{ totalItems - filteredItems }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
     <div v-if="loading" class="loading-state">
       <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
       <p>{{ loadingMessage }}</p>
@@ -21,33 +48,6 @@
     </div>
 
     <div v-else class="table-content">
-      <!-- Filters -->
-      <div v-if="showFilters" class="filters-container">
-        <div class="filters-header">
-          <h3 class="filters-title">
-            <i class="pi pi-filter"></i> Filter Data
-          </h3>
-          <button @click.prevent="$emit('reset-filters')" class="btn btn-secondary btn-sm">
-            <i class="pi pi-filter-slash"></i> Reset
-          </button>
-        </div>
-
-        <div class="filters-body">
-          <slot name="filters"></slot>
-
-          <div class="filter-stats">
-            <div class="filter-stat-item">
-              <span class="filter-stat-label">Total Data:</span>
-              <span class="filter-stat-value">{{ totalItems }}</span>
-            </div>
-            <div class="filter-stat-item" v-if="filteredItems !== totalItems">
-              <span class="filter-stat-label">Terfilter:</span>
-              <span class="filter-stat-value">{{ totalItems - filteredItems }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- Table -->
       <div class="table-container">
         <div class="table-header">
@@ -126,13 +126,13 @@
           </select>
         </div>
       </div>
-
-      <!-- Actions -->
-      <div v-if="showRefreshButton" class="actions-section">
-        <button @click="handleRefreshClick" class="btn btn-secondary">
-          <i class="pi pi-refresh"></i> Refresh Data
-        </button>
-      </div>
+    </div>
+    
+    <!-- Actions - Always visible -->
+    <div v-if="showRefreshButton" class="actions-section">
+      <button @click="handleRefreshClick" class="btn btn-secondary">
+        <i class="pi pi-refresh"></i> Refresh Data
+      </button>
     </div>
   </div>
 </template>
@@ -484,8 +484,6 @@ watch(() => props.filteredData, (newData) => {
     emit('page-change', { page: currentPage.value, itemsPerPage: itemsPerPage.value });
   }
 }, { deep: true });
-
-// Tidak diperlukan lagi karena menggunakan tabel tunggal
 </script>
 
 <style scoped>
@@ -797,101 +795,47 @@ watch(() => props.filteredData, (newData) => {
   padding-right: 2rem;
 }
 
-.items-select:hover {
-  border-color: #bbb;
-  background-color: #fff;
-}
-
 .items-select:focus {
   outline: none;
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(var(--primary-color-rgb), 0.1);
-  background-color: #fff;
+  box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.25);
 }
 
-/* Actions */
+/* Actions section */
 .actions-section {
   display: flex;
-  justify-content: flex-end;
-  gap: 1rem;
-  margin-top: 1rem;
-  padding: 0 1rem 1rem;
-}
-
-/* Buttons */
-.btn {
-  display: inline-flex;
-  align-items: center;
   justify-content: center;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s, transform 0.1s;
-  border: none;
-  gap: 0.5rem;
-  font-size: 0.875rem;
+  padding: 1rem;
+  border-top: 1px solid #e9ecef;
 }
 
-.btn:active {
-  transform: translateY(1px);
-}
-
-.btn-icon {
-  padding: 0.25rem 0.5rem;
-}
-
-.btn-sm {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
-}
-
-.btn-primary {
-  background-color: var(--primary-color);
-  color: white;
-}
-
-.btn-primary:hover {
-  background-color: var(--primary-color-darken);
-}
-
-.btn-secondary {
-  background-color: #eceff1;
-  color: #455a64;
-}
-
-.btn-secondary:hover {
-  background-color: #cfd8dc;
-}
-
-.btn:disabled {
-  background-color: #b0bec5;
-  cursor: not-allowed;
-}
-
+/* Responsive adjustments */
 @media (max-width: 768px) {
-  .filters-body {
-    flex-direction: column;
-  }
-  
   .pagination-container {
-    row-gap: 1rem;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
   }
   
-  .pagination-info {
+  .pagination-info,
+  .pagination-controls,
+  .items-per-page {
+    flex: 1 1 100%;
+    width: 100%;
+    justify-content: center;
     text-align: center;
   }
   
+  .pagination-info {
+    order: 1;
+  }
+  
   .pagination-controls {
-    order: 3;
-    width: 100%;
-    justify-content: center;
+    order: 2;
   }
   
   .items-per-page {
-    order: 2;
-    width: 100%;
-    justify-content: center;
+    order: 3;
   }
   
   .btn-page {

@@ -1323,52 +1323,58 @@ class RekonWtHarianService {
 
       // Filter data from JSON file
       let filteredData = this.rekonData.filter(item => {
-        // Match basic criteria
-        if (item.periode !== period) {
-          return false;
-        }
-        
-        // If cab is not "All", filter by cab
-        if (cab !== "All" && item.cab !== cab) {
-          return false;
+        // Wajib: periode harus cocok
+        if (String(item.periode) !== String(period)) return false;
+
+        // Cab fleksibel: jika "All"/null/undefined/"" -> jangan filter cab
+        const isAllCab = !cab || String(cab).trim().toLowerCase() === "all";
+        if (!isAllCab) {
+          const itemCab = (item.cab ?? "").toString().trim().toUpperCase();
+          const cabNorm = String(cab).trim().toUpperCase();
+          if (itemCab !== cabNorm) return false;
         }
 
-        // Match additional filters if provided
-        if (tipe && item.tipe !== tipe) {
-          return false;
-        }
+        // Filter tambahan (opsional)
+        if (tipe && item.tipe !== tipe) return false;
 
-        if (toko && item.toko !== toko) {
+        // Catatan: ini exact match. Jika mau partial, ganti jadi includes (case-insensitive)
+        if (
+          toko &&
+          !String(item.toko ?? "")
+            .toLowerCase()
+            .includes(String(toko).toLowerCase())
+        )
           return false;
-        }
 
         if (tgl1) {
-          // Handle date comparison (tgl1 might be in different formats)
+          // Samakan ke tanggal (YYYY-MM-DD)
           const itemDate = new Date(item.tgl1).toISOString().split("T")[0];
           const filterDate = new Date(tgl1).toISOString().split("T")[0];
-          if (itemDate !== filterDate) {
-            return false;
-          }
+          if (itemDate !== filterDate) return false;
         }
 
-        // Search across multiple fields if searchQuery is provided
-        if (searchQuery) {
-          const query = searchQuery.toLowerCase();
-          return (
-            (item.shop && item.shop.toLowerCase().includes(query)) ||
-            (item.toko && item.toko.toLowerCase().includes(query)) ||
-            (item.tipe && item.tipe.toLowerCase().includes(query)) ||
-            (item.tgl1 && item.tgl1.toString().includes(query)) ||
-            (item.cab && item.cab.toLowerCase().includes(query)) ||
-            (item.gross_wrc && item.gross_wrc.toString().includes(query)) ||
-            (item.gross_store && item.gross_store.toString().includes(query)) ||
-            (item.gross_idm_wrc && item.gross_idm_wrc.toString().includes(query)) ||
-            (item.gross_idm_store && item.gross_idm_store.toString().includes(query)) ||
-            (item.ppn_wrc && item.ppn_wrc.toString().includes(query)) ||
-            (item.ppn_store && item.ppn_store.toString().includes(query)) ||
-            (item.ppn_idm_wrc && item.ppn_idm_wrc.toString().includes(query)) ||
-            (item.ppn_idm_store && item.ppn_idm_store.toString().includes(query))
-          );
+        // Pencarian global (opsional)
+        const q = (searchQuery ?? "").toString().trim().toLowerCase();
+        if (q) {
+          const haystack = [
+            item.shop,
+            item.toko,
+            item.tipe,
+            item.tgl1,
+            item.cab,
+            item.gross_wrc,
+            item.gross_store,
+            item.gross_idm_wrc,
+            item.gross_idm_store,
+            item.ppn_wrc,
+            item.ppn_store,
+            item.ppn_idm_wrc,
+            item.ppn_idm_store,
+          ]
+            .map(v => (v === null || v === undefined ? "" : String(v).toLowerCase()))
+            .join(" ");
+
+          if (!haystack.includes(q)) return false;
         }
 
         return true;

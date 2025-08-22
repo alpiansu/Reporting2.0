@@ -164,14 +164,14 @@ class UserService {
   }
 
   /**
-   * Find user by username or email
-   * @param {string} login - Username or email
+   * Find user by username
+   * @param {string} login - Username
    * @returns {Promise<Object>} Complete user data including password
    */
   async findByCredentials(login) {
     try {
       await this.ensureInitialized();
-      return this.userList.find(user => user.username === login && user.isActive) || null;
+      return this.userList.find(user => user.username == login && user.isActive) || null;
     } catch (error) {
       logger.error(`Error in findByCredentials: ${error.message}`);
       throw error;
@@ -187,13 +187,11 @@ class UserService {
     try {
       await this.ensureInitialized();
 
-      // Check if username or email already exists
-      const existingUser = this.userList.find(
-        user => user.username === userData.username || user.email === userData.email
-      );
+      // Check if username already exists
+      const existingUser = this.userList.find(user => user.username === userData.username);
 
       if (existingUser) {
-        throw new Error("Username or email already exists");
+        throw new Error("Username already exists");
       }
 
       // Generate new ID

@@ -246,17 +246,14 @@ class UserService {
         return null;
       }
 
-      // Check if username or email is being changed and already exists
-      if (userData.username || userData.email) {
+      // Check if username is being changed and already exists
+      if (userData.username) {
         const existingUser = this.userList.find(
-          user =>
-            user.id !== id &&
-            ((userData.username && user.username === userData.username) ||
-              (userData.email && user.email === userData.email))
+          user => user.id !== id && userData.username && user.username === userData.username
         );
 
         if (existingUser) {
-          throw new Error("Username or email already exists");
+          throw new Error("Username already exists");
         }
       }
 
@@ -264,7 +261,6 @@ class UserService {
       const updatedUser = { ...this.userList[index] };
 
       // Update allowed fields
-      if (userData.username) updatedUser.username = userData.username;
       if (userData.email) updatedUser.email = userData.email;
       if (userData.fullName !== undefined) updatedUser.fullName = userData.fullName;
       if (userData.role) updatedUser.role = userData.role;

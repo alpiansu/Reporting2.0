@@ -53,8 +53,8 @@ class UserService {
               lastLogin: null,
               profileImage: null,
               createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-            }
+              updatedAt: new Date().toISOString(),
+            },
           ];
           await this.saveToFile();
           logger.info("Created new m_users.json file with default admin user");
@@ -139,7 +139,7 @@ class UserService {
       await this.ensureInitialized();
       const user = this.userList.find(user => user.id === id);
       if (!user) return null;
-      
+
       const { password, ...userWithoutPassword } = user;
       return userWithoutPassword;
     } catch (error) {
@@ -171,9 +171,7 @@ class UserService {
   async findByCredentials(login) {
     try {
       await this.ensureInitialized();
-      return this.userList.find(
-        user => (user.username === login || user.email === login) && user.isActive
-      ) || null;
+      return this.userList.find(user => user.username === login && user.isActive) || null;
     } catch (error) {
       logger.error(`Error in findByCredentials: ${error.message}`);
       throw error;
@@ -199,9 +197,7 @@ class UserService {
       }
 
       // Generate new ID
-      const newId = this.userList.length > 0 
-        ? Math.max(...this.userList.map(user => user.id)) + 1 
-        : 1;
+      const newId = this.userList.length > 0 ? Math.max(...this.userList.map(user => user.id)) + 1 : 1;
 
       // Hash password
       const hashedPassword = await this.hashPassword(userData.password);
@@ -218,7 +214,7 @@ class UserService {
         lastLogin: null,
         profileImage: userData.profileImage || null,
         createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
       };
 
       // Add to user list
@@ -255,10 +251,10 @@ class UserService {
       // Check if username or email is being changed and already exists
       if (userData.username || userData.email) {
         const existingUser = this.userList.find(
-          user => user.id !== id && (
-            (userData.username && user.username === userData.username) ||
-            (userData.email && user.email === userData.email)
-          )
+          user =>
+            user.id !== id &&
+            ((userData.username && user.username === userData.username) ||
+              (userData.email && user.email === userData.email))
         );
 
         if (existingUser) {
@@ -268,7 +264,7 @@ class UserService {
 
       // Prepare updated user data
       const updatedUser = { ...this.userList[index] };
-      
+
       // Update allowed fields
       if (userData.username) updatedUser.username = userData.username;
       if (userData.email) updatedUser.email = userData.email;
@@ -276,12 +272,12 @@ class UserService {
       if (userData.role) updatedUser.role = userData.role;
       if (userData.isActive !== undefined) updatedUser.isActive = userData.isActive;
       if (userData.profileImage !== undefined) updatedUser.profileImage = userData.profileImage;
-      
+
       // Update password if provided
       if (userData.password) {
         updatedUser.password = await this.hashPassword(userData.password);
       }
-      
+
       // Update timestamp
       updatedUser.updatedAt = new Date().toISOString();
 
@@ -378,10 +374,12 @@ class UserService {
       await this.initialize();
 
       // Convert id to number if it's a string
-      const userId = typeof id === 'string' ? parseInt(id, 10) : id;
-      
+      const userId = typeof id === "string" ? parseInt(id, 10) : id;
+
       // Debug: Log all user IDs to see what's available
-      logger.info(`Current users after reload: ${JSON.stringify(this.userList.map(u => ({ id: u.id, username: u.username })))}`); 
+      logger.info(
+        `Current users after reload: ${JSON.stringify(this.userList.map(u => ({ id: u.id, username: u.username })))}`
+      );
       logger.info(`Attempting to delete user with ID: ${userId} (type: ${typeof userId})`);
 
       // Find user index
@@ -412,13 +410,13 @@ class UserService {
   async cleanupTestData() {
     try {
       await this.ensureInitialized();
-      
+
       // Hitung jumlah pengguna sebelum pembersihan
       const beforeCount = this.userList.length;
-      
+
       // Filter hanya pengguna admin (username: "admin")
       const adminUsers = this.userList.filter(user => user.username === "admin");
-      
+
       // Jika tidak ada admin, pertahankan data yang ada
       if (adminUsers.length === 0) {
         logger.warn("Tidak ada pengguna admin ditemukan, data tidak dibersihkan");
@@ -426,30 +424,36 @@ class UserService {
           success: false,
           message: "Tidak ada pengguna admin ditemukan, data tidak dibersihkan",
           beforeCount,
-          afterCount: beforeCount
+          afterCount: beforeCount,
         };
       }
-      
+
       // Simpan hanya pengguna admin
       this.userList = adminUsers;
-      
+
       // Simpan ke file
       await this.saveToFile();
-      
-      logger.info(`Data pengujian dibersihkan: ${beforeCount - adminUsers.length} pengguna dihapus, ${adminUsers.length} pengguna admin dipertahankan`);
-      
+
+      logger.info(
+        `Data pengujian dibersihkan: ${beforeCount - adminUsers.length} pengguna dihapus, ${
+          adminUsers.length
+        } pengguna admin dipertahankan`
+      );
+
       return {
         success: true,
-        message: `Data pengujian dibersihkan: ${beforeCount - adminUsers.length} pengguna dihapus, ${adminUsers.length} pengguna admin dipertahankan`,
+        message: `Data pengujian dibersihkan: ${beforeCount - adminUsers.length} pengguna dihapus, ${
+          adminUsers.length
+        } pengguna admin dipertahankan`,
         beforeCount,
-        afterCount: adminUsers.length
+        afterCount: adminUsers.length,
       };
     } catch (error) {
       logger.error(`Error dalam cleanupTestData: ${error.message}`);
       return {
         success: false,
         message: `Error dalam cleanupTestData: ${error.message}`,
-        error: error.message
+        error: error.message,
       };
     }
   }

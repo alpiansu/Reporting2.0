@@ -118,21 +118,6 @@ class RekonWtHarianController {
         });
       }
 
-      // Handle 'SEMUA CABANG' option
-      if (cab === "All") {
-        const results = await rekonWtHarianService.getResults(cab, periode, {
-          page: parseInt(page) || 1,
-          limit: parseInt(limit) || config.pagination.defaultLimit,
-          tipe,
-          toko,
-          tgl1,
-          searchQuery,
-          sortColumn,
-          sortOrder,
-        });
-        return res.status(200).json(results);
-      }
-
       const results = await rekonWtHarianService.getResults(cab, periode, {
         page: parseInt(page) || 1,
         limit: parseInt(limit) || config.pagination.defaultLimit,

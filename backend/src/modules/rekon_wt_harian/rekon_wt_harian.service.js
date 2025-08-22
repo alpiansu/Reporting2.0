@@ -1324,7 +1324,12 @@ class RekonWtHarianService {
       // Filter data from JSON file
       let filteredData = this.rekonData.filter(item => {
         // Match basic criteria
-        if (item.cab !== cab || item.periode !== period) {
+        if (item.periode !== period) {
+          return false;
+        }
+        
+        // If cab is not "All", filter by cab
+        if (cab !== "All" && item.cab !== cab) {
           return false;
         }
 

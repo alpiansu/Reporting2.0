@@ -87,11 +87,6 @@ const { sequelize } = require("../config/database");
 const RekonWtHarian = sequelize.define(
   "rekon_wt_harian",
   {
-    id: {
-      type: DataTypes.INTEGER,
-      primaryKey: true,
-      autoIncrement: true,
-    },
     cab: {
       type: DataTypes.STRING(10),
       primaryKey: true,

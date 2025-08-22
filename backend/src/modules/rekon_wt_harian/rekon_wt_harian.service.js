@@ -88,13 +88,13 @@ class RekonWtHarianService {
     try {
       // Get all data from database
       const dbData = await RekonWtHarian.findAll();
-      
+
       // Convert to plain objects
       this.rekonData = dbData.map(item => item.get({ plain: true }));
-      
+
       // Save to file
       await this.saveToFile();
-      
+
       logger.info(`Synchronized ${this.rekonData.length} rekon_wt_harian records to JSON file`);
       return this.rekonData.length;
     } catch (error) {
@@ -119,7 +119,7 @@ class RekonWtHarianService {
       logger.info(`Found ${branches.length} branches to process`);
 
       // Initialize progress tracking
-      const progressId = rekonProgressService.initProgress('All', period, branches.length);
+      const progressId = rekonProgressService.initProgress("All", period, branches.length);
       logger.info(`Initialized progress tracking with ID: ${progressId}`);
 
       const results = {
@@ -145,14 +145,14 @@ class RekonWtHarianService {
         for (const cab of branchCodes) {
           const promise = this.processBranch(cab, period, progressId).then(result => {
             executing.splice(executing.indexOf(promise), 1);
-            
+
             // Update progress after each branch is processed
             processedCount++;
             rekonProgressService.updateProgress(progressId, {
               processedItems: processedCount,
-              details: { lastProcessedBranch: cab }
+              details: { lastProcessedBranch: cab },
             });
-            
+
             return result;
           });
 
@@ -181,12 +181,12 @@ class RekonWtHarianService {
       // Process branch results
       let totalProcessedStores = 0;
       let totalStoresWithDifferences = 0;
-      
+
       for (const result of allBranchResults) {
         if (result.status === "fulfilled" && result.value) {
           const branchResult = result.value;
           results.processedBranches++;
-          
+
           // Count total processed stores across all branches
           totalProcessedStores += branchResult.processedStores || 0;
           totalStoresWithDifferences += branchResult.storesWithDifferences || 0;
@@ -205,7 +205,7 @@ class RekonWtHarianService {
           logger.error(`Branch processing error: ${result.reason}`);
         }
       }
-      
+
       // Store total processed stores in results
       results.totalProcessedStores = totalProcessedStores;
       results.totalStoresWithDifferences = totalStoresWithDifferences;
@@ -219,28 +219,28 @@ class RekonWtHarianService {
         processedItems: results.totalProcessedStores,
         completedItems: results.totalProcessedStores,
         itemsWithDifferences: results.totalStoresWithDifferences,
-        status: 'completed',
+        status: "completed",
         details: {
           branchesWithDifferences: results.branchesWithDifferences,
           totalDifferences: results.totalDifferences,
-          totalProcessedStores: results.totalProcessedStores
+          totalProcessedStores: results.totalProcessedStores,
         },
-        message: `Rekonsiliasi selesai: ${results.totalProcessedStores} toko diproses, ${results.totalStoresWithDifferences} toko memiliki perbedaan`
+        message: `Rekonsiliasi selesai: ${results.totalProcessedStores} toko diproses, ${results.totalStoresWithDifferences} toko memiliki perbedaan`,
       });
 
       logger.info(`Completed processing ${results.processedBranches}/${results.totalBranches} branches`);
       return results;
     } catch (error) {
       logger.error(`Error reconciling all branches: ${error.message}`);
-      
+
       // Mark progress as failed
       if (progressId) {
         rekonProgressService.updateProgress(progressId, {
-          status: 'failed',
-          errors: [error.message]
+          status: "failed",
+          errors: [error.message],
         });
       }
-      
+
       throw error;
     }
   }
@@ -279,13 +279,13 @@ class RekonWtHarianService {
           // Progress status will be updated to 'failed' by reconcileAllBranches
         }
       }, 0);
-      
+
       logger.info(`Started non-blocking reconciliation for all branches with progress ID: ${progressId}`);
     } catch (error) {
       logger.error(`Error starting non-blocking reconciliation: ${error.message}`);
       rekonProgressService.updateProgress(progressId, {
-        status: 'failed',
-        errors: [error.message]
+        status: "failed",
+        errors: [error.message],
       });
     }
   }
@@ -304,7 +304,7 @@ class RekonWtHarianService {
           await storeService.ensureInitialized();
           const branchStores = await storeService.getStoresByBranch(cab, true);
           const totalStores = branchStores.length;
-          
+
           // Inisialisasi progress dengan nilai awal yang benar
           rekonProgressService.updateProgress(progressId, {
             totalItems: totalStores,
@@ -313,24 +313,24 @@ class RekonWtHarianService {
             message: `Memulai proses rekonsiliasi untuk ${totalStores} toko`,
             details: {
               totalStores: totalStores,
-              processedStores: 0
-            }
+              processedStores: 0,
+            },
           });
-          
+
           // Log initialization with explicit percentage
           logger.info(`Starting reconciliation for ${cab} with ${totalStores} stores (0%)`);
-          
+
           // Set up progress tracking variables
           let processedStores = 0;
           let storesWithDifferences = 0;
           let totalDifferences = 0;
-          
+
           // Set up progress update interval - update every 2 seconds
           const PROGRESS_UPDATE_INTERVAL = 2000;
           const progressInterval = setInterval(() => {
             // Calculate percentage directly here
             const percentage = totalStores > 0 ? Math.round((processedStores / totalStores) * 100) : 0;
-            
+
             // Update progress even if no new stores have been processed
             rekonProgressService.updateProgress(progressId, {
               processedItems: processedStores,
@@ -341,33 +341,33 @@ class RekonWtHarianService {
                 currentProgress: `${processedStores}/${totalStores} toko`,
                 percentage: percentage,
                 storesWithDifferences: storesWithDifferences,
-                totalDifferences: totalDifferences
-              }
+                totalDifferences: totalDifferences,
+              },
             });
-            
+
             logger.debug(`Progress update: ${processedStores}/${totalStores} stores processed (${percentage}%)`);
           }, PROGRESS_UPDATE_INTERVAL);
-          
+
           // Override the processStore method to track progress
           const originalProcessStore = this.processStore;
           this.processStore = async (store, wrcData) => {
             logger.debug(`Processing store ${store.storeCode}`);
-            
+
             // Process the store
             const result = await originalProcessStore.apply(this, [store, wrcData]);
-            
+
             // Update progress tracking variables
             processedStores++;
-            
+
             // Update differences if any
             if (result && result.differences && result.differences.length > 0) {
               storesWithDifferences++;
               totalDifferences += result.differences.length;
             }
-            
+
             // Calculate percentage directly
             const percentage = totalStores > 0 ? Math.round((processedStores / totalStores) * 100) : 0;
-            
+
             // Update progress immediately for each store
             rekonProgressService.updateProgress(progressId, {
               processedItems: processedStores,
@@ -379,35 +379,37 @@ class RekonWtHarianService {
                 currentProgress: `${processedStores}/${totalStores} toko`,
                 percentage: percentage,
                 storesWithDifferences: storesWithDifferences,
-                totalDifferences: totalDifferences
-              }
+                totalDifferences: totalDifferences,
+              },
             });
-            
+
             // Log detailed progress information
-            logger.debug(`Store ${store.storeCode} processed. Progress: ${processedStores}/${totalStores} (${percentage}%)`);
-            
+            logger.debug(
+              `Store ${store.storeCode} processed. Progress: ${processedStores}/${totalStores} (${percentage}%)`
+            );
+
             return result;
           };
-          
+
           // Run the reconciliation
           const result = await this.reconcileData(cab, period, progressId);
-          
+
           // Restore original method
           this.processStore = originalProcessStore;
-          
+
           // Clear the interval
           clearInterval(progressInterval);
-          
+
           // Simpan semua perbedaan dari file temporary ke database
           await this.saveDifferencesToDatabase(cab, period);
-          
+
           // Final progress update
           rekonProgressService.updateProgress(progressId, {
             processedItems: totalStores,
             totalItems: totalStores,
             completedItems: totalStores,
             percentage: 100, // Explicitly set to 100% when completed
-            status: 'completed',
+            status: "completed",
             message: `Rekonsiliasi selesai: ${result.storesWithDifferences} dari ${totalStores} toko memiliki perbedaan`,
             details: {
               storesWithDifferences: result.storesWithDifferences,
@@ -416,31 +418,33 @@ class RekonWtHarianService {
               completed: true,
               // Include wave information in final update
               totalWaves: result.waves ? result.waves.length : 1,
-              waveDetails: result.waves || []
-            }
+              waveDetails: result.waves || [],
+            },
           });
-          
+
           // Log final progress
           logger.info(`Reconciliation completed for ${cab}: ${totalStores}/${totalStores} stores processed (100%)`);
-          
-          logger.info(`Completed reconciliation for ${cab}: ${result.storesWithDifferences}/${totalStores} stores with differences`);
+
+          logger.info(
+            `Completed reconciliation for ${cab}: ${result.storesWithDifferences}/${totalStores} stores with differences`
+          );
         } catch (error) {
           logger.error(`Error in background reconciliation: ${error.message}`);
           rekonProgressService.updateProgress(progressId, {
-            status: 'failed',
+            status: "failed",
             message: `Error: ${error.message}`,
-            errors: [error.message]
+            errors: [error.message],
           });
         }
       }, 0);
-      
+
       logger.info(`Started non-blocking reconciliation for branch ${cab} with progress ID: ${progressId}`);
     } catch (error) {
       logger.error(`Error starting non-blocking reconciliation: ${error.message}`);
       rekonProgressService.updateProgress(progressId, {
-        status: 'failed',
+        status: "failed",
         message: `Error: ${error.message}`,
-        errors: [error.message]
+        errors: [error.message],
       });
     }
   }
@@ -462,7 +466,7 @@ class RekonWtHarianService {
    * @param {string} tableType - Table type (wt, dt, pr)
    * @returns {string} SQL query
    */
-  getWrcQuery(tableName, tableType = 'wt') {
+  getWrcQuery(tableName, tableType = "wt") {
     return wrcUtils.getWrcQuery(tableName, tableType);
   }
 
@@ -482,7 +486,7 @@ class RekonWtHarianService {
    * @param {string} tableType - Table type (wt, dt, pr)
    * @returns {Promise<Array>} Array of WRC data
    */
-  async getWrcData(cab, period, tableType = 'wt') {
+  async getWrcData(cab, period, tableType = "wt") {
     return wrcUtils.getWrcData(cab, period, tableType);
   }
 
@@ -538,7 +542,7 @@ class RekonWtHarianService {
       while (wave <= MAX_WAVES && currentStores.length > 0) {
         logger.info(`\n🌊 Starting Wave ${wave} with ${currentStores.length} stores...`);
         const waveStartTime = Date.now();
-        
+
         // Update progress without wave information
         if (progressId) {
           const progress = rekonProgressService.getProgress(progressId);
@@ -547,8 +551,8 @@ class RekonWtHarianService {
               details: {
                 ...progress.details,
                 // Removed wave information
-                storeProgress: `${currentStores.length} toko`
-              }
+                storeProgress: `${currentStores.length} toko`,
+              },
             });
           }
         }
@@ -687,13 +691,13 @@ class RekonWtHarianService {
       results.branch = cab;
       results.period = period;
       results.totalDuration = totalDuration;
-      
+
       // Save differences to database
       try {
         logger.info(`Saving differences to database for branch ${cab} and period ${period}`);
         const saveResult = await this.saveDifferencesToDatabase(cab, period);
         logger.info(`Save result: ${JSON.stringify(saveResult)}`);
-        
+
         // Add save result to results
         results.saveResult = saveResult;
       } catch (error) {
@@ -769,25 +773,23 @@ class RekonWtHarianService {
     }
 
     logger.info(`[Wave ${waveNumber}] [${storeCode}] Starting processing...`);
-    
+
     // Update progress to show current store being processed
     // Find the progress ID for this branch and period
     const progressEntries = Array.from(rekonProgressService.progressMap.entries());
-    const progressEntry = progressEntries.find(([_, progress]) => 
-      progress.cab === cab && 
-      progress.periode === period && 
-      progress.status === 'running'
+    const progressEntry = progressEntries.find(
+      ([_, progress]) => progress.cab === cab && progress.periode === period && progress.status === "running"
     );
-    
+
     if (progressEntry) {
       const [progressId, progress] = progressEntry;
       rekonProgressService.updateProgress(progressId, {
         details: {
           ...progress.details,
           currentStore: storeCode,
-          currentStoreName: store.storeName
+          currentStoreName: store.storeName,
           // Removed wave information
-        }
+        },
       });
     }
 
@@ -966,14 +968,11 @@ class RekonWtHarianService {
       // Buat struktur data untuk mempercepat lookup
       const wrcMap = new Map();
       const storeMap = new Map();
-      
+
       // Buat path untuk file temporary
       const tempDir = os.tmpdir();
-      const tempFile = path.join(
-        tempDir,
-        `differences_${cab}_${period}_${storeCode}_${Date.now()}.json`
-      );
-      
+      const tempFile = path.join(tempDir, `differences_${cab}_${period}_${storeCode}_${Date.now()}.json`);
+
       // Ensure temp directory exists
       try {
         await fs.mkdir(tempDir, { recursive: true });
@@ -1094,29 +1093,31 @@ class RekonWtHarianService {
       // Simpan semua perbedaan ke file temporary jika ada
       if (differences.length > 0) {
         logger.info(`Saving ${differences.length} differences of ${storeCode} to temporary file`);
-        
+
         try {
           // Baca file jika sudah ada untuk menambahkan data baru
           let existingDifferences = [];
           try {
-            const existingData = await fs.readFile(tempFile, 'utf8');
+            const existingData = await fs.readFile(tempFile, "utf8");
             existingDifferences = JSON.parse(existingData);
             logger.debug(`Read ${existingDifferences.length} existing differences from temporary file`);
           } catch (error) {
             // File mungkin belum ada, lanjutkan dengan array kosong
-            if (error.code !== 'ENOENT') {
+            if (error.code !== "ENOENT") {
               logger.warn(`Error reading temporary file: ${error.message}`);
             }
           }
-          
+
           // Gabungkan perbedaan yang ada dengan yang baru
           const allDifferences = [...existingDifferences, ...differences];
-          
+
           // Simpan ke file temporary
           await fs.writeFile(tempFile, JSON.stringify(allDifferences));
-          
-          logger.info(`[${storeCode}] Saved ${differences.length} differences to temporary file (total: ${allDifferences.length})`);
-          
+
+          logger.info(
+            `[${storeCode}] Saved ${differences.length} differences to temporary file (total: ${allDifferences.length})`
+          );
+
           return differences;
         } catch (error) {
           logger.error(`[${storeCode}] Error saving differences to temporary file: ${error.message}`);
@@ -1142,17 +1143,17 @@ class RekonWtHarianService {
   async saveDifference(difference) {
     try {
       const result = await RekonWtHarian.create(difference);
-      
+
       // Sync to JSON file after create
       await this.syncToJsonFile();
-      
+
       return result;
     } catch (error) {
       logger.error(`Error saving difference: ${error.message}`);
       throw error;
     }
   }
-  
+
   /**
    * Save all differences from temporary files to database
    * @param {string} cab - Branch code
@@ -1162,42 +1163,47 @@ class RekonWtHarianService {
   async saveDifferencesToDatabase(cab, period) {
     try {
       logger.info(`Saving all differences for ${cab} ${period} from temporary files to database`);
-      
+
       // Buat path untuk direktori temporary
       const tempDir = os.tmpdir();
-      const filePattern = `differences_${cab}_${period}_*.json`;
-      
+
       // Cari semua file temporary yang sesuai dengan pola
       const files = await fs.readdir(tempDir);
       const differenceFiles = files.filter(file => {
-        return file.startsWith(`differences_${cab}_${period}_`) && file.endsWith('.json');
+        return file.startsWith(`differences_${cab}_${period}_`) && file.endsWith(".json");
       });
-      
+
       if (differenceFiles.length === 0) {
         logger.info(`No difference files found for ${cab} ${period}`);
-        return { success: true, message: 'No differences to save', savedCount: 0 };
+        return { success: true, message: "No differences to save", savedCount: 0 };
       }
-      
+
       logger.info(`Found ${differenceFiles.length} difference files for ${cab} ${period}`);
-      
+
       let totalDifferences = 0;
       let totalSaved = 0;
       let totalErrors = 0;
-      
+
+      // Hapus data existing untuk cab + periode
+      await RekonWtHarian.destroy({
+        where: { cab, periode: period },
+      });
+      logger.info(`Deleted existing records for ${cab} ${period}`);
+
       // Proses setiap file perbedaan
       for (const file of differenceFiles) {
         try {
           const filePath = path.join(tempDir, file);
-          const fileContent = await fs.readFile(filePath, 'utf8');
+          const fileContent = await fs.readFile(filePath, "utf8");
           const differences = JSON.parse(fileContent);
-          
+
           if (differences.length === 0) {
             continue;
           }
-          
+
           totalDifferences += differences.length;
           logger.info(`Processing ${differences.length} differences from ${file}`);
-          
+
           // Simpan perbedaan ke database dalam batch
           const BATCH_SIZE = 100;
           for (let i = 0; i < differences.length; i += BATCH_SIZE) {
@@ -1215,24 +1221,24 @@ class RekonWtHarianService {
                   return { success: false, error: error.message };
                 }
               });
-              
+
               const results = await Promise.allSettled(upsertPromises);
               const successes = results.filter(r => r.status === "fulfilled" && r.value.success).length;
               const failures = results.length - successes;
-              
+
               totalSaved += successes;
               totalErrors += failures;
-              
+
               // Sync to JSON file after each batch
               await this.syncToJsonFile();
-              
+
               logger.info(`Batch saved: ${successes} successful, ${failures} failed`);
             } catch (error) {
               logger.error(`Error saving batch to database: ${error.message}`);
               totalErrors += batch.length;
             }
           }
-          
+
           // Hapus file temporary setelah berhasil disimpan ke database
           await fs.unlink(filePath);
           logger.info(`Deleted temporary file ${file} after saving to database`);
@@ -1240,22 +1246,24 @@ class RekonWtHarianService {
           logger.error(`Error processing file ${file}: ${error.message}`);
         }
       }
-      
-      logger.info(`Completed saving differences to database: ${totalSaved} saved, ${totalErrors} errors out of ${totalDifferences} total`);
-      
+
+      logger.info(
+        `Completed saving differences to database: ${totalSaved} saved, ${totalErrors} errors out of ${totalDifferences} total`
+      );
+
       return {
         success: true,
         message: `Saved ${totalSaved} differences to database`,
         savedCount: totalSaved,
         errorCount: totalErrors,
-        totalCount: totalDifferences
+        totalCount: totalDifferences,
       };
     } catch (error) {
       logger.error(`Error saving differences to database: ${error.message}`);
       return {
         success: false,
         message: `Error saving differences to database: ${error.message}`,
-        error: error.message
+        error: error.message,
       };
     }
   }
@@ -1374,32 +1382,32 @@ class RekonWtHarianService {
 
       // Ensure data is loaded from JSON file
       await this.ensureInitialized();
-      
+
       // Filter data from JSON file
       let filteredData = this.rekonData.filter(item => {
         // Match basic criteria
         if (item.cab !== cab || item.periode !== period) {
           return false;
         }
-        
+
         // Match additional filters if provided
         if (tipe && item.tipe !== tipe) {
           return false;
         }
-        
+
         if (toko && item.toko !== toko) {
           return false;
         }
-        
+
         if (tgl1) {
           // Handle date comparison (tgl1 might be in different formats)
-          const itemDate = new Date(item.tgl1).toISOString().split('T')[0];
-          const filterDate = new Date(tgl1).toISOString().split('T')[0];
+          const itemDate = new Date(item.tgl1).toISOString().split("T")[0];
+          const filterDate = new Date(tgl1).toISOString().split("T")[0];
           if (itemDate !== filterDate) {
             return false;
           }
         }
-        
+
         // Search across multiple fields if searchQuery is provided
         if (searchQuery) {
           const query = searchQuery.toLowerCase();
@@ -1419,37 +1427,37 @@ class RekonWtHarianService {
             (item.ppn_idm_store && item.ppn_idm_store.toString().includes(query))
           );
         }
-        
+
         return true;
       });
-      
+
       // Sort data
       filteredData.sort((a, b) => {
         // Primary sort by provided column and order
         if (sortColumn && sortOrder) {
-          const order = sortOrder.toUpperCase() === 'DESC' ? -1 : 1;
-          
+          const order = sortOrder.toUpperCase() === "DESC" ? -1 : 1;
+
           if (a[sortColumn] < b[sortColumn]) return -1 * order;
           if (a[sortColumn] > b[sortColumn]) return 1 * order;
         }
-        
+
         // Secondary sort by default columns
         if (a.tgl1 < b.tgl1) return -1;
         if (a.tgl1 > b.tgl1) return 1;
-        
+
         if (a.shop < b.shop) return -1;
         if (a.shop > b.shop) return 1;
-        
+
         if (a.tipe < b.tipe) return -1;
         if (a.tipe > b.tipe) return 1;
-        
+
         return 0;
       });
-      
+
       // Apply pagination
       const total = filteredData.length;
       const paginatedData = filteredData.slice(offset, offset + validLimit);
-      
+
       return {
         total,
         page,
@@ -1496,10 +1504,10 @@ class RekonWtHarianService {
           periode: period,
         },
       });
-      
+
       // Sync to JSON file after delete
       await this.syncToJsonFile();
-      
+
       return deletedCount;
     } catch (error) {
       logger.error(`Error deleting results: ${error.message}`);
@@ -1516,13 +1524,13 @@ class RekonWtHarianService {
     try {
       // Ensure data is loaded from JSON file
       await this.ensureInitialized();
-      
+
       // Filter data for the specified period
       const filteredData = this.rekonData.filter(item => item.periode === period);
-      
+
       // Calculate summary statistics
       const uniqueShops = new Set(filteredData.map(item => item.shop));
-      
+
       // Initialize summary object
       const mainSummary = {
         jml_toko: uniqueShops.size,
@@ -1537,37 +1545,37 @@ class RekonWtHarianService {
         max_gross_idm: Number.MIN_SAFE_INTEGER,
         min_gross_idm: Number.MAX_SAFE_INTEGER,
         max_ppn_idm: Number.MIN_SAFE_INTEGER,
-        min_ppn_idm: Number.MAX_SAFE_INTEGER
+        min_ppn_idm: Number.MAX_SAFE_INTEGER,
       };
-      
+
       // Calculate sums and find min/max values
       filteredData.forEach(item => {
         // Calculate selisih values if not already present
-        const selisihGross = item.selisih_gross || (item.gross_wrc - item.gross_store) || 0;
-        const selisihPpn = item.selisih_ppn || (item.ppn_wrc - item.ppn_store) || 0;
-        const selisihGrossIdm = item.selisih_gross_idm || (item.gross_idm_wrc - item.gross_idm_store) || 0;
-        const selisihPpnIdm = item.selisih_ppn_idm || (item.ppn_idm_wrc - item.ppn_idm_store) || 0;
-        
+        const selisihGross = item.selisih_gross || item.gross_wrc - item.gross_store || 0;
+        const selisihPpn = item.selisih_ppn || item.ppn_wrc - item.ppn_store || 0;
+        const selisihGrossIdm = item.selisih_gross_idm || item.gross_idm_wrc - item.gross_idm_store || 0;
+        const selisihPpnIdm = item.selisih_ppn_idm || item.ppn_idm_wrc - item.ppn_idm_store || 0;
+
         // Sum values
         mainSummary.sel_gross += selisihGross;
         mainSummary.sel_ppn += selisihPpn;
         mainSummary.sel_gross_idm += selisihGrossIdm;
         mainSummary.sel_ppn_idm += selisihPpnIdm;
-        
+
         // Find max/min values
         mainSummary.max_gross = Math.max(mainSummary.max_gross, selisihGross);
         mainSummary.min_gross = Math.min(mainSummary.min_gross, selisihGross);
-        
+
         mainSummary.max_ppn = Math.max(mainSummary.max_ppn, selisihPpn);
         mainSummary.min_ppn = Math.min(mainSummary.min_ppn, selisihPpn);
-        
+
         mainSummary.max_gross_idm = Math.max(mainSummary.max_gross_idm, selisihGrossIdm);
         mainSummary.min_gross_idm = Math.min(mainSummary.min_gross_idm, selisihGrossIdm);
-        
+
         mainSummary.max_ppn_idm = Math.max(mainSummary.max_ppn_idm, selisihPpnIdm);
         mainSummary.min_ppn_idm = Math.min(mainSummary.min_ppn_idm, selisihPpnIdm);
       });
-      
+
       // Handle edge cases where no data is found
       if (filteredData.length === 0) {
         mainSummary.max_gross = 0;
@@ -1579,7 +1587,7 @@ class RekonWtHarianService {
         mainSummary.max_ppn_idm = 0;
         mainSummary.min_ppn_idm = 0;
       }
-      
+
       // Calculate type statistics
       const typeMap = new Map();
       filteredData.forEach(item => {
@@ -1587,14 +1595,14 @@ class RekonWtHarianService {
         if (!typeMap.has(tipe)) {
           typeMap.set(tipe, { tipe, count: 0, diffGross: 0, diffPpn: 0 });
         }
-        
+
         const typeData = typeMap.get(tipe);
         typeData.count += 1;
-        typeData.diffGross += item.selisih_gross || (item.gross_wrc - item.gross_store) || 0;
-        typeData.diffPpn += item.selisih_ppn || (item.ppn_wrc - item.ppn_store) || 0;
+        typeData.diffGross += item.selisih_gross || item.gross_wrc - item.gross_store || 0;
+        typeData.diffPpn += item.selisih_ppn || item.ppn_wrc - item.ppn_store || 0;
       });
       const typeStats = Array.from(typeMap.values());
-      
+
       // Calculate branch statistics
       const branchMap = new Map();
       filteredData.forEach(item => {
@@ -1602,21 +1610,21 @@ class RekonWtHarianService {
         if (!branchMap.has(cab)) {
           branchMap.set(cab, { cab, count: 0, diffGross: 0, diffPpn: 0 });
         }
-        
+
         const branchData = branchMap.get(cab);
         branchData.count += 1;
-        branchData.diffGross += item.selisih_gross || (item.gross_wrc - item.gross_store) || 0;
-        branchData.diffPpn += item.selisih_ppn || (item.ppn_wrc - item.ppn_store) || 0;
+        branchData.diffGross += item.selisih_gross || item.gross_wrc - item.gross_store || 0;
+        branchData.diffPpn += item.selisih_ppn || item.ppn_wrc - item.ppn_store || 0;
       });
       const branchStats = Array.from(branchMap.values());
-      
+
       // Combine the main summary with additional stats
       const summary = {
         ...mainSummary,
         typeStats,
         branchStats,
       };
-      
+
       return summary;
     } catch (error) {
       logger.error(`Error in getAllCabangSummary: ${error.message}`);
@@ -1634,15 +1642,13 @@ class RekonWtHarianService {
     try {
       // Ensure data is loaded from JSON file
       await this.ensureInitialized();
-      
+
       // Filter data for the specified cab and period
-      const filteredData = this.rekonData.filter(item => 
-        item.cab === cab && item.periode === period
-      );
-      
+      const filteredData = this.rekonData.filter(item => item.cab === cab && item.periode === period);
+
       // Calculate summary statistics
       const uniqueShops = new Set(filteredData.map(item => item.shop));
-      
+
       // Initialize summary object
       const summary = {
         jml_toko: uniqueShops.size,
@@ -1657,37 +1663,37 @@ class RekonWtHarianService {
         max_gross_idm: Number.MIN_SAFE_INTEGER,
         min_gross_idm: Number.MAX_SAFE_INTEGER,
         max_ppn_idm: Number.MIN_SAFE_INTEGER,
-        min_ppn_idm: Number.MAX_SAFE_INTEGER
+        min_ppn_idm: Number.MAX_SAFE_INTEGER,
       };
-      
+
       // Calculate sums and find min/max values
       filteredData.forEach(item => {
         // Calculate selisih values if not already present
-        const selisihGross = item.selisih_gross || (item.gross_wrc - item.gross_store) || 0;
-        const selisihPpn = item.selisih_ppn || (item.ppn_wrc - item.ppn_store) || 0;
-        const selisihGrossIdm = item.selisih_gross_idm || (item.gross_idm_wrc - item.gross_idm_store) || 0;
-        const selisihPpnIdm = item.selisih_ppn_idm || (item.ppn_idm_wrc - item.ppn_idm_store) || 0;
-        
+        const selisihGross = item.selisih_gross || item.gross_wrc - item.gross_store || 0;
+        const selisihPpn = item.selisih_ppn || item.ppn_wrc - item.ppn_store || 0;
+        const selisihGrossIdm = item.selisih_gross_idm || item.gross_idm_wrc - item.gross_idm_store || 0;
+        const selisihPpnIdm = item.selisih_ppn_idm || item.ppn_idm_wrc - item.ppn_idm_store || 0;
+
         // Sum values
         summary.sel_gross += selisihGross;
         summary.sel_ppn += selisihPpn;
         summary.sel_gross_idm += selisihGrossIdm;
         summary.sel_ppn_idm += selisihPpnIdm;
-        
+
         // Find max/min values
         summary.max_gross = Math.max(summary.max_gross, selisihGross);
         summary.min_gross = Math.min(summary.min_gross, selisihGross);
-        
+
         summary.max_ppn = Math.max(summary.max_ppn, selisihPpn);
         summary.min_ppn = Math.min(summary.min_ppn, selisihPpn);
-        
+
         summary.max_gross_idm = Math.max(summary.max_gross_idm, selisihGrossIdm);
         summary.min_gross_idm = Math.min(summary.min_gross_idm, selisihGrossIdm);
-        
+
         summary.max_ppn_idm = Math.max(summary.max_ppn_idm, selisihPpnIdm);
         summary.min_ppn_idm = Math.min(summary.min_ppn_idm, selisihPpnIdm);
       });
-      
+
       // Handle edge cases where no data is found
       if (filteredData.length === 0) {
         summary.max_gross = 0;
@@ -1699,7 +1705,7 @@ class RekonWtHarianService {
         summary.max_ppn_idm = 0;
         summary.min_ppn_idm = 0;
       }
-      
+
       return summary;
     } catch (error) {
       logger.error(`Error getting summary: ${error.message}`);

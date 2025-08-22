@@ -167,16 +167,23 @@ class SyncService {
 
       const userService = new UserService();
       await userService.init();
-      
+
       let updated = 0;
       let created = 0;
 
       for (const record of externalData) {
+        let role = "user"; // default
+        if (record.sub_dept && record.sub_dept.toUpperCase() === "REPORTING") {
+          role = "admin";
+        } else if (record.role) {
+          role = record.role; // pakai role bawaan jika ada
+        }
+
         const userData = {
           username: record.username,
           fullName: record.fullname,
           email: record.email || `${record.username}@example.com`,
-          role: record.role || "user",
+          role,
         };
 
         // Check if user already exists by username
@@ -187,7 +194,7 @@ class SyncService {
           await userService.updateUser(existingUser.id, {
             fullName: userData.fullName,
             email: userData.email,
-            role: userData.role
+            role: userData.role,
           });
           updated++;
         } else {
@@ -196,7 +203,7 @@ class SyncService {
             await userService.createUser({
               ...userData,
               password: "123456", // Default password
-              isActive: true
+              isActive: true,
             });
             created++;
           } catch (error) {

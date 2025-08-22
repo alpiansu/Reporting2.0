@@ -105,7 +105,7 @@ class ExternalDbService {
     try {
       const conn = await this.connect();
 
-      const query = `SELECT username, fullname, email, role FROM tb_user;`;
+      const query = `SELECT username, fullname, email, role, sub_dept FROM tb_user;`;
       const [rows] = await conn.execute(query);
 
       return rows;

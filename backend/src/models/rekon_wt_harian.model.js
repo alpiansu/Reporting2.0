@@ -224,7 +224,7 @@ const RekonWtHarian = sequelize.define(
         record.updtime = new Date();
       },
       // Hook untuk bulk update dan upsert
-      beforeBulkUpdate: (options) => {
+      beforeBulkUpdate: options => {
         // Add updtime for bulk updates
         if (options.attributes) {
           options.attributes.updtime = new Date();
@@ -232,7 +232,7 @@ const RekonWtHarian = sequelize.define(
           options.attributes = { updtime: new Date() };
         }
       },
-      
+
       // Hook untuk upsert operations
       beforeUpsert: (values, options) => {
         // For upsert, set updtime only if this is an update (not create)
@@ -263,14 +263,6 @@ const RekonWtHarian = sequelize.define(
       {
         name: "idx_rekon_wt_harian_toko_tgl",
         fields: ["shop", "tgl1"],
-      },
-      {
-        name: "idx_rekon_wt_harian_addtime",
-        fields: ["addtime"],
-      },
-      {
-        name: "idx_rekon_wt_harian_updtime",
-        fields: ["updtime"],
       },
     ],
   }

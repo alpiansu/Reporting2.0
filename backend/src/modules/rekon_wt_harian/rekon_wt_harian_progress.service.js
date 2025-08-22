@@ -233,7 +233,7 @@ class RekonWtHarianProgressService {
       }
 
       // Get WRC data for this branch and period
-      const wrcQuery = this.baseService.getWrcQuery(cab, period);
+      const wrcQuery = this.baseService.getWrcQuery(cab, period, 'wt');
       const [wrcData] = await dbWrc.query(wrcQuery);
 
       if (!wrcData || wrcData.length === 0) {

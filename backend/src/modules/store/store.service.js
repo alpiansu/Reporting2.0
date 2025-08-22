@@ -210,6 +210,37 @@ class StoreService {
   }
 
   /**
+   * Get store IP and host information for a specific store code
+   * @param {string} storeCode - Store code
+   * @param {string} cab - Branch code (optional)
+   * @returns {Promise<Object>} Store information with dbHost and storeName
+   */
+  async getStoreIPHost(storeCode) {
+    try {
+      await this.ensureInitialized();
+
+      // Create filter conditions
+      let storeFilter = (s) => s.storeCode === storeCode && s.notes === "INDUK";
+
+      // Find the store
+      const store = this.stores.find(storeFilter);
+
+      if (!store) {
+        logger.warn(`Store not found or not an INDUK store ${storeCode}`);
+        return null;
+      }
+
+      return {
+        dbHost: store.dbHost,
+        storeName: store.storeName,
+      };
+    } catch (error) {
+      logger.error(`Error getting store IP for store ${storeCode}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * Get stores by branch with pagination
    * @param {string} branchCode - Branch code
    * @param {Object} options - Query options

@@ -13,8 +13,95 @@ const { sequelize } = require("../../config/database");
 const { Op } = require("sequelize");
 const config = require("../../config/rekon_wt_harian.config");
 const rekonProgressService = require("./rekon_progress.service");
+// Import storeService directly from the singleton instance
+const storeService = require("../../modules/store/storeService");
+const wrcUtils = require("../../utils/wrc.utils");
+
+// Path untuk file JSON rekon_wt_harian
+const REKON_WT_HARIAN_JSON_PATH = path.join(process.cwd(), "data/rekon_wt_harian.json");
 
 class RekonWtHarianService {
+  constructor() {
+    this.rekonData = [];
+    this.initialized = false;
+  }
+
+  /**
+   * Initialize the service by loading data from JSON file
+   * Creates the file and directory if they don't exist
+   */
+  async initialize() {
+    try {
+      // Create directory if it doesn't exist
+      const dir = path.dirname(REKON_WT_HARIAN_JSON_PATH);
+      await fs.mkdir(dir, { recursive: true });
+
+      try {
+        // Try to read the file
+        const data = await fs.readFile(REKON_WT_HARIAN_JSON_PATH, "utf8");
+        this.rekonData = JSON.parse(data);
+        logger.info(`Loaded ${this.rekonData.length} rekon_wt_harian records from JSON file`);
+      } catch (error) {
+        // If file doesn't exist or is invalid, create an empty file
+        if (error.code === "ENOENT" || error instanceof SyntaxError) {
+          this.rekonData = [];
+          await this.saveToFile();
+          logger.info("Created new rekon_wt_harian.json file");
+        } else {
+          throw error;
+        }
+      }
+
+      this.initialized = true;
+    } catch (error) {
+      logger.error(`Failed to initialize rekon_wt_harian service: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Save rekon_wt_harian data to JSON file
+   */
+  async saveToFile() {
+    try {
+      await fs.writeFile(REKON_WT_HARIAN_JSON_PATH, JSON.stringify(this.rekonData, null, 2));
+      logger.debug(`Saved ${this.rekonData.length} rekon_wt_harian records to JSON file`);
+    } catch (error) {
+      logger.error(`Failed to save rekon_wt_harian to file: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Ensure the service is initialized before performing operations
+   */
+  async ensureInitialized() {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+  }
+
+  /**
+   * Synchronize data from database to JSON file
+   */
+  async syncToJsonFile() {
+    try {
+      // Get all data from database
+      const dbData = await RekonWtHarian.findAll();
+      
+      // Convert to plain objects
+      this.rekonData = dbData.map(item => item.get({ plain: true }));
+      
+      // Save to file
+      await this.saveToFile();
+      
+      logger.info(`Synchronized ${this.rekonData.length} rekon_wt_harian records to JSON file`);
+      return this.rekonData.length;
+    } catch (error) {
+      logger.error(`Failed to synchronize rekon_wt_harian data: ${error.message}`);
+      throw error;
+    }
+  }
   /**
    * Reconcile data for all branches
    * @param {string} period - Period in YYMM format
@@ -22,9 +109,6 @@ class RekonWtHarianService {
    */
   async reconcileAllBranches(period) {
     try {
-      // Import storeService directly from the singleton instance
-      const storeService = require("../../modules/store/storeService");
-
       // Ensure storeService is initialized
       await storeService.ensureInitialized();
 
@@ -217,8 +301,6 @@ class RekonWtHarianService {
       // Run in background (non-blocking)
       setTimeout(async () => {
         try {
-          // Get stores for this branch to track progress
-          const storeService = require("../../modules/store/storeService");
           await storeService.ensureInitialized();
           const branchStores = await storeService.getStoresByBranch(cab, true);
           const totalStores = branchStores.length;
@@ -371,38 +453,17 @@ class RekonWtHarianService {
    * @returns {Array} Array of dates in YYYY-MM-DD format
    */
   getAllDatesInMonth(year, month, untilYesterday = false) {
-    const dates = [];
-    const daysInMonth = new Date(year, month, 0).getDate();
-
-    let lastDay = daysInMonth;
-    if (untilYesterday) {
-      const today = new Date();
-      const currentYear = today.getFullYear();
-      const currentMonth = today.getMonth() + 1;
-
-      if (parseInt(year) === currentYear && parseInt(month) === currentMonth) {
-        lastDay = today.getDate() - 1;
-        if (lastDay <= 0) {
-          return [];
-        }
-      }
-    }
-
-    for (let i = 1; i <= lastDay; i++) {
-      const day = i.toString().padStart(2, "0");
-      dates.push(`${year}-${month}-${day}`);
-    }
-
-    return dates;
+    return wrcUtils.getAllDatesInMonth(year, month, untilYesterday);
   }
 
   /**
    * Get query for WRC data
    * @param {string} tableName - WT table name
+   * @param {string} tableType - Table type (wt, dt, pr)
    * @returns {string} SQL query
    */
-  getWrcQuery(tableName) {
-    return config.queries.wrc.replace("{date}", tableName.substring(3));
+  getWrcQuery(tableName, tableType = 'wt') {
+    return wrcUtils.getWrcQuery(tableName, tableType);
   }
 
   /**
@@ -411,89 +472,18 @@ class RekonWtHarianService {
    * @returns {string} SQL query
    */
   getStoreQuery(period) {
-    const year = "20" + period.substring(0, 2);
-    const month = period.substring(2, 4);
-    const periodStr = `${year}-${month}`;
-
-    return config.queries.store.replace("{period}", periodStr);
+    return wrcUtils.getStoreQuery(period);
   }
 
   /**
    * Get data from WRC for a specific period
    * @param {string} cab - Branch code
    * @param {string} period - Period in YYMM format
+   * @param {string} tableType - Table type (wt, dt, pr)
    * @returns {Promise<Array>} Array of WRC data
    */
-  async getWrcData(cab, period) {
-    const wrcInstance = new wrcService();
-    const wrcConfig = await wrcInstance.getConnWRC(cab);
-    const connection = await mysql.createConnection(wrcConfig);
-
-    try {
-      logger.info(`Getting WRC data for cab: ${cab}, period: ${period} ...`);
-      const year = "20" + period.substring(0, 2);
-      const month = period.substring(2, 4);
-
-      // Get all dates in the month
-      const currentDate = new Date();
-      const currentYear = currentDate.getFullYear();
-      const currentMonth = currentDate.getMonth() + 1;
-      const isCurrentMonth = parseInt(year) === currentYear && parseInt(month) === currentMonth;
-
-      const dates = this.getAllDatesInMonth(year, month, isCurrentMonth);
-
-      if (dates.length === 0) {
-        return [];
-      }
-
-      // Create temporary file to store WRC data
-      const tempDir = path.join(os.tmpdir());
-      const tempFile = path.join(
-        tempDir,
-        `wrc_data_${cab}_${period}_${Date.now()}.json`
-      );
-
-      // Ensure temp directory exists
-      try {
-        await fs.mkdir(tempDir, { recursive: true });
-      } catch (error) {
-        if (error.code !== "EEXIST") {
-          throw error;
-        }
-      }
-
-      // Initialize empty array for all WRC data
-      const allWrcData = [];
-
-      // Query each WT table for each date
-      for (const date of dates) {
-        const dateParts = date.split("-");
-        const tableDate = dateParts[0].substring(2) + dateParts[1] + dateParts[2];
-        const tableName = `wt_${tableDate}`;
-
-        try {
-          const query = this.getWrcQuery(tableName);
-          const [rows] = await connection.execute(query);
-
-          if (rows && rows.length > 0) {
-            allWrcData.push(...rows);
-          }
-        } catch (error) {
-          logger.error(`Error querying ${tableName}: ${error.message}`);
-          // Continue with next date even if there's an error
-        }
-      }
-
-      // Save data to temporary file
-      await fs.writeFile(tempFile, JSON.stringify(allWrcData));
-
-      return tempFile;
-    } catch (error) {
-      logger.error(`Error getting WRC data: ${error.message}`);
-      throw error;
-    } finally {
-      await connection.end();
-    }
+  async getWrcData(cab, period, tableType = 'wt') {
+    return wrcUtils.getWrcData(cab, period, tableType);
   }
 
   /**
@@ -515,9 +505,6 @@ class RekonWtHarianService {
       // Read WRC data from file
       const wrcDataRaw = await fs.readFile(wrcDataFile, "utf8");
       const wrcData = JSON.parse(wrcDataRaw);
-
-      // Import storeService directly from the singleton instance
-      const storeService = require("../../modules/store/storeService");
 
       // Ensure storeService is initialized
       await storeService.ensureInitialized();
@@ -963,36 +950,6 @@ class RekonWtHarianService {
    * @param {string} cab - Branch code
    * @returns {Promise<Object>} Store information
    */
-  async getStoreIp(storeCode, cab) {
-    try {
-      // Import storeService directly from the singleton instance
-      const storeService = require("../../modules/store/storeService");
-
-      // Ensure storeService is initialized
-      await storeService.ensureInitialized();
-
-      // Get all stores and filter by store code, branch code, and notes = 'INDUK'
-      const allStores = storeService.stores;
-      const store = allStores.find(
-        s => s.storeCode === storeCode && s.notes === "INDUK" && (s.branch === cab || s.cab === cab) // Check both branch and cab fields for compatibility
-      );
-
-      if (!store) {
-        logger.warn(`Store not found or not an INDUK store for branch ${cab}: ${storeCode}`);
-        return null;
-      }
-
-      logger.info(`Found INDUK store for branch ${cab}: ${storeCode} (${store.storeName}) at ${store.dbHost}`);
-
-      return {
-        dbHost: store.dbHost,
-        storeName: store.storeName,
-      };
-    } catch (error) {
-      logger.error(`Error getting store IP for branch ${cab}: ${error.message}`);
-      throw error;
-    }
-  }
 
   /**
    * Compare WRC and store data
@@ -1184,7 +1141,12 @@ class RekonWtHarianService {
    */
   async saveDifference(difference) {
     try {
-      return await RekonWtHarian.create(difference);
+      const result = await RekonWtHarian.create(difference);
+      
+      // Sync to JSON file after create
+      await this.syncToJsonFile();
+      
+      return result;
     } catch (error) {
       logger.error(`Error saving difference: ${error.message}`);
       throw error;
@@ -1260,6 +1222,9 @@ class RekonWtHarianService {
               
               totalSaved += successes;
               totalErrors += failures;
+              
+              // Sync to JSON file after each batch
+              await this.syncToJsonFile();
               
               logger.info(`Batch saved: ${successes} successful, ${failures} failed`);
             } catch (error) {
@@ -1407,69 +1372,90 @@ class RekonWtHarianService {
       const validLimit = Math.min(limit, config.pagination.maxLimit);
       const offset = (page - 1) * validLimit;
 
-      const whereClause = {
-        cab,
-        periode: period,
-      };
-
-      if (tipe) {
-        whereClause.tipe = tipe;
-      }
-
-      if (toko) {
-        whereClause.toko = toko;
-      }
-
-      if (tgl1) {
-        whereClause.tgl1 = tgl1;
-      }
-
-      // Add search query if provided (search across multiple columns)
-      if (searchQuery) {
-        whereClause[Op.or] = [
-          { shop: { [Op.like]: `%${searchQuery}%` } },
-          { toko: { [Op.like]: `%${searchQuery}%` } },
-          { tipe: { [Op.like]: `%${searchQuery}%` } },
-          { tgl1: { [Op.like]: `%${searchQuery}%` } },
-          { cab: { [Op.like]: `%${searchQuery}%` } },
-          { gross_wrc: { [Op.like]: `%${searchQuery}%` } },
-          { gross_store: { [Op.like]: `%${searchQuery}%` } },
-          { gross_idm_wrc: { [Op.like]: `%${searchQuery}%` } },
-          { gross_idm_store: { [Op.like]: `%${searchQuery}%` } },
-          { ppn_wrc: { [Op.like]: `%${searchQuery}%` } },
-          { ppn_store: { [Op.like]: `%${searchQuery}%` } },
-          { ppn_idm_wrc: { [Op.like]: `%${searchQuery}%` } },
-          { ppn_idm_store: { [Op.like]: `%${searchQuery}%` } },
-        ];
-      }
-
-      // Define default order or use provided sort parameters
-      let orderConfig = [
-        ["tgl1", "ASC"],
-        ["shop", "ASC"],
-        ["tipe", "ASC"],
-      ];
-
-      // If sortColumn and sortOrder are provided, use them as primary sort
-      if (sortColumn && sortOrder) {
-        // Validate sortOrder value
-        const validSortOrder = ["ASC", "DESC"].includes(sortOrder.toUpperCase()) ? sortOrder.toUpperCase() : "ASC";
-        orderConfig = [[sortColumn, validSortOrder], ...orderConfig];
-      }
-
-      const { count, rows } = await RekonWtHarian.findAndCountAll({
-        where: whereClause,
-        limit: validLimit,
-        offset,
-        order: orderConfig,
+      // Ensure data is loaded from JSON file
+      await this.ensureInitialized();
+      
+      // Filter data from JSON file
+      let filteredData = this.rekonData.filter(item => {
+        // Match basic criteria
+        if (item.cab !== cab || item.periode !== period) {
+          return false;
+        }
+        
+        // Match additional filters if provided
+        if (tipe && item.tipe !== tipe) {
+          return false;
+        }
+        
+        if (toko && item.toko !== toko) {
+          return false;
+        }
+        
+        if (tgl1) {
+          // Handle date comparison (tgl1 might be in different formats)
+          const itemDate = new Date(item.tgl1).toISOString().split('T')[0];
+          const filterDate = new Date(tgl1).toISOString().split('T')[0];
+          if (itemDate !== filterDate) {
+            return false;
+          }
+        }
+        
+        // Search across multiple fields if searchQuery is provided
+        if (searchQuery) {
+          const query = searchQuery.toLowerCase();
+          return (
+            (item.shop && item.shop.toLowerCase().includes(query)) ||
+            (item.toko && item.toko.toLowerCase().includes(query)) ||
+            (item.tipe && item.tipe.toLowerCase().includes(query)) ||
+            (item.tgl1 && item.tgl1.toString().includes(query)) ||
+            (item.cab && item.cab.toLowerCase().includes(query)) ||
+            (item.gross_wrc && item.gross_wrc.toString().includes(query)) ||
+            (item.gross_store && item.gross_store.toString().includes(query)) ||
+            (item.gross_idm_wrc && item.gross_idm_wrc.toString().includes(query)) ||
+            (item.gross_idm_store && item.gross_idm_store.toString().includes(query)) ||
+            (item.ppn_wrc && item.ppn_wrc.toString().includes(query)) ||
+            (item.ppn_store && item.ppn_store.toString().includes(query)) ||
+            (item.ppn_idm_wrc && item.ppn_idm_wrc.toString().includes(query)) ||
+            (item.ppn_idm_store && item.ppn_idm_store.toString().includes(query))
+          );
+        }
+        
+        return true;
       });
-
+      
+      // Sort data
+      filteredData.sort((a, b) => {
+        // Primary sort by provided column and order
+        if (sortColumn && sortOrder) {
+          const order = sortOrder.toUpperCase() === 'DESC' ? -1 : 1;
+          
+          if (a[sortColumn] < b[sortColumn]) return -1 * order;
+          if (a[sortColumn] > b[sortColumn]) return 1 * order;
+        }
+        
+        // Secondary sort by default columns
+        if (a.tgl1 < b.tgl1) return -1;
+        if (a.tgl1 > b.tgl1) return 1;
+        
+        if (a.shop < b.shop) return -1;
+        if (a.shop > b.shop) return 1;
+        
+        if (a.tipe < b.tipe) return -1;
+        if (a.tipe > b.tipe) return 1;
+        
+        return 0;
+      });
+      
+      // Apply pagination
+      const total = filteredData.length;
+      const paginatedData = filteredData.slice(offset, offset + validLimit);
+      
       return {
-        total: count,
+        total,
         page,
         limit: validLimit,
-        totalPages: Math.ceil(count / validLimit),
-        data: rows,
+        totalPages: Math.ceil(total / validLimit),
+        data: paginatedData,
       };
     } catch (error) {
       logger.error(`Error getting results: ${error.message}`);
@@ -1504,12 +1490,17 @@ class RekonWtHarianService {
    */
   async deleteResults(cab, period) {
     try {
-      return await RekonWtHarian.destroy({
+      const deletedCount = await RekonWtHarian.destroy({
         where: {
           cab,
           periode: period,
         },
       });
+      
+      // Sync to JSON file after delete
+      await this.syncToJsonFile();
+      
+      return deletedCount;
     } catch (error) {
       logger.error(`Error deleting results: ${error.message}`);
       throw error;
@@ -1523,74 +1514,109 @@ class RekonWtHarianService {
    */
   async getAllCabangSummary(period) {
     try {
-      // Use a similar query as getSummary but without the cab filter
-      const result = await sequelize.query(
-        `
-        SELECT 
-            COUNT(DISTINCT shop) AS jml_toko,
-            SUM(selisih_gross) AS sel_gross,
-            SUM(selisih_ppn) AS sel_ppn,
-            SUM(selisih_gross_idm) AS sel_gross_idm,
-            SUM(selisih_ppn_idm) AS sel_ppn_idm,
-
-            MAX(selisih_gross) AS max_gross,
-            MIN(selisih_gross) AS min_gross,
-
-            MAX(selisih_ppn) AS max_ppn,
-            MIN(selisih_ppn) AS min_ppn,
-
-            MAX(selisih_gross_idm) AS max_gross_idm,
-            MIN(selisih_gross_idm) AS min_gross_idm,
-
-            MAX(selisih_ppn_idm) AS max_ppn_idm,
-            MIN(selisih_ppn_idm) AS min_ppn_idm
-
-        FROM rekon_wt_harian
-        WHERE periode = ?
-      `,
-        {
-          replacements: [period],
-          type: sequelize.QueryTypes.SELECT,
+      // Ensure data is loaded from JSON file
+      await this.ensureInitialized();
+      
+      // Filter data for the specified period
+      const filteredData = this.rekonData.filter(item => item.periode === period);
+      
+      // Calculate summary statistics
+      const uniqueShops = new Set(filteredData.map(item => item.shop));
+      
+      // Initialize summary object
+      const mainSummary = {
+        jml_toko: uniqueShops.size,
+        sel_gross: 0,
+        sel_ppn: 0,
+        sel_gross_idm: 0,
+        sel_ppn_idm: 0,
+        max_gross: Number.MIN_SAFE_INTEGER,
+        min_gross: Number.MAX_SAFE_INTEGER,
+        max_ppn: Number.MIN_SAFE_INTEGER,
+        min_ppn: Number.MAX_SAFE_INTEGER,
+        max_gross_idm: Number.MIN_SAFE_INTEGER,
+        min_gross_idm: Number.MAX_SAFE_INTEGER,
+        max_ppn_idm: Number.MIN_SAFE_INTEGER,
+        min_ppn_idm: Number.MAX_SAFE_INTEGER
+      };
+      
+      // Calculate sums and find min/max values
+      filteredData.forEach(item => {
+        // Calculate selisih values if not already present
+        const selisihGross = item.selisih_gross || (item.gross_wrc - item.gross_store) || 0;
+        const selisihPpn = item.selisih_ppn || (item.ppn_wrc - item.ppn_store) || 0;
+        const selisihGrossIdm = item.selisih_gross_idm || (item.gross_idm_wrc - item.gross_idm_store) || 0;
+        const selisihPpnIdm = item.selisih_ppn_idm || (item.ppn_idm_wrc - item.ppn_idm_store) || 0;
+        
+        // Sum values
+        mainSummary.sel_gross += selisihGross;
+        mainSummary.sel_ppn += selisihPpn;
+        mainSummary.sel_gross_idm += selisihGrossIdm;
+        mainSummary.sel_ppn_idm += selisihPpnIdm;
+        
+        // Find max/min values
+        mainSummary.max_gross = Math.max(mainSummary.max_gross, selisihGross);
+        mainSummary.min_gross = Math.min(mainSummary.min_gross, selisihGross);
+        
+        mainSummary.max_ppn = Math.max(mainSummary.max_ppn, selisihPpn);
+        mainSummary.min_ppn = Math.min(mainSummary.min_ppn, selisihPpn);
+        
+        mainSummary.max_gross_idm = Math.max(mainSummary.max_gross_idm, selisihGrossIdm);
+        mainSummary.min_gross_idm = Math.min(mainSummary.min_gross_idm, selisihGrossIdm);
+        
+        mainSummary.max_ppn_idm = Math.max(mainSummary.max_ppn_idm, selisihPpnIdm);
+        mainSummary.min_ppn_idm = Math.min(mainSummary.min_ppn_idm, selisihPpnIdm);
+      });
+      
+      // Handle edge cases where no data is found
+      if (filteredData.length === 0) {
+        mainSummary.max_gross = 0;
+        mainSummary.min_gross = 0;
+        mainSummary.max_ppn = 0;
+        mainSummary.min_ppn = 0;
+        mainSummary.max_gross_idm = 0;
+        mainSummary.min_gross_idm = 0;
+        mainSummary.max_ppn_idm = 0;
+        mainSummary.min_ppn_idm = 0;
+      }
+      
+      // Calculate type statistics
+      const typeMap = new Map();
+      filteredData.forEach(item => {
+        const tipe = item.tipe;
+        if (!typeMap.has(tipe)) {
+          typeMap.set(tipe, { tipe, count: 0, diffGross: 0, diffPpn: 0 });
         }
-      );
-
-      // Get additional statistics for detailed reporting
-      const typeStats = await RekonWtHarian.findAll({
-        attributes: [
-          "tipe",
-          [sequelize.fn("COUNT", sequelize.col("id")), "count"],
-          [sequelize.fn("SUM", sequelize.col("selisih_gross")), "diffGross"],
-          [sequelize.fn("SUM", sequelize.col("selisih_ppn")), "diffPpn"],
-        ],
-        where: {
-          periode: period,
-        },
-        group: ["tipe"],
-        raw: true,
+        
+        const typeData = typeMap.get(tipe);
+        typeData.count += 1;
+        typeData.diffGross += item.selisih_gross || (item.gross_wrc - item.gross_store) || 0;
+        typeData.diffPpn += item.selisih_ppn || (item.ppn_wrc - item.ppn_store) || 0;
       });
-
-      // Get count by branch
-      const branchStats = await RekonWtHarian.findAll({
-        attributes: [
-          "cab",
-          [sequelize.fn("COUNT", sequelize.col("id")), "count"],
-          [sequelize.fn("SUM", sequelize.col("selisih_gross")), "diffGross"],
-          [sequelize.fn("SUM", sequelize.col("selisih_ppn")), "diffPpn"],
-        ],
-        where: {
-          periode: period,
-        },
-        group: ["cab"],
-        raw: true,
+      const typeStats = Array.from(typeMap.values());
+      
+      // Calculate branch statistics
+      const branchMap = new Map();
+      filteredData.forEach(item => {
+        const cab = item.cab;
+        if (!branchMap.has(cab)) {
+          branchMap.set(cab, { cab, count: 0, diffGross: 0, diffPpn: 0 });
+        }
+        
+        const branchData = branchMap.get(cab);
+        branchData.count += 1;
+        branchData.diffGross += item.selisih_gross || (item.gross_wrc - item.gross_store) || 0;
+        branchData.diffPpn += item.selisih_ppn || (item.ppn_wrc - item.ppn_store) || 0;
       });
-
+      const branchStats = Array.from(branchMap.values());
+      
       // Combine the main summary with additional stats
       const summary = {
-        ...result[0],
+        ...mainSummary,
         typeStats,
         branchStats,
       };
-
+      
       return summary;
     } catch (error) {
       logger.error(`Error in getAllCabangSummary: ${error.message}`);
@@ -1606,37 +1632,75 @@ class RekonWtHarianService {
    */
   async getSummary(cab, period) {
     try {
-      const result = await sequelize.query(
-        `
-        SELECT 
-            COUNT(DISTINCT shop) AS jml_toko,
-            SUM(selisih_gross) AS sel_gross,
-            SUM(selisih_ppn) AS sel_ppn,
-            SUM(selisih_gross_idm) AS sel_gross_idm,
-            SUM(selisih_ppn_idm) AS sel_ppn_idm,
-
-            MAX(selisih_gross) AS max_gross,
-            MIN(selisih_gross) AS min_gross,
-
-            MAX(selisih_ppn) AS max_ppn,
-            MIN(selisih_ppn) AS min_ppn,
-
-            MAX(selisih_gross_idm) AS max_gross_idm,
-            MIN(selisih_gross_idm) AS min_gross_idm,
-
-            MAX(selisih_ppn_idm) AS max_ppn_idm,
-            MIN(selisih_ppn_idm) AS min_ppn_idm
-
-        FROM rekon_wt_harian
-        WHERE cab = ? AND periode = ?
-      `,
-        {
-          replacements: [cab, period],
-          type: sequelize.QueryTypes.SELECT,
-        }
+      // Ensure data is loaded from JSON file
+      await this.ensureInitialized();
+      
+      // Filter data for the specified cab and period
+      const filteredData = this.rekonData.filter(item => 
+        item.cab === cab && item.periode === period
       );
-
-      return result[0];
+      
+      // Calculate summary statistics
+      const uniqueShops = new Set(filteredData.map(item => item.shop));
+      
+      // Initialize summary object
+      const summary = {
+        jml_toko: uniqueShops.size,
+        sel_gross: 0,
+        sel_ppn: 0,
+        sel_gross_idm: 0,
+        sel_ppn_idm: 0,
+        max_gross: Number.MIN_SAFE_INTEGER,
+        min_gross: Number.MAX_SAFE_INTEGER,
+        max_ppn: Number.MIN_SAFE_INTEGER,
+        min_ppn: Number.MAX_SAFE_INTEGER,
+        max_gross_idm: Number.MIN_SAFE_INTEGER,
+        min_gross_idm: Number.MAX_SAFE_INTEGER,
+        max_ppn_idm: Number.MIN_SAFE_INTEGER,
+        min_ppn_idm: Number.MAX_SAFE_INTEGER
+      };
+      
+      // Calculate sums and find min/max values
+      filteredData.forEach(item => {
+        // Calculate selisih values if not already present
+        const selisihGross = item.selisih_gross || (item.gross_wrc - item.gross_store) || 0;
+        const selisihPpn = item.selisih_ppn || (item.ppn_wrc - item.ppn_store) || 0;
+        const selisihGrossIdm = item.selisih_gross_idm || (item.gross_idm_wrc - item.gross_idm_store) || 0;
+        const selisihPpnIdm = item.selisih_ppn_idm || (item.ppn_idm_wrc - item.ppn_idm_store) || 0;
+        
+        // Sum values
+        summary.sel_gross += selisihGross;
+        summary.sel_ppn += selisihPpn;
+        summary.sel_gross_idm += selisihGrossIdm;
+        summary.sel_ppn_idm += selisihPpnIdm;
+        
+        // Find max/min values
+        summary.max_gross = Math.max(summary.max_gross, selisihGross);
+        summary.min_gross = Math.min(summary.min_gross, selisihGross);
+        
+        summary.max_ppn = Math.max(summary.max_ppn, selisihPpn);
+        summary.min_ppn = Math.min(summary.min_ppn, selisihPpn);
+        
+        summary.max_gross_idm = Math.max(summary.max_gross_idm, selisihGrossIdm);
+        summary.min_gross_idm = Math.min(summary.min_gross_idm, selisihGrossIdm);
+        
+        summary.max_ppn_idm = Math.max(summary.max_ppn_idm, selisihPpnIdm);
+        summary.min_ppn_idm = Math.min(summary.min_ppn_idm, selisihPpnIdm);
+      });
+      
+      // Handle edge cases where no data is found
+      if (filteredData.length === 0) {
+        summary.max_gross = 0;
+        summary.min_gross = 0;
+        summary.max_ppn = 0;
+        summary.min_ppn = 0;
+        summary.max_gross_idm = 0;
+        summary.min_gross_idm = 0;
+        summary.max_ppn_idm = 0;
+        summary.min_ppn_idm = 0;
+      }
+      
+      return summary;
     } catch (error) {
       logger.error(`Error getting summary: ${error.message}`);
       throw error;

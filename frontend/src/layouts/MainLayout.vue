@@ -102,7 +102,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '../stores';
 import { useToastService } from '../utils/toast';
@@ -176,19 +176,57 @@ const toggleMobileDrawer = () => {
   mobileOpen.value = !mobileOpen.value;
 };
 
-const toggleUserMenu = () => {
+const toggleUserMenu = (event) => {
+  event.stopPropagation();
   userMenuOpen.value = !userMenuOpen.value;
   if (userMenuOpen.value) {
     notificationsOpen.value = false;
   }
 };
 
-const toggleNotifications = () => {
+const toggleNotifications = (event) => {
+  event.stopPropagation();
   notificationsOpen.value = !notificationsOpen.value;
   if (notificationsOpen.value) {
     userMenuOpen.value = false;
   }
 };
+
+// Close dropdowns when clicking outside
+const handleClickOutside = (event) => {
+  // Check if click is outside user menu and its dropdown
+  const userMenuEl = document.querySelector('.user-menu');
+  const userDropdownEl = document.querySelector('.user-dropdown');
+  const notificationButtonEl = document.querySelector('.notification-button');
+  const notificationsDropdownEl = document.querySelector('.notifications-dropdown');
+  
+  // Close user menu if click is outside
+  if (userMenuOpen.value && 
+      userMenuEl && 
+      userDropdownEl && 
+      !userMenuEl.contains(event.target) && 
+      !userDropdownEl.contains(event.target)) {
+    userMenuOpen.value = false;
+  }
+  
+  // Close notifications if click is outside
+  if (notificationsOpen.value && 
+      notificationButtonEl && 
+      notificationsDropdownEl && 
+      !notificationButtonEl.contains(event.target) && 
+      !notificationsDropdownEl.contains(event.target)) {
+    notificationsOpen.value = false;
+  }
+};
+
+// Add and remove click event listener
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickOutside);
+});
 
 // Show logout confirmation dialog
 const showLogoutConfirm = ref(false);

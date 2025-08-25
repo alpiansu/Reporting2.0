@@ -18,7 +18,7 @@ const UserSchema = {
   email: { type: "string", required: true },
   password: { type: "string", required: true },
   fullName: { type: "string" },
-  role: { type: "string", enum: ["admin", "manager", "user"], default: "user" },
+  role: { type: "string", enum: ["admin", "superadmin", "user"], default: "user" },
   isActive: { type: "boolean", default: true },
   lastLogin: { type: "date" },
   profileImage: { type: "string" },

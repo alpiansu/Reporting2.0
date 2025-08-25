@@ -27,7 +27,7 @@ module.exports = {
   corsOptions: {
     origin: (origin, callback) => {
       if (!origin) return callback(null, true); // allow non-browser tools (Postman, curl, etc)
-      console.log("origin", origin);
+      // console.log("origin", origin); // Disabled unnecessary logging
       // cek apakah origin ada di whitelist (mulai dengan localhost atau 192.168.61.228)
       if (allowedOrigins.some(allowed => origin.startsWith(allowed))) {
         return callback(null, true);

@@ -12,6 +12,7 @@ const mDeptModule = require('./m_dept');
 const rekonWtHarianModule = require('./rekon_wt_harian');
 const mCabangModule = require('./m_cabang');
 const userModule = require('./user');
+const menuManagerModule = require('./menu-manager');
 
 module.exports = {
   // Export all modules
@@ -24,6 +25,7 @@ module.exports = {
   rekonWtHarianModule,
   mCabangModule,
   userModule,
+  menuManagerModule,
   
   // Initialize all modules
   initialize: (app) => {
@@ -38,6 +40,9 @@ module.exports = {
     const mCabang = mCabangModule.initialize(app);
     const user = userModule.initialize(app);
     
+    // Initialize menu manager module
+    app.use('/api/menu-manager', menuManagerModule.routes);
+    
     return {
       auth,
       store,
@@ -47,7 +52,8 @@ module.exports = {
       mDept,
       rekonWtHarian,
       mCabang,
-      user
+      user,
+      menuManager: true
     };
   }
 };

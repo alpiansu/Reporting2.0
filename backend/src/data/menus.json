@@ -1,0 +1,110 @@
+[
+  {
+    "id": "main",
+    "name": "Main",
+    "order": 1,
+    "items": [
+      {
+        "id": "dashboard",
+        "text": "Dashboard",
+        "icon": "pi-home",
+        "path": "/dashboard",
+        "roles": ["admin", "manager", "user"],
+        "keywords": ["home", "main"]
+      }
+    ],
+    "createdAt": "2023-01-01T00:00:00.000Z",
+    "updatedAt": "2023-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "data-management",
+    "name": "Data Management",
+    "order": 2,
+    "items": [
+      {
+        "id": "stores",
+        "text": "Stores",
+        "icon": "pi-shopping-bag",
+        "path": "/stores",
+        "roles": ["admin", "manager"],
+        "keywords": ["store", "shop"]
+      },
+      {
+        "id": "screenings",
+        "text": "Screenings",
+        "icon": "pi-chart-bar",
+        "path": "/screenings",
+        "roles": ["admin", "manager"],
+        "keywords": ["screen", "analysis"]
+      }
+    ],
+    "createdAt": "2023-01-01T00:00:00.000Z",
+    "updatedAt": "2023-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "reports",
+    "name": "Reports",
+    "order": 3,
+    "items": [
+      {
+        "id": "rekon-wt-harian",
+        "text": "Rekonsiliasi WT Harian",
+        "icon": "pi-sync",
+        "path": "/rekon-wt-harian",
+        "roles": ["admin", "manager"],
+        "keywords": ["reconciliation", "daily"]
+      },
+      {
+        "id": "sales-report",
+        "text": "Sales Report",
+        "icon": "pi-chart-line",
+        "path": "/sales-report",
+        "roles": ["admin", "manager", "user"],
+        "keywords": ["sales", "revenue"]
+      },
+      {
+        "id": "inventory-report",
+        "text": "Inventory Report",
+        "icon": "pi-box",
+        "path": "/inventory-report",
+        "roles": ["admin", "manager"],
+        "keywords": ["inventory", "stock"]
+      }
+    ],
+    "createdAt": "2023-01-01T00:00:00.000Z",
+    "updatedAt": "2023-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "administration",
+    "name": "Administration",
+    "order": 4,
+    "items": [
+      {
+        "id": "users",
+        "text": "User Management",
+        "icon": "pi-users",
+        "path": "/users",
+        "roles": ["admin"],
+        "keywords": ["user", "account"]
+      },
+      {
+        "id": "settings",
+        "text": "Settings",
+        "icon": "pi-cog",
+        "path": "/settings",
+        "roles": ["admin"],
+        "keywords": ["config", "preferences"]
+      },
+      {
+        "id": "menu-manager",
+        "text": "Menu Manager",
+        "icon": "pi-list",
+        "path": "/admin/menu-manager",
+        "roles": ["admin"],
+        "keywords": ["menu", "navigation", "admin"]
+      }
+    ],
+    "createdAt": "2023-01-01T00:00:00.000Z",
+    "updatedAt": "2023-01-01T00:00:00.000Z"
+  }
+]

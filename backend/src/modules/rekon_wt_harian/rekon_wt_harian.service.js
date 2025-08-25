@@ -7,7 +7,6 @@ const os = require("os");
 const logger = require("../../config/logger");
 const dbStore = require("../../config/db_store");
 const RekonWtHarian = require("../../models/rekon_wt_harian.model");
-const { Op } = require("sequelize");
 const config = require("../../config/rekon_wt_harian.config");
 const rekonProgressService = require("./rekon_progress.service");
 const storeService = require("../../modules/store/storeService");
@@ -432,6 +431,17 @@ class RekonWtHarianService {
 
           // Clear the interval
           clearInterval(progressInterval);
+
+          // Set recid to '1' for all processed records to mark them in active history if there are differences
+          await RekonWtHarian.update(
+            { recid: "1" },
+            {
+              where: {
+                cab: cab,
+                periode: period,
+              },
+            }
+          );
 
           // Simpan semua perbedaan dari file temporary ke database
           await this.saveDifferencesToDatabase(cab, period);
@@ -886,131 +896,102 @@ class RekonWtHarianService {
     const storeJsonDir = path.join(__dirname, "../../../data/rekon_wt_harian");
     const storeJsonFile = path.join(storeJsonDir, `${storeCode}_${period}.json`);
 
+    let storeData = [];
+    let connectionError = null;
     try {
       if (!storeInfo.dbHost) {
-        const errorMsg = `No dbHost found in branch ${cab}`;
-        logger.warn(`[${storeCode}] ${errorMsg}`);
-        return {
-          storeCode,
-          storeName: storeInfo.storeName,
-          differences: [],
-          errors: [errorMsg],
-        };
-      }
-
-      // Connect to store database with reduced retry for faster parallel processing
-      const storeConnection = await dbStore.createDbStore(storeInfo.dbHost, 2);
-
-      if (!storeConnection) {
-        const errorMsg = `Could not connect to ${storeInfo.dbHost}`;
-        logger.warn(`[${storeCode}] ${errorMsg}`);
-        return {
-          storeCode,
-          storeName: storeInfo.storeName,
-          differences: [],
-          errors: [errorMsg],
-        };
-      }
-
-      try {
-        // Get store data with timeout
-        const storeQuery = this.getStoreQuery(period);
-        logger.debug(`[${storeCode}] Executing query...`);
-
-        // Execute query with timeout
-        const queryTimeout = config.parallelProcessing?.queryTimeoutMs || 15000; // 15 seconds
-        const queryPromise = storeConnection.query(storeQuery);
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error("Query timeout")), queryTimeout);
-        });
-
-        const [storeData] = await Promise.race([queryPromise, timeoutPromise]);
-        logger.debug(`[${storeCode}] Query completed, got ${storeData.length} records`);
-
-        // Save store data to JSON file (delete old file first)
-        try {
-          await fs.mkdir(storeJsonDir, { recursive: true });
-          // Remove old file if exists
-          try {
-            await fs.unlink(storeJsonFile);
-            logger.info(`[${storeCode}] Old store JSON file deleted: ${storeJsonFile}`);
-          } catch (err) {
-            if (err.code !== "ENOENT") {
-              logger.warn(`[${storeCode}] Error deleting old JSON file: ${err.message}`);
-            }
-          }
-          await fs.writeFile(storeJsonFile, JSON.stringify(storeData));
-          logger.info(`[${storeCode}] Store data saved to JSON: ${storeJsonFile}`);
-        } catch (err) {
-          logger.error(`[${storeCode}] Error saving store data to JSON: ${err.message}`);
-        }
-
-        // Filter WRC data for this store
-        const storeWrcData = wrcData.filter(item => item.shop === storeCode);
-
-        // Compare data using storeData from DB (freshly fetched)
-        if (storeWrcData.length === 0) {
-          logger.debug(`[${storeCode}] No WRC data found`);
-          return {
-            storeCode,
-            storeName: storeInfo.storeName,
-            differences: [],
-            errors: [],
-          };
-        }
-
-        logger.debug(
-          `[${storeCode}] Comparing ${storeWrcData.length} WRC records with ${storeData.length} store records`
-        );
-        const differences = await this.compareData(cab, period, storeWrcData, storeData, storeCode);
-
-        logger.debug(`[${storeCode}] Found ${differences.length} differences`);
-        return {
-          storeCode,
-          storeName: storeInfo.storeName,
-          differences,
-          errors: [],
-        };
-      } finally {
-        // Properly close connection pool
+        connectionError = `No dbHost found in branch ${cab}`;
+        logger.warn(`[${storeCode}] ${connectionError}`);
+      } else {
+        // Try connect to store database
+        const storeConnection = await dbStore.createDbStore(storeInfo.dbHost, 2);
         if (storeConnection) {
           try {
-            if (storeConnection.end) {
-              await storeConnection.end();
-            } else if (storeConnection.destroy) {
-              storeConnection.destroy();
+            // Get store data with timeout
+            const storeQuery = this.getStoreQuery(period);
+            logger.debug(`[${storeCode}] Executing query...`);
+            const queryTimeout = config.parallelProcessing?.queryTimeoutMs || 15000;
+            const queryPromise = storeConnection.query(storeQuery);
+            const timeoutPromise = new Promise((_, reject) => {
+              setTimeout(() => reject(new Error("Query timeout")), queryTimeout);
+            });
+            [storeData] = await Promise.race([queryPromise, timeoutPromise]);
+            logger.debug(`[${storeCode}] Query completed, got ${storeData.length} records`);
+            // Save store data to JSON file (delete old file first)
+            try {
+              await fs.mkdir(storeJsonDir, { recursive: true });
+              try {
+                await fs.unlink(storeJsonFile);
+                logger.info(`[${storeCode}] Old store JSON file deleted: ${storeJsonFile}`);
+              } catch (err) {
+                if (err.code !== "ENOENT") {
+                  logger.warn(`[${storeCode}] Error deleting old JSON file: ${err.message}`);
+                }
+              }
+              await fs.writeFile(storeJsonFile, JSON.stringify(storeData));
+              logger.info(`[${storeCode}] Store data saved to JSON: ${storeJsonFile}`);
+            } catch (err) {
+              logger.error(`[${storeCode}] Error saving store data to JSON: ${err.message}`);
             }
-          } catch (closeError) {
-            // Log connection close error but don't throw
-            logger.warn(`[${storeCode}] Error closing connection: ${closeError.message}`);
+          } finally {
+            // Properly close connection pool
+            if (storeConnection) {
+              try {
+                if (storeConnection.end) {
+                  await storeConnection.end();
+                } else if (storeConnection.destroy) {
+                  storeConnection.destroy();
+                }
+              } catch (closeError) {
+                logger.warn(`[${storeCode}] Error closing connection: ${closeError.message}`);
+              }
+            }
           }
+        } else {
+          connectionError = `Could not connect to ${storeInfo.dbHost}`;
+          logger.warn(`[${storeCode}] ${connectionError}`);
         }
       }
     } catch (error) {
-      const errorMsg = `Processing error: ${error.message}`;
-      logger.error(`[${storeCode}] ${errorMsg}`);
+      connectionError = `Processing error: ${error.message}`;
+      logger.error(`[${storeCode}] ${connectionError}`);
+    }
 
-      // Don't throw - return error info instead to prevent premature response
+    // Jika koneksi gagal, coba baca file JSON lokal
+    if (storeData.length === 0 && connectionError) {
+      try {
+        const fileContent = await fs.readFile(storeJsonFile, "utf8");
+        storeData = JSON.parse(fileContent);
+        logger.info(`[${storeCode}] Loaded store data from local file: ${storeJsonFile}`);
+      } catch (err) {
+        logger.warn(`[${storeCode}] No local store JSON file found: ${storeJsonFile}`);
+        storeData = [];
+      }
+    }
+
+    // Filter WRC data for this store
+    const storeWrcData = wrcData.filter(item => item.shop === storeCode);
+
+    // Compare data
+    if (storeWrcData.length === 0) {
+      logger.debug(`[${storeCode}] No WRC data found`);
       return {
         storeCode,
         storeName: storeInfo.storeName,
         differences: [],
-        errors: [errorMsg],
+        errors: connectionError ? [connectionError] : [],
       };
     }
-  }
-  async saveDifference(difference) {
-    try {
-      const result = await RekonWtHarian.create(difference);
 
-      // Sync to JSON file after create
-      await this.syncToJsonFile();
-
-      return result;
-    } catch (error) {
-      logger.error(`Error saving difference: ${error.message}`);
-      throw error;
-    }
+    logger.debug(`[${storeCode}] Comparing ${storeWrcData.length} WRC records with ${storeData.length} store records`);
+    const differences = await this.compareData(cab, period, storeWrcData, storeData, storeCode);
+    logger.debug(`[${storeCode}] Found ${differences.length} differences`);
+    return {
+      storeCode,
+      storeName: storeInfo.storeName,
+      differences,
+      errors: connectionError ? [connectionError] : [],
+    };
   }
 
   /**
@@ -1042,17 +1023,6 @@ class RekonWtHarianService {
       let totalDifferences = 0;
       let totalSaved = 0;
       let totalErrors = 0;
-
-      // Hapus data existing untuk cab + periode
-      const deletedCount = await RekonWtHarian.destroy({
-        where: { cab, periode: period },
-      });
-
-      if (deletedCount > 0) {
-        logger.info(`🗑️ Deleted ${deletedCount} existing record(s) for cab=${cab}, periode=${period}`);
-      } else {
-        logger.warn(`⚠️ No existing records found to delete for cab=${cab}, periode=${period}`);
-      }
 
       // Proses setiap file perbedaan
       for (const file of differenceFiles) {
@@ -1496,6 +1466,169 @@ class RekonWtHarianService {
       return summary;
     } catch (error) {
       logger.error(`Error getting summary: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Compare WRC and store data
+   * @param {string} cab - Branch code
+   * @param {string} period - Period in YYMM format
+   * @param {Array} wrcData - WRC data (already filtered for specific store)
+   * @param {Array} storeData - Store data
+   * @returns {Promise<Array>} Array of differences
+   */
+  async compareData(cab, period, wrcData, storeData, storeCode) {
+    try {
+      const differences = [];
+
+      // Buat struktur data untuk mempercepat lookup
+      const wrcMap = new Map();
+      const storeMap = new Map();
+
+      // Buat path untuk file temporary
+      const tempDir = os.tmpdir();
+      const tempFile = path.join(tempDir, `differences_${cab}_${period}_${storeCode}_${Date.now()}.json`);
+
+      // Ensure temp directory exists
+      try {
+        await fs.mkdir(tempDir, { recursive: true });
+      } catch (error) {
+        if (error.code !== "EEXIST") {
+          throw error;
+        }
+      }
+
+      // Normalisasi data WRC dan simpan ke Map
+      const taskWrc = wrcData.map(async item => {
+        const normalizedItem = {
+          ...item,
+          GROSS: parseFloat(item.GROSS) || 0,
+          PPN: parseFloat(item.PPN) || 0,
+          GROSS_IDM: parseFloat(item.GROSS_IDM) || 0,
+          PPN_IDM: parseFloat(item.PPN_IDM) || 0,
+        };
+
+        const key = `${item.TIPE}|${item.TOKO}|${item.shop}|${item.TGL1}`;
+        wrcMap.set(key, normalizedItem);
+      });
+
+      await Promise.all(taskWrc);
+
+      // Normalisasi data store dan simpan ke Map
+      const taskStore = storeData.map(async item => {
+        const normalizedItem = {
+          ...item,
+          GROSS: parseFloat(item.GROSS) || 0,
+          PPN: parseFloat(item.PPN) || 0,
+          GROSS_IDM: parseFloat(item.GROSS_IDM) || 0,
+          PPN_IDM: parseFloat(item.PPN_IDM) || 0,
+        };
+
+        const key = `${item.TIPE}|${item.TOKO}|${item.shop}|${item.TGL1}`;
+        storeMap.set(key, normalizedItem);
+      });
+
+      await Promise.all(taskStore);
+
+      // Log jumlah data yang akan dibandingkan
+      logger.info(
+        `Comparing ${wrcData.length} WRC records with ${storeData.length} store records of ${storeCode} for cab ${cab} and period ${period}`
+      );
+
+      // Kumpulkan semua key unik dari kedua sumber data
+      const allKeys = new Set([...wrcMap.keys(), ...storeMap.keys()]);
+
+      // Proses semua data sekaligus
+      for (const key of allKeys) {
+        const wrcItem = wrcMap.get(key) || {
+          GROSS: 0,
+          PPN: 0,
+          GROSS_IDM: 0,
+          PPN_IDM: 0,
+          TIPE: key.split("|")[0],
+          TOKO: key.split("|")[1],
+          shop: key.split("|")[2],
+          TGL1: key.split("|")[3],
+        };
+
+        const storeItem = storeMap.get(key) || {
+          GROSS: 0,
+          PPN: 0,
+          GROSS_IDM: 0,
+          PPN_IDM: 0,
+          TIPE: key.split("|")[0],
+          TOKO: key.split("|")[1],
+          shop: key.split("|")[2],
+          TGL1: key.split("|")[3],
+        };
+
+        // Hitung selisih
+        const grossDiff = storeItem.GROSS - wrcItem.GROSS;
+        const ppnDiff = storeItem.PPN - wrcItem.PPN;
+        const grossIdmDiff = storeItem.GROSS_IDM - wrcItem.GROSS_IDM;
+        const ppnIdmDiff = storeItem.PPN_IDM - wrcItem.PPN_IDM;
+
+        // Cek apakah selisih melebihi threshold
+        const hasSignificantDifference =
+          Math.abs(grossDiff) > config.differenceThreshold ||
+          Math.abs(ppnDiff) > config.differenceThreshold ||
+          Math.abs(grossIdmDiff) > config.differenceThreshold ||
+          Math.abs(ppnIdmDiff) > config.differenceThreshold;
+
+        // Simpan jika ada selisih signifikan
+        if (hasSignificantDifference) {
+          logger.info(`Difference found for ${wrcItem.TOKO} on ${wrcItem.TGL1} with type ${wrcItem.TIPE}`);
+
+          const difference = {
+            cab,
+            periode: period,
+            tipe: wrcItem.TIPE,
+            toko: wrcItem.TOKO,
+            shop: wrcItem.shop,
+            tgl1: wrcItem.TGL1,
+            gross_store: storeItem.GROSS,
+            ppn_store: storeItem.PPN,
+            gross_idm_store: storeItem.GROSS_IDM,
+            ppn_idm_store: storeItem.PPN_IDM,
+            gross_wrc: wrcItem.GROSS,
+            ppn_wrc: wrcItem.PPN,
+            gross_idm_wrc: wrcItem.GROSS_IDM,
+            ppn_idm_wrc: wrcItem.PPN_IDM,
+            selisih_gross: grossDiff,
+            selisih_ppn: ppnDiff,
+            selisih_gross_idm: grossIdmDiff,
+            selisih_ppn_idm: ppnIdmDiff,
+          };
+
+          differences.push(difference);
+        }
+      }
+
+      // Simpan semua perbedaan ke file temporary jika ada
+      if (differences.length > 0) {
+        logger.info(`Saving ${differences.length} differences of ${storeCode} to temporary file`);
+
+        try {
+          // Simpan ke file temporary
+          await fs.writeFile(tempFile, JSON.stringify(differences));
+
+          logger.info(
+            `[${storeCode}] Saved ${differences.length} differences to temporary file (total: ${allDifferences.length})`
+          );
+
+          return differences;
+        } catch (error) {
+          logger.error(`[${storeCode}] Error saving differences to temporary file: ${error.message}`);
+          throw error;
+        }
+      } else {
+        logger.info(`No significant differences found from ${storeCode}`);
+      }
+
+      return differences;
+    } catch (error) {
+      logger.error(`Error comparing data ${storeCode} : ${error.message}`);
       throw error;
     }
   }

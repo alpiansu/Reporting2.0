@@ -89,6 +89,12 @@ const { sequelize } = require("../config/database");
 const RekonWtHarian = sequelize.define(
   "rekon_wt_harian",
   {
+    recid: {
+      type: DataTypes.STRING(1),
+      allowNull: false,
+      defaultValue: "*",
+      comment: "Setting recid data active for history tracking",
+    },
     cab: {
       type: DataTypes.STRING(10),
       primaryKey: true,

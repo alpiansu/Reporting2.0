@@ -341,7 +341,7 @@ router.get("/:cab/:periode/summary", authenticateJWT, rekonWtHarianController.ge
 router.delete(
   "/:cab/:periode",
   authenticateJWT,
-  authorizeRole(["admin", "manager"]),
+  authorizeRole(["admin", "superadmin"]),
   rekonWtHarianController.deleteResults
 );
 

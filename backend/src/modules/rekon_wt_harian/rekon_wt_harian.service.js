@@ -383,11 +383,11 @@ class RekonWtHarianService {
 
           // Override the processStore method to track progress
           const originalProcessStore = this.processStore;
-          this.processStore = async (store, wrcData) => {
+          this.processStore = async (store, cab, period, wrcData) => {
             logger.debug(`Processing store ${store.storeCode}`);
 
-            // Process the store
-            const result = await originalProcessStore.apply(this, [store, wrcData]);
+            // Process the store with all required parameters
+            const result = await originalProcessStore.apply(this, [store, cab, period, wrcData]);
 
             // Update progress tracking variables
             processedStores++;
@@ -435,6 +435,7 @@ class RekonWtHarianService {
 
           // Simpan semua perbedaan dari file temporary ke database
           await this.saveDifferencesToDatabase(cab, period);
+          await this.syncToJsonFile();
 
           // Final progress update
           rekonProgressService.updateProgress(progressId, {
@@ -882,6 +883,8 @@ class RekonWtHarianService {
       dbHost: store.dbHost,
       storeName: store.storeName,
     };
+    const storeJsonDir = path.join(__dirname, "../../../data/rekon_wt_harian");
+    const storeJsonFile = path.join(storeJsonDir, `${storeCode}_${period}.json`);
 
     try {
       if (!storeInfo.dbHost) {
@@ -924,9 +927,28 @@ class RekonWtHarianService {
         const [storeData] = await Promise.race([queryPromise, timeoutPromise]);
         logger.debug(`[${storeCode}] Query completed, got ${storeData.length} records`);
 
+        // Save store data to JSON file (delete old file first)
+        try {
+          await fs.mkdir(storeJsonDir, { recursive: true });
+          // Remove old file if exists
+          try {
+            await fs.unlink(storeJsonFile);
+            logger.info(`[${storeCode}] Old store JSON file deleted: ${storeJsonFile}`);
+          } catch (err) {
+            if (err.code !== "ENOENT") {
+              logger.warn(`[${storeCode}] Error deleting old JSON file: ${err.message}`);
+            }
+          }
+          await fs.writeFile(storeJsonFile, JSON.stringify(storeData));
+          logger.info(`[${storeCode}] Store data saved to JSON: ${storeJsonFile}`);
+        } catch (err) {
+          logger.error(`[${storeCode}] Error saving store data to JSON: ${err.message}`);
+        }
+
         // Filter WRC data for this store
         const storeWrcData = wrcData.filter(item => item.shop === storeCode);
 
+        // Compare data using storeData from DB (freshly fetched)
         if (storeWrcData.length === 0) {
           logger.debug(`[${storeCode}] No WRC data found`);
           return {
@@ -937,7 +959,6 @@ class RekonWtHarianService {
           };
         }
 
-        // Compare data
         logger.debug(
           `[${storeCode}] Comparing ${storeWrcData.length} WRC records with ${storeData.length} store records`
         );
@@ -978,194 +999,6 @@ class RekonWtHarianService {
       };
     }
   }
-
-  /**
-   * Compare WRC and store data
-   * @param {string} cab - Branch code
-   * @param {string} period - Period in YYMM format
-   * @param {Array} wrcData - WRC data (already filtered for specific store)
-   * @param {Array} storeData - Store data
-   * @returns {Promise<Array>} Array of differences
-   */
-  async compareData(cab, period, wrcData, storeData, storeCode) {
-    try {
-      const differences = [];
-
-      // Buat struktur data untuk mempercepat lookup
-      const wrcMap = new Map();
-      const storeMap = new Map();
-
-      // Buat path untuk file temporary
-      const tempDir = os.tmpdir();
-      const tempFile = path.join(tempDir, `differences_${cab}_${period}_${storeCode}_${Date.now()}.json`);
-
-      // Ensure temp directory exists
-      try {
-        await fs.mkdir(tempDir, { recursive: true });
-      } catch (error) {
-        if (error.code !== "EEXIST") {
-          throw error;
-        }
-      }
-
-      // Normalisasi data WRC dan simpan ke Map
-      const taskWrc = wrcData.map(async item => {
-        const normalizedItem = {
-          ...item,
-          GROSS: parseFloat(item.GROSS) || 0,
-          PPN: parseFloat(item.PPN) || 0,
-          GROSS_IDM: parseFloat(item.GROSS_IDM) || 0,
-          PPN_IDM: parseFloat(item.PPN_IDM) || 0,
-        };
-
-        const key = `${item.TIPE}|${item.TOKO}|${item.shop}|${item.TGL1}`;
-        wrcMap.set(key, normalizedItem);
-      });
-
-      await Promise.all(taskWrc);
-
-      // Normalisasi data store dan simpan ke Map
-      const taskStore = storeData.map(async item => {
-        const normalizedItem = {
-          ...item,
-          GROSS: parseFloat(item.GROSS) || 0,
-          PPN: parseFloat(item.PPN) || 0,
-          GROSS_IDM: parseFloat(item.GROSS_IDM) || 0,
-          PPN_IDM: parseFloat(item.PPN_IDM) || 0,
-        };
-
-        const key = `${item.TIPE}|${item.TOKO}|${item.shop}|${item.TGL1}`;
-        storeMap.set(key, normalizedItem);
-      });
-
-      await Promise.all(taskStore);
-
-      // Log jumlah data yang akan dibandingkan
-      logger.info(
-        `Comparing ${wrcData.length} WRC records with ${storeData.length} store records of ${storeCode} for cab ${cab} and period ${period}`
-      );
-
-      // Kumpulkan semua key unik dari kedua sumber data
-      const allKeys = new Set([...wrcMap.keys(), ...storeMap.keys()]);
-
-      // Proses semua data sekaligus
-      for (const key of allKeys) {
-        const wrcItem = wrcMap.get(key) || {
-          GROSS: 0,
-          PPN: 0,
-          GROSS_IDM: 0,
-          PPN_IDM: 0,
-          TIPE: key.split("|")[0],
-          TOKO: key.split("|")[1],
-          shop: key.split("|")[2],
-          TGL1: key.split("|")[3],
-        };
-
-        const storeItem = storeMap.get(key) || {
-          GROSS: 0,
-          PPN: 0,
-          GROSS_IDM: 0,
-          PPN_IDM: 0,
-          TIPE: key.split("|")[0],
-          TOKO: key.split("|")[1],
-          shop: key.split("|")[2],
-          TGL1: key.split("|")[3],
-        };
-
-        // Hitung selisih
-        const grossDiff = storeItem.GROSS - wrcItem.GROSS;
-        const ppnDiff = storeItem.PPN - wrcItem.PPN;
-        const grossIdmDiff = storeItem.GROSS_IDM - wrcItem.GROSS_IDM;
-        const ppnIdmDiff = storeItem.PPN_IDM - wrcItem.PPN_IDM;
-
-        // Cek apakah selisih melebihi threshold
-        const hasSignificantDifference =
-          Math.abs(grossDiff) > config.differenceThreshold ||
-          Math.abs(ppnDiff) > config.differenceThreshold ||
-          Math.abs(grossIdmDiff) > config.differenceThreshold ||
-          Math.abs(ppnIdmDiff) > config.differenceThreshold;
-
-        // Simpan jika ada selisih signifikan
-        if (hasSignificantDifference) {
-          logger.info(`Difference found for ${wrcItem.TOKO} on ${wrcItem.TGL1} with type ${wrcItem.TIPE}`);
-          logger.debug(`  GROSS: Store=${storeItem.GROSS}, WRC=${wrcItem.GROSS}, Diff=${grossDiff}`);
-          logger.debug(`  PPN: Store=${storeItem.PPN}, WRC=${wrcItem.PPN}, Diff=${ppnDiff}`);
-
-          const difference = {
-            cab,
-            periode: period,
-            tipe: wrcItem.TIPE,
-            toko: wrcItem.TOKO,
-            shop: wrcItem.shop,
-            tgl1: wrcItem.TGL1,
-            gross_store: storeItem.GROSS,
-            ppn_store: storeItem.PPN,
-            gross_idm_store: storeItem.GROSS_IDM,
-            ppn_idm_store: storeItem.PPN_IDM,
-            gross_wrc: wrcItem.GROSS,
-            ppn_wrc: wrcItem.PPN,
-            gross_idm_wrc: wrcItem.GROSS_IDM,
-            ppn_idm_wrc: wrcItem.PPN_IDM,
-            selisih_gross: grossDiff,
-            selisih_ppn: ppnDiff,
-            selisih_gross_idm: grossIdmDiff,
-            selisih_ppn_idm: ppnIdmDiff,
-          };
-
-          differences.push(difference);
-        }
-      }
-
-      // Simpan semua perbedaan ke file temporary jika ada
-      if (differences.length > 0) {
-        logger.info(`Saving ${differences.length} differences of ${storeCode} to temporary file`);
-
-        try {
-          // Baca file jika sudah ada untuk menambahkan data baru
-          let existingDifferences = [];
-          try {
-            const existingData = await fs.readFile(tempFile, "utf8");
-            existingDifferences = JSON.parse(existingData);
-            logger.debug(`Read ${existingDifferences.length} existing differences from temporary file`);
-          } catch (error) {
-            // File mungkin belum ada, lanjutkan dengan array kosong
-            if (error.code !== "ENOENT") {
-              logger.warn(`Error reading temporary file: ${error.message}`);
-            }
-          }
-
-          // Gabungkan perbedaan yang ada dengan yang baru
-          const allDifferences = [...existingDifferences, ...differences];
-
-          // Simpan ke file temporary
-          await fs.writeFile(tempFile, JSON.stringify(allDifferences));
-
-          logger.info(
-            `[${storeCode}] Saved ${differences.length} differences to temporary file (total: ${allDifferences.length})`
-          );
-
-          return differences;
-        } catch (error) {
-          logger.error(`[${storeCode}] Error saving differences to temporary file: ${error.message}`);
-          throw error;
-        }
-      } else {
-        logger.info(`No significant differences found from ${storeCode}`);
-      }
-
-      return differences;
-    } catch (error) {
-      logger.error(`Error comparing data ${storeCode} : ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Save difference to database
-   * @param {Object} difference - Difference data
-   * @returns {Promise<Object>} Saved record
-   * @deprecated This method is no longer used. Use bulkCreate for better performance.
-   */
   async saveDifference(difference) {
     try {
       const result = await RekonWtHarian.create(difference);

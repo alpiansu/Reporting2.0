@@ -82,6 +82,8 @@
  *           description: Record update time
  */
 const { DataTypes } = require("sequelize");
+const moment = require("moment-timezone");
+const getJakartaNow = () => moment().tz("Asia/Jakarta").toDate();
 const { sequelize } = require("../config/database");
 
 const RekonWtHarian = sequelize.define(
@@ -206,46 +208,38 @@ const RekonWtHarian = sequelize.define(
     tableName: "rekon_wt_harian",
     timestamps: false, // We handle timestamps manually with addtime/updtime
     hooks: {
-      // Hook untuk mengisi addtime saat create (jika belum diisi)
+      // Semua hook waktu menggunakan Asia/Jakarta
       beforeCreate: (record, options) => {
+        const nowJakarta = getJakartaNow();
         if (!record.addtime) {
-          record.addtime = new Date();
+          record.addtime = nowJakarta;
         }
-        // Tidak set updtime saat create pertama kali
         record.updtime = null;
       },
-      // Hook untuk mengisi updtime saat update
       beforeUpdate: (record, options) => {
-        record.updtime = new Date();
+        record.updtime = getJakartaNow();
       },
-      // Hook untuk bulk update dan upsert
       beforeBulkUpdate: options => {
-        // Add updtime for bulk updates
+        const nowJakarta = getJakartaNow();
         if (options.attributes) {
-          options.attributes.updtime = new Date();
+          options.attributes.updtime = nowJakarta;
         } else {
-          options.attributes = { updtime: new Date() };
+          options.attributes = { updtime: nowJakarta };
         }
       },
-
-      // Hook untuk upsert operations
       beforeUpsert: (values, options) => {
-        // For upsert, set updtime only if this is an update (not create)
-        // The upsert will handle addtime automatically for new records
+        const nowJakarta = getJakartaNow();
         if (!values.addtime) {
-          values.addtime = new Date(); // For new records
+          values.addtime = nowJakarta;
         }
-        // Always set updtime for upsert as it could be an update
-        values.updtime = new Date();
+        values.updtime = nowJakarta;
       },
-      // Hook untuk bulk create - pastikan addtime diisi
       beforeBulkCreate: (records, options) => {
-        const now = new Date();
+        const nowJakarta = getJakartaNow();
         records.forEach(record => {
           if (!record.addtime) {
-            record.addtime = now;
+            record.addtime = nowJakarta;
           }
-          // Tidak set updtime untuk bulk create (data baru)
           record.updtime = null;
         });
       },

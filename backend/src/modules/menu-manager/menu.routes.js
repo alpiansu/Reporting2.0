@@ -2,31 +2,20 @@
  * Menu Routes
  * Defines API endpoints for menu management
  */
-const express = require('express');
-const menuController = require('./menu.controller');
-const { authMiddleware } = require('../../middlewares');
+const express = require("express");
+const menuController = require("./menu.controller");
+const { authenticateJWT, authorizeRole } = require("../../middlewares/auth.middleware");
 
 const router = express.Router();
+const allowedRoles = ["admin", "superadmin"];
 
-// Get all menus - Admin only
-router.get('/', authMiddleware.isAdmin, menuController.getAllMenus);
-
-// Get menu by ID - Admin only
-router.get('/:id', authMiddleware.isAdmin, menuController.getMenuById);
-
-// Get menus by role - Admin only
-router.get('/role/:role', authMiddleware.isAdmin, menuController.getMenusByRole);
-
-// Get menus for current user - Any authenticated user
-router.get('/user/current', authMiddleware.authenticate, menuController.getMenusForCurrentUser);
-
-// Create a new menu - Admin only
-router.post('/', authMiddleware.isAdmin, menuController.createMenu);
-
-// Update an existing menu - Admin only
-router.put('/:id', authMiddleware.isAdmin, menuController.updateMenu);
-
-// Delete a menu - Admin only
-router.delete('/:id', authMiddleware.isAdmin, menuController.deleteMenu);
+// Semua endpoint menu hanya bisa diakses oleh admin & superadmin
+router.get("/", authenticateJWT, authorizeRole(allowedRoles), menuController.getAllMenus);
+router.get("/:id", authenticateJWT, authorizeRole(allowedRoles), menuController.getMenuById);
+router.get("/role/:role", authenticateJWT, authorizeRole(allowedRoles), menuController.getMenusByRole);
+router.get("/user/current", authenticateJWT, authorizeRole(allowedRoles), menuController.getMenusForCurrentUser);
+router.post("/", authenticateJWT, authorizeRole(allowedRoles), menuController.createMenu);
+router.put("/:id", authenticateJWT, authorizeRole(allowedRoles), menuController.updateMenu);
+router.delete("/:id", authenticateJWT, authorizeRole(allowedRoles), menuController.deleteMenu);
 
 module.exports = router;

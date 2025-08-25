@@ -75,6 +75,12 @@ const routes = [
         component: () => import("../views/profile/Profile.vue"),
         meta: { requiresAuth: true, title: "Profile" },
       },
+      {
+        path: "admin/menu-manager",
+        name: "MenuManager",
+        component: () => import("../views/admin/MenuManager.vue"),
+        meta: { requiresAuth: true, requiresAdmin: true, title: "Menu Manager" },
+      },
     ],
   },
   {
@@ -105,6 +111,12 @@ router.beforeEach(async (to, from, next) => {
   }
   // Check if the route requires guest access (like login page)
   else if (to.meta.requiresGuest && isAuthenticated) {
+    next({ name: "Dashboard" });
+    return;
+  }
+  
+  // Check if the route requires admin role
+  if (to.meta.requiresAdmin && (!authStore.user || authStore.user.role !== 'admin')) {
     next({ name: "Dashboard" });
     return;
   }

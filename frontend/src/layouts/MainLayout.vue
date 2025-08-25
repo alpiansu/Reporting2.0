@@ -102,9 +102,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { useAuthStore } from '../stores';
+import { useAuthStore, useMenuStore } from '../stores';
 import { useToastService } from '../utils/toast';
 import ConfirmDialog from '../components/common/ConfirmDialog.vue';
 import FormDialog from '../components/common/FormDialog.vue';
@@ -128,6 +128,11 @@ const notificationsOpen = ref(false);
 // Navigation loading state
 const isNavigating = ref(false);
 
+// Menu store
+const menuStore = useMenuStore();
+const menuCategories = computed(() => menuStore.menuCategories);
+const menuLoading = computed(() => menuStore.loading);
+
 // Setup navigation loading indicator
 router.beforeEach((to, from, next) => {
   isNavigating.value = true;
@@ -141,36 +146,23 @@ router.afterEach(() => {
   }, 300);
 });
 
-const menuCategories = [
-  {
-    name: 'Main',
-    items: [
-      { text: 'Dashboard', icon: 'pi-home', path: '/dashboard' },
-    ]
+// Fetch menus when user changes
+watch(
+  () => authStore.user,
+  async (newUser) => {
+    if (newUser) {
+      try {
+        await menuStore.fetchMenus();
+      } catch (error) {
+        console.error('Failed to fetch menus:', error);
+        toast.showError('Error', 'Failed to load navigation menu');
+      }
+    }
   },
-  {
-    name: 'Data Management',
-    items: [
-      { text: 'Stores', icon: 'pi-shopping-bag', path: '/stores' },
-      { text: 'Screenings', icon: 'pi-chart-bar', path: '/screenings' },
-    ]
-  },
-  {
-    name: 'Reports',
-    items: [
-      { text: 'Rekonsiliasi WT Harian', icon: 'pi-sync', path: '/rekon-wt-harian' },
-      { text: 'Sales Report', icon: 'pi-chart-line', path: '/sales-report' },
-      { text: 'Inventory Report', icon: 'pi-box', path: '/inventory-report' },
-    ]
-  },
-  {
-    name: 'Administration',
-    items: [
-      { text: 'User Management', icon: 'pi-users', path: '/users' },
-      { text: 'Settings', icon: 'pi-cog', path: '/settings' },
-    ]
-  }
-];
+  { immediate: true }
+);
+
+// Menu categories are now loaded from the API via menuStore
 
 const toggleMobileDrawer = () => {
   mobileOpen.value = !mobileOpen.value;

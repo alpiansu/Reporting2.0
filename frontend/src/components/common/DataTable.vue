@@ -6,7 +6,7 @@
         <h3 class="filters-title">
           <i class="pi pi-filter"></i> Filter Data
         </h3>
-        <button @click.prevent="$emit('reset-filters')" class="btn btn-secondary btn-sm">
+        <button @click.prevent="$emit('reset-filters')" class="btn btn-reset">
           <i class="pi pi-filter-slash"></i> Reset
         </button>
       </div>
@@ -36,7 +36,7 @@
     <div v-else-if="error" class="error-state">
       <i class="pi pi-exclamation-triangle" style="font-size: 2rem; color: #e74c3c;"></i>
       <p>{{ error }}</p>
-      <button @click="handleRefreshClick" class="btn btn-secondary btn-sm">
+      <button @click="handleRefreshClick" class="btn btn-refresh">
         <i class="pi pi-refresh"></i> Coba Lagi
       </button>
     </div>
@@ -54,10 +54,10 @@
           <h3 class="table-title">{{ tableTitle }}</h3>
           <div class="table-actions">
             <slot name="table-actions">
-              <button v-if="showExportButton" class="btn btn-secondary btn-sm" @click.prevent="$emit('export')" title="Ekspor ke Excel">
+              <button v-if="showExportButton" class="btn btn-export" @click.prevent="$emit('export')" title="Ekspor ke Excel">
                 <i class="pi pi-file-excel"></i> Ekspor Data
               </button>
-              <button v-if="showPrintButton" class="btn btn-secondary btn-sm" @click.prevent="$emit('print')" title="Cetak hasil">
+              <button v-if="showPrintButton" class="btn btn-print" @click.prevent="$emit('print')" title="Cetak hasil">
                 <i class="pi pi-print"></i> Cetak
               </button>
             </slot>
@@ -89,31 +89,31 @@
         </div>
 
         <div class="pagination-controls">
-          <button @click.prevent="goToFirstPage" :disabled="currentPage === 1" class="btn btn-icon"
+          <button @click.prevent="goToFirstPage" :disabled="currentPage === 1" class="btn btn-nav"
             title="Halaman pertama">
             <i class="pi pi-angle-double-left"></i>
           </button>
 
-          <button @click.prevent="prevPage" :disabled="currentPage === 1" class="btn btn-icon" title="Halaman sebelumnya">
+          <button @click.prevent="prevPage" :disabled="currentPage === 1" class="btn btn-nav" title="Halaman sebelumnya">
             <i class="pi pi-angle-left"></i>
           </button>
 
           <div class="page-numbers">
             <template v-for="pageNum in displayedPageNumbers" :key="pageNum">
               <button v-if="pageNum !== '...'" @click.prevent="goToPage(pageNum)"
-                :class="['btn', 'btn-page', currentPage === pageNum ? 'btn-active' : '']">
+                :class="['btn', 'btn-page', currentPage === pageNum ? 'btn-page-active' : '']">
                 {{ pageNum }}
               </button>
               <span v-else class="ellipsis">...</span>
             </template>
           </div>
 
-          <button @click.prevent="nextPage" :disabled="currentPage === totalPages" class="btn btn-icon"
+          <button @click.prevent="nextPage" :disabled="currentPage === totalPages" class="btn btn-nav"
             title="Halaman selanjutnya">
             <i class="pi pi-angle-right"></i>
           </button>
 
-          <button @click.prevent="goToLastPage" :disabled="currentPage === totalPages" class="btn btn-icon"
+          <button @click.prevent="goToLastPage" :disabled="currentPage === totalPages" class="btn btn-nav"
             title="Halaman terakhir">
             <i class="pi pi-angle-double-right"></i>
           </button>
@@ -130,7 +130,7 @@
     
     <!-- Actions - Always visible -->
     <div v-if="showRefreshButton" class="actions-section">
-      <button @click="handleRefreshClick" class="btn btn-secondary">
+      <button @click="handleRefreshClick" class="btn btn-refresh">
         <i class="pi pi-refresh"></i> Refresh Data
       </button>
     </div>
@@ -807,6 +807,116 @@ watch(() => props.filteredData, (newData) => {
   justify-content: center;
   padding: 1rem;
   border-top: 1px solid #e9ecef;
+}
+
+/* Styled buttons for refresh, reset, export, print, and navigation */
+.btn-refresh, .btn-reset, .btn-export, .btn-print, .btn-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.2rem;
+  font-weight: 500;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  border: none;
+  cursor: pointer;
+}
+
+.btn-refresh {
+  background: linear-gradient(135deg, #4a6cf7, #3a5ce5);
+  color: white;
+}
+
+.btn-refresh:hover {
+  background: linear-gradient(135deg, #3a5ce5, #2a4cd5);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
+}
+
+.btn-reset {
+  background: linear-gradient(135deg, #f76a6a, #e53a3a);
+  color: white;
+}
+
+.btn-reset:hover {
+  background: linear-gradient(135deg, #e53a3a, #d52a2a);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
+}
+
+.btn-export {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+}
+
+.btn-export:hover {
+  background: linear-gradient(135deg, #059669, #047857);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
+}
+
+.btn-print {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: white;
+}
+
+.btn-print:hover {
+  background: linear-gradient(135deg, #4f46e5, #4338ca);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
+}
+
+.btn-nav {
+  background: linear-gradient(135deg, #64748b, #475569);
+  color: white;
+  padding: 0.5rem 0.8rem;
+}
+
+.btn-nav:hover {
+  background: linear-gradient(135deg, #475569, #334155);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
+}
+
+.btn-nav:disabled {
+  background: #cbd5e1;
+  color: #94a3b8;
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-page {
+  background: linear-gradient(135deg, #e2e8f0, #cbd5e1);
+  color: #334155;
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0.25rem;
+  border-radius: 4px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn-page:hover {
+  background: linear-gradient(135deg, #cbd5e1, #94a3b8);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.btn-page-active {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.btn-page-active:hover {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+}
+
+.btn-refresh i, .btn-reset i, .btn-export i, .btn-print i, .btn-nav i {
+  font-size: 1rem;
 }
 
 /* Responsive adjustments */

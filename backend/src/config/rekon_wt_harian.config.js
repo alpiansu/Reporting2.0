@@ -61,7 +61,7 @@ module.exports = {
   },
 
   // Threshold for considering values as different (to handle floating point precision issues)
-  differenceThreshold: 50.01,
+  differenceThreshold: 100.01,
 
   // Parallel processing configuration
   parallelProcessing: {
@@ -80,7 +80,7 @@ module.exports = {
     // Stores that will be artificially timed out for wave system testing
     // Add store codes here to simulate timeouts in first 2 waves
     simulateTimeoutStores: [],
-    // Example: simulateTimeoutStores: ['0001', '0002'], 
+    // Example: simulateTimeoutStores: ['0001', '0002'],
     // These stores will timeout in wave 1 & 2, then succeed in wave 3
   },
 };

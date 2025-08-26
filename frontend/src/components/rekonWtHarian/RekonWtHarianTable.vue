@@ -10,35 +10,42 @@
     <!-- Search Component -->
     <template #filters>
       <div class="search-container">
-        <form @submit.prevent="handleSearch" class="search-form">
-          <div class="search-box">
-            <i class="pi pi-search search-icon"></i>
-            <input type="text" v-model="searchQuery" @input="handleSearch" placeholder="Cari Data ..."
-              class="search-input" />
-            <button type="button" v-if="searchQuery" @click="clearSearch" class="clear-button">
-              <i class="pi pi-times"></i>
-            </button>
-          </div>
-        </form>
+        <div class="filters-row">
+          <form @submit.prevent="handleSearch" class="search-form">
+            <div class="search-box">
+              <i class="pi pi-search search-icon"></i>
+              <input type="text" v-model="searchQuery" @input="handleSearch" placeholder="Cari Data ..."
+                class="search-input" />
+              <button type="button" v-if="searchQuery" @click="clearSearch" class="clear-button">
+                <i class="pi pi-times"></i>
+              </button>
+            </div>
+          </form>
 
-        <!-- Filter Toleransi Selisih -->
-        <div class="tolerance-filter">
-          <label for="toleranceAmount">Toleransi Selisih (Rp):</label>
-          <div class="tolerance-input-container">
-            <input 
-              type="number" 
-              id="toleranceAmount" 
-              v-model="toleranceAmount" 
-              @input="handleToleranceChange" 
-              min="0" 
-              step="100"
-              class="tolerance-input" 
-            />
-            <button type="button" @click="resetTolerance" class="reset-tolerance-button">
-              <i class="pi pi-refresh"></i>
-            </button>
+          <!-- Filter Toleransi Selisih -->
+          <div class="tolerance-filter">
+            <div class="tolerance-header">
+              <i class="pi pi-filter"></i>
+              <label for="toleranceAmount">Toleransi Selisih</label>
+            </div>
+            <div class="tolerance-input-container">
+              <span class="currency-symbol">Rp</span>
+              <input 
+                type="number" 
+                id="toleranceAmount" 
+                v-model="toleranceAmount" 
+                @input="handleToleranceChange" 
+                min="0" 
+                step="100"
+                class="tolerance-input" 
+                placeholder="Masukkan nilai"
+              />
+              <button type="button" @click="resetTolerance" class="reset-tolerance-button" title="Reset filter">
+                <i class="pi pi-refresh"></i>
+              </button>
+            </div>
+            <small class="tolerance-help">Tampilkan selisih di atas nilai ini</small>
           </div>
-          <small class="tolerance-help">Tampilkan selisih di atas nilai ini</small>
         </div>
       </div>
     </template>
@@ -556,32 +563,53 @@ const printResults = () => {
 .search-container {
   margin-bottom: 1rem;
   width: 100%;
-  max-width: 500px;
   display: flex;
   flex-direction: column;
   gap: 1rem;
 }
 
+.filters-row {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 1.5rem;
+  width: 100%;
+}
+
+.search-form {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
 .search-box {
   position: relative;
   width: 100%;
+  background-color: #fff;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
 }
 
 .search-icon {
   position: absolute;
-  left: 12px;
+  left: 15px;
   top: 50%;
   transform: translateY(-50%);
-  color: #666;
+  color: var(--primary-color);
+  font-size: 0.9rem;
 }
 
 .search-input {
   width: 100%;
-  padding: 10px 40px 10px 35px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  padding: 12px 40px 12px 40px;
+  border: none;
+  border-radius: 6px;
   font-size: 14px;
   transition: all 0.3s ease;
+  background-color: transparent;
 }
 
 .search-input:focus {
@@ -614,33 +642,67 @@ const printResults = () => {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  margin-top: 0.5rem;
+  min-width: 280px;
+  background-color: #f8f9fa;
+  padding: 12px 15px;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.tolerance-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.tolerance-header i {
+  color: var(--primary-color);
+  font-size: 0.9rem;
 }
 
 .tolerance-filter label {
-  font-weight: 500;
+  font-weight: 600;
   font-size: 0.9rem;
+  color: #333;
+  margin: 0;
 }
 
 .tolerance-input-container {
   position: relative;
   display: flex;
   align-items: center;
+  background-color: #fff;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  overflow: hidden;
+}
+
+.currency-symbol {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  background-color: #f1f3f5;
+  border-right: 1px solid #ddd;
+  color: #495057;
+  font-weight: 500;
+  height: 100%;
 }
 
 .tolerance-input {
-  width: 100%;
-  padding: 8px 40px 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  flex: 1;
+  border: none;
+  padding: 10px 40px 10px 10px;
   font-size: 14px;
   transition: all 0.3s ease;
+  width: 100%;
 }
 
 .tolerance-input:focus {
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.2);
   outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.1);
 }
 
 .reset-tolerance-button {
@@ -648,21 +710,25 @@ const printResults = () => {
   right: 10px;
   background: none;
   border: none;
-  color: #666;
+  color: #adb5bd;
   cursor: pointer;
   padding: 5px;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.2s ease;
 }
 
 .reset-tolerance-button:hover {
-  color: #333;
+  color: var(--primary-color);
+  transform: rotate(90deg);
 }
 
 .tolerance-help {
   font-size: 0.8rem;
-  color: #666;
+  color: #6c757d;
+  margin-top: 4px;
+  font-style: italic;
 }
 
 .same-amount {

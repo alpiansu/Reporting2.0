@@ -8,25 +8,25 @@
     <div class="card">
       <div class="card-header">
         <h2>Daftar Pengguna</h2>
-        <button class="add-button" @click="showAddUserModal = true">
+        <button class="add-button" @click="addUser()">
           <i class="pi pi-plus"></i> Tambah Pengguna Baru
         </button>
       </div>
 
       <div class="card-body">
-        <div v-if="userStore.loading" class="loading-state">
+        <div v-if="loading" class="loading-state">
           <i class="pi pi-spin pi-spinner"></i>
           <p>Memuat data pengguna...</p>
         </div>
 
-        <div v-else-if="userStore.error" class="error-state">
-          <i class="pi pi-exclamation-triangle"></i> {{ userStore.error }}
+        <div v-else-if="error" class="error-state">
+          <i class="pi pi-exclamation-triangle"></i> {{ error }}
         </div>
 
-        <div v-else-if="!userStore.hasUsers" class="empty-state">
+        <div v-else-if="!hasUsers" class="empty-state">
           <i class="pi pi-info-circle"></i>
           <p>Belum ada pengguna yang tersedia</p>
-          <button class="add-button" @click="showAddUserModal = true">
+          <button class="add-button" @click="addUser()">
             <i class="pi pi-plus"></i> Tambah Pengguna Baru
           </button>
         </div>
@@ -46,7 +46,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="user in userStore.users" :key="user.id">
+                <tr v-for="user in users" :key="user.id">
                   <td>{{ user.username }}</td>
                   <td>{{ user.fullName || '-' }}</td>
                   <td>{{ user.email }}</td>
@@ -168,10 +168,16 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
-import { useUserStore } from '../../stores';
+import { ref, onMounted, computed } from 'vue';
+import { useToast } from 'primevue/usetoast';
+import api from '../../services/api';
 
-const userStore = useUserStore();
+const toast = useToast();
+
+// User state
+const users = ref([]);
+const loading = ref(false);
+const error = ref(null);
 
 // User form state
 const showUserModal = ref(false);
@@ -185,6 +191,9 @@ const userForm = ref({
   isActive: true
 });
 
+// Computed properties
+const hasUsers = computed(() => users.value.length > 0);
+
 // Confirmation modal state
 const showConfirmModal = ref(false);
 const confirmMessage = ref('');
@@ -192,12 +201,30 @@ const confirmCallback = ref(() => {});
 
 // Fetch users on component mount
 onMounted(async () => {
-  try {
-    await userStore.fetchUsers();
-  } catch (error) {
-    console.error('Failed to fetch users:', error);
-  }
+  await fetchUsers();
 });
+
+// Fetch users from API
+async function fetchUsers() {
+  loading.value = true;
+  error.value = null;
+  
+  try {
+    const response = await api.get('/users');
+    users.value = response.data.data || [];
+  } catch (err) {
+    console.error('Failed to fetch users:', err);
+    error.value = err.response?.data?.message || 'Gagal memuat data pengguna';
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error.value,
+      life: 3000
+    });
+  } finally {
+    loading.value = false;
+  }
+}
 
 // User form methods
 function addUser() {
@@ -229,13 +256,33 @@ function editUser(user) {
 async function saveUser() {
   try {
     if (isEditingUser.value) {
-      await userStore.updateUser(userForm.value.id, userForm.value);
+      await api.put(`/users/${userForm.value.id}`, userForm.value);
+      toast.add({
+        severity: 'success',
+        summary: 'Berhasil',
+        detail: 'Pengguna berhasil diperbarui',
+        life: 3000
+      });
     } else {
-      await userStore.createUser(userForm.value);
+      await api.post('/users', userForm.value);
+      toast.add({
+        severity: 'success',
+        summary: 'Berhasil',
+        detail: 'Pengguna baru berhasil dibuat',
+        life: 3000
+      });
     }
     closeUserModal();
+    // Refresh user list after saving
+    await fetchUsers();
   } catch (error) {
     console.error('Failed to save user:', error);
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error.response?.data?.message || 'Gagal menyimpan data pengguna',
+      life: 3000
+    });
   }
 }
 
@@ -248,10 +295,24 @@ function confirmDeleteUser(user) {
   confirmMessage.value = `Apakah Anda yakin ingin menghapus pengguna ${user.username}?`;
   confirmCallback.value = async () => {
     try {
-      await userStore.deleteUser(user.id);
+      await api.delete(`/users/${user.id}`);
+      toast.add({
+        severity: 'success',
+        summary: 'Berhasil',
+        detail: 'Pengguna berhasil dihapus',
+        life: 3000
+      });
       closeConfirmModal();
+      // Refresh user list after deletion
+      await fetchUsers();
     } catch (error) {
       console.error('Failed to delete user:', error);
+      toast.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: error.response?.data?.message || 'Gagal menghapus pengguna',
+        life: 3000
+      });
     }
   };
   showConfirmModal.value = true;
@@ -261,10 +322,23 @@ function confirmResetPassword(user) {
   confirmMessage.value = `Apakah Anda yakin ingin mereset password untuk pengguna ${user.username}?`;
   confirmCallback.value = async () => {
     try {
-      await userStore.resetPassword(user.id);
+      const response = await api.post(`/users/${user.id}/reset-password`);
+      const newPassword = response.data.password;
       closeConfirmModal();
+      toast.add({
+        severity: 'success',
+        summary: 'Berhasil',
+        detail: `Password berhasil direset. Password baru: ${newPassword}`,
+        life: 5000
+      });
     } catch (error) {
       console.error('Failed to reset password:', error);
+      toast.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: error.response?.data?.message || 'Gagal mereset password',
+        life: 3000
+      });
     }
   };
   showConfirmModal.value = true;

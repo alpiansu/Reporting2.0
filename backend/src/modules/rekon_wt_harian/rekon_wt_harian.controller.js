@@ -8,6 +8,24 @@ const config = require("../../config/rekon_wt_harian.config");
 
 class RekonWtHarianController {
   /**
+   * Cleanup temporary files used in reconciliation
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @param {Function} next - Express next middleware function
+   */
+  async cleanupTempFiles(req, res, next) {
+    try {
+      await rekonWtHarianService.cleanupTempFiles();
+      res.status(200).json({
+        success: true,
+        message: "Temporary files cleaned up successfully",
+      });
+    } catch (error) {
+      logger.error(`Error in cleanupTempFiles: ${error.message}`);
+      next(error);
+    }
+  }
+  /**
    * Start reconciliation process
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object

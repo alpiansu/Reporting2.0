@@ -1010,7 +1010,7 @@ class RekonWtHarianService {
       // Cari semua file temporary yang sesuai dengan pola
       const files = await fs.readdir(tempDir);
       const differenceFiles = files.filter(file => {
-        return file.startsWith(`differences_${cab}_${period}_`) && file.endsWith(".json");
+        return file.startsWith(`differences_wtharian_${cab}_${period}_`) && file.endsWith(".json");
       });
 
       if (differenceFiles.length === 0) {
@@ -1192,12 +1192,14 @@ class RekonWtHarianService {
           const selisihPpn = Math.abs(parseFloat(item.ppn_wrc || 0) - parseFloat(item.ppn_store || 0));
           const selisihGrossIdm = Math.abs(parseFloat(item.gross_idm_wrc || 0) - parseFloat(item.gross_idm_store || 0));
           const selisihPpnIdm = Math.abs(parseFloat(item.ppn_idm_wrc || 0) - parseFloat(item.ppn_idm_store || 0));
-          
+
           // Jika semua selisih di bawah toleransi, jangan tampilkan data
-          if (selisihGross <= toleranceAmount && 
-              selisihPpn <= toleranceAmount && 
-              selisihGrossIdm <= toleranceAmount && 
-              selisihPpnIdm <= toleranceAmount) {
+          if (
+            selisihGross <= toleranceAmount &&
+            selisihPpn <= toleranceAmount &&
+            selisihGrossIdm <= toleranceAmount &&
+            selisihPpnIdm <= toleranceAmount
+          ) {
             return false;
           }
         }
@@ -1505,7 +1507,7 @@ class RekonWtHarianService {
 
       // Buat path untuk file temporary
       const tempDir = os.tmpdir();
-      const tempFile = path.join(tempDir, `differences_${cab}_${period}_${storeCode}_${Date.now()}.json`);
+      const tempFile = path.join(tempDir, `differences_wtharian_${cab}_${period}_${storeCode}_${Date.now()}.json`);
 
       // Ensure temp directory exists
       try {
@@ -1647,6 +1649,60 @@ class RekonWtHarianService {
     } catch (error) {
       logger.error(`Error comparing data ${storeCode} : ${error.message}`);
       throw error;
+    }
+  }
+
+  /**
+   * Clean up old temporary difference files
+   * @param {number} maxAge - Maximum age in milliseconds (default: 24 hours)
+   * @returns {Promise<Object>} Cleanup result
+   */
+  async cleanupTempFiles() {
+    try {
+      const tempDir = os.tmpdir();
+      const files = await fs.readdir(tempDir);
+
+      // Filter for difference files
+      const differenceFiles = files.filter(file => {
+        return file.startsWith("differences_wtharian_") && file.endsWith(".json");
+      });
+
+      if (differenceFiles.length === 0) {
+        return;
+      }
+
+      logger.info(`Found ${differenceFiles.length} difference files to cleanup`);
+      let deletedCount = 0;
+
+      for (const file of differenceFiles) {
+        try {
+          const filePath = path.join(tempDir, file);
+
+          await fs.unlink(filePath);
+          deletedCount++;
+          logger.info(`Deleted old temporary file: ${file}`);
+        } catch (error) {
+          logger.error(`Error cleaning up file ${file}: ${error.message}`);
+        }
+      }
+
+      if (deletedCount > 0) {
+        logger.info(`Cleaned up ${deletedCount} old temporary difference files`);
+      }
+
+      return {
+        success: true,
+        message: `Cleaned up ${deletedCount} old temporary difference files`,
+        deletedCount,
+        totalChecked: differenceFiles.length,
+      };
+    } catch (error) {
+      logger.error(`Error in cleanupTempFiles: ${error.message}`);
+      return {
+        success: false,
+        message: `Error cleaning up temporary files: ${error.message}`,
+        error: error.message,
+      };
     }
   }
 }

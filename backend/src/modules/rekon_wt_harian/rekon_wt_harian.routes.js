@@ -373,6 +373,45 @@ router.delete(
  *       500:
  *         description: Server error
  */
+
+/**
+ * @swagger
+ * /rekon-wt-harian/cleanup-temp-files:
+ *   get:
+ *     summary: Clean up temporary difference files
+ *     description: Deletes old temporary difference files that may not have been cleaned up due to connection loss
+ *     tags: [RekonWtHarian]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Cleanup operation completed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 deletedFiles:
+ *                   type: integer
+ *                 totalFiles:
+ *                   type: integer
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - User does not have required role
+ *       500:
+ *         description: Server error
+ */
+router.get(
+  "/cleanup-temp-files",
+  authenticateJWT,
+  authorizeRole(["admin", "superadmin"]),
+  rekonWtHarianController.cleanupTempFiles
+);
 // This endpoint is handled by rekonWebSocketService in server.js
 
 module.exports = router;

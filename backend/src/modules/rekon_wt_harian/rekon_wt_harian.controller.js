@@ -32,6 +32,9 @@ class RekonWtHarianController {
         });
       }
 
+      //cleanup old temp files
+      await rekonWtHarianService.cleanupTempFiles();
+
       // Check if there is already an active reconciliation process
       const cabParam = cab === "SEMUA" || !cab ? "All" : cab;
       const activeProcess = rekonProgressService.getActiveProcess(cabParam, periode);

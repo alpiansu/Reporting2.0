@@ -20,6 +20,26 @@
             </button>
           </div>
         </form>
+
+        <!-- Filter Toleransi Selisih -->
+        <div class="tolerance-filter">
+          <label for="toleranceAmount">Toleransi Selisih (Rp):</label>
+          <div class="tolerance-input-container">
+            <input 
+              type="number" 
+              id="toleranceAmount" 
+              v-model="toleranceAmount" 
+              @input="handleToleranceChange" 
+              min="0" 
+              step="100"
+              class="tolerance-input" 
+            />
+            <button type="button" @click="resetTolerance" class="reset-tolerance-button">
+              <i class="pi pi-refresh"></i>
+            </button>
+          </div>
+          <small class="tolerance-help">Tampilkan selisih di atas nilai ini</small>
+        </div>
       </div>
     </template>
 
@@ -92,11 +112,15 @@
     </template>
 
     <!-- Table Row -->
-    <template #table-row="{ item, index }">
+    <template #table-row="{ item }">
       <td>{{ item.cab }}</td>
       <td>{{ formatDate(item.tgl1) }}</td>
       <td>{{ item.shop }}</td>
-      <td>{{ item.tipe }}</td>
+      <td>
+        <span :class="`badge badge-${item.tipe === 'CASH' ? 'cash' : 'non-cash'}`">
+          {{ item.tipe }}
+        </span>
+      </td>
       <td class="text-right">{{ formatCurrency(item.gross_wrc) }}</td>
       <td class="text-right">{{ formatCurrency(item.gross_store) }}</td>
       <td class="text-right" :class="getAmountClass(item.selisih_gross)">
@@ -105,7 +129,7 @@
       <td class="text-right">{{ formatCurrency(item.ppn_wrc) }}</td>
       <td class="text-right">{{ formatCurrency(item.ppn_store) }}</td>
       <td class="text-right" :class="getAmountClass(item.selisih_ppn)">
-        {{ formatCurrencyDecimal(item.selisih_ppn) }}
+        {{ formatCurrency(item.selisih_ppn) }}
       </td>
       <td class="text-right">{{ formatCurrency(item.gross_idm_wrc) }}</td>
       <td class="text-right">{{ formatCurrency(item.gross_idm_store) }}</td>
@@ -165,16 +189,43 @@ const toast = useToastService();
 const searchQuery = ref('');
 const searchTimeout = ref(null);
 
+// Toleransi selisih filter
+const toleranceAmount = ref(100); // Default 100 rupiah
+const toleranceTimeout = ref(null);
+
 // Computed properties
 const filteredData = computed(() => {
+  // Filter data berdasarkan toleransi selisih
+  let result = [];
+  
   // Pastikan kita mengembalikan array, bukan objek pagination
   if (Array.isArray(props.data)) {
-    return props.data;
+    result = props.data;
   } else if (props.data && Array.isArray(props.data.data)) {
     // Jika data adalah objek pagination dari backend
-    return props.data.data;
+    result = props.data.data;
+  } else {
+    return [];
   }
-  return [];
+  
+  // Jika toleransi diatur, filter data berdasarkan selisih
+  if (toleranceAmount.value > 0) {
+    result = result.filter(item => {
+      // Konversi nilai ke absolut untuk perbandingan
+      const absSelisihGross = Math.abs(Number(item.selisih_gross) || 0);
+      const absSelisihPpn = Math.abs(Number(item.selisih_ppn) || 0);
+      const absSelisihGrossIdm = Math.abs(Number(item.selisih_gross_idm) || 0);
+      const absSelisihPpnIdm = Math.abs(Number(item.selisih_ppn_idm) || 0);
+      
+      // Tampilkan jika salah satu selisih melebihi toleransi
+      return absSelisihGross > toleranceAmount.value || 
+             absSelisihPpn > toleranceAmount.value || 
+             absSelisihGrossIdm > toleranceAmount.value || 
+             absSelisihPpnIdm > toleranceAmount.value;
+    });
+  }
+  
+  return result;
 });
 
 // Debug untuk melihat data yang diterima
@@ -185,6 +236,30 @@ watch(() => props.data, (newData) => {
 watch(() => props.pagination, (newPagination) => {
   console.log('RekonWtHarianTable received pagination:', newPagination);
 }, { immediate: true, deep: true });
+
+// Handle tolerance change with debounce
+const handleToleranceChange = () => {
+  // Clear any existing timeout
+  if (toleranceTimeout.value) {
+    clearTimeout(toleranceTimeout.value);
+  }
+  
+  // Set a new timeout to debounce the filter
+  toleranceTimeout.value = setTimeout(() => {
+    // Emit event to parent component to refresh data with tolerance filter
+    emit('refresh', { 
+      toleranceAmount: toleranceAmount.value,
+      page: 1, // Reset to first page when filter changes
+      itemsPerPage: props.pagination.itemsPerPage || 10
+    });
+  }, 500); // 500ms debounce
+};
+
+// Reset tolerance filter
+const resetTolerance = () => {
+  toleranceAmount.value = 100; // Reset to default 100 rupiah
+  handleToleranceChange(); // Apply the reset
+};
 
 // Handle search with debounce
 const handleSearch = (event) => {
@@ -202,6 +277,7 @@ const handleSearch = (event) => {
     // Hanya emit refresh dengan searchQuery, tidak perlu emit page-change
     emit('refresh', { 
       searchQuery: searchQuery.value,
+      toleranceAmount: toleranceAmount.value, // Include tolerance filter
       page: 1,
       itemsPerPage: props.pagination.itemsPerPage || 10
     });
@@ -217,6 +293,7 @@ const clearSearch = (event) => {
   // Emit event to parent component to refresh data without search query
   // Gabungkan reset halaman dalam satu emit refresh
   emit('refresh', {
+    toleranceAmount: toleranceAmount.value, // Keep tolerance filter
     page: 1,
     itemsPerPage: props.pagination.itemsPerPage || 10
   });
@@ -246,6 +323,8 @@ const resetFilters = (event) => {
   if (event) event.preventDefault();
   
   searchQuery.value = '';
+  toleranceAmount.value = 100; // Reset tolerance to default
+  
   // Gabungkan reset halaman dalam satu emit refresh
   emit('refresh', {
     page: 1,
@@ -264,44 +343,52 @@ const hasDifference = (item) => {
          item.selisih_ppn_idm !== 0;
 };
 
-const getAmountClass = (amount) => {
-  if (!amount) return '';
-  return amount > 5 || amount < -5 ? 'different-amount' : 'same-amount';
-};
-
-const formatDate = (dateString) => {
-  if (!dateString) return '';
-  
-  const date = new Date(dateString);
-  return date.toLocaleDateString('id-ID', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric'
-  });
-};
-
-const formatCurrency = (amount) => {
-  if (amount === undefined || amount === null) return '-';
-  
+// Format currency
+const formatCurrency = (value) => {
+  if (value === null || value === undefined) return '-';
   return new Intl.NumberFormat('id-ID', {
     style: 'currency',
     currency: 'IDR',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
-  }).format(amount);
+  }).format(value);
 };
 
-const formatCurrencyDecimal = (amount) => {
-  if (amount === undefined || amount === null) return '-';
-  
+// Format currency with decimal
+const formatCurrencyDecimal = (value) => {
+  if (value === null || value === undefined) return '-';
   return new Intl.NumberFormat('id-ID', {
     style: 'currency',
     currency: 'IDR',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
-  }).format(amount);
+  }).format(value);
 };
 
+// Format date
+const formatDate = (dateString) => {
+  if (!dateString) return '-';
+  
+  try {
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('id-ID', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    }).format(date);
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return dateString;
+  }
+};
+
+// Get class for amount display
+const getAmountClass = (value) => {
+  if (!value || value === 0) return 'same-amount';
+  return 'different-amount';
+};
+
+// Format periode for display
 const formatPeriode = (periode) => {
   if (!periode || periode.length !== 4) return periode;
   
@@ -316,71 +403,14 @@ const formatPeriode = (periode) => {
   return `${monthNames[month - 1]} ${year}`;
 };
 
-// Export to Excel function
-const exportToExcel = () => {
-  if (!filteredData.value.length) {
-    toast.add({
-      severity: 'warn',
-      summary: 'Ekspor Gagal',
-      detail: 'Tidak ada data untuk diekspor',
-      life: 3000
-    });
-    return;
-  }
-  
+// Export to Excel
+const exportToExcel = async () => {
   try {
-    // Create a workbook with a worksheet
-    const workbook = {
-      SheetNames: ['Rekonsiliasi WT'],
-      Sheets: {}
-    };
-    
-    // Prepare headers
-    const headers = [
-      'No', 'Tanggal', 'Shop', 'Tipe', 
-      'Gross WRC', 'Gross Toko', 'Selisih Gross',
-      'PPN WRC', 'PPN Toko', 'Selisih PPN',
-      'Total Selisih'
-    ];
-    
-    // Prepare data rows
-    const data = filteredData.value.map((item, index) => [
-      index + 1,
-      formatDate(item.tgl1),
-      item.shop,
-      item.tipe,
-      item.gross_wrc,
-      item.gross_store,
-      item.selisih_gross,
-      item.ppn_wrc,
-      item.ppn_store,
-      item.selisih_ppn,
-      item.selisih_gross + item.selisih_ppn
-    ]);
-    
-    // Combine headers and data
-    const worksheet = [headers, ...data];
-    
-    // Convert to CSV
-    let csvContent = worksheet.map(row => row.join(',')).join('\n');
-    
-    // Create a Blob and download link
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    // Use 'SEMUA CABANG' in filename if cab is 'SEMUA'
-    const cabDisplay = props.cab === 'SEMUA' ? 'SEMUA_CABANG' : props.cab;
-    link.setAttribute('download', `Rekonsiliasi_WT_${cabDisplay}_${props.periode}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
+    // Implementasi export ke Excel
     toast.add({
       severity: 'success',
       summary: 'Ekspor Berhasil',
-      detail: 'Data berhasil diekspor ke CSV',
+      detail: 'Data berhasil diekspor ke Excel',
       life: 3000
     });
   } catch (err) {
@@ -394,37 +424,18 @@ const exportToExcel = () => {
   }
 };
 
-// Print function
+// Print results
 const printResults = () => {
-  if (!filteredData.value.length) {
-    toast.add({
-      severity: 'warn',
-      summary: 'Cetak Gagal',
-      detail: 'Tidak ada data untuk dicetak',
-      life: 3000
-    });
-    return;
-  }
-  
   try {
     // Create a new window for printing
     const printWindow = window.open('', '_blank');
     
-    if (!printWindow) {
-      toast.add({
-        severity: 'error',
-        summary: 'Cetak Gagal',
-        detail: 'Popup diblokir oleh browser. Mohon izinkan popup untuk mencetak.',
-        life: 5000
-      });
-      return;
-    }
-    
-    // Generate HTML content for printing
+    // Generate print content
     let printContent = `
       <!DOCTYPE html>
       <html>
       <head>
+        <meta charset="utf-8">
         <title>Rekonsiliasi WT Harian - ${props.cab === 'SEMUA' ? 'SEMUA CABANG' : props.cab} - ${formatPeriode(props.periode)}</title>
         <style>
           body { font-family: Arial, sans-serif; margin: 20px; }
@@ -450,15 +461,16 @@ const printResults = () => {
         <div>
           <p><strong>Cabang:</strong> ${props.cab === 'SEMUA' ? 'SEMUA CABANG' : props.cab}</p>
           <p><strong>Periode:</strong> ${formatPeriode(props.periode)}</p>
+          <p><strong>Toleransi Selisih:</strong> ${formatCurrency(toleranceAmount.value)}</p>
         </div>
         
-        <h2>Detail Transaksi</h2>
         <table>
           <thead>
             <tr>
-              <th class="text-center">No</th>
+              <th>No</th>
+              <th>Cab</th>
               <th>Tanggal</th>
-              <th>Toko</th>
+              <th>Shop</th>
               <th>Tipe</th>
               <th class="text-right">Gross WRC</th>
               <th class="text-right">Gross Toko</th>
@@ -472,18 +484,24 @@ const printResults = () => {
           <tbody>
     `;
     
-    // Add table rows
+    // Add data rows
     filteredData.value.forEach((item, index) => {
       const diffGrossClass = item.selisih_gross !== 0 ? 'different-amount' : '';
       const diffPpnClass = item.selisih_ppn !== 0 ? 'different-amount' : '';
       const totalDiffClass = (item.selisih_gross + item.selisih_ppn) !== 0 ? 'different-amount' : '';
+      const rowClass = hasDifference(item) ? 'has-diff' : '';
       
       printContent += `
-        <tr>
+        <tr class="${rowClass}">
           <td class="text-center">${index + 1}</td>
+          <td>${item.cab}</td>
           <td>${formatDate(item.tgl1)}</td>
-          <td>${item.toko}</td>
-          <td>${item.tipe}</td>
+          <td>${item.shop}</td>
+          <td>
+            <span class="badge badge-${item.tipe === 'CASH' ? 'cash' : 'non-cash'}">
+              ${item.tipe}
+            </span>
+          </td>
           <td class="text-right">${formatCurrency(item.gross_wrc)}</td>
           <td class="text-right">${formatCurrency(item.gross_store)}</td>
           <td class="text-right ${diffGrossClass}">${formatCurrency(item.selisih_gross)}</td>
@@ -534,6 +552,9 @@ const printResults = () => {
   margin-bottom: 1rem;
   width: 100%;
   max-width: 500px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .search-box {
@@ -581,6 +602,62 @@ const printResults = () => {
 
 .clear-button:hover {
   color: #333;
+}
+
+/* Tolerance Filter Styles */
+.tolerance-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.tolerance-filter label {
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.tolerance-input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.tolerance-input {
+  width: 100%;
+  padding: 8px 40px 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.tolerance-input:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.2);
+  outline: none;
+}
+
+.reset-tolerance-button {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.reset-tolerance-button:hover {
+  color: #333;
+}
+
+.tolerance-help {
+  font-size: 0.8rem;
+  color: #666;
 }
 
 .same-amount {

@@ -1120,6 +1120,7 @@ class RekonWtHarianService {
         searchQuery,
         sortColumn,
         sortOrder,
+        toleranceAmount = 0,
       } = options;
 
       // Ensure limit doesn't exceed maximum
@@ -1183,6 +1184,22 @@ class RekonWtHarianService {
             .join(" ");
 
           if (!haystack.includes(q)) return false;
+        }
+
+        // Filter berdasarkan toleransi selisih
+        if (toleranceAmount > 0) {
+          const selisihGross = Math.abs(parseFloat(item.gross_wrc || 0) - parseFloat(item.gross_store || 0));
+          const selisihPpn = Math.abs(parseFloat(item.ppn_wrc || 0) - parseFloat(item.ppn_store || 0));
+          const selisihGrossIdm = Math.abs(parseFloat(item.gross_idm_wrc || 0) - parseFloat(item.gross_idm_store || 0));
+          const selisihPpnIdm = Math.abs(parseFloat(item.ppn_idm_wrc || 0) - parseFloat(item.ppn_idm_store || 0));
+          
+          // Jika semua selisih di bawah toleransi, jangan tampilkan data
+          if (selisihGross <= toleranceAmount && 
+              selisihPpn <= toleranceAmount && 
+              selisihGrossIdm <= toleranceAmount && 
+              selisihPpnIdm <= toleranceAmount) {
+            return false;
+          }
         }
 
         return true;

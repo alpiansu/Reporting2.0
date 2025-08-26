@@ -77,6 +77,11 @@ const loadResults = async (options = {}) => {
       params.searchQuery = options.searchQuery;
     }
 
+    // Add tolerance filter if provided
+    if (options.toleranceAmount !== undefined) {
+      params.toleranceAmount = options.toleranceAmount;
+    }
+
     // Add sorting parameters if available
     if (sortColumn.value) {
       params.sortColumn = sortColumn.value;

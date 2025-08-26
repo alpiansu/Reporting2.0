@@ -102,7 +102,7 @@ export default {
    * Get reconciliation results
    * @param {String} cab - Branch code (empty string for all branches)
    * @param {String} periode - Period in YYMM format
-   * @param {Object} params - Query parameters (page, limit, tipe, toko, tgl1, sortColumn, sortOrder)
+   * @param {Object} params - Query parameters (page, limit, tipe, toko, tgl1, sortColumn, sortOrder, toleranceAmount)
    * @returns {Promise}
    */
   getResults(cab, periode, params = {}) {

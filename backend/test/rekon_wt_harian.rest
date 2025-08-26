@@ -51,6 +51,18 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hb
 GET http://localhost:3000/api/rekon-wt-harian/2508/All?page=1&limit=10&tgl1=2025-08-01
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1NTI0MjQ3NiwiZXhwIjoxNzU1MzI4ODc2fQ.Qhpd6VgG80ZJMu443Wn7tReCwypyFU0Ch1i5BS-Xc18
 
+### Test get reconciliation results with tolerance filter (1000 rupiah)
+GET http://localhost:3000/api/rekon-wt-harian/2508/All?page=1&limit=10&toleranceAmount=1000
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1NTI0MjQ3NiwiZXhwIjoxNzU1MzI4ODc2fQ.Qhpd6VgG80ZJMu443Wn7tReCwypyFU0Ch1i5BS-Xc18
+
+### Test get reconciliation results with tolerance filter (500 rupiah) and search query
+GET http://localhost:3000/api/rekon-wt-harian/2508/All?page=1&limit=10&toleranceAmount=500&searchQuery=CASH
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1NTI0MjQ3NiwiZXhwIjoxNzU1MzI4ODc2fQ.Qhpd6VgG80ZJMu443Wn7tReCwypyFU0Ch1i5BS-Xc18
+
+### Test get reconciliation results with tolerance filter (2000 rupiah) and date filter
+GET http://localhost:3000/api/rekon-wt-harian/2508/All?page=1&limit=10&toleranceAmount=2000&tgl1=2025-08-01
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1NTI0MjQ3NiwiZXhwIjoxNzU1MzI4ODc2fQ.Qhpd6VgG80ZJMu443Wn7tReCwypyFU0Ch1i5BS-Xc18
+
 ### Test get reconciliation results for specific branch
 GET http://localhost:3000/api/rekon-wt-harian/2508/G001?page=1&limit=10
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1NTI0MjQ3NiwiZXhwIjoxNzU1MzI4ODc2fQ.Qhpd6VgG80ZJMu443Wn7tReCwypyFU0Ch1i5BS-Xc18

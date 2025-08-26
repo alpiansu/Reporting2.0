@@ -109,7 +109,7 @@ class RekonWtHarianController {
   async getResults(req, res) {
     try {
       const { cab, periode } = req.params;
-      const { page, limit, tipe, toko, tgl1, searchQuery, sortColumn, sortOrder } = req.query;
+      const { page, limit, tipe, toko, tgl1, searchQuery, sortColumn, sortOrder, toleranceAmount } = req.query;
 
       if (!periode) {
         return res.status(400).json({
@@ -127,6 +127,7 @@ class RekonWtHarianController {
         searchQuery,
         sortColumn,
         sortOrder,
+        toleranceAmount: toleranceAmount ? parseInt(toleranceAmount) : undefined,
       });
 
       res.status(200).json(results);

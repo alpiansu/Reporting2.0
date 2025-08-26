@@ -6,49 +6,47 @@
     </div>
 
     <div class="card">
-      <div class="card-header d-flex justify-content-between align-items-center">
+      <div class="card-header">
         <h2>Daftar Menu</h2>
-        <button class="btn btn-primary" @click="showAddMenuModal = true">
+        <button class="add-button" @click="showAddMenuModal = true">
           <i class="pi pi-plus"></i> Tambah Menu Baru
         </button>
       </div>
 
       <div class="card-body">
-        <div v-if="menuStore.loading" class="text-center p-5">
-          <div class="spinner-border" role="status">
-            <span class="visually-hidden">Loading...</span>
-          </div>
-          <p class="mt-2">Memuat data menu...</p>
+        <div v-if="menuStore.loading" class="loading-state">
+          <i class="pi pi-spin pi-spinner"></i>
+          <p>Memuat data menu...</p>
         </div>
 
-        <div v-else-if="menuStore.error" class="alert alert-danger">
+        <div v-else-if="menuStore.error" class="error-state">
           <i class="pi pi-exclamation-triangle"></i> {{ menuStore.error }}
         </div>
 
-        <div v-else-if="!menuStore.hasMenus" class="text-center p-5">
-          <i class="pi pi-info-circle fs-1 text-muted"></i>
-          <p class="mt-2">Belum ada menu yang tersedia</p>
-          <button class="btn btn-primary" @click="showAddMenuModal = true">
+        <div v-else-if="!menuStore.hasMenus" class="empty-state">
+          <i class="pi pi-info-circle"></i>
+          <p>Belum ada menu yang tersedia</p>
+          <button class="add-button" @click="showAddMenuModal = true">
             <i class="pi pi-plus"></i> Tambah Menu Baru
           </button>
         </div>
 
         <div v-else>
           <div v-for="(category, index) in menuStore.menuCategories" :key="index" class="menu-category mb-4">
-            <div class="menu-category-header d-flex justify-content-between align-items-center">
+            <div class="menu-category-header">
               <h3>{{ category.name }}</h3>
-              <div class="btn-group">
-                <button class="btn btn-sm btn-outline-primary" @click="editCategory(category)">
+              <div class="action-buttons">
+                <button class="edit-button" @click="editCategory(category)">
                   <i class="pi pi-pencil"></i>
                 </button>
-                <button class="btn btn-sm btn-outline-danger" @click="confirmDeleteCategory(category)">
+                <button class="delete-button" @click="confirmDeleteCategory(category)">
                   <i class="pi pi-trash"></i>
                 </button>
               </div>
             </div>
 
-            <div class="table-responsive">
-              <table class="table table-hover">
+            <div class="table-container">
+              <table class="data-table">
                 <thead>
                   <tr>
                     <th>Nama</th>
@@ -64,16 +62,16 @@
                     <td><i :class="`pi ${item.icon}`"></i> {{ item.icon }}</td>
                     <td>{{ item.path }}</td>
                     <td>
-                      <span v-for="role in item.roles" :key="role" class="badge bg-primary me-1">
+                      <span v-for="role in item.roles" :key="role" class="role-badge">
                         {{ role }}
                       </span>
                     </td>
                     <td>
-                      <div class="btn-group">
-                        <button class="btn btn-sm btn-outline-primary" @click="editMenuItem(category, item)">
+                      <div class="action-buttons">
+                        <button class="edit-button" @click="editMenuItem(category, item)">
                           <i class="pi pi-pencil"></i>
                         </button>
-                        <button class="btn btn-sm btn-outline-danger" @click="confirmDeleteMenuItem(category, item)">
+                        <button class="delete-button" @click="confirmDeleteMenuItem(category, item)">
                           <i class="pi pi-trash"></i>
                         </button>
                       </div>
@@ -88,113 +86,121 @@
     </div>
 
     <!-- Modal for adding/editing menu category -->
-    <div class="modal fade" :class="{ 'show d-block': showCategoryModal }" tabindex="-1" role="dialog">
-      <div class="modal-dialog" role="document">
+    <div v-if="showCategoryModal" class="modal-backdrop"></div>
+    <div class="modal" :class="{ 'show': showCategoryModal }" tabindex="-1" role="dialog" v-if="showCategoryModal">
+      <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title">{{ isEditingCategory ? 'Edit Kategori Menu' : 'Tambah Kategori Menu' }}</h5>
-            <button type="button" class="btn-close" @click="closeCategoryModal"></button>
+            <button type="button" class="modal-close" @click="closeCategoryModal">
+              <i class="pi pi-times"></i>
+            </button>
           </div>
           <div class="modal-body">
             <form @submit.prevent="saveCategory">
-              <div class="mb-3">
-                <label for="categoryName" class="form-label">Nama Kategori</label>
-                <input type="text" class="form-control" id="categoryName" v-model="categoryForm.name" required>
+              <div class="form-group">
+                <label for="categoryName">Nama Kategori</label>
+                <input type="text" class="form-input" id="categoryName" v-model="categoryForm.name" required>
               </div>
-              <div class="mb-3">
-                <label for="categoryOrder" class="form-label">Urutan</label>
-                <input type="number" class="form-control" id="categoryOrder" v-model="categoryForm.order">
+              <div class="form-group">
+                <label for="categoryOrder">Urutan</label>
+                <input type="number" class="form-input" id="categoryOrder" v-model="categoryForm.order" required min="0">
               </div>
             </form>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" @click="closeCategoryModal">Batal</button>
-            <button type="button" class="btn btn-primary" @click="saveCategory">Simpan</button>
+            <button type="button" class="cancel-button" @click="closeCategoryModal">Batal</button>
+            <button type="button" class="submit-button" @click="saveCategory">Simpan</button>
           </div>
         </div>
       </div>
     </div>
-    <div v-if="showCategoryModal" class="modal-backdrop fade show"></div>
 
     <!-- Modal for adding/editing menu item -->
-    <div class="modal fade" :class="{ 'show d-block': showMenuItemModal }" tabindex="-1" role="dialog">
-      <div class="modal-dialog" role="document">
+    <div v-if="showMenuItemModal" class="modal-backdrop"></div>
+    <div class="modal" :class="{ 'show': showMenuItemModal }" tabindex="-1" role="dialog" v-if="showMenuItemModal">
+      <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title">{{ isEditingMenuItem ? 'Edit Menu Item' : 'Tambah Menu Item' }}</h5>
-            <button type="button" class="btn-close" @click="closeMenuItemModal"></button>
+            <button type="button" class="modal-close" @click="closeMenuItemModal">
+              <i class="pi pi-times"></i>
+            </button>
           </div>
           <div class="modal-body">
             <form @submit.prevent="saveMenuItem">
-              <div class="mb-3">
-                <label for="menuCategory" class="form-label">Kategori</label>
+              <div class="form-group">
+                <label for="menuCategory">Kategori</label>
                 <select class="form-select" id="menuCategory" v-model="menuItemForm.categoryId" required>
                   <option v-for="category in menuStore.menuCategories" :key="category.id" :value="category.id">
                     {{ category.name }}
                   </option>
                 </select>
               </div>
-              <div class="mb-3">
-                <label for="menuText" class="form-label">Nama Menu</label>
-                <input type="text" class="form-control" id="menuText" v-model="menuItemForm.text" required>
+              <div class="form-group">
+                <label for="menuText">Nama Menu</label>
+                <input type="text" class="form-input" id="menuText" v-model="menuItemForm.text" required>
               </div>
-              <div class="mb-3">
-                <label for="menuIcon" class="form-label">Icon (PrimeIcons)</label>
-                <input type="text" class="form-control" id="menuIcon" v-model="menuItemForm.icon" placeholder="pi-home">
+              <div class="form-group">
+                <label for="menuIcon">Icon (PrimeIcons)</label>
+                <input type="text" class="form-input" id="menuIcon" v-model="menuItemForm.icon" placeholder="pi-home">
               </div>
-              <div class="mb-3">
-                <label for="menuPath" class="form-label">Path</label>
-                <input type="text" class="form-control" id="menuPath" v-model="menuItemForm.path" required>
+              <div class="form-group">
+                <label for="menuPath">Path</label>
+                <input type="text" class="form-input" id="menuPath" v-model="menuItemForm.path" required>
               </div>
-              <div class="mb-3">
-                <label class="form-label">Peran yang Diizinkan</label>
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="roleAdmin" value="admin" v-model="menuItemForm.roles">
-                  <label class="form-check-label" for="roleAdmin">Admin</label>
+              <div class="form-group">
+                <label>Peran yang Diizinkan</label>
+                <div class="checkbox-group">
+                  <div class="checkbox-item">
+                    <input type="checkbox" id="roleAdmin" value="admin" v-model="menuItemForm.roles">
+                    <label for="roleAdmin">Admin</label>
+                  </div>
+                  <div class="checkbox-item">
+                    <input type="checkbox" id="roleManager" value="manager" v-model="menuItemForm.roles">
+                    <label for="roleManager">Manager</label>
+                  </div>
+                  <div class="checkbox-item">
+                    <input type="checkbox" id="roleUser" value="user" v-model="menuItemForm.roles">
+                    <label for="roleUser">User</label>
+                  </div>
                 </div>
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="roleManager" value="manager" v-model="menuItemForm.roles">
-                  <label class="form-check-label" for="roleManager">Manager</label>
-                </div>
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="roleUser" value="user" v-model="menuItemForm.roles">
-                  <label class="form-check-label" for="roleUser">User</label>
-                </div>
               </div>
-              <div class="mb-3">
-                <label for="menuKeywords" class="form-label">Keywords (dipisahkan dengan koma)</label>
-                <input type="text" class="form-control" id="menuKeywords" v-model="menuItemForm.keywordsInput" placeholder="dashboard, home, beranda">
+              <div class="form-group">
+                <label for="menuKeywords">Keywords (dipisahkan dengan koma)</label>
+                <input type="text" class="form-input" id="menuKeywords" v-model="menuItemForm.keywordsInput" placeholder="dashboard, home, beranda">
               </div>
             </form>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" @click="closeMenuItemModal">Batal</button>
-            <button type="button" class="btn btn-primary" @click="saveMenuItem">Simpan</button>
+            <button type="button" class="cancel-button" @click="closeMenuItemModal">Batal</button>
+            <button type="button" class="submit-button" @click="saveMenuItem">Simpan</button>
           </div>
         </div>
       </div>
     </div>
-    <div v-if="showMenuItemModal" class="modal-backdrop fade show"></div>
 
     <!-- Confirmation Modal -->
-    <div class="modal fade" :class="{ 'show d-block': showConfirmModal }" tabindex="-1" role="dialog">
-      <div class="modal-dialog" role="document">
+    <div v-if="showConfirmModal" class="modal-backdrop"></div>
+    <div class="modal" :class="{ 'show': showConfirmModal }" tabindex="-1" role="dialog" v-if="showConfirmModal">
+      <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title">Konfirmasi</h5>
-            <button type="button" class="btn-close" @click="closeConfirmModal"></button>
+            <button type="button" class="modal-close" @click="closeConfirmModal">
+              <i class="pi pi-times"></i>
+            </button>
           </div>
           <div class="modal-body">
             <p>{{ confirmMessage }}</p>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" @click="closeConfirmModal">Batal</button>
-            <button type="button" class="btn btn-danger" @click="confirmAction">Hapus</button>
+            <button type="button" class="cancel-button" @click="closeConfirmModal">Batal</button>
+            <button type="button" class="delete-button" @click="confirmCallback()">Hapus</button>
           </div>
         </div>
       </div>
     </div>
-    <div v-if="showConfirmModal" class="modal-backdrop fade show"></div>
   </div>
 </template>
 
@@ -496,21 +502,195 @@ function closeConfirmModal() {
   margin-bottom: 2rem;
 }
 
+.page-header h1 {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--text-color);
+  margin-bottom: 0.5rem;
+}
+
+.page-header p {
+  color: var(--text-secondary-color);
+  font-size: 0.9rem;
+}
+
 .card {
+  background-color: white;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   border-radius: 0.5rem;
   margin-bottom: 2rem;
+  overflow: hidden;
 }
 
 .card-header {
   padding: 1rem;
   border-bottom: 1px solid #e9ecef;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.card-header h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.card-body {
+  padding: 1rem;
+}
+
+.menu-category {
+  margin-bottom: 1.5rem;
 }
 
 .menu-category-header {
   padding: 0.75rem 0;
   border-bottom: 1px solid #e9ecef;
   margin-bottom: 0.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.menu-category-header h3 {
+  font-size: 1.1rem;
+  font-weight: 500;
+  margin: 0;
+}
+
+/* Table styles */
+.table-container {
+  overflow-x: auto;
+  margin-bottom: 1rem;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th {
+  background-color: #f8f9fa;
+  padding: 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--text-color);
+  border-bottom: 1px solid #e9ecef;
+}
+
+.data-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid #e9ecef;
+  font-size: 0.875rem;
+}
+
+.data-table tr:hover {
+  background-color: #f8f9fa;
+}
+
+/* Button styles */
+.add-button {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background-color 0.2s;
+}
+
+.add-button:hover {
+  background-color: var(--primary-color-darken);
+}
+
+.action-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.edit-button {
+  background-color: transparent;
+  color: var(--primary-color);
+  border: 1px solid var(--primary-color);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-button:hover {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.delete-button {
+  background-color: transparent;
+  color: var(--danger-color, #dc3545);
+  border: 1px solid var(--danger-color, #dc3545);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.delete-button:hover {
+  background-color: var(--danger-color, #dc3545);
+  color: white;
+}
+
+.role-badge {
+  display: inline-block;
+  background-color: var(--primary-color);
+  color: white;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  margin-right: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+/* State styles */
+.loading-state,
+.empty-state,
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  text-align: center;
+}
+
+.loading-state i,
+.empty-state i,
+.error-state i {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
+
+.loading-state i {
+  color: var(--primary-color);
+}
+
+.empty-state i {
+  color: var(--text-secondary-color);
+}
+
+.error-state {
+  color: var(--danger-color, #dc3545);
+}
+
+.error-state i {
+  color: var(--danger-color, #dc3545);
 }
 
 /* Modal styles */
@@ -520,24 +700,182 @@ function closeConfirmModal() {
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(0, 0, 0, 0.6);
   z-index: 1040;
+  backdrop-filter: blur(2px);
 }
 
 .modal {
   position: fixed;
   top: 0;
   left: 0;
-  z-index: 1050;
   width: 100%;
   height: 100%;
   overflow-x: hidden;
   overflow-y: auto;
-  outline: 0;
+  z-index: 1050;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.modal.show {
+  display: flex;
 }
 
 .modal-dialog {
-  margin: 1.75rem auto;
+  position: relative;
+  width: 100%;
+  margin: 0 auto;
   max-width: 500px;
+  transform: translateY(0);
+  transition: transform 0.3s ease-out;
+}
+
+.modal-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  outline: 0;
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid #eee;
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--primary-color, #3B82F6);
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  color: #666;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.modal-close:hover {
+  color: var(--primary-color, #3B82F6);
+}
+
+.modal-body {
+  position: relative;
+  flex: 1 1 auto;
+  padding: 1.5rem;
+}
+
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 1.25rem 1.5rem;
+  border-top: 1px solid #eee;
+  gap: 0.75rem;
+}
+
+.form-group {
+  margin-bottom: 1.25rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: #333;
+}
+
+.form-input,
+.form-select {
+  display: block;
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #333;
+  background-color: #fff;
+  background-clip: padding-box;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-input:focus,
+.form-select:focus {
+  border-color: var(--primary-color, #3B82F6);
+  outline: 0;
+  box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.25);
+}
+
+.checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.checkbox-item input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+}
+
+.checkbox-item label {
+  margin-bottom: 0;
+  font-weight: normal;
+}
+
+.submit-button {
+  padding: 0.625rem 1.25rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #fff;
+  background-color: var(--primary-color, #3B82F6);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.submit-button:hover {
+  background-color: var(--primary-dark-color, #2563EB);
+}
+
+.cancel-button {
+  padding: 0.625rem 1.25rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #666;
+  background-color: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.cancel-button:hover {
+  background-color: #e5e5e5;
 }
 </style>

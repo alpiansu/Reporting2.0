@@ -61,6 +61,10 @@
         Tipe
         <i v-if="sortColumn === 'tipe'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
       </th>
+      <th class="sortable" :class="{ 'sort-asc': sortColumn === 'toko' && sortOrder === 'asc', 'sort-desc': sortColumn === 'toko' && sortOrder === 'desc' }" @click="handleSort('toko')">
+        Toko
+        <i v-if="sortColumn === 'toko'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+      </th>
       <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'gross_wrc' && sortOrder === 'asc', 'sort-desc': sortColumn === 'gross_wrc' && sortOrder === 'desc' }" @click="handleSort('gross_wrc')">
         Gross WRC
         <i v-if="sortColumn === 'gross_wrc'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
@@ -121,6 +125,7 @@
           {{ item.tipe }}
         </span>
       </td>
+      <td>{{ item.toko }}</td>
       <td class="text-right">{{ formatCurrency(item.gross_wrc) }}</td>
       <td class="text-right">{{ formatCurrency(item.gross_store) }}</td>
       <td class="text-right" :class="getAmountClass(item.selisih_gross)">

@@ -53,7 +53,8 @@ const transformMenuToRoutes = (menuCategories) => {
               requiresAdmin: requiresAdmin,
               title: item.text,
               icon: item.icon,
-              roles: item.roles || []
+              roles: item.roles || [],
+              layout: 'main' // Menandai bahwa rute ini menggunakan MainLayout
             }
           };
 

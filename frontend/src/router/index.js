@@ -42,20 +42,21 @@ const staticRoutes = [
         path: "stores/:id",
         name: "StoreDetails",
         component: () => import("../views/stores/StoreDetails.vue"),
-        meta: { requiresAuth: true, title: "Store Details" },
+        meta: { requiresAuth: true, title: "Store Details", layout: 'main', roles: ['admin', 'superadmin'] },
       },
       {
         path: "screenings/:id",
         name: "ScreeningDetails",
         component: () => import("../views/screenings/ScreeningDetails.vue"),
-        meta: { requiresAuth: true, title: "Screening Details" },
+        meta: { requiresAuth: true, title: "Screening Details", layout: 'main', roles: ['admin', 'superadmin'] },
       },
       {
         path: "profile",
         name: "Profile",
         component: () => import("../views/profile/Profile.vue"),
-        meta: { requiresAuth: true, title: "Profile" },
+        meta: { requiresAuth: true, title: "Profile", layout: 'main', roles: ['admin', 'superadmin', 'user'] },
       },
+      // Rute dinamis dari backend akan ditambahkan ke sini
     ],
   },
   {
@@ -86,12 +87,28 @@ const addDynamicRoutes = async () => {
       // Muat rute dinamis dari backend
       const dynamicRoutesArray = await loadDynamicRoutes();
       
-      // Tambahkan rute dinamis ke router
-      dynamicRoutesArray.forEach(route => {
-        if (!router.hasRoute(route.name)) {
-          router.addRoute(route);
+      // Cari rute MainLayout yang sudah ada di staticRoutes
+      const mainLayoutRoute = staticRoutes.find(route => route.component === MainLayout);
+      
+      if (mainLayoutRoute && Array.isArray(mainLayoutRoute.children)) {
+        // Cari rute dinamis dengan MainLayout sebagai parent component
+        const dynamicMainRoute = dynamicRoutesArray.find(route => route.component === MainLayout);
+        
+        if (dynamicMainRoute && Array.isArray(dynamicMainRoute.children)) {
+          // Tambahkan semua children dari rute dinamis ke dalam children dari rute MainLayout yang sudah ada
+          dynamicMainRoute.children.forEach(child => {
+            // Pastikan child memiliki meta.layout = 'main'
+            if (!child.meta) child.meta = {};
+            child.meta.layout = 'main';
+            
+            // Tambahkan child ke dalam children dari rute MainLayout yang sudah ada
+            mainLayoutRoute.children.push(child);
+          });
         }
-      });
+      }
+      
+      // Tandai bahwa rute dinamis sudah dimuat
+      isLoaded.value = true;
       
       return true;
     } catch (error) {
@@ -136,6 +153,18 @@ router.beforeEach(async (to, from, next) => {
     }
   }
   
+  // Pastikan rute dengan layout 'main' menggunakan MainLayout
+  if (to.meta.layout === 'main' && to.matched.length > 0) {
+    // Verifikasi bahwa rute ini memiliki parent dengan MainLayout
+    const hasMainLayoutParent = to.matched.some(record => 
+      record.components && record.components.default === MainLayout
+    );
+    
+    if (!hasMainLayoutParent) {
+      console.warn(`Route ${to.path} has layout 'main' but no MainLayout parent`);
+    }
+  }
+  
   // Jika user terautentikasi, pastikan data cabang sudah dimuat
   if (isAuthenticated && !cabangStore.isInitialized) {
     try {
@@ -157,6 +186,18 @@ router.beforeEach(async (to, from, next) => {
       
       // Tambahkan rute dinamis ke router
       await addDynamicRoutes();
+      
+      // Verifikasi bahwa rute dengan layout 'main' memiliki MainLayout sebagai parent
+      if (to.meta.layout === 'main') {
+        const routeMatched = router.resolve(to.path);
+        const hasMainLayoutParent = routeMatched.matched.some(record => 
+          record.components && record.components.default === MainLayout
+        );
+        
+        if (!hasMainLayoutParent) {
+          console.warn(`Route ${to.path} has layout 'main' but no MainLayout parent after dynamic routes loaded`);
+        }
+      }
       
       // Jika rute yang diminta tidak ditemukan setelah menambahkan rute dinamis,
       // coba navigasi ulang ke rute yang sama

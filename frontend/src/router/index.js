@@ -37,6 +37,13 @@ const staticRoutes = [
     path: "/",
     component: MainLayout,
     children: [
+      // Dashboard route yang harus ada secara statis
+      {
+        path: "dashboard",
+        name: "Dashboard",
+        component: Dashboard,
+        meta: { requiresAuth: true, title: "Dashboard", layout: 'main', roles: ['admin', 'superadmin', 'user'] },
+      },
       // Rute detail yang tidak ada di menus.json
       {
         path: "stores/:id",

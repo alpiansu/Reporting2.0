@@ -104,7 +104,8 @@
               </div>
               <div class="form-group">
                 <label for="categoryOrder">Urutan</label>
-                <input type="number" class="form-input" id="categoryOrder" v-model="categoryForm.order" required min="0">
+                <input type="number" class="form-input" id="categoryOrder" v-model="categoryForm.order" required
+                  min="0">
               </div>
             </form>
           </div>
@@ -157,18 +158,19 @@
                     <label for="roleAdmin">Admin</label>
                   </div>
                   <div class="checkbox-item">
-                    <input type="checkbox" id="roleManager" value="manager" v-model="menuItemForm.roles">
-                    <label for="roleManager">Manager</label>
-                  </div>
-                  <div class="checkbox-item">
                     <input type="checkbox" id="roleUser" value="user" v-model="menuItemForm.roles">
                     <label for="roleUser">User</label>
+                  </div>
+                  <div class="checkbox-item">
+                    <input type="checkbox" id="roleManager" value="superadmin" v-model="menuItemForm.roles">
+                    <label for="roleManager">Super Admin</label>
                   </div>
                 </div>
               </div>
               <div class="form-group">
                 <label for="menuKeywords">Keywords (dipisahkan dengan koma)</label>
-                <input type="text" class="form-input" id="menuKeywords" v-model="menuItemForm.keywordsInput" placeholder="dashboard, home, beranda">
+                <input type="text" class="form-input" id="menuKeywords" v-model="menuItemForm.keywordsInput"
+                  placeholder="dashboard, home, beranda">
               </div>
             </form>
           </div>
@@ -205,7 +207,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useMenuStore } from '../../stores';
 import { useToastService } from '../../utils/toast';
 

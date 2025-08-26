@@ -14,8 +14,23 @@ class MenuController {
    */
   async getAllMenus(req, res, next) {
     try {
+      const userRole = req.user?.role;
       const menus = await Menu.findAll();
-      return apiResponse.success(res, menus);
+      // Filter menu items by user role
+      const filteredMenus = Array.isArray(menus)
+        ? menus.filter(menu => {
+            // menu.items bisa array, filter juga per item
+            if (Array.isArray(menu.items)) {
+              menu.items = menu.items.filter(item =>
+                Array.isArray(item.roles) ? item.roles.includes(userRole) : true
+              );
+              // Jika setelah filter items kosong, jangan tampilkan menu
+              return menu.items.length > 0;
+            }
+            return true;
+          })
+        : [];
+      return apiResponse.success(res, filteredMenus);
     } catch (error) {
       next(error);
     }
@@ -29,13 +44,20 @@ class MenuController {
    */
   async getMenuById(req, res, next) {
     try {
+      const userRole = req.user?.role;
       const { id } = req.params;
       const menu = await Menu.findByPk(id);
-
       if (!menu) {
         return apiResponse.notFound(res, `Menu with ID ${id} not found`);
       }
-
+      // Filter items by user role
+      if (Array.isArray(menu.items)) {
+        menu.items = menu.items.filter(item => (Array.isArray(item.roles) ? item.roles.includes(userRole) : true));
+      }
+      // Jika items kosong, jangan tampilkan menu
+      if (Array.isArray(menu.items) && menu.items.length === 0) {
+        return apiResponse.notFound(res, `Menu with ID ${id} not found for your role`);
+      }
       return apiResponse.success(res, menu);
     } catch (error) {
       next(error);
@@ -50,9 +72,22 @@ class MenuController {
    */
   async getMenusByRole(req, res, next) {
     try {
-      const { role } = req.params;
-      const menus = await Menu.findByRole(role);
-      return apiResponse.success(res, menus);
+      const userRole = req.user?.role;
+      // Gunakan role dari req.user, abaikan param
+      const menus = await Menu.findByRole(userRole);
+      // Filter items by user role
+      const filteredMenus = Array.isArray(menus)
+        ? menus.filter(menu => {
+            if (Array.isArray(menu.items)) {
+              menu.items = menu.items.filter(item =>
+                Array.isArray(item.roles) ? item.roles.includes(userRole) : true
+              );
+              return menu.items.length > 0;
+            }
+            return true;
+          })
+        : [];
+      return apiResponse.success(res, filteredMenus);
     } catch (error) {
       next(error);
     }
@@ -66,10 +101,21 @@ class MenuController {
    */
   async getMenusForCurrentUser(req, res, next) {
     try {
-      // Get user role from authenticated user
-      const { role } = req.user;
-      const menus = await Menu.findByRole(role);
-      return apiResponse.success(res, menus);
+      const userRole = req.user?.role;
+      const menus = await Menu.findByRole(userRole);
+      // Filter items by user role
+      const filteredMenus = Array.isArray(menus)
+        ? menus.filter(menu => {
+            if (Array.isArray(menu.items)) {
+              menu.items = menu.items.filter(item =>
+                Array.isArray(item.roles) ? item.roles.includes(userRole) : true
+              );
+              return menu.items.length > 0;
+            }
+            return true;
+          })
+        : [];
+      return apiResponse.success(res, filteredMenus);
     } catch (error) {
       next(error);
     }

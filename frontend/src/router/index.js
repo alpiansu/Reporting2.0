@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
-import { useAuthStore, useCabangStore } from "../stores";
+import { useAuthStore, useCabangStore, useMenuStore } from "../stores";
+import { dynamicRoutes, loadDynamicRoutes, isLoaded } from "./dynamicRoutes";
 
 // Layouts
 import AuthLayout from "../layouts/AuthLayout.vue";
@@ -11,7 +12,10 @@ import Login from "../views/auth/Login.vue";
 // Dashboard Views
 import Dashboard from "../views/dashboard/Dashboard.vue";
 
-const routes = [
+// Rute statis yang selalu ada, terlepas dari konfigurasi menu
+// Hanya menyimpan rute yang tidak ada di menus.json seperti login, register, dan halaman error
+
+const staticRoutes = [
   {
     path: "/",
     redirect: "/dashboard",
@@ -33,29 +37,12 @@ const routes = [
     path: "/",
     component: MainLayout,
     children: [
-      {
-        path: "dashboard",
-        name: "Dashboard",
-        component: Dashboard,
-        meta: { requiresAuth: true, title: "Dashboard" },
-      },
-      {
-        path: "stores",
-        name: "Stores",
-        component: () => import("../views/stores/StoreList.vue"),
-        meta: { requiresAuth: true, title: "Stores" },
-      },
+      // Rute detail yang tidak ada di menus.json
       {
         path: "stores/:id",
         name: "StoreDetails",
         component: () => import("../views/stores/StoreDetails.vue"),
         meta: { requiresAuth: true, title: "Store Details" },
-      },
-      {
-        path: "screenings",
-        name: "Screenings",
-        component: () => import("../views/screenings/ScreeningList.vue"),
-        meta: { requiresAuth: true, title: "Screenings" },
       },
       {
         path: "screenings/:id",
@@ -64,28 +51,10 @@ const routes = [
         meta: { requiresAuth: true, title: "Screening Details" },
       },
       {
-        path: "rekon-wt-harian",
-        name: "RekonWtHarian",
-        component: () => import("../views/rekonWtHarian/RekonWtHarianView.vue"),
-        meta: { requiresAuth: true, title: "Rekonsiliasi WT Harian" },
-      },
-      {
         path: "profile",
         name: "Profile",
         component: () => import("../views/profile/Profile.vue"),
         meta: { requiresAuth: true, title: "Profile" },
-      },
-      {
-        path: "admin/menu-manager",
-        name: "MenuManager",
-        component: () => import("../views/admin/MenuManager.vue"),
-        meta: { requiresAuth: true, requiresAdmin: true, title: "Menu Manager" },
-      },
-      {
-        path: "admin/user-manager",
-        name: "UserManager",
-        component: () => import("../views/admin/UserManager.vue"),
-        meta: { requiresAuth: true, requiresAdmin: true, title: "User Manager" },
       },
     ],
   },
@@ -97,6 +66,10 @@ const routes = [
   },
 ];
 
+// Gabungkan rute statis dengan rute dinamis
+const routes = [...staticRoutes];
+
+// Buat router dengan rute statis awal
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
@@ -105,9 +78,35 @@ const router = createRouter({
   },
 });
 
+// Fungsi untuk menambahkan rute dinamis ke router
+const addDynamicRoutes = async () => {
+  // Hanya muat rute dinamis jika belum dimuat
+  if (!isLoaded.value) {
+    try {
+      // Muat rute dinamis dari backend
+      const dynamicRoutesArray = await loadDynamicRoutes();
+      
+      // Tambahkan rute dinamis ke router
+      dynamicRoutesArray.forEach(route => {
+        if (!router.hasRoute(route.name)) {
+          router.addRoute(route);
+        }
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('Failed to load dynamic routes:', error);
+      return false;
+    }
+  }
+  
+  return true;
+};
+
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore();
   const cabangStore = useCabangStore();
+  const menuStore = useMenuStore();
   const isAuthenticated = authStore.isAuthenticated;
 
   // Check if the route requires authentication
@@ -127,6 +126,16 @@ router.beforeEach(async (to, from, next) => {
     return;
   }
   
+  // Check if the route has roles restriction from menus.json
+  if (to.meta.roles && Array.isArray(to.meta.roles) && to.meta.roles.length > 0) {
+    const userRole = authStore.user?.role;
+    // If user doesn't have a role or their role is not in the allowed roles list
+    if (!userRole || !to.meta.roles.includes(userRole)) {
+      next({ name: "Dashboard" });
+      return;
+    }
+  }
+  
   // Jika user terautentikasi, pastikan data cabang sudah dimuat
   if (isAuthenticated && !cabangStore.isInitialized) {
     try {
@@ -135,6 +144,29 @@ router.beforeEach(async (to, from, next) => {
     } catch (error) {
       console.error("Failed to load cabang data:", error);
       // Lanjutkan navigasi meskipun gagal memuat data cabang
+    }
+  }
+  
+  // Jika user terautentikasi, pastikan rute dinamis sudah dimuat
+  if (isAuthenticated && !isLoaded.value) {
+    try {
+      // Muat menu dari store jika belum ada
+      if (!menuStore.hasMenus) {
+        await menuStore.fetchMenus();
+      }
+      
+      // Tambahkan rute dinamis ke router
+      await addDynamicRoutes();
+      
+      // Jika rute yang diminta tidak ditemukan setelah menambahkan rute dinamis,
+      // coba navigasi ulang ke rute yang sama
+      if (!router.hasRoute(to.name) && to.name !== 'NotFound') {
+        next({ path: to.fullPath, replace: true });
+        return;
+      }
+    } catch (error) {
+      console.error("Failed to load dynamic routes:", error);
+      // Lanjutkan navigasi meskipun gagal memuat rute dinamis
     }
   }
   

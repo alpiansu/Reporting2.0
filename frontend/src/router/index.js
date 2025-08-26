@@ -81,6 +81,12 @@ const routes = [
         component: () => import("../views/admin/MenuManager.vue"),
         meta: { requiresAuth: true, requiresAdmin: true, title: "Menu Manager" },
       },
+      {
+        path: "admin/user-manager",
+        name: "UserManager",
+        component: () => import("../views/admin/UserManager.vue"),
+        meta: { requiresAuth: true, requiresAdmin: true, title: "User Manager" },
+      },
     ],
   },
   {

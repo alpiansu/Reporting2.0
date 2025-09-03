@@ -1,169 +1,56 @@
 <template>
   <div class="user-manager">
     <div class="page-header">
-      <h1>User Manager</h1>
-      <p>Kelola pengguna aplikasi dan atur hak akses</p>
+      <h1 class="page-title">
+        <i class="pi pi-users"></i>
+        Manajemen Pengguna
+      </h1>
+      <p class="page-description">Kelola pengguna sistem dan hak akses mereka</p>
     </div>
 
-    <div class="card">
-      <div class="card-header">
-        <h2>Daftar Pengguna</h2>
-        <button class="add-button" @click="addUser()">
-          <i class="pi pi-plus"></i> Tambah Pengguna Baru
-        </button>
-      </div>
-
-      <div class="card-body">
-        <div v-if="loading" class="loading-state">
-          <i class="pi pi-spin pi-spinner"></i>
-          <p>Memuat data pengguna...</p>
-        </div>
-
-        <div v-else-if="error" class="error-state">
-          <i class="pi pi-exclamation-triangle"></i> {{ error }}
-        </div>
-
-        <div v-else-if="!hasUsers" class="empty-state">
-          <i class="pi pi-info-circle"></i>
-          <p>Belum ada pengguna yang tersedia</p>
-          <button class="add-button" @click="addUser()">
-            <i class="pi pi-plus"></i> Tambah Pengguna Baru
-          </button>
-        </div>
-
-        <div v-else>
-          <div class="table-container">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Username</th>
-                  <th>Nama Lengkap</th>
-                  <th>Email</th>
-                  <th>Peran</th>
-                  <th>Status</th>
-                  <th>Login Terakhir</th>
-                  <th>Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="user in users" :key="user.id">
-                  <td>{{ user.username }}</td>
-                  <td>{{ user.fullName || '-' }}</td>
-                  <td>{{ user.email }}</td>
-                  <td>
-                    <span class="role-badge" :class="getRoleBadgeClass(user.role)">
-                      {{ user.role }}
-                    </span>
-                  </td>
-                  <td>
-                    <span class="status-badge" :class="{ 'active': user.isActive, 'inactive': !user.isActive }">
-                      {{ user.isActive ? 'Aktif' : 'Nonaktif' }}
-                    </span>
-                  </td>
-                  <td>{{ formatDate(user.lastLogin) }}</td>
-                  <td>
-                    <div class="action-buttons">
-                      <button class="edit-button" @click="editUser(user)" title="Edit Pengguna">
-                        <i class="pi pi-pencil"></i>
-                      </button>
-                      <button class="reset-button" @click="confirmResetPassword(user)" title="Reset Password">
-                        <i class="pi pi-key"></i>
-                      </button>
-                      <button class="delete-button" @click="confirmDeleteUser(user)" title="Hapus Pengguna">
-                        <i class="pi pi-trash"></i>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Modal for adding/editing user -->
-    <div v-if="showUserModal" class="modal-backdrop"></div>
-    <div class="modal" :class="{ 'show': showUserModal }" tabindex="-1" role="dialog" v-if="showUserModal">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">{{ isEditingUser ? 'Edit Pengguna' : 'Tambah Pengguna Baru' }}</h5>
-            <button type="button" class="modal-close" @click="closeUserModal">
-              <i class="pi pi-times"></i>
+    <div class="content-wrapper">
+      <div class="table-section">
+        <div class="section-header">
+          <h2 class="section-title">Daftar Pengguna</h2>
+          <div class="section-actions">
+            <button @click="addUser" class="btn btn-primary">
+              <i class="pi pi-plus"></i>
+              Tambah Pengguna
             </button>
           </div>
-          <div class="modal-body">
-            <form @submit.prevent="saveUser">
-              <div class="form-group">
-                <label for="username">Username</label>
-                <input type="text" id="username" class="form-input" v-model="userForm.username" required :disabled="isEditingUser">
-              </div>
-              
-              <div class="form-group">
-                <label for="email">Email</label>
-                <input type="email" id="email" class="form-input" v-model="userForm.email" required>
-              </div>
-              
-              <div class="form-group">
-                <label for="fullName">Nama Lengkap</label>
-                <input type="text" id="fullName" class="form-input" v-model="userForm.fullName">
-              </div>
-              
-              <div class="form-group" v-if="!isEditingUser">
-                <label for="password">Password</label>
-                <input type="password" id="password" class="form-input" v-model="userForm.password" :required="!isEditingUser">
-              </div>
-              
-              <div class="form-group">
-                <label for="role">Peran</label>
-                <select id="role" class="form-select" v-model="userForm.role" required>
-                  <option value="user">User</option>
-                  <option value="admin">Admin</option>
-                  <option value="superadmin">Superadmin</option>
-                </select>
-              </div>
-              
-              <div class="form-group">
-                <div class="checkbox-group">
-                  <div class="checkbox-item">
-                    <input type="checkbox" id="isActive" v-model="userForm.isActive">
-                    <label for="isActive">Aktif</label>
-                  </div>
-                </div>
-              </div>
-              
-              <div class="modal-footer">
-                <button type="button" class="cancel-button" @click="closeUserModal">Batal</button>
-                <button type="submit" class="submit-button">{{ isEditingUser ? 'Simpan' : 'Tambah' }}</button>
-              </div>
-            </form>
-          </div>
         </div>
+
+        <UserDataTable
+          :data="users"
+          :loading="loading"
+          :error="error"
+          @refresh="fetchUsers"
+          @export="exportUsers"
+          @print="printUsers"
+          @edit-user="editUser"
+          @reset-password="confirmResetPassword"
+          @delete-user="confirmDeleteUser"
+        />
       </div>
     </div>
 
-    <!-- Confirmation Modal -->
-    <div v-if="showConfirmModal" class="modal-backdrop"></div>
-    <div class="modal" :class="{ 'show': showConfirmModal }" tabindex="-1" role="dialog" v-if="showConfirmModal">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">Konfirmasi</h5>
-            <button type="button" class="modal-close" @click="closeConfirmModal">
-              <i class="pi pi-times"></i>
-            </button>
-          </div>
-          <div class="modal-body">
-            <p>{{ confirmMessage }}</p>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="cancel-button" @click="closeConfirmModal">Batal</button>
-            <button type="button" class="delete-button" @click="confirmCallback()">Konfirmasi</button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- User Dialog Component -->
+    <UserDialog
+      :show="showUserModal"
+      :user="selectedUser"
+      :is-editing="isEditingUser"
+      @close="closeUserModal"
+      @save="saveUser"
+    />
+
+    <!-- Confirm Dialog Component -->
+    <ConfirmDialog
+      :show="showConfirmModal"
+      :message="confirmMessage"
+      :type="confirmType"
+      @close="closeConfirmModal"
+      @confirm="confirmCallback"
+    />
   </div>
 </template>
 
@@ -171,6 +58,9 @@
 import { ref, onMounted, computed } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import api from '../../services/api';
+import UserDataTable from '../../components/admin/UserDataTable.vue';
+import UserDialog from '../../components/admin/UserDialog.vue';
+import ConfirmDialog from '../../components/admin/ConfirmDialog.vue';
 
 const toast = useToast();
 
@@ -182,14 +72,11 @@ const error = ref(null);
 // User form state
 const showUserModal = ref(false);
 const isEditingUser = ref(false);
-const userForm = ref({
-  username: '',
-  email: '',
-  fullName: '',
-  password: '',
-  role: 'user',
-  isActive: true
-});
+const selectedUser = ref(null);
+
+// Table configuration - removed as DataTable uses slot-based approach
+
+// Sorting state - removed as not needed
 
 // Computed properties
 const hasUsers = computed(() => users.value.length > 0);
@@ -197,12 +84,10 @@ const hasUsers = computed(() => users.value.length > 0);
 // Confirmation modal state
 const showConfirmModal = ref(false);
 const confirmMessage = ref('');
+const confirmType = ref('warning');
 const confirmCallback = ref(() => {});
 
-// Fetch users on component mount
-onMounted(async () => {
-  await fetchUsers();
-});
+
 
 // Fetch users from API
 async function fetchUsers() {
@@ -226,37 +111,30 @@ async function fetchUsers() {
   }
 }
 
+// Fetch users on component mount
+onMounted(async () => {
+  await fetchUsers();
+});
+
 // User form methods
 function addUser() {
   isEditingUser.value = false;
-  userForm.value = {
-    username: '',
-    email: '',
-    fullName: '',
-    password: '',
-    role: 'user',
-    isActive: true
-  };
+  selectedUser.value = null;
   showUserModal.value = true;
 }
 
 function editUser(user) {
   isEditingUser.value = true;
-  userForm.value = {
-    id: user.id,
-    username: user.username,
-    email: user.email,
-    fullName: user.fullName || '',
-    role: user.role,
-    isActive: user.isActive
-  };
+  selectedUser.value = user;
   showUserModal.value = true;
 }
 
-async function saveUser() {
+
+
+async function saveUser(userData) {
   try {
     if (isEditingUser.value) {
-      await api.put(`/users/${userForm.value.id}`, userForm.value);
+      await api.put(`/users/${userData.id}`, userData);
       toast.add({
         severity: 'success',
         summary: 'Berhasil',
@@ -264,7 +142,7 @@ async function saveUser() {
         life: 3000
       });
     } else {
-      await api.post('/users', userForm.value);
+      await api.post('/users', userData);
       toast.add({
         severity: 'success',
         summary: 'Berhasil',
@@ -293,6 +171,7 @@ function closeUserModal() {
 // Confirmation modal methods
 function confirmDeleteUser(user) {
   confirmMessage.value = `Apakah Anda yakin ingin menghapus pengguna ${user.username}?`;
+  confirmType.value = 'danger';
   confirmCallback.value = async () => {
     try {
       await api.delete(`/users/${user.id}`);
@@ -320,6 +199,7 @@ function confirmDeleteUser(user) {
 
 function confirmResetPassword(user) {
   confirmMessage.value = `Apakah Anda yakin ingin mereset password untuk pengguna ${user.username}?`;
+  confirmType.value = 'warning';
   confirmCallback.value = async () => {
     try {
       const response = await api.post(`/users/${user.id}/reset-password`);
@@ -371,6 +251,81 @@ function getRoleBadgeClass(role) {
       return 'user';
   }
 }
+
+// Export and Print functions
+function exportUsers() {
+  // Implementasi export ke Excel
+  const csvContent = "data:text/csv;charset=utf-8," 
+    + "Username,Nama Lengkap,Email,Peran,Status,Login Terakhir\n"
+    + users.value.map(user => 
+        `${user.username},${user.fullName},${user.email},${user.role},${user.isActive ? 'Aktif' : 'Nonaktif'},${formatDate(user.lastLogin)}`
+      ).join("\n");
+  
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", "daftar_pengguna.csv");
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  
+  toast.add({
+    severity: 'success',
+    summary: 'Berhasil',
+    detail: 'Data pengguna berhasil diekspor',
+    life: 3000
+  });
+}
+
+function printUsers() {
+  // Implementasi print
+  const printContent = `
+    <html>
+      <head>
+        <title>Daftar Pengguna</title>
+        <style>
+          body { font-family: Arial, sans-serif; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+          th { background-color: #f2f2f2; }
+          h1 { text-align: center; }
+        </style>
+      </head>
+      <body>
+        <h1>Daftar Pengguna</h1>
+        <table>
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Nama Lengkap</th>
+              <th>Email</th>
+              <th>Peran</th>
+              <th>Status</th>
+              <th>Login Terakhir</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${users.value.map(user => `
+              <tr>
+                <td>${user.username}</td>
+                <td>${user.fullName}</td>
+                <td>${user.email}</td>
+                <td>${user.role}</td>
+                <td>${user.isActive ? 'Aktif' : 'Nonaktif'}</td>
+                <td>${formatDate(user.lastLogin)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </body>
+    </html>
+  `;
+  
+  const printWindow = window.open('', '_blank');
+  printWindow.document.write(printContent);
+  printWindow.document.close();
+  printWindow.print();
+}
 </script>
 
 <style scoped>
@@ -379,24 +334,91 @@ function getRoleBadgeClass(role) {
 }
 
 .page-header {
-  margin-bottom: 20px;
+  margin-bottom: 2rem;
+  padding: 2rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 16px;
+  color: white;
+  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
 }
 
-.page-header h1 {
-  font-size: 24px;
-  margin-bottom: 8px;
+.page-title {
+  font-size: 2.2rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
-.page-header p {
-  color: #666;
+.page-title i {
+  font-size: 2rem;
+}
+
+.page-description {
   margin: 0;
+  opacity: 0.9;
+  font-size: 1.1rem;
+  font-weight: 400;
+}
+
+.content-wrapper {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.table-section {
+  padding: 0;
+}
+
+.section-header {
+  padding: 2rem 2rem 1.5rem 2rem;
+  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  border-bottom: 2px solid #e9ecef;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.section-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+  color: #2c3e50;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.section-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.header-content h1 {
+  font-size: 2rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem 0;
+}
+
+.header-content p {
+  margin: 0;
+  opacity: 0.9;
+  font-size: 1rem;
 }
 
 .card {
   background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
   overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .card-header {
@@ -460,6 +482,26 @@ function getRoleBadgeClass(role) {
   font-weight: 600;
 }
 
+.sortable-header {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s;
+}
+
+.sortable-header:hover {
+  background-color: #e9ecef;
+}
+
+.sortable-header i {
+  margin-left: 5px;
+  font-size: 0.8em;
+  opacity: 0.6;
+}
+
+.sortable-header:hover i {
+  opacity: 1;
+}
+
 .data-table tr:hover {
   background-color: #f5f5f5;
 }
@@ -473,19 +515,19 @@ function getRoleBadgeClass(role) {
   text-transform: uppercase;
 }
 
-.role-badge.superadmin {
-  background-color: #9b59b6;
-  color: white;
+.role-badge.role-superadmin {
+  background: #fff3e0;
+  color: #f57c00;
 }
 
-.role-badge.admin {
-  background-color: #3498db;
-  color: white;
+.role-badge.role-admin {
+  background: #e3f2fd;
+  color: #1976d2;
 }
 
-.role-badge.user {
-  background-color: #7f8c8d;
-  color: white;
+.role-badge.role-user {
+  background: #f3e5f5;
+  color: #7b1fa2;
 }
 
 .status-badge {
@@ -512,227 +554,160 @@ function getRoleBadgeClass(role) {
 }
 
 .add-button {
-  background-color: #2ecc71;
+  background: rgba(255, 255, 255, 0.2);
   color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 8px 16px;
-  font-weight: 600;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 500;
   cursor: pointer;
+  transition: all 0.3s ease;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
+  backdrop-filter: blur(10px);
 }
 
 .add-button:hover {
-  background-color: #27ae60;
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2);
 }
 
-.edit-button,
-.reset-button,
-.delete-button {
-  background-color: transparent;
+.btn {
+  padding: 0.5rem;
   border: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  border-radius: 6px;
   cursor: pointer;
-}
-
-.edit-button {
-  color: #3498db;
-}
-
-.reset-button {
-  color: #f39c12;
-}
-
-.delete-button {
-  color: #e74c3c;
-}
-
-.edit-button:hover {
-  background-color: rgba(52, 152, 219, 0.1);
-}
-
-.reset-button:hover {
-  background-color: rgba(243, 156, 18, 0.1);
-}
-
-.delete-button:hover {
-  background-color: rgba(231, 76, 60, 0.1);
-}
-
-/* Modal styles */
-.modal-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  z-index: 1000;
-}
-
-.modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1001;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.3s, visibility 0.3s;
-}
-
-.modal.show {
-  opacity: 1;
-  visibility: visible;
-}
-
-.modal-dialog {
-  width: 100%;
-  max-width: 500px;
-  margin: 0 auto;
-  background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  overflow: hidden;
-}
-
-.modal-content {
-  display: flex;
-  flex-direction: column;
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid #eee;
-}
-
-.modal-title {
-  font-size: 18px;
-  font-weight: 600;
-  margin: 0;
-}
-
-.modal-close {
-  background: transparent;
-  border: none;
-  font-size: 20px;
-  cursor: pointer;
-  color: #999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-}
-
-.modal-close:hover {
-  background-color: #f5f5f5;
-  color: #333;
-}
-
-.modal-body {
-  padding: 20px;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 16px 20px;
-  border-top: 1px solid #eee;
-}
-
-/* Form styles */
-.form-group {
-  margin-bottom: 16px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 8px;
+  font-size: 0.875rem;
   font-weight: 500;
 }
 
-.form-input,
-.form-select {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-  transition: border-color 0.3s;
+.btn-sm {
+  width: 32px;
+  height: 32px;
+  padding: 0.25rem;
 }
 
-.form-input:focus,
-.form-select:focus {
-  border-color: #3498db;
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
-}
-
-.checkbox-group {
-  margin-top: 8px;
-}
-
-.checkbox-item {
-  display: flex;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.checkbox-item input[type="checkbox"] {
-  margin-right: 8px;
-}
-
-.checkbox-item label {
-  margin-bottom: 0;
-  cursor: pointer;
-}
-
-.submit-button {
-  background-color: #3498db;
+.btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
-  border-radius: 4px;
-  padding: 10px 20px;
+  border-radius: 12px;
+  padding: 0.875rem 1.75rem;
   font-weight: 600;
+  font-size: 0.95rem;
   cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  position: relative;
+  overflow: hidden;
 }
 
-.submit-button:hover {
-  background-color: #2980b9;
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
 }
 
-.cancel-button {
-  background-color: #f5f5f5;
-  color: #333;
-  border: none;
-  border-radius: 4px;
-  padding: 10px 20px;
-  font-weight: 600;
-  cursor: pointer;
+.btn-primary:hover::before {
+  left: 100%;
 }
 
-.cancel-button:hover {
-  background-color: #e0e0e0;
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+  background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
 }
+
+.btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.btn-primary i {
+  font-size: 1rem;
+  transition: transform 0.3s ease;
+}
+
+.btn-primary:hover i {
+  transform: scale(1.1);
+}
+
+.btn-warning {
+  background: #ffc107;
+  color: #212529;
+}
+
+.btn-warning:hover {
+  background: #e0a800;
+  transform: scale(1.1);
+}
+
+.btn-danger {
+  background: #dc3545;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #c82333;
+  transform: scale(1.1);
+}
+
+/* Modal, form, and dialog styles removed - moved to separate components */
+
+/* Button styles moved to dialog components */
 
 @media (max-width: 768px) {
+  .page-header {
+    padding: 1.5rem;
+  }
+  
+  .page-title {
+    font-size: 1.8rem;
+  }
+  
+  .page-description {
+    font-size: 1rem;
+  }
+  
+  .section-header {
+    padding: 1.5rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .section-title {
+    font-size: 1.3rem;
+  }
+  
+  .section-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  
+  .btn-primary {
+    padding: 0.75rem 1.5rem;
+    font-size: 0.9rem;
+    width: auto;
+    min-width: 160px;
+  }
+  
   .card-header {
     flex-direction: column;
     align-items: flex-start;
@@ -746,6 +721,54 @@ function getRoleBadgeClass(role) {
   
   .action-buttons {
     justify-content: flex-end;
+  }
+}
+
+@media (max-width: 480px) {
+  .user-manager {
+    padding: 1rem;
+  }
+  
+  .page-header {
+    padding: 1.25rem;
+  }
+  
+  .section-header {
+    padding: 1.25rem;
+  }
+  
+  .btn-primary {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .modal-dialog {
+    width: 95%;
+    max-height: 90vh;
+  }
+  
+  .modal-body {
+    padding: 1.5rem;
+  }
+  
+  .modal-footer {
+    padding: 1rem 1.5rem 1.5rem 1.5rem;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .radio-group-compact {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .radio-item-compact {
+    flex: none;
+  }
+  
+  .radio-label-compact {
+    padding: 0.875rem 1rem;
+    font-size: 0.9rem;
   }
 }
 </style>

@@ -29,25 +29,39 @@ defineProps({
 
 <style scoped>
 .page-header {
-  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 2rem;
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%);
+  border-radius: 16px;
+  color: var(--text-color);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  margin-bottom: 2rem;
+  border: 1px solid rgba(79, 70, 229, 0.1);
 }
 
 .page-title {
-  font-size: 1.75rem;
-  font-weight: 600;
+  font-size: 2rem;
+  font-weight: 700;
   color: var(--primary-color);
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 0.75rem 0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .page-subtitle {
-  font-size: 1rem;
-  color: #666;
-  margin-bottom: 0.5rem;
+  font-size: 1.125rem;
+  color: var(--text-color-secondary);
+  margin-bottom: 0.75rem;
+  font-weight: 500;
 }
 
 .page-description {
-  font-size: 0.875rem;
-  color: #777;
-  line-height: 1.5;
+  font-size: 0.95rem;
+  color: var(--text-color-secondary);
+  line-height: 1.6;
+  max-width: 800px;
+  opacity: 0.9;
 }
 </style>

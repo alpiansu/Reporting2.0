@@ -1,11 +1,16 @@
 <template>
   <div class="store-list">
     <div class="page-header">
-      <h1 class="page-title">Stores</h1>
-      <button class="add-button" @click="openAddStoreDialog">
-        <i class="pi pi-plus"></i>
-        Add Store
-      </button>
+      <div class="header-content">
+        <h1 class="page-title">Store Management</h1>
+        <p class="page-description">Kelola data toko dan informasi cabang</p>
+      </div>
+      <div class="header-actions">
+        <button class="add-button" @click="openAddStoreDialog">
+          <i class="pi pi-plus"></i>
+          Add Store
+        </button>
+      </div>
     </div>
     
     <div class="search-filter-container">
@@ -469,33 +474,60 @@ const handlePageChange = async (page) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  padding: 2rem;
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%);
+  border-radius: 16px;
+  color: var(--text-color);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  margin-bottom: 2rem;
+  border: 1px solid rgba(79, 70, 229, 0.1);
+}
+
+.header-content h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem 0;
+  color: var(--primary-color);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.header-content p {
+  font-size: 1rem;
+  color: var(--text-color-secondary);
+  margin: 0;
+  opacity: 0.9;
 }
 
 .page-title {
-  font-size: 1.75rem;
+  font-size: 2rem;
   font-weight: 700;
   margin: 0;
-  color: var(--text-color);
+  color: var(--primary-color);
 }
 
 .add-button {
   display: flex;
   align-items: center;
   gap: 8px;
-  background-color: var(--primary-color);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 10px 16px;
-  font-size: 0.875rem;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--primary-color);
+  border: 2px solid rgba(79, 70, 229, 0.2);
+  border-radius: 12px;
+  padding: 12px 20px;
+  font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 15px rgba(79, 70, 229, 0.1);
 }
 
 .add-button:hover {
-  background-color: var(--primary-color-darken);
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(79, 70, 229, 0.2);
 }
 
 .search-filter-container {
@@ -634,16 +666,18 @@ const handlePageChange = async (page) => {
 
 .store-card {
   background-color: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(79, 70, 229, 0.1);
   overflow: hidden;
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: all 0.3s ease;
 }
 
 .store-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  transform: translateY(-6px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+  border-color: rgba(79, 70, 229, 0.2);
 }
 
 .store-header {
@@ -781,7 +815,8 @@ const handlePageChange = async (page) => {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -789,49 +824,58 @@ const handlePageChange = async (page) => {
 }
 
 .dialog-content {
-  background-color: white;
-  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 20px;
+  border: 1px solid rgba(79, 70, 229, 0.1);
   width: 100%;
   max-width: 500px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
 }
 
 .dialog-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  padding: 1.5rem 2rem;
+  background: rgba(79, 70, 229, 0.05);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(79, 70, 229, 0.1);
 }
 
 .dialog-header h2 {
-  font-size: 1.25rem;
+  font-size: 1.375rem;
   font-weight: 600;
   margin: 0;
-  color: var(--text-color);
+  color: var(--primary-color);
 }
 
 .close-button {
-  background: none;
-  border: none;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(79, 70, 229, 0.2);
   cursor: pointer;
-  color: var(--text-color-secondary);
-  width: 32px;
-  height: 32px;
+  color: var(--primary-color);
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.3s ease;
 }
 
 .close-button:hover {
-  background-color: rgba(0, 0, 0, 0.04);
+  background: var(--primary-color);
+  color: white;
+  transform: scale(1.1);
 }
 
 .dialog-body {
-  padding: 16px;
+  padding: 2rem;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
 }
 
 .store-form {
@@ -895,27 +939,34 @@ const handlePageChange = async (page) => {
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
 }
 
 .form-group label {
-  font-size: 0.875rem;
-  font-weight: 500;
+  font-size: 0.9rem;
+  font-weight: 600;
   color: var(--text-color);
+  margin-bottom: 0.25rem;
 }
 
 .form-group input, .form-group select {
-  padding: 10px 12px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  transition: border-color 0.2s;
+  padding: 0.875rem 1rem;
+  border: 2px solid rgba(79, 70, 229, 0.1);
+  border-radius: 12px;
+  font-size: 0.9rem;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .form-group input:focus, .form-group select:focus {
   outline: none;
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.2);
+  background: white;
+  box-shadow: 0 4px 20px rgba(79, 70, 229, 0.15);
+  transform: translateY(-1px);
 }
 
 .form-actions {
@@ -926,43 +977,56 @@ const handlePageChange = async (page) => {
 }
 
 .cancel-button {
-  background-color: white;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 10px 16px;
-  font-size: 0.875rem;
-  font-weight: 500;
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid rgba(108, 117, 125, 0.2);
+  border-radius: 12px;
+  padding: 0.875rem 1.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: border-color 0.2s;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .cancel-button:hover {
-  border-color: var(--text-color);
+  border-color: #6c757d;
+  background: #6c757d;
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(108, 117, 125, 0.2);
 }
 
 .submit-button {
-  background-color: var(--primary-color);
+  background: var(--primary-color);
   color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 10px 16px;
-  font-size: 0.875rem;
+  border: 2px solid var(--primary-color);
+  border-radius: 12px;
+  padding: 0.875rem 1.5rem;
+  font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.3s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 100px;
+  min-width: 120px;
+  box-shadow: 0 4px 15px rgba(79, 70, 229, 0.2);
 }
 
 .submit-button:hover {
-  background-color: var(--primary-color-darken);
+  background: var(--primary-color-darken);
+  border-color: var(--primary-color-darken);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(79, 70, 229, 0.3);
 }
 
 .submit-button:disabled {
-  background-color: var(--primary-color-lighten);
+  background: rgba(79, 70, 229, 0.5);
+  border-color: rgba(79, 70, 229, 0.5);
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 /* Responsive adjustments */

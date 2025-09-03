@@ -39,7 +39,8 @@ export const useMenuStore = defineStore('menu', () => {
       loading.value = true;
       error.value = null;
       const response = await menuService.getAllMenus();
-      return response.data;
+      menuCategories.value = response.data || [];
+      return response;
     } catch (err) {
       error.value = err.response?.data?.message || err.message;
       throw err;
@@ -53,7 +54,9 @@ export const useMenuStore = defineStore('menu', () => {
       loading.value = true;
       error.value = null;
       const response = await menuService.createMenu(menuData);
-      return response.data;
+      // Refresh menu categories after creating
+      await fetchAllMenus();
+      return response;
     } catch (err) {
       error.value = err.response?.data?.message || err.message;
       throw err;
@@ -62,12 +65,14 @@ export const useMenuStore = defineStore('menu', () => {
     }
   }
 
-  async function updateMenu(id, menuData) {
+  async function updateMenu(menuData) {
     try {
       loading.value = true;
       error.value = null;
-      const response = await menuService.updateMenu(id, menuData);
-      return response.data;
+      const response = await menuService.updateMenu(menuData.id, menuData);
+      // Refresh menu categories after updating
+      await fetchAllMenus();
+      return response;
     } catch (err) {
       error.value = err.response?.data?.message || err.message;
       throw err;
@@ -81,7 +86,9 @@ export const useMenuStore = defineStore('menu', () => {
       loading.value = true;
       error.value = null;
       const response = await menuService.deleteMenu(id);
-      return response.data;
+      // Refresh menu categories after deleting
+      await fetchAllMenus();
+      return response;
     } catch (err) {
       error.value = err.response?.data?.message || err.message;
       throw err;

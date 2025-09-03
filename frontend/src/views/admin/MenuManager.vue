@@ -1,16 +1,25 @@
 <template>
   <div class="menu-manager">
     <div class="page-header">
-      <h1>Menu Manager</h1>
-      <p>Kelola menu navigasi aplikasi berdasarkan peran pengguna</p>
+      <div class="header-content">
+        <h1>Menu Manager</h1>
+        <p>Kelola menu aplikasi dan atur struktur navigasi</p>
+      </div>
+      <div class="header-actions">
+        <button class="add-button" @click="addCategory">
+          <i class="pi pi-plus"></i>
+          Tambah Kategori
+        </button>
+        <button class="add-button" @click="addMenuItem">
+          <i class="pi pi-plus"></i>
+          Tambah Menu Item
+        </button>
+      </div>
     </div>
 
     <div class="card">
       <div class="card-header">
         <h2>Daftar Menu</h2>
-        <button class="add-button" @click="showAddMenuModal = true">
-          <i class="pi pi-plus"></i> Tambah Menu Baru
-        </button>
       </div>
 
       <div class="card-body">
@@ -26,26 +35,34 @@
         <div v-else-if="!menuStore.hasMenus" class="empty-state">
           <i class="pi pi-info-circle"></i>
           <p>Belum ada menu yang tersedia</p>
-          <button class="add-button" @click="showAddMenuModal = true">
-            <i class="pi pi-plus"></i> Tambah Menu Baru
-          </button>
+          <div class="empty-actions">
+            <button class="add-button" @click="addCategory()">
+              <i class="pi pi-plus"></i> Tambah Kategori
+            </button>
+            <button class="add-button" @click="addMenuItem()">
+              <i class="pi pi-plus"></i> Tambah Menu Item
+            </button>
+          </div>
         </div>
 
         <div v-else>
           <div v-for="(category, index) in menuStore.menuCategories" :key="index" class="menu-category mb-4">
             <div class="menu-category-header">
               <h3>{{ category.name }}</h3>
-              <div class="action-buttons">
-                <button class="edit-button" @click="editCategory(category)">
+              <div class="category-actions">
+                <button class="add-item-button" @click="addMenuItemToCategory(category)" title="Tambah item ke kategori ini">
+                  <i class="pi pi-plus"></i> Tambah Item
+                </button>
+                <button class="edit-button" @click="editCategory(category)" title="Edit kategori">
                   <i class="pi pi-pencil"></i>
                 </button>
-                <button class="delete-button" @click="confirmDeleteCategory(category)">
+                <button class="delete-button" @click="confirmDeleteCategory(category)" title="Hapus kategori">
                   <i class="pi pi-trash"></i>
                 </button>
               </div>
             </div>
 
-            <div class="table-container">
+            <div v-if="category.items && category.items.length > 0" class="table-container">
               <table class="data-table">
                 <thead>
                   <tr>
@@ -68,10 +85,10 @@
                     </td>
                     <td>
                       <div class="action-buttons">
-                        <button class="edit-button" @click="editMenuItem(category, item)">
+                        <button class="edit-button" @click="editMenuItem(category, item)" title="Edit menu item">
                           <i class="pi pi-pencil"></i>
                         </button>
-                        <button class="delete-button" @click="confirmDeleteMenuItem(category, item)">
+                        <button class="delete-button" @click="confirmDeleteMenuItem(category, item)" title="Hapus menu item">
                           <i class="pi pi-trash"></i>
                         </button>
                       </div>
@@ -80,129 +97,48 @@
                 </tbody>
               </table>
             </div>
+            <div v-else class="category-empty-state">
+              <i class="pi pi-info-circle"></i>
+              <p>Belum ada menu item dalam kategori ini</p>
+              <button class="add-item-button" @click="addMenuItemToCategory(category)">
+                <i class="pi pi-plus"></i> Tambah Item Pertama
+              </button>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Modal for adding/editing menu category -->
-    <div v-if="showCategoryModal" class="modal-backdrop"></div>
-    <div class="modal" :class="{ 'show': showCategoryModal }" tabindex="-1" role="dialog" v-if="showCategoryModal">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">{{ isEditingCategory ? 'Edit Kategori Menu' : 'Tambah Kategori Menu' }}</h5>
-            <button type="button" class="modal-close" @click="closeCategoryModal">
-              <i class="pi pi-times"></i>
-            </button>
-          </div>
-          <div class="modal-body">
-            <form @submit.prevent="saveCategory">
-              <div class="form-group">
-                <label for="categoryName">Nama Kategori</label>
-                <input type="text" class="form-input" id="categoryName" v-model="categoryForm.name" required>
-              </div>
-              <div class="form-group">
-                <label for="categoryOrder">Urutan</label>
-                <input type="number" class="form-input" id="categoryOrder" v-model="categoryForm.order" required
-                  min="0">
-              </div>
-            </form>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="cancel-button" @click="closeCategoryModal">Batal</button>
-            <button type="button" class="submit-button" @click="saveCategory">Simpan</button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- Category Dialog -->
+    <CategoryDialog 
+      :show="showCategoryModal"
+      :category="selectedCategory"
+      :categories-count="menuStore.menuCategories.length"
+      @close="closeCategoryModal"
+      @save="saveCategory"
+    />
 
-    <!-- Modal for adding/editing menu item -->
-    <div v-if="showMenuItemModal" class="modal-backdrop"></div>
-    <div class="modal" :class="{ 'show': showMenuItemModal }" tabindex="-1" role="dialog" v-if="showMenuItemModal">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">{{ isEditingMenuItem ? 'Edit Menu Item' : 'Tambah Menu Item' }}</h5>
-            <button type="button" class="modal-close" @click="closeMenuItemModal">
-              <i class="pi pi-times"></i>
-            </button>
-          </div>
-          <div class="modal-body">
-            <form @submit.prevent="saveMenuItem">
-              <div class="form-group">
-                <label for="menuCategory">Kategori</label>
-                <select class="form-select" id="menuCategory" v-model="menuItemForm.categoryId" required>
-                  <option v-for="category in menuStore.menuCategories" :key="category.id" :value="category.id">
-                    {{ category.name }}
-                  </option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label for="menuText">Nama Menu</label>
-                <input type="text" class="form-input" id="menuText" v-model="menuItemForm.text" required>
-              </div>
-              <div class="form-group">
-                <label for="menuIcon">Icon (PrimeIcons)</label>
-                <input type="text" class="form-input" id="menuIcon" v-model="menuItemForm.icon" placeholder="pi-home">
-              </div>
-              <div class="form-group">
-                <label for="menuPath">Path</label>
-                <input type="text" class="form-input" id="menuPath" v-model="menuItemForm.path" required>
-              </div>
-              <div class="form-group">
-                <label>Peran yang Diizinkan</label>
-                <div class="checkbox-group">
-                  <div class="checkbox-item">
-                    <input type="checkbox" id="roleAdmin" value="admin" v-model="menuItemForm.roles">
-                    <label for="roleAdmin">Admin</label>
-                  </div>
-                  <div class="checkbox-item">
-                    <input type="checkbox" id="roleUser" value="user" v-model="menuItemForm.roles">
-                    <label for="roleUser">User</label>
-                  </div>
-                  <div class="checkbox-item">
-                    <input type="checkbox" id="roleManager" value="superadmin" v-model="menuItemForm.roles">
-                    <label for="roleManager">Super Admin</label>
-                  </div>
-                </div>
-              </div>
-              <div class="form-group">
-                <label for="menuKeywords">Keywords (dipisahkan dengan koma)</label>
-                <input type="text" class="form-input" id="menuKeywords" v-model="menuItemForm.keywordsInput"
-                  placeholder="dashboard, home, beranda">
-              </div>
-            </form>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="cancel-button" @click="closeMenuItemModal">Batal</button>
-            <button type="button" class="submit-button" @click="saveMenuItem">Simpan</button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- Menu Item Dialog -->
+    <MenuItemDialog 
+      :show="showMenuItemModal"
+      :menu-item="selectedMenuItem"
+      :category="selectedCategory"
+      :categories="menuStore.menuCategories"
+      @close="closeMenuItemModal"
+      @save="saveMenuItem"
+    />
 
-    <!-- Confirmation Modal -->
-    <div v-if="showConfirmModal" class="modal-backdrop"></div>
-    <div class="modal" :class="{ 'show': showConfirmModal }" tabindex="-1" role="dialog" v-if="showConfirmModal">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">Konfirmasi</h5>
-            <button type="button" class="modal-close" @click="closeConfirmModal">
-              <i class="pi pi-times"></i>
-            </button>
-          </div>
-          <div class="modal-body">
-            <p>{{ confirmMessage }}</p>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="cancel-button" @click="closeConfirmModal">Batal</button>
-            <button type="button" class="delete-button" @click="confirmCallback()">Hapus</button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- Confirmation Dialog -->
+    <ConfirmDialog 
+      :show="showConfirmModal"
+      :title="'Konfirmasi'"
+      :message="confirmMessage"
+      :confirm-text="'Hapus'"
+      :cancel-text="'Batal'"
+      :type="'danger'"
+      @close="closeConfirmModal"
+      @confirm="confirmCallback"
+    />
   </div>
 </template>
 
@@ -210,42 +146,28 @@
 import { ref, onMounted } from 'vue';
 import { useMenuStore } from '../../stores';
 import { useToastService } from '../../utils/toast';
+import CategoryDialog from '../../components/CategoryDialog.vue';
+import MenuItemDialog from '../../components/MenuItemDialog.vue';
+import ConfirmDialog from '../../components/admin/ConfirmDialog.vue';
 
 const menuStore = useMenuStore();
 const toast = useToastService();
 
 // State for modals
-const showAddMenuModal = ref(false);
 const showCategoryModal = ref(false);
 const showMenuItemModal = ref(false);
 const showConfirmModal = ref(false);
 
-// State for editing
-const isEditingCategory = ref(false);
-const isEditingMenuItem = ref(false);
+// State for selected items
+const selectedCategory = ref(null);
+const selectedMenuItem = ref(null);
 const currentCategoryId = ref(null);
 const currentMenuItemId = ref(null);
-
-// Form data
-const categoryForm = ref({
-  id: null,
-  name: '',
-  order: 0
-});
-
-const menuItemForm = ref({
-  id: null,
-  categoryId: null,
-  text: '',
-  icon: '',
-  path: '',
-  roles: [],
-  keywordsInput: ''
-});
 
 // Confirmation modal
 const confirmMessage = ref('');
 const confirmCallback = ref(null);
+const confirmType = ref('warning');
 
 // Load menus on component mount
 onMounted(async () => {
@@ -259,44 +181,33 @@ onMounted(async () => {
 
 // Category methods
 function addCategory() {
-  isEditingCategory.value = false;
-  categoryForm.value = {
-    id: null,
-    name: '',
-    order: menuStore.menuCategories.length + 1
-  };
+  selectedCategory.value = null;
   showCategoryModal.value = true;
 }
 
 function editCategory(category) {
-  isEditingCategory.value = true;
-  categoryForm.value = {
-    id: category.id,
-    name: category.name,
-    order: category.order || 0
-  };
-  currentCategoryId.value = category.id;
+  selectedCategory.value = { ...category };
   showCategoryModal.value = true;
 }
 
-async function saveCategory() {
+async function saveCategory(categoryData) {
   try {
-    if (isEditingCategory.value) {
+    if (categoryData.id) {
       await menuStore.updateMenu({
-        id: currentCategoryId.value,
-        name: categoryForm.value.name,
-        order: categoryForm.value.order
+        id: categoryData.id,
+        name: categoryData.name,
+        order: categoryData.order
       });
       toast.showSuccess('Success', 'Menu category updated successfully');
     } else {
       await menuStore.createMenu({
-        name: categoryForm.value.name,
+        name: categoryData.name,
         items: [],
-        order: categoryForm.value.order
+        order: categoryData.order
       });
       toast.showSuccess('Success', 'Menu category created successfully');
     }
-    closeCategoryModal();
+    showCategoryModal.value = false;
   } catch (error) {
     console.error('Failed to save category:', error);
     toast.showError('Error', 'Failed to save menu category');
@@ -321,86 +232,56 @@ function confirmDeleteCategory(category) {
 
 function closeCategoryModal() {
   showCategoryModal.value = false;
-  categoryForm.value = {
-    id: null,
-    name: '',
-    order: 0
-  };
+  selectedCategory.value = null;
 }
 
 // Menu item methods
 function addMenuItem() {
-  isEditingMenuItem.value = false;
-  menuItemForm.value = {
-    id: null,
-    categoryId: menuStore.menuCategories.length > 0 ? menuStore.menuCategories[0].id : null,
-    text: '',
-    icon: '',
-    path: '',
-    roles: ['admin'],
-    keywordsInput: ''
-  };
+  selectedMenuItem.value = null;
+  selectedCategory.value = menuStore.menuCategories.length > 0 ? menuStore.menuCategories[0] : null;
+  showMenuItemModal.value = true;
+}
+
+function addMenuItemToCategory(category) {
+  selectedMenuItem.value = null;
+  selectedCategory.value = category;
   showMenuItemModal.value = true;
 }
 
 function editMenuItem(category, item) {
-  isEditingMenuItem.value = true;
-  menuItemForm.value = {
-    id: item.id,
-    categoryId: category.id,
-    text: item.text,
-    icon: item.icon,
-    path: item.path,
-    roles: [...(item.roles || [])],
-    keywordsInput: (item.keywords || []).join(', ')
-  };
-  currentCategoryId.value = category.id;
-  currentMenuItemId.value = item.id;
+  selectedMenuItem.value = { ...item };
+  selectedCategory.value = category;
   showMenuItemModal.value = true;
 }
 
-async function saveMenuItem() {
+async function saveMenuItem(menuItemData) {
   try {
-    const keywords = menuItemForm.value.keywordsInput
-      .split(',')
-      .map(keyword => keyword.trim())
-      .filter(keyword => keyword !== '');
-
-    const menuItemData = {
-      id: menuItemForm.value.id,
-      text: menuItemForm.value.text,
-      icon: menuItemForm.value.icon,
-      path: menuItemForm.value.path,
-      roles: menuItemForm.value.roles,
-      keywords: keywords
-    };
-
-    if (isEditingMenuItem.value) {
+    if (menuItemData.id) {
       // Find the category
-      const category = menuStore.menuCategories.find(cat => cat.id === currentCategoryId.value);
+      const category = menuStore.menuCategories.find(cat => cat.id === selectedCategory.value.id);
       if (!category) {
         throw new Error('Category not found');
       }
 
       // Update the menu item
       const updatedItems = category.items.map(item => {
-        if (item.id === currentMenuItemId.value) {
+        if (item.id === menuItemData.id) {
           return { ...item, ...menuItemData };
         }
         return item;
       });
 
       // If category changed, remove from old and add to new
-      if (currentCategoryId.value !== menuItemForm.value.categoryId) {
+      if (selectedCategory.value.id !== menuItemData.categoryId) {
         // Remove from old category
         const updatedOldCategory = {
           ...category,
-          items: category.items.filter(item => item.id !== currentMenuItemId.value)
+          items: category.items.filter(item => item.id !== menuItemData.id)
         };
         await menuStore.updateMenu(updatedOldCategory);
 
         // Add to new category
-        const newCategory = menuStore.menuCategories.find(cat => cat.id === menuItemForm.value.categoryId);
+        const newCategory = menuStore.menuCategories.find(cat => cat.id === menuItemData.categoryId);
         if (!newCategory) {
           throw new Error('New category not found');
         }
@@ -422,7 +303,7 @@ async function saveMenuItem() {
       toast.showSuccess('Success', 'Menu item updated successfully');
     } else {
       // Find the category
-      const category = menuStore.menuCategories.find(cat => cat.id === menuItemForm.value.categoryId);
+      const category = menuStore.menuCategories.find(cat => cat.id === menuItemData.categoryId);
       if (!category) {
         throw new Error('Category not found');
       }
@@ -440,7 +321,7 @@ async function saveMenuItem() {
       toast.showSuccess('Success', 'Menu item created successfully');
     }
 
-    closeMenuItemModal();
+    showMenuItemModal.value = false;
   } catch (error) {
     console.error('Failed to save menu item:', error);
     toast.showError('Error', 'Failed to save menu item');
@@ -471,15 +352,8 @@ function confirmDeleteMenuItem(category, item) {
 
 function closeMenuItemModal() {
   showMenuItemModal.value = false;
-  menuItemForm.value = {
-    id: null,
-    categoryId: null,
-    text: '',
-    icon: '',
-    path: '',
-    roles: [],
-    keywordsInput: ''
-  };
+  selectedMenuItem.value = null;
+  selectedCategory.value = null;
 }
 
 function confirmAction() {
@@ -492,6 +366,7 @@ function closeConfirmModal() {
   showConfirmModal.value = false;
   confirmMessage.value = '';
   confirmCallback.value = null;
+  confirmType.value = 'warning';
 }
 </script>
 
@@ -501,27 +376,36 @@ function closeConfirmModal() {
 }
 
 .page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  color: white;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
 }
 
-.page-header h1 {
-  font-size: 1.75rem;
+.header-content h1 {
+  font-size: 2rem;
   font-weight: 600;
-  color: var(--text-color);
-  margin-bottom: 0.5rem;
+  margin: 0 0 0.5rem 0;
 }
 
-.page-header p {
-  color: var(--text-secondary-color);
-  font-size: 0.9rem;
+.header-content p {
+  margin: 0;
+  opacity: 0.9;
+  font-size: 1rem;
 }
 
 .card {
-  background-color: white;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  border-radius: 0.5rem;
-  margin-bottom: 2rem;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
   overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  margin-bottom: 2rem;
 }
 
 .card-header {
@@ -536,6 +420,18 @@ function closeConfirmModal() {
   font-size: 1.25rem;
   font-weight: 600;
   margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.empty-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  justify-content: center;
 }
 
 .card-body {
@@ -559,6 +455,56 @@ function closeConfirmModal() {
   font-size: 1.1rem;
   font-weight: 500;
   margin: 0;
+}
+
+.category-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.add-item-button {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.add-item-button:hover {
+  background-color: #218838;
+  transform: translateY(-1px);
+}
+
+.category-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+  color: #6c757d;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+  margin: 1rem 0;
+}
+
+.category-empty-state i {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+  color: #6c757d;
+}
+
+.category-empty-state p {
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
 }
 
 /* Table styles */
@@ -594,22 +540,26 @@ function closeConfirmModal() {
 
 /* Button styles */
 .add-button {
-  background-color: var(--primary-color);
+  background: rgba(255, 255, 255, 0.2);
   color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 0.5rem 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  padding: 0.75rem 1.5rem;
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  transition: background-color 0.2s;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
 }
 
 .add-button:hover {
-  background-color: var(--primary-color-darken);
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2);
 }
 
 .action-buttons {
@@ -695,189 +645,5 @@ function closeConfirmModal() {
   color: var(--danger-color, #dc3545);
 }
 
-/* Modal styles */
-.modal-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.6);
-  z-index: 1040;
-  backdrop-filter: blur(2px);
-}
-
-.modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  overflow-x: hidden;
-  overflow-y: auto;
-  z-index: 1050;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-}
-
-.modal.show {
-  display: flex;
-}
-
-.modal-dialog {
-  position: relative;
-  width: 100%;
-  margin: 0 auto;
-  max-width: 500px;
-  transform: translateY(0);
-  transition: transform 0.3s ease-out;
-}
-
-.modal-content {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-  outline: 0;
-  overflow: hidden;
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid #eee;
-}
-
-.modal-title {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--primary-color, #3B82F6);
-}
-
-.modal-close {
-  background: transparent;
-  border: none;
-  font-size: 1.25rem;
-  cursor: pointer;
-  color: #666;
-  padding: 0.25rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.2s;
-}
-
-.modal-close:hover {
-  color: var(--primary-color, #3B82F6);
-}
-
-.modal-body {
-  position: relative;
-  flex: 1 1 auto;
-  padding: 1.5rem;
-}
-
-.modal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding: 1.25rem 1.5rem;
-  border-top: 1px solid #eee;
-  gap: 0.75rem;
-}
-
-.form-group {
-  margin-bottom: 1.25rem;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-  color: #333;
-}
-
-.form-input,
-.form-select {
-  display: block;
-  width: 100%;
-  padding: 0.625rem 0.75rem;
-  font-size: 0.95rem;
-  line-height: 1.5;
-  color: #333;
-  background-color: #fff;
-  background-clip: padding-box;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-}
-
-.form-input:focus,
-.form-select:focus {
-  border-color: var(--primary-color, #3B82F6);
-  outline: 0;
-  box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.25);
-}
-
-.checkbox-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.checkbox-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.checkbox-item input[type="checkbox"] {
-  width: 1rem;
-  height: 1rem;
-}
-
-.checkbox-item label {
-  margin-bottom: 0;
-  font-weight: normal;
-}
-
-.submit-button {
-  padding: 0.625rem 1.25rem;
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: #fff;
-  background-color: var(--primary-color, #3B82F6);
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.submit-button:hover {
-  background-color: var(--primary-dark-color, #2563EB);
-}
-
-.cancel-button {
-  padding: 0.625rem 1.25rem;
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: #666;
-  background-color: #f5f5f5;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.cancel-button:hover {
-  background-color: #e5e5e5;
-}
+/* Modal and form styles moved to separate dialog components */
 </style>

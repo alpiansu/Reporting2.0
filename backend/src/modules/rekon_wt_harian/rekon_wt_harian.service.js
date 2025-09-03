@@ -1132,6 +1132,9 @@ class RekonWtHarianService {
 
       // Filter data from JSON file
       let filteredData = this.rekonData.filter(item => {
+        // Wajib: hanya tampilkan data dengan recid '*' (masih ada selisih)
+        if (item.recid !== '*') return false;
+
         // Wajib: periode harus cocok
         if (String(item.periode) !== String(period)) return false;
 
@@ -1301,8 +1304,8 @@ class RekonWtHarianService {
       // Ensure data is loaded from JSON file
       await this.ensureInitialized();
 
-      // Filter data for the specified period
-      const filteredData = this.rekonData.filter(item => item.periode === period);
+      // Filter data for the specified period and only show data with recid '*' (still has differences)
+      const filteredData = this.rekonData.filter(item => item.periode === period && item.recid === '*');
 
       // Calculate summary statistics
       const uniqueShops = new Set(filteredData.map(item => item.shop));
@@ -1419,8 +1422,8 @@ class RekonWtHarianService {
       // Ensure data is loaded from JSON file
       await this.ensureInitialized();
 
-      // Filter data for the specified cab and period
-      const filteredData = this.rekonData.filter(item => item.cab === cab && item.periode === period);
+      // Filter data for the specified cab and period, only show data with recid '*' (still has differences)
+      const filteredData = this.rekonData.filter(item => item.cab === cab && item.periode === period && item.recid === '*');
 
       // Calculate summary statistics
       const uniqueShops = new Set(filteredData.map(item => item.shop));

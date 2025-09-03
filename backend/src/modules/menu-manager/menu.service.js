@@ -166,6 +166,240 @@ class MenuService {
 
     return false;
   }
+
+  // ===== CATEGORY OPERATIONS =====
+
+  /**
+   * Create a new category
+   * @param {Object} categoryData - Category data
+   * @returns {Object} Created category object
+   */
+  async createCategory(categoryData) {
+    await this.init();
+
+    const newCategory = {
+      ...categoryData,
+      id: categoryData.id || uuidv4(),
+      items: categoryData.items || [],
+      order: categoryData.order || this.menus.length,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.menus.push(newCategory);
+    await this.saveMenus();
+
+    return newCategory;
+  }
+
+  /**
+   * Update an existing category
+   * @param {string} id - Category ID
+   * @param {Object} categoryData - Category data
+   * @returns {Object} Updated category object
+   */
+  async updateCategory(id, categoryData) {
+    await this.init();
+
+    const index = this.menus.findIndex(menu => menu.id === id);
+
+    if (index === -1) {
+      throw new Error(`Category with ID ${id} not found`);
+    }
+
+    // Update category with new data, preserving existing items
+    const updatedCategory = {
+      ...this.menus[index],
+      ...categoryData,
+      id, // Ensure ID doesn't change
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.menus[index] = updatedCategory;
+    await this.saveMenus();
+
+    return updatedCategory;
+  }
+
+  /**
+   * Delete a category
+   * @param {string} id - Category ID
+   * @returns {boolean} True if deleted, false if not found
+   */
+  async deleteCategory(id) {
+    await this.init();
+
+    const initialLength = this.menus.length;
+    this.menus = this.menus.filter(menu => menu.id !== id);
+
+    if (this.menus.length < initialLength) {
+      await this.saveMenus();
+      return true;
+    }
+
+    return false;
+  }
+
+  // ===== MENU ITEM OPERATIONS =====
+
+  /**
+   * Add a menu item to a category
+   * @param {string} categoryId - Category ID
+   * @param {Object} itemData - Menu item data
+   * @returns {Object} Created menu item object
+   */
+  async addMenuItem(categoryId, itemData) {
+    await this.init();
+
+    const categoryIndex = this.menus.findIndex(menu => menu.id === categoryId);
+
+    if (categoryIndex === -1) {
+      throw new Error(`Category with ID ${categoryId} not found`);
+    }
+
+    const newItem = {
+      ...itemData,
+      id: itemData.id || uuidv4(),
+    };
+
+    // Initialize items array if it doesn't exist
+    if (!this.menus[categoryIndex].items) {
+      this.menus[categoryIndex].items = [];
+    }
+
+    this.menus[categoryIndex].items.push(newItem);
+    this.menus[categoryIndex].updatedAt = new Date().toISOString();
+
+    await this.saveMenus();
+
+    return newItem;
+  }
+
+  /**
+   * Update a menu item
+   * @param {string} categoryId - Category ID
+   * @param {string} itemId - Menu item ID
+   * @param {Object} itemData - Menu item data
+   * @returns {Object} Updated menu item object
+   */
+  async updateMenuItem(categoryId, itemId, itemData) {
+    await this.init();
+
+    const categoryIndex = this.menus.findIndex(menu => menu.id === categoryId);
+
+    if (categoryIndex === -1) {
+      throw new Error(`Category with ID ${categoryId} not found`);
+    }
+
+    const category = this.menus[categoryIndex];
+    if (!category.items) {
+      throw new Error(`No items found in category ${categoryId}`);
+    }
+
+    const itemIndex = category.items.findIndex(item => item.id === itemId);
+
+    if (itemIndex === -1) {
+      throw new Error(`Menu item with ID ${itemId} not found in category ${categoryId}`);
+    }
+
+    // Update item with new data
+    const updatedItem = {
+      ...category.items[itemIndex],
+      ...itemData,
+      id: itemId, // Ensure ID doesn't change
+    };
+
+    this.menus[categoryIndex].items[itemIndex] = updatedItem;
+    this.menus[categoryIndex].updatedAt = new Date().toISOString();
+
+    await this.saveMenus();
+
+    return updatedItem;
+  }
+
+  /**
+   * Delete a menu item
+   * @param {string} categoryId - Category ID
+   * @param {string} itemId - Menu item ID
+   * @returns {boolean} True if deleted, false if not found
+   */
+  async deleteMenuItem(categoryId, itemId) {
+    await this.init();
+
+    const categoryIndex = this.menus.findIndex(menu => menu.id === categoryId);
+
+    if (categoryIndex === -1) {
+      throw new Error(`Category with ID ${categoryId} not found`);
+    }
+
+    const category = this.menus[categoryIndex];
+    if (!category.items) {
+      return false;
+    }
+
+    const initialLength = category.items.length;
+    category.items = category.items.filter(item => item.id !== itemId);
+
+    if (category.items.length < initialLength) {
+      this.menus[categoryIndex].updatedAt = new Date().toISOString();
+      await this.saveMenus();
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Move a menu item to a different category
+   * @param {string} fromCategoryId - Source category ID
+   * @param {string} toCategoryId - Target category ID
+   * @param {string} itemId - Menu item ID
+   * @returns {Object} Moved menu item object
+   */
+  async moveMenuItem(fromCategoryId, toCategoryId, itemId) {
+    await this.init();
+
+    const fromCategoryIndex = this.menus.findIndex(menu => menu.id === fromCategoryId);
+    const toCategoryIndex = this.menus.findIndex(menu => menu.id === toCategoryId);
+
+    if (fromCategoryIndex === -1) {
+      throw new Error(`Source category with ID ${fromCategoryId} not found`);
+    }
+
+    if (toCategoryIndex === -1) {
+      throw new Error(`Target category with ID ${toCategoryId} not found`);
+    }
+
+    const fromCategory = this.menus[fromCategoryIndex];
+    const toCategory = this.menus[toCategoryIndex];
+
+    if (!fromCategory.items) {
+      throw new Error(`No items found in source category ${fromCategoryId}`);
+    }
+
+    const itemIndex = fromCategory.items.findIndex(item => item.id === itemId);
+
+    if (itemIndex === -1) {
+      throw new Error(`Menu item with ID ${itemId} not found in category ${fromCategoryId}`);
+    }
+
+    // Remove item from source category
+    const [movedItem] = fromCategory.items.splice(itemIndex, 1);
+
+    // Add item to target category
+    if (!toCategory.items) {
+      toCategory.items = [];
+    }
+    toCategory.items.push(movedItem);
+
+    // Update timestamps
+    this.menus[fromCategoryIndex].updatedAt = new Date().toISOString();
+    this.menus[toCategoryIndex].updatedAt = new Date().toISOString();
+
+    await this.saveMenus();
+
+    return movedItem;
+  }
 }
 
 module.exports = MenuService;

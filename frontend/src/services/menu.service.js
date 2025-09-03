@@ -64,14 +64,95 @@ const menuService = {
   },
 
   /**
-   * Delete a menu (admin only)
+   * Delete an existing menu (admin only)
    * @param {string} id - Menu ID
-   * @returns {Promise} - Response with success message
+   * @returns {Promise} - Response with deletion status
    */
   deleteMenu: async (id) => {
     const response = await api.delete(`/menu-manager/${id}`);
     return response.data;
-  }
+  },
+
+  // ===== CATEGORY OPERATIONS =====
+
+  /**
+   * Create a new category (admin only)
+   * @param {Object} categoryData - Category data
+   * @returns {Promise} - Response with created category
+   */
+  createCategory: async (categoryData) => {
+    const response = await api.post('/menu-manager/categories', categoryData);
+    return response.data;
+  },
+
+  /**
+   * Update an existing category (admin only)
+   * @param {string} id - Category ID
+   * @param {Object} categoryData - Category data
+   * @returns {Promise} - Response with updated category
+   */
+  updateCategory: async (id, categoryData) => {
+    const response = await api.put(`/menu-manager/categories/${id}`, categoryData);
+    return response.data;
+  },
+
+  /**
+   * Delete a category (admin only)
+   * @param {string} id - Category ID
+   * @returns {Promise} - Response with deletion status
+   */
+  deleteCategory: async (id) => {
+    const response = await api.delete(`/menu-manager/categories/${id}`);
+    return response.data;
+  },
+
+  // ===== MENU ITEM OPERATIONS =====
+
+  /**
+   * Add a menu item to a category (admin only)
+   * @param {string} categoryId - Category ID
+   * @param {Object} itemData - Menu item data
+   * @returns {Promise} - Response with created menu item
+   */
+  addMenuItem: async (categoryId, itemData) => {
+    const response = await api.post(`/menu-manager/categories/${categoryId}/items`, itemData);
+    return response.data;
+  },
+
+  /**
+   * Update a menu item (admin only)
+   * @param {string} categoryId - Category ID
+   * @param {string} itemId - Menu item ID
+   * @param {Object} itemData - Menu item data
+   * @returns {Promise} - Response with updated menu item
+   */
+  updateMenuItem: async (categoryId, itemId, itemData) => {
+    const response = await api.put(`/menu-manager/categories/${categoryId}/items/${itemId}`, itemData);
+    return response.data;
+  },
+
+  /**
+   * Delete a menu item (admin only)
+   * @param {string} categoryId - Category ID
+   * @param {string} itemId - Menu item ID
+   * @returns {Promise} - Response with deletion status
+   */
+  deleteMenuItem: async (categoryId, itemId) => {
+    const response = await api.delete(`/menu-manager/categories/${categoryId}/items/${itemId}`);
+    return response.data;
+  },
+
+  /**
+   * Move a menu item to a different category (admin only)
+   * @param {string} fromCategoryId - Source category ID
+   * @param {string} toCategoryId - Target category ID
+   * @param {string} itemId - Menu item ID
+   * @returns {Promise} - Response with moved menu item
+   */
+  moveMenuItem: async (fromCategoryId, toCategoryId, itemId) => {
+    const response = await api.post(`/menu-manager/categories/${fromCategoryId}/items/${itemId}/move/${toCategoryId}`);
+    return response.data;
+  },
 };
 
 export default menuService;

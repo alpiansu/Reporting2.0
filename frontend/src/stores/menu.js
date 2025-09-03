@@ -97,6 +97,115 @@ export const useMenuStore = defineStore('menu', () => {
     }
   }
 
+  // ===== CATEGORY OPERATIONS =====
+
+  async function createCategory(categoryData) {
+    try {
+      loading.value = true;
+      error.value = null;
+      const response = await menuService.createCategory(categoryData);
+      await fetchAllMenus(); // Refresh the list
+      return response;
+    } catch (err) {
+      error.value = err.response?.data?.message || err.message;
+      throw err;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  async function updateCategory(categoryId, categoryData) {
+    try {
+      loading.value = true;
+      error.value = null;
+      const response = await menuService.updateCategory(categoryId, categoryData);
+      await fetchAllMenus(); // Refresh the list
+      return response;
+    } catch (err) {
+      error.value = err.response?.data?.message || err.message;
+      throw err;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  async function deleteCategory(categoryId) {
+    try {
+      loading.value = true;
+      error.value = null;
+      const response = await menuService.deleteCategory(categoryId);
+      await fetchAllMenus(); // Refresh the list
+      return response;
+    } catch (err) {
+      error.value = err.response?.data?.message || err.message;
+      throw err;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  // ===== MENU ITEM OPERATIONS =====
+
+  async function addMenuItem(categoryId, itemData) {
+    try {
+      loading.value = true;
+      error.value = null;
+      const response = await menuService.addMenuItem(categoryId, itemData);
+      await fetchAllMenus(); // Refresh the list
+      return response;
+    } catch (err) {
+      error.value = err.response?.data?.message || err.message;
+      throw err;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  async function updateMenuItem(categoryId, itemId, itemData) {
+    try {
+      loading.value = true;
+      error.value = null;
+      const response = await menuService.updateMenuItem(categoryId, itemId, itemData);
+      await fetchAllMenus(); // Refresh the list
+      return response;
+    } catch (err) {
+      error.value = err.response?.data?.message || err.message;
+      throw err;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  async function deleteMenuItem(categoryId, itemId) {
+    try {
+      loading.value = true;
+      error.value = null;
+      const response = await menuService.deleteMenuItem(categoryId, itemId);
+      await fetchAllMenus(); // Refresh the list
+      return response;
+    } catch (err) {
+      error.value = err.response?.data?.message || err.message;
+      throw err;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  async function moveMenuItem(fromCategoryId, toCategoryId, itemId) {
+    try {
+      loading.value = true;
+      error.value = null;
+      const response = await menuService.moveMenuItem(fromCategoryId, toCategoryId, itemId);
+      await fetchAllMenus(); // Refresh the list
+      return response;
+    } catch (err) {
+      error.value = err.response?.data?.message || err.message;
+      throw err;
+    } finally {
+      loading.value = false;
+    }
+  }
+
   return {
     menuCategories,
     loading,
@@ -107,5 +216,12 @@ export const useMenuStore = defineStore('menu', () => {
     createMenu,
     updateMenu,
     deleteMenu,
+    createCategory,
+    updateCategory,
+    deleteCategory,
+    addMenuItem,
+    updateMenuItem,
+    deleteMenuItem,
+    moveMenuItem,
   };
 });

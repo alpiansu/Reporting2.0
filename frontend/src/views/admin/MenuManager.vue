@@ -193,18 +193,10 @@ function editCategory(category) {
 async function saveCategory(categoryData) {
   try {
     if (categoryData.id) {
-      await menuStore.updateMenu({
-        id: categoryData.id,
-        name: categoryData.name,
-        order: categoryData.order
-      });
+      await menuStore.updateCategory(categoryData.id, categoryData);
       toast.showSuccess('Success', 'Menu category updated successfully');
     } else {
-      await menuStore.createMenu({
-        name: categoryData.name,
-        items: [],
-        order: categoryData.order
-      });
+      await menuStore.createCategory(categoryData);
       toast.showSuccess('Success', 'Menu category created successfully');
     }
     showCategoryModal.value = false;
@@ -218,7 +210,7 @@ function confirmDeleteCategory(category) {
   confirmMessage.value = `Are you sure you want to delete the category "${category.name}" and all its menu items?`;
   confirmCallback.value = async () => {
     try {
-      await menuStore.deleteMenu(category.id);
+      await menuStore.deleteCategory(category.id);
       toast.showSuccess('Success', 'Menu category deleted successfully');
       closeConfirmModal();
     } catch (error) {
@@ -257,67 +249,12 @@ function editMenuItem(category, item) {
 async function saveMenuItem(menuItemData) {
   try {
     if (menuItemData.id) {
-      // Find the category
-      const category = menuStore.menuCategories.find(cat => cat.id === selectedCategory.value.id);
-      if (!category) {
-        throw new Error('Category not found');
-      }
-
-      // Update the menu item
-      const updatedItems = category.items.map(item => {
-        if (item.id === menuItemData.id) {
-          return { ...item, ...menuItemData };
-        }
-        return item;
-      });
-
-      // If category changed, remove from old and add to new
-      if (selectedCategory.value.id !== menuItemData.categoryId) {
-        // Remove from old category
-        const updatedOldCategory = {
-          ...category,
-          items: category.items.filter(item => item.id !== menuItemData.id)
-        };
-        await menuStore.updateMenu(updatedOldCategory);
-
-        // Add to new category
-        const newCategory = menuStore.menuCategories.find(cat => cat.id === menuItemData.categoryId);
-        if (!newCategory) {
-          throw new Error('New category not found');
-        }
-
-        const updatedNewCategory = {
-          ...newCategory,
-          items: [...newCategory.items, menuItemData]
-        };
-        await menuStore.updateMenu(updatedNewCategory);
-      } else {
-        // Update in the same category
-        const updatedCategory = {
-          ...category,
-          items: updatedItems
-        };
-        await menuStore.updateMenu(updatedCategory);
-      }
-
+      // Update existing menu item
+      await menuStore.updateMenuItem(selectedCategory.value.id, menuItemData.id, menuItemData);
       toast.showSuccess('Success', 'Menu item updated successfully');
     } else {
-      // Find the category
-      const category = menuStore.menuCategories.find(cat => cat.id === menuItemData.categoryId);
-      if (!category) {
-        throw new Error('Category not found');
-      }
-
-      // Generate a new ID for the menu item
-      menuItemData.id = Date.now().toString();
-
-      // Add the new menu item to the category
-      const updatedCategory = {
-        ...category,
-        items: [...category.items, menuItemData]
-      };
-
-      await menuStore.updateMenu(updatedCategory);
+      // Add new menu item
+      await menuStore.addMenuItem(menuItemData.categoryId, menuItemData);
       toast.showSuccess('Success', 'Menu item created successfully');
     }
 
@@ -332,13 +269,7 @@ function confirmDeleteMenuItem(category, item) {
   confirmMessage.value = `Are you sure you want to delete the menu item "${item.text}"?`;
   confirmCallback.value = async () => {
     try {
-      // Remove the item from the category
-      const updatedCategory = {
-        ...category,
-        items: category.items.filter(i => i.id !== item.id)
-      };
-
-      await menuStore.updateMenu(updatedCategory);
+      await menuStore.deleteMenuItem(category.id, item.id);
       toast.showSuccess('Success', 'Menu item deleted successfully');
       closeConfirmModal();
     } catch (error) {

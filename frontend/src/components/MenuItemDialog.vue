@@ -22,7 +22,7 @@
                 <label for="menuCategory" class="form-label">Kategori</label>
                 <select class="form-select" id="menuCategory" v-model="formData.categoryId" required>
                   <option value="" disabled>Pilih kategori</option>
-                  <option v-for="category in categories" :key="category.id" :value="category.id">
+                  <option v-for="category in availableCategories" :key="category.id" :value="category.id">
                     {{ category.name }}
                   </option>
                 </select>
@@ -159,6 +159,9 @@ const props = defineProps({
   }
 });
 
+// Computed untuk memastikan categories selalu reactive
+const availableCategories = computed(() => props.categories || []);
+
 // Emits
 const emit = defineEmits(['close', 'save']);
 
@@ -204,16 +207,23 @@ watch(() => props.show, (newShow) => {
     resetForm();
     if (props.category) {
       formData.value.categoryId = props.category.id;
-    } else if (props.categories.length > 0) {
-      formData.value.categoryId = props.categories[0].id;
+    } else if (availableCategories.value.length > 0) {
+      formData.value.categoryId = availableCategories.value[0].id;
     }
   }
 });
 
+// Watch for categories changes to update form if needed
+watch(() => availableCategories.value, (newCategories) => {
+  if (newCategories.length > 0 && !formData.value.categoryId && !props.menuItem) {
+    formData.value.categoryId = newCategories[0].id;
+  }
+}, { immediate: true });
+
 // Methods
 function resetForm() {
   formData.value = {
-    categoryId: props.category?.id || (props.categories.length > 0 ? props.categories[0].id : null),
+    categoryId: props.category?.id || (availableCategories.value.length > 0 ? availableCategories.value[0].id : null),
     text: '',
     icon: '',
     path: '',

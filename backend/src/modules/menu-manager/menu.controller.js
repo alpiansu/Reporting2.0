@@ -24,8 +24,7 @@ class MenuController {
               menu.items = menu.items.filter(item =>
                 Array.isArray(item.roles) ? item.roles.includes(userRole) : true
               );
-              // Jika setelah filter items kosong, jangan tampilkan menu
-              return menu.items.length > 0;
+              return menu;
             }
             return true;
           })
@@ -185,6 +184,150 @@ class MenuController {
         return apiResponse.notFound(res, `Menu with ID ${id} not found`);
       }
     } catch (error) {
+      next(error);
+    }
+  }
+
+  // ===== CATEGORY OPERATIONS =====
+
+  /**
+   * Create a new category
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @param {Function} next - Express next middleware function
+   */
+  async createCategory(req, res, next) {
+    try {
+      const categoryData = req.body;
+      const newCategory = await Menu.createCategory(categoryData);
+      return apiResponse.created(res, newCategory);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Update a category
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @param {Function} next - Express next middleware function
+   */
+  async updateCategory(req, res, next) {
+    try {
+      const { id } = req.params;
+      const categoryData = req.body;
+      const updatedCategory = await Menu.updateCategory(id, categoryData);
+      return apiResponse.success(res, updatedCategory);
+    } catch (error) {
+      if (error.message.includes("not found")) {
+        return apiResponse.notFound(res, error.message);
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * Delete a category
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @param {Function} next - Express next middleware function
+   */
+  async deleteCategory(req, res, next) {
+    try {
+      const { id } = req.params;
+      const deleted = await Menu.deleteCategory(id);
+
+      if (deleted) {
+        return apiResponse.success(res, true);
+      } else {
+        return apiResponse.notFound(res, `Category with ID ${id} not found`);
+      }
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ===== MENU ITEM OPERATIONS =====
+
+  /**
+   * Add a menu item to a category
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @param {Function} next - Express next middleware function
+   */
+  async addMenuItem(req, res, next) {
+    try {
+      const { categoryId } = req.params;
+      const itemData = req.body;
+      const newItem = await Menu.addMenuItem(categoryId, itemData);
+      return apiResponse.created(res, newItem);
+    } catch (error) {
+      if (error.message.includes("not found")) {
+        return apiResponse.notFound(res, error.message);
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * Update a menu item
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @param {Function} next - Express next middleware function
+   */
+  async updateMenuItem(req, res, next) {
+    try {
+      const { categoryId, itemId } = req.params;
+      const itemData = req.body;
+      const updatedItem = await Menu.updateMenuItem(categoryId, itemId, itemData);
+      return apiResponse.success(res, updatedItem);
+    } catch (error) {
+      if (error.message.includes("not found")) {
+        return apiResponse.notFound(res, error.message);
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * Delete a menu item
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @param {Function} next - Express next middleware function
+   */
+  async deleteMenuItem(req, res, next) {
+    try {
+      const { categoryId, itemId } = req.params;
+      const deleted = await Menu.deleteMenuItem(categoryId, itemId);
+
+      if (deleted) {
+        return apiResponse.success(res, true);
+      } else {
+        return apiResponse.notFound(res, `Menu item with ID ${itemId} not found in category ${categoryId}`);
+      }
+    } catch (error) {
+      if (error.message.includes("not found")) {
+        return apiResponse.notFound(res, error.message);
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * Move a menu item to a different category
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @param {Function} next - Express next middleware function
+   */
+  async moveMenuItem(req, res, next) {
+    try {
+      const { fromCategoryId, toCategoryId, itemId } = req.params;
+      const movedItem = await Menu.moveMenuItem(fromCategoryId, toCategoryId, itemId);
+      return apiResponse.success(res, movedItem);
+    } catch (error) {
+      if (error.message.includes("not found")) {
+        return apiResponse.notFound(res, error.message);
+      }
       next(error);
     }
   }

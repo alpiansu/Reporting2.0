@@ -99,6 +99,80 @@ const Menu = {
     await menuService.init();
     return menuService.deleteMenu(id);
   },
+
+  // ===== CATEGORY OPERATIONS =====
+
+  /**
+   * Create a new category
+   * @param {Object} categoryData - Category data
+   * @returns {Promise<Object>} Created category object
+   */
+  createCategory: async (categoryData) => {
+    return menuService.createCategory(categoryData);
+  },
+
+  /**
+   * Update a category
+   * @param {string} id - Category ID
+   * @param {Object} categoryData - Category data
+   * @returns {Promise<Object>} Updated category object
+   */
+  updateCategory: async (id, categoryData) => {
+    return menuService.updateCategory(id, categoryData);
+  },
+
+  /**
+   * Delete a category
+   * @param {string} id - Category ID
+   * @returns {Promise<boolean>} True if deleted, false if not found
+   */
+  deleteCategory: async (id) => {
+    return menuService.deleteCategory(id);
+  },
+
+  // ===== MENU ITEM OPERATIONS =====
+
+  /**
+   * Add a menu item to a category
+   * @param {string} categoryId - Category ID
+   * @param {Object} itemData - Menu item data
+   * @returns {Promise<Object>} Created menu item object
+   */
+  addMenuItem: async (categoryId, itemData) => {
+    return menuService.addMenuItem(categoryId, itemData);
+  },
+
+  /**
+   * Update a menu item
+   * @param {string} categoryId - Category ID
+   * @param {string} itemId - Menu item ID
+   * @param {Object} itemData - Menu item data
+   * @returns {Promise<Object>} Updated menu item object
+   */
+  updateMenuItem: async (categoryId, itemId, itemData) => {
+    return menuService.updateMenuItem(categoryId, itemId, itemData);
+  },
+
+  /**
+   * Delete a menu item
+   * @param {string} categoryId - Category ID
+   * @param {string} itemId - Menu item ID
+   * @returns {Promise<boolean>} True if deleted, false if not found
+   */
+  deleteMenuItem: async (categoryId, itemId) => {
+    return menuService.deleteMenuItem(categoryId, itemId);
+  },
+
+  /**
+   * Move a menu item to a different category
+   * @param {string} fromCategoryId - Source category ID
+   * @param {string} toCategoryId - Target category ID
+   * @param {string} itemId - Menu item ID
+   * @returns {Promise<Object>} Moved menu item object
+   */
+  moveMenuItem: async (fromCategoryId, toCategoryId, itemId) => {
+    return menuService.moveMenuItem(fromCategoryId, toCategoryId, itemId);
+  },
 };
 
 module.exports = Menu;

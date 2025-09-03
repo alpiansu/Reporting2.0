@@ -1,10 +1,15 @@
 import { createRouter, createWebHistory } from "vue-router";
-import { useAuthStore, useCabangStore, useMenuStore } from "../stores";
-import { dynamicRoutes, loadDynamicRoutes, isLoaded } from "./dynamicRoutes";
+import { useAuthStore, useCabangStore } from "../stores";
+import { ref } from "vue";
+import api from "../services/api";
+
+// Flag untuk tracking apakah routes dinamis sudah dimuat
+const isLoaded = ref(false);
 
 // Layouts
 import AuthLayout from "../layouts/AuthLayout.vue";
 import MainLayout from "../layouts/MainLayout.vue";
+import AppLoading from "../components/AppLoading.vue";
 
 // Auth Views
 import Login from "../views/auth/Login.vue";
@@ -18,7 +23,13 @@ import Dashboard from "../views/dashboard/Dashboard.vue";
 const staticRoutes = [
   {
     path: "/",
-    redirect: "/dashboard",
+    redirect: "/loading",
+  },
+  {
+    path: "/loading",
+    name: "AppLoading",
+    component: AppLoading,
+    meta: { requiresAuth: true, title: "Loading" },
   },
   {
     path: "/",
@@ -34,45 +45,15 @@ const staticRoutes = [
     ],
   },
   {
-    path: "/",
-    component: MainLayout,
-    children: [
-      // Dashboard route yang harus ada secara statis
-      {
-        path: "dashboard",
-        name: "Dashboard",
-        component: Dashboard,
-        meta: { requiresAuth: true, title: "Dashboard", layout: 'main', roles: ['admin', 'superadmin', 'user'] },
-      },
-      // Rute detail yang tidak ada di menus.json
-      {
-        path: "stores/:id",
-        name: "StoreDetails",
-        component: () => import("../views/stores/StoreDetails.vue"),
-        meta: { requiresAuth: true, title: "Store Details", layout: 'main', roles: ['admin', 'superadmin'] },
-      },
-      {
-        path: "screenings/:id",
-        name: "ScreeningDetails",
-        component: () => import("../views/screenings/ScreeningDetails.vue"),
-        meta: { requiresAuth: true, title: "Screening Details", layout: 'main', roles: ['admin', 'superadmin'] },
-      },
-      {
-        path: "profile",
-        name: "Profile",
-        component: () => import("../views/profile/Profile.vue"),
-        meta: { requiresAuth: true, title: "Profile", layout: 'main', roles: ['admin', 'superadmin', 'user'] },
-      },
-      // Rute dinamis dari backend akan ditambahkan ke sini
-    ],
-  },
-  {
     path: "/:pathMatch(.*)*",
     name: "NotFound",
     component: () => import("../views/NotFound.vue"),
     meta: { title: "Page Not Found" },
   },
 ];
+
+// MainLayout route akan ditambahkan secara dinamis setelah routes dimuat
+let mainLayoutRoute = null;
 
 // Gabungkan rute statis dengan rute dinamis
 const routes = [...staticRoutes];
@@ -86,51 +67,145 @@ const router = createRouter({
   },
 });
 
-// Fungsi untuk menambahkan rute dinamis ke router
+// Fungsi untuk memuat dan menambahkan rute dinamis
 const addDynamicRoutes = async () => {
-  // Hanya muat rute dinamis jika belum dimuat
-  if (!isLoaded.value) {
-    try {
-      // Muat rute dinamis dari backend
-      const dynamicRoutesArray = await loadDynamicRoutes();
-      
-      // Cari rute MainLayout yang sudah ada di staticRoutes
-      const mainLayoutRoute = staticRoutes.find(route => route.component === MainLayout);
-      
-      if (mainLayoutRoute && Array.isArray(mainLayoutRoute.children)) {
-        // Cari rute dinamis dengan MainLayout sebagai parent component
-        const dynamicMainRoute = dynamicRoutesArray.find(route => route.component === MainLayout);
-        
-        if (dynamicMainRoute && Array.isArray(dynamicMainRoute.children)) {
-          // Tambahkan semua children dari rute dinamis ke dalam children dari rute MainLayout yang sudah ada
-          dynamicMainRoute.children.forEach(child => {
-            // Pastikan child memiliki meta.layout = 'main'
-            if (!child.meta) child.meta = {};
-            child.meta.layout = 'main';
-            
-            // Tambahkan child ke dalam children dari rute MainLayout yang sudah ada
-            mainLayoutRoute.children.push(child);
-          });
-        }
-      }
-      
-      // Tandai bahwa rute dinamis sudah dimuat
-      isLoaded.value = true;
-      
-      return true;
-    } catch (error) {
-      console.error('Failed to load dynamic routes:', error);
-      return false;
-    }
-  }
+  if (isLoaded.value) return true;
   
-  return true;
+  try {
+    console.log('Loading dynamic routes from backend...');
+    
+    // Ambil data menu dari backend
+    const response = await api.get('/menu-manager/user/current');
+    const menuData = response.data?.data || [];
+    
+    console.log('Menu data received:', menuData);
+    
+    // Extract semua items dari menu groups
+    const allMenuItems = [];
+    menuData.forEach(group => {
+      if (Array.isArray(group.items)) {
+        allMenuItems.push(...group.items);
+      }
+    });
+    
+    console.log('All menu items:', allMenuItems);
+    
+    // Buat children routes untuk MainLayout
+    const mainLayoutChildren = [
+      // Dashboard route yang harus ada secara statis
+      {
+        path: "dashboard",
+        name: "Dashboard",
+        component: Dashboard,
+        meta: { requiresAuth: true, title: "Dashboard", layout: 'main', roles: ['admin', 'manager', 'user'] },
+      },
+      // Rute detail yang tidak ada di menus.json
+      {
+        path: "stores/:id",
+        name: "StoreDetails",
+        component: () => import("../views/stores/StoreDetails.vue"),
+        meta: { requiresAuth: true, title: "Store Details", layout: 'main', roles: ['admin', 'manager'] },
+      },
+      {
+        path: "screenings/:id",
+        name: "ScreeningDetails",
+        component: () => import("../views/screenings/ScreeningDetails.vue"),
+        meta: { requiresAuth: true, title: "Screening Details", layout: 'main', roles: ['admin', 'manager'] },
+      },
+      {
+        path: "profile",
+        name: "Profile",
+        component: () => import("../views/profile/Profile.vue"),
+        meta: { requiresAuth: true, title: "Profile", layout: 'main', roles: ['admin', 'manager', 'user'] },
+      },
+    ];
+    
+    // Tambahkan routes untuk setiap menu item
+    allMenuItems.forEach(item => {
+      if (item.path && item.path !== '/dashboard') { // Skip dashboard karena sudah ada
+        const routeName = item.text.replace(/\s+/g, '');
+        const component = getComponent(item.path);
+        
+        const route = {
+          path: item.path.startsWith('/') ? item.path.substring(1) : item.path,
+          name: routeName,
+          component: component,
+          meta: {
+            requiresAuth: true,
+            title: item.text,
+            layout: 'main',
+            roles: item.roles || ['admin', 'manager', 'user']
+          }
+        };
+        
+        console.log('Adding route:', route);
+        mainLayoutChildren.push(route);
+      }
+    });
+    
+    // Buat MainLayout route dengan semua children
+    mainLayoutRoute = {
+      path: "/",
+      component: MainLayout,
+      children: mainLayoutChildren,
+    };
+    
+    // Tambahkan MainLayout route ke router
+    router.addRoute(mainLayoutRoute);
+    
+    // Update redirect dari root ke dashboard
+    router.removeRoute('AppLoading'); // Remove loading route
+    router.addRoute({
+      path: "/",
+      redirect: "/dashboard",
+    });
+    
+    isLoaded.value = true;
+    console.log('Dynamic routes loaded successfully');
+    return true;
+    
+  } catch (error) {
+    console.error('Failed to load dynamic routes:', error);
+    return false;
+  }
+};
+
+// Helper function untuk convert path ke component path
+// Static component imports untuk menghindari dynamic import error
+const componentMap = {
+  'stores/StoreList': () => import('../views/stores/StoreList.vue'),
+  'screenings/ScreeningList': () => import('../views/screenings/ScreeningList.vue'),
+  'rekonWtHarian/RekonWtHarianView': () => import('../views/rekonWtHarian/RekonWtHarianView.vue'),
+  'reports/SalesReport': () => import('../views/reports/SalesReport.vue'),
+  'reports/InventoryReport': () => import('../views/reports/InventoryReport.vue'),
+  'admin/UserManager': () => import('../views/admin/UserManager.vue'),
+  'settings/Settings': () => import('../views/settings/Settings.vue'),
+  'admin/MenuManager': () => import('../views/admin/MenuManager.vue')
+};
+
+const getComponent = (path) => {
+  // Remove leading slash
+  const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+  
+  // Handle special cases
+  const pathMappings = {
+    'stores': 'stores/StoreList',
+    'screenings': 'screenings/ScreeningList', 
+    'rekon-wt-harian': 'rekonWtHarian/RekonWtHarianView',
+    'sales-report': 'reports/SalesReport',
+    'inventory-report': 'reports/InventoryReport',
+    'users': 'admin/UserManager',
+    'settings': 'settings/Settings',
+    'admin/menu-manager': 'admin/MenuManager'
+  };
+  
+  const componentPath = pathMappings[cleanPath] || cleanPath;
+  return componentMap[componentPath] || (() => import('../views/NotFound.vue'));
 };
 
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore();
   const cabangStore = useCabangStore();
-  const menuStore = useMenuStore();
   const isAuthenticated = authStore.isAuthenticated;
 
   // Check if the route requires authentication
@@ -140,7 +215,45 @@ router.beforeEach(async (to, from, next) => {
   }
   // Check if the route requires guest access (like login page)
   else if (to.meta.requiresGuest && isAuthenticated) {
+    // Jika user sudah login dan routes belum dimuat, arahkan ke loading
+    if (!isLoaded.value) {
+      next({ name: "AppLoading" });
+      return;
+    }
     next({ name: "Dashboard" });
+    return;
+  }
+  
+  // Jika user terautentikasi dan routes belum dimuat
+  if (isAuthenticated && !isLoaded.value) {
+    // Jika sedang menuju loading page, izinkan
+    if (to.name === 'AppLoading') {
+      // Mulai proses loading routes di background
+      setTimeout(async () => {
+        try {
+          // Muat data cabang terlebih dahulu
+          if (!cabangStore.isInitialized) {
+            await cabangStore.fetchCabang();
+          }
+          
+          // Kemudian muat routes dinamis
+          await addDynamicRoutes();
+          
+          // Setelah selesai, arahkan ke dashboard
+          router.push({ name: "Dashboard" });
+        } catch (error) {
+          console.error("Failed to load application data:", error);
+          // Jika gagal, tetap arahkan ke dashboard dengan routes minimal
+          router.push({ name: "Dashboard" });
+        }
+      }, 1000); // Delay 1 detik untuk UX yang lebih baik
+      
+      next();
+      return;
+    }
+    
+    // Jika mencoba akses route lain sebelum loading selesai, arahkan ke loading
+    next({ name: "AppLoading" });
     return;
   }
   
@@ -157,64 +270,6 @@ router.beforeEach(async (to, from, next) => {
     if (!userRole || !to.meta.roles.includes(userRole)) {
       next({ name: "Dashboard" });
       return;
-    }
-  }
-  
-  // Pastikan rute dengan layout 'main' menggunakan MainLayout
-  if (to.meta.layout === 'main' && to.matched.length > 0) {
-    // Verifikasi bahwa rute ini memiliki parent dengan MainLayout
-    const hasMainLayoutParent = to.matched.some(record => 
-      record.components && record.components.default === MainLayout
-    );
-    
-    if (!hasMainLayoutParent) {
-      console.warn(`Route ${to.path} has layout 'main' but no MainLayout parent`);
-    }
-  }
-  
-  // Jika user terautentikasi, pastikan data cabang sudah dimuat
-  if (isAuthenticated && !cabangStore.isInitialized) {
-    try {
-      // Tunggu sampai data cabang dimuat
-      await cabangStore.fetchCabang();
-    } catch (error) {
-      console.error("Failed to load cabang data:", error);
-      // Lanjutkan navigasi meskipun gagal memuat data cabang
-    }
-  }
-  
-  // Jika user terautentikasi, pastikan rute dinamis sudah dimuat
-  if (isAuthenticated && !isLoaded.value) {
-    try {
-      // Muat menu dari store jika belum ada
-      if (!menuStore.hasMenus) {
-        await menuStore.fetchMenus();
-      }
-      
-      // Tambahkan rute dinamis ke router
-      await addDynamicRoutes();
-      
-      // Verifikasi bahwa rute dengan layout 'main' memiliki MainLayout sebagai parent
-      if (to.meta.layout === 'main') {
-        const routeMatched = router.resolve(to.path);
-        const hasMainLayoutParent = routeMatched.matched.some(record => 
-          record.components && record.components.default === MainLayout
-        );
-        
-        if (!hasMainLayoutParent) {
-          console.warn(`Route ${to.path} has layout 'main' but no MainLayout parent after dynamic routes loaded`);
-        }
-      }
-      
-      // Jika rute yang diminta tidak ditemukan setelah menambahkan rute dinamis,
-      // coba navigasi ulang ke rute yang sama
-      if (!router.hasRoute(to.name) && to.name !== 'NotFound') {
-        next({ path: to.fullPath, replace: true });
-        return;
-      }
-    } catch (error) {
-      console.error("Failed to load dynamic routes:", error);
-      // Lanjutkan navigasi meskipun gagal memuat rute dinamis
     }
   }
   

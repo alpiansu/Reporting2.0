@@ -88,7 +88,7 @@ const getComponentPath = (menuPath) => {
     'profile': 'profile/Profile',
     'admin/menu-manager': 'admin/MenuManager',
     'users': 'admin/UserManager',
-    'settings': 'admin/Settings'
+    'settings': 'settings/Settings'
   };
 
   // Gunakan pemetaan khusus jika ada
@@ -128,11 +128,18 @@ const loadDynamicRoutes = async () => {
     
     // Ambil data menu dari backend
     const response = await menuService.getMenusForCurrentUser();
+    // Backend mengembalikan { success: true, data: [...] }
+    // menuService mengembalikan response.data yang berisi { success: true, data: [...] }
+    // Jadi kita perlu mengakses property data dari response
     const menuData = response.data || [];
+    
+    console.log('Menu data received from backend:', menuData);
     
     // Transformasi menu menjadi rute
     const routes = transformMenuToRoutes(menuData);
     dynamicRoutes.value = routes;
+    
+    console.log('Dynamic routes generated:', routes);
     
     isLoaded.value = true;
     return routes;

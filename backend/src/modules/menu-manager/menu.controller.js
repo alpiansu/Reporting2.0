@@ -30,7 +30,7 @@ class MenuController {
             return true;
           })
         : [];
-      return apiResponse.success(res, filteredMenus);
+      return apiResponse.success(res, filteredMenus, 200);
     } catch (error) {
       next(error);
     }

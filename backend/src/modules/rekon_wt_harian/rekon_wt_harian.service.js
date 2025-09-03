@@ -432,16 +432,7 @@ class RekonWtHarianService {
           // Clear the interval
           clearInterval(progressInterval);
 
-          // Set recid to '1' for all processed records to mark them in active history if there are differences
-          await RekonWtHarian.update(
-            { recid: "1" },
-            {
-              where: {
-                cab: cab,
-                periode: period,
-              },
-            }
-          );
+          // Recid update has been moved to the beginning of reconcileData function
 
           // Simpan semua perbedaan dari file temporary ke database
           await this.saveDifferencesToDatabase(cab, period);
@@ -560,6 +551,18 @@ class RekonWtHarianService {
       // Get stores by branch code with notes='INDUK'
       const branchStores = await storeService.getStoresByBranch(cab, true);
       logger.info(`Found ${branchStores.length} INDUK stores for branch ${cab}`);
+
+      // Set recid to '1' for all processed records to mark them in active history at the beginning of reconciliation
+      await RekonWtHarian.update(
+        { recid: "1" },
+        {
+          where: {
+            cab: cab,
+            periode: period,
+          },
+        }
+      );
+      logger.info(`Updated recid to '1' for all existing records in ${cab} for period ${period}`);
 
       // Get store connection and data for each store
       const results = {
@@ -1046,6 +1049,7 @@ class RekonWtHarianService {
               // Gunakan upsert untuk setiap record agar bisa update jika sudah ada
               const upsertPromises = batch.map(async difference => {
                 try {
+                  difference.recid = "*";
                   const [record, created] = await RekonWtHarian.upsert(difference, {
                     returning: true, // Return the record whether created or updated
                   });
@@ -1133,7 +1137,7 @@ class RekonWtHarianService {
       // Filter data from JSON file
       let filteredData = this.rekonData.filter(item => {
         // Wajib: hanya tampilkan data dengan recid '*' (masih ada selisih)
-        if (item.recid !== '*') return false;
+        if (item.recid !== "*") return false;
 
         // Wajib: periode harus cocok
         if (String(item.periode) !== String(period)) return false;
@@ -1305,7 +1309,7 @@ class RekonWtHarianService {
       await this.ensureInitialized();
 
       // Filter data for the specified period and only show data with recid '*' (still has differences)
-      const filteredData = this.rekonData.filter(item => item.periode === period && item.recid === '*');
+      const filteredData = this.rekonData.filter(item => item.periode === period && item.recid === "*");
 
       // Calculate summary statistics
       const uniqueShops = new Set(filteredData.map(item => item.shop));
@@ -1423,7 +1427,9 @@ class RekonWtHarianService {
       await this.ensureInitialized();
 
       // Filter data for the specified cab and period, only show data with recid '*' (still has differences)
-      const filteredData = this.rekonData.filter(item => item.cab === cab && item.periode === period && item.recid === '*');
+      const filteredData = this.rekonData.filter(
+        item => item.cab === cab && item.periode === period && item.recid === "*"
+      );
 
       // Calculate summary statistics
       const uniqueShops = new Set(filteredData.map(item => item.shop));

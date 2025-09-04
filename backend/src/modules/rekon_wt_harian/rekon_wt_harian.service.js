@@ -11,6 +11,7 @@ const config = require("../../config/rekon_wt_harian.config");
 const rekonProgressService = require("./rekon_progress.service");
 const storeService = require("../../modules/store/storeService");
 const wrcUtils = require("../../utils/wrc.utils");
+const RekapRemoteService = require("../rekap_remote/rekap_remote.service");
 
 // Path untuk file JSON rekon_wt_harian
 const REKON_WT_HARIAN_JSON_PATH = path.join(process.cwd(), "data/rekon_wt_harian.json");
@@ -432,8 +433,6 @@ class RekonWtHarianService {
           // Clear the interval
           clearInterval(progressInterval);
 
-          // Recid update has been moved to the beginning of reconcileData function
-
           // Simpan semua perbedaan dari file temporary ke database
           await this.saveDifferencesToDatabase(cab, period);
           await this.syncToJsonFile();
@@ -640,7 +639,9 @@ class RekonWtHarianService {
               const store = currentStores.find(s => s.storeCode === storeResult.storeCode);
               if (store) {
                 timeoutStores.push(store);
-                logger.warn(`[Wave ${wave}] ${storeResult.storeCode} timeout - will retry in next wave`);
+                const msg = `[Wave ${wave}] ${storeResult.storeCode} timeout - will retry in next wave`;
+                logger.warn(`${msg}`);
+                await RekapRemoteService.addToTemp(cab, storeResult.storeCode, "rekon_wt_harian", `${msg}`);
               }
             } else {
               // Store completed (successfully or permanently failed)
@@ -715,6 +716,17 @@ class RekonWtHarianService {
           errors: [`Failed after ${MAX_WAVES} waves - persistent timeout`],
         }));
 
+        // Log permanently failed stores to rekap_remote
+        for (const store of currentStores) {
+          await RekapRemoteService.addToTemp(
+            cab,
+            store.storeCode,
+            "rekon_wt_harian",
+            "failure",
+            `Failed after ${MAX_WAVES} waves - persistent timeout`
+          );
+        }
+
         if (!results.storeErrors) results.storeErrors = [];
         results.storeErrors.push(...failedStores);
       }
@@ -750,6 +762,16 @@ class RekonWtHarianService {
       } catch (error) {
         logger.error(`Error saving differences to database: ${error.message}`);
         results.saveError = error.message;
+      }
+
+      // Save rekap_remote logs to database at the end of reconciliation process
+      try {
+        const saveLogResult = await RekapRemoteService.saveToDatabase();
+        logger.info(`Rekap_remote logs saved: ${JSON.stringify(saveLogResult)}`);
+        results.rekapRemoteLogResult = saveLogResult;
+      } catch (error) {
+        logger.error(`Error saving rekap_remote logs: ${error.message}`);
+        results.rekapRemoteLogError = error.message;
       }
 
       return results;
@@ -905,6 +927,7 @@ class RekonWtHarianService {
       if (!storeInfo.dbHost) {
         connectionError = `No dbHost found in branch ${cab}`;
         logger.warn(`[${storeCode}] ${connectionError}`);
+        await RekapRemoteService.addToTemp(cab, storeCode, "rekon_wt_harian", `${connectionError}`);
       } else {
         // Try connect to store database
         const storeConnection = await dbStore.createDbStore(storeInfo.dbHost, 2);
@@ -919,7 +942,9 @@ class RekonWtHarianService {
               setTimeout(() => reject(new Error("Query timeout")), queryTimeout);
             });
             [storeData] = await Promise.race([queryPromise, timeoutPromise]);
-            logger.debug(`[${storeCode}] Query completed, got ${storeData.length} records`);
+            const msg = `[${storeCode}] Query completed, got ${storeData.length} records`;
+            logger.debug(`${msg}`);
+            await RekapRemoteService.addToTemp(cab, storeCode, "rekon_wt_harian", `${msg}`);
             // Save store data to JSON file (delete old file first)
             try {
               await fs.mkdir(storeJsonDir, { recursive: true });
@@ -953,11 +978,13 @@ class RekonWtHarianService {
         } else {
           connectionError = `Could not connect to ${storeInfo.dbHost}`;
           logger.warn(`[${storeCode}] ${connectionError}`);
+          await RekapRemoteService.addToTemp(cab, storeCode, "rekon_wt_harian", `${connectionError}`);
         }
       }
     } catch (error) {
       connectionError = `Processing error: ${error.message}`;
       logger.error(`[${storeCode}] ${connectionError}`);
+      await RekapRemoteService.addToTemp(cab, storeCode, "rekon_wt_harian", `${connectionError}`);
     }
 
     // Jika koneksi gagal, coba baca file JSON lokal

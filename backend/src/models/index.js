@@ -4,6 +4,7 @@ const Store = require("./store.model");
 const SalesPerDept = require("./sales_per_dept.model");
 const MDept = require("./m_dept.model");
 const RekonWtHarian = require("./rekon_wt_harian.model");
+const RekapRemote = require("./rekap_remote.model");
 
 // Define relationships between models
 // Note: Store is now a JSON-based model, so Sequelize relationships don't apply to it
@@ -19,6 +20,7 @@ module.exports = {
   SalesPerDept,
   MDept,
   RekonWtHarian,
+  RekapRemote,
 };
 
 

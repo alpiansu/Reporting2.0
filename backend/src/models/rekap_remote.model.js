@@ -32,7 +32,7 @@
  *           description: Last update timestamp
  */
 
-const { DataTypes } = require("sequelize");
+const { DataTypes, Sequelize } = require("sequelize");
 const moment = require("moment-timezone");
 const { sequelize } = require("../config/database");
 
@@ -62,10 +62,17 @@ const RekapRemote = sequelize.define(
       allowNull: true,
       comment: "Status koneksi (success, timeout, error, dll)",
     },
+    updtime: {
+      type: "TIMESTAMP",
+      allowNull: false,
+      defaultValue: Sequelize.literal("CURRENT_TIMESTAMP"),
+      onUpdate: Sequelize.literal("CURRENT_TIMESTAMP"), // untuk dialect mysql >= 8
+      comment: "Waktu update terakhir",
+    },
   },
   {
     tableName: "rekap_remote",
-    timestamps: true, // We handle timestamps manually with updtime
+    timestamps: false, // We handle timestamps manually with updtime
     indexes: [
       {
         name: "idx_rekap_remote_kdtk",

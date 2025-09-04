@@ -1,0 +1,75 @@
+### Rekap Remote API Tests
+### Base URL: http://localhost:3000/api/rekap-remote
+
+### 1. Get Rekap Data
+GET http://localhost:3000/api/rekap-remote/data
+Authorization: Bearer YOUR_TOKEN_HERE
+
+### 2. Get Rekap Data with filters
+GET http://localhost:3000/api/rekap-remote/data?kdtk=0001&module_name=rekon_wt_harian&status=success
+Authorization: Bearer YOUR_TOKEN_HERE
+
+### 3. Get Summary Statistics
+GET http://localhost:3000/api/rekap-remote/summary
+Authorization: Bearer YOUR_TOKEN_HERE
+
+### 4. Get Summary with filters
+GET http://localhost:3000/api/rekap-remote/summary?module_name=rekon_wt_harian
+Authorization: Bearer YOUR_TOKEN_HERE
+
+### 5. Get Log Count (in memory)
+GET http://localhost:3000/api/rekap-remote/logs/count
+Authorization: Bearer YOUR_TOKEN_HERE
+
+### 6. Save Logs Manually (force save current in-memory logs)
+POST http://localhost:3000/api/rekap-remote/logs/save
+Authorization: Bearer YOUR_TOKEN_HERE
+Content-Type: application/json
+
+### 7. Clear Logs (from memory)
+DELETE http://localhost:3000/api/rekap-remote/logs/clear
+Authorization: Bearer YOUR_TOKEN_HERE
+
+### 8. Test Manual Log Creation (for testing purposes)
+### Note: This would require adding test data manually via service
+### Example of how logs are created during rekon_wt_harian process:
+### RekapRemoteService.logSuccess('0001', 'rekon_wt_harian', 'Test success message')
+### RekapRemoteService.logError('0002', 'rekon_wt_harian', 'Test error message')
+### RekapRemoteService.logTimeout('0003', 'rekon_wt_harian', 'Test timeout message')
+### RekapRemoteService.logFailure('0004', 'rekon_wt_harian', 'Test failure message')
+
+### 9. Get Rekap Data for specific store
+GET http://localhost:3000/api/rekap-remote/data?kdtk=0001
+Authorization: Bearer YOUR_TOKEN_HERE
+
+### 10. Get Rekap Data for specific module
+GET http://localhost:3000/api/rekap-remote/data?module_name=rekon_wt_harian
+Authorization: Bearer YOUR_TOKEN_HERE
+
+### 11. Get Recent Rekap Data (last 24 hours)
+GET http://localhost:3000/api/rekap-remote/data?hours=24
+Authorization: Bearer YOUR_TOKEN_HERE
+
+### 12. Get Summary by Status
+GET http://localhost:3000/api/rekap-remote/summary?status=success
+Authorization: Bearer YOUR_TOKEN_HERE
+
+### 13. Get Summary by Status (error)
+GET http://localhost:3000/api/rekap-remote/summary?status=error
+Authorization: Bearer YOUR_TOKEN_HERE
+
+### 14. Get Summary by Status (timeout)
+GET http://localhost:3000/api/rekap-remote/summary?status=timeout
+Authorization: Bearer YOUR_TOKEN_HERE
+
+### 15. Get Summary by Status (failure)
+GET http://localhost:3000/api/rekap-remote/summary?status=failure
+Authorization: Bearer YOUR_TOKEN_HERE
+
+### Notes:
+### - Replace YOUR_TOKEN_HERE with actual JWT token
+### - Server should be running on http://localhost:3000
+### - All endpoints require authentication
+### - Data will be populated after running rekon_wt_harian process
+### - Use the summary endpoint to get overview of store connection status
+### - Use the data endpoint to get detailed logs for specific stores or modules

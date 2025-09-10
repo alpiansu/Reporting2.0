@@ -73,7 +73,7 @@ router.get(
 // SSE endpoint for progress updates
 // GET /api/rekon-wt-harian/sse/progress-updates/:progressId
 // Access: Private
-import rekonWebSocketService from './rekon_websocket.service.js';
+import progressService from './progress.service.js';
 
 // Custom authentication middleware for SSE
 const authenticateSSE = (req, res, next) => {
@@ -118,7 +118,7 @@ router.get("/sse/progress-updates/:progressId", authenticateSSE, (req, res) => {
 
   // Simpan connection
   const clientId = `client-${Date.now()}`;
-  rekonWebSocketService.clients.set(clientId, {
+  progressService.clients.set(clientId, {
     id: clientId,
     response: res,
     subscriptions: new Set([progressId]),
@@ -127,15 +127,15 @@ router.get("/sse/progress-updates/:progressId", authenticateSSE, (req, res) => {
   });
 
   // Subscribe ke progress events
-  rekonWebSocketService.subscribeToProgress(clientId, progressId);
+  progressService.subscribeToProgress(clientId, progressId);
 
   // Handle client disconnect
   req.on("close", () => {
     // Clear heartbeat interval when client disconnects
-    if (rekonWebSocketService.clients.get(clientId)?.heartbeatInterval) {
-      clearInterval(rekonWebSocketService.clients.get(clientId).heartbeatInterval);
+    if (progressService.clients.get(clientId)?.heartbeatInterval) {
+      clearInterval(progressService.clients.get(clientId).heartbeatInterval);
     }
-    rekonWebSocketService.clients.delete(clientId);
+    progressService.clients.delete(clientId);
   });
 });
 

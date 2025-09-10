@@ -9,7 +9,7 @@ import logger from '../../config/logger.js';
 import dbStore from '../../config/db_store.js';
 import RekonWtHarian from '../../models/rekon_wt_harian.model.js';
 import config from '../../config/rekon_wt_harian.config.js';
-import rekonProgressService from './rekon_progress.service.js';
+import progressService from './progress.service.js';
 import storeService from '../../modules/store/storeService.js';
 import wrcUtils from '../../utils/wrc.utils.js';
 import RekapRemoteService from '../rekap_remote/rekap_remote.service.js';
@@ -153,7 +153,7 @@ class RekonWtHarianService {
       logger.info(`Found ${branches.length} branches to process`);
 
       // Initialize progress tracking
-      const progressId = rekonProgressService.initProgress("All", period, branches.length);
+      const progressId = progressService.initProgress("All", period, branches.length);
       logger.info(`Initialized progress tracking with ID: ${progressId}`);
 
       const results = {
@@ -182,7 +182,7 @@ class RekonWtHarianService {
 
             // Update progress after each branch is processed
             processedCount++;
-            rekonProgressService.updateProgress(progressId, {
+            progressService.updateProgress(progressId, {
               processedItems: processedCount,
               details: { lastProcessedBranch: cab },
             });
@@ -249,7 +249,7 @@ class RekonWtHarianService {
       results.period = period;
 
       // Mark progress as completed with total store count instead of branch count
-      rekonProgressService.updateProgress(progressId, {
+      progressService.updateProgress(progressId, {
         processedItems: results.totalProcessedStores,
         completedItems: results.totalProcessedStores,
         itemsWithDifferences: results.totalStoresWithDifferences,
@@ -269,7 +269,7 @@ class RekonWtHarianService {
 
       // Mark progress as failed
       if (progressId) {
-        rekonProgressService.updateProgress(progressId, {
+        progressService.updateProgress(progressId, {
           status: "failed",
           errors: [error.message],
         });
@@ -317,7 +317,7 @@ class RekonWtHarianService {
       logger.info(`Started non-blocking reconciliation for all branches with progress ID: ${progressId}`);
     } catch (error) {
       logger.error(`Error starting non-blocking reconciliation: ${error.message}`);
-      rekonProgressService.updateProgress(progressId, {
+      progressService.updateProgress(progressId, {
         status: "failed",
         errors: [error.message],
       });
@@ -340,7 +340,7 @@ class RekonWtHarianService {
           const totalStores = branchStores.length;
 
           // Inisialisasi progress dengan nilai awal yang benar
-          rekonProgressService.updateProgress(progressId, {
+          progressService.updateProgress(progressId, {
             totalItems: totalStores,
             processedItems: 0,
             percentage: 0, // Explicitly set initial percentage to 0
@@ -366,7 +366,7 @@ class RekonWtHarianService {
             const percentage = totalStores > 0 ? Math.round((processedStores / totalStores) * 100) : 0;
 
             // Update progress even if no new stores have been processed
-            rekonProgressService.updateProgress(progressId, {
+            progressService.updateProgress(progressId, {
               processedItems: processedStores,
               totalItems: totalStores,
               percentage: percentage, // Explicitly set percentage
@@ -403,7 +403,7 @@ class RekonWtHarianService {
             const percentage = totalStores > 0 ? Math.round((processedStores / totalStores) * 100) : 0;
 
             // Update progress immediately for each store
-            rekonProgressService.updateProgress(progressId, {
+            progressService.updateProgress(progressId, {
               processedItems: processedStores,
               totalItems: totalStores,
               percentage: percentage, // Explicitly set percentage
@@ -439,7 +439,7 @@ class RekonWtHarianService {
           await this.syncToJsonFile();
 
           // Final progress update
-          rekonProgressService.updateProgress(progressId, {
+          progressService.updateProgress(progressId, {
             processedItems: totalStores,
             totalItems: totalStores,
             completedItems: totalStores,
@@ -465,7 +465,7 @@ class RekonWtHarianService {
           );
         } catch (error) {
           logger.error(`Error in background reconciliation: ${error.message}`);
-          rekonProgressService.updateProgress(progressId, {
+          progressService.updateProgress(progressId, {
             status: "failed",
             message: `Error: ${error.message}`,
             errors: [error.message],
@@ -476,7 +476,7 @@ class RekonWtHarianService {
       logger.info(`Started non-blocking reconciliation for branch ${cab} with progress ID: ${progressId}`);
     } catch (error) {
       logger.error(`Error starting non-blocking reconciliation: ${error.message}`);
-      rekonProgressService.updateProgress(progressId, {
+      progressService.updateProgress(progressId, {
         status: "failed",
         message: `Error: ${error.message}`,
         errors: [error.message],
@@ -592,9 +592,9 @@ class RekonWtHarianService {
 
         // Update progress without wave information
         if (progressId) {
-          const progress = rekonProgressService.getProgress(progressId);
-          if (progress) {
-            rekonProgressService.updateProgress(progressId, {
+          const progress = progressService.getProgress(progressId);
+           if (progress) {
+             progressService.updateProgress(progressId, {
               details: {
                 ...progress.details,
                 // Removed wave information
@@ -846,14 +846,14 @@ class RekonWtHarianService {
 
     // Update progress to show current store being processed
     // Find the progress ID for this branch and period
-    const progressEntries = Array.from(rekonProgressService.progressMap.entries());
+    const progressEntries = Array.from(progressService.progressMap.entries());
     const progressEntry = progressEntries.find(
       ([_, progress]) => progress.cab === cab && progress.periode === period && progress.status === "running"
     );
 
     if (progressEntry) {
       const [progressId, progress] = progressEntry;
-      rekonProgressService.updateProgress(progressId, {
+      progressService.updateProgress(progressId, {
         details: {
           ...progress.details,
           currentStore: storeCode,

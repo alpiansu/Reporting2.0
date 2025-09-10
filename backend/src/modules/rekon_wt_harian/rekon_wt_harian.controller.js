@@ -2,7 +2,7 @@
  * Controller for WT reconciliation
  */
 import rekonWtHarianService from './rekon_wt_harian.service.js';
-import rekonProgressService from './rekon_progress.service.js';
+import progressService from './progress.service.js';
 import logger from '../../config/logger.js';
 import config from '../../config/rekon_wt_harian.config.js';
 import storeService from '../../modules/store/storeService.js';
@@ -56,7 +56,7 @@ export const startReconciliation = async (req, res, next) => {
 
       // Check if there is already an active reconciliation process
       const cabParam = cab === "SEMUA" || !cab ? "All" : cab;
-      const activeProcess = rekonProgressService.getActiveProcess(cabParam, periode);
+      const activeProcess = progressService.getActiveProcess(cabParam, periode);
 
       if (activeProcess) {
         return res.status(409).json({
@@ -84,7 +84,7 @@ export const startReconciliation = async (req, res, next) => {
 
         // Count total stores across all branches instead of just branch count
         const totalStores = allStores.filter(s => s.notes === "INDUK").length;
-        const progressId = rekonProgressService.initProgress("All", periode, totalStores);
+        const progressId = progressService.initProgress("All", periode, totalStores);
 
         // Start reconciliation process for all branches (non-blocking)
         // Data lama akan dihapus setelah proses rekon selesai, bukan di awal
@@ -102,7 +102,7 @@ export const startReconciliation = async (req, res, next) => {
       // Initialize progress tracking
       await storeService.ensureInitialized();
       const branchStores = await storeService.getStoresByBranch(cab, true);
-      const progressId = rekonProgressService.initProgress(cab, periode, branchStores.length);
+      const progressId = progressService.initProgress(cab, periode, branchStores.length);
 
       // Start reconciliation process (non-blocking)
       // Data lama akan dihapus setelah proses rekon selesai, bukan di awal
@@ -250,7 +250,7 @@ export const getProgress = async (req, res, next) => {
         });
       }
 
-      const progress = rekonProgressService.getProgress(progressId);
+      const progress = progressService.getProgress(progressId);
 
       if (!progress) {
         return res.status(404).json({
@@ -287,7 +287,7 @@ export const getLatestProgress = async (req, res, next) => {
     }
 
     const cabParam = cab === "SEMUA" ? "All" : cab;
-    const progress = rekonProgressService.getLatestProgress(cabParam, periode);
+    const progress = progressService.getLatestProgress(cabParam, periode);
 
     if (!progress) {
       return res.status(404).json({

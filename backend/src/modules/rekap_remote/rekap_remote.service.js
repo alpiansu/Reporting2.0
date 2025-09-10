@@ -7,14 +7,14 @@
  * - Retry mechanism untuk menangani file yang sedang diakses proses lain
  * - Atomic write menggunakan temporary file + rename untuk konsistensi data
  */
-const RekapRemote = require("../../models/rekap_remote.model");
-const logger = require("../../config/logger");
-const fs = require("fs").promises;
-const path = require("path");
-const os = require("os");
-const { Mutex } = require("async-mutex");
-const rekapRemoteStagingService = require('./rekap_remote_staging.service');
-const { Op } = require('sequelize');
+import RekapRemote from '../../models/rekap_remote.model.js';
+import logger from '../../config/logger.js';
+import fs from 'fs/promises';
+import path from 'path';
+import os from 'os';
+import { Mutex } from 'async-mutex';
+import rekapRemoteStagingService from './rekap_remote_staging.service.js';
+import { Op } from 'sequelize';
 
 class RekapRemoteService {
   constructor() {
@@ -326,4 +326,4 @@ class RekapRemoteService {
 }
 
 // Export singleton instance
-module.exports = new RekapRemoteService();
+export default new RekapRemoteService();

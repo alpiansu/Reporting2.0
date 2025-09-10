@@ -1,7 +1,8 @@
 // Menggunakan HTTP server untuk komunikasi karena ws tidak tersedia
-const http = require("http");
-const logger = require("../../config/logger");
-const rekonProgressService = require("./rekon_progress.service");
+import http from 'http';
+import logger from '../../config/logger.js';
+import rekonProgressService from './rekon_progress.service.js';
+import jwt from '../../config/jwt.js';
 
 class RekonWebSocketService {
   constructor() {
@@ -12,97 +13,23 @@ class RekonWebSocketService {
   }
 
   /**
-   * Initialize SSE endpoint for progress updates
+   * Initialize SSE service (endpoint is now defined in routes)
    * @param {Object} app - Express app instance
    */
   initialize(app) {
     if (this.initialized) {
-      logger.info("Progress update server already initialized");
+      logger.info("Progress update service already initialized");
       return;
     }
 
     try {
-      // Custom authentication middleware for SSE
-      const authenticateSSE = (req, res, next) => {
-        const authHeader = req.headers.authorization;
-
-        if (!authHeader) {
-          res.setHeader("Content-Type", "text/event-stream");
-          res.status(401);
-          res.write(`data: ${JSON.stringify({ error: "Authorization header missing" })}\n\n`);
-          return res.end();
-        }
-
-        const parts = authHeader.split(" ");
-        if (parts.length !== 2 || parts[0] !== "Bearer") {
-          res.setHeader("Content-Type", "text/event-stream");
-          res.status(401);
-          res.write(`data: ${JSON.stringify({ error: "Invalid authorization format" })}\n\n`);
-          return res.end();
-        }
-
-        const token = parts[1];
-        const { jwt } = require("../../config");
-        const decoded = jwt.verifyToken(token);
-
-        if (!decoded) {
-          res.setHeader("Content-Type", "text/event-stream");
-          res.status(401);
-          res.write(`data: ${JSON.stringify({ error: "Invalid or expired token" })}\n\n`);
-          return res.end();
-        }
-
-        req.user = decoded;
-        next();
-      };
-
-      // Gunakan endpoint HTTP untuk SSE (Server-Sent Events)
-      app.get("/api/rekon-wt-harian/sse/progress-updates/:progressId", authenticateSSE, (req, res) => {
-        const progressId = req.params.progressId;
-
-        // Set headers untuk SSE
-        res.setHeader("Content-Type", "text/event-stream");
-        res.setHeader("Cache-Control", "no-cache");
-        res.setHeader("Connection", "keep-alive");
-        res.setHeader("Access-Control-Allow-Origin", "*");
-        res.flushHeaders();
-
-        // Kirim event awal
-        res.write(`data: ${JSON.stringify({ type: "connected", progressId })}\n\n`);
-        
-        // Implement heartbeat to keep connection alive
-        const heartbeatInterval = setInterval(() => {
-          res.write(":heartbeat\n\n");
-        }, 30000); // Send heartbeat every 30 seconds
-
-        // Simpan connection
-        const clientId = `client-${Date.now()}`;
-        this.clients.set(clientId, {
-          id: clientId,
-          response: res,
-          subscriptions: new Set([progressId]),
-          connectedAt: Date.now(),
-          heartbeatInterval: heartbeatInterval
-        });
-
-        // Subscribe ke progress events
-        this.subscribeToProgress(clientId, progressId);
-
-        // Handle client disconnect
-        req.on("close", () => {
-          logger.info(`SSE client disconnected: ${clientId}`);
-          // Clear heartbeat interval when client disconnects
-          if (this.clients.get(clientId)?.heartbeatInterval) {
-            clearInterval(this.clients.get(clientId).heartbeatInterval);
-          }
-          this.clients.delete(clientId);
-        });
-      });
-
+      // SSE endpoint is now defined in routes file
+      // This service only handles the business logic for SSE connections
+      
       this.initialized = true;
-      logger.info("SSE endpoints initialized for progress updates");
+      logger.info("SSE service initialized for progress updates");
     } catch (error) {
-      logger.error(`Error initializing SSE server: ${error.message}`);
+      logger.error(`Error initializing SSE service: ${error.message}`);
       throw error;
     }
   }
@@ -261,4 +188,4 @@ class RekonWebSocketService {
   }
 }
 
-module.exports = new RekonWebSocketService();
+export default new RekonWebSocketService();

@@ -2,10 +2,13 @@
  * Export all utility functions
  */
 
-const apiResponse = require('./apiResponse');
-const validator = require('./validator');
+import apiResponse from './apiResponse.js';
+import validator from './validator.js';
 
-module.exports = {
+export default {
   apiResponse,
   validator,
 };
+
+// Named exports for convenience
+export { apiResponse, validator };

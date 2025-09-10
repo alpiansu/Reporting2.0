@@ -1,12 +1,12 @@
 /**
  * Service for synchronizing data from external database to local JSON storage
  */
-const ExternalDbService = require("./external-db.service");
-const storeService = require("../store/storeService");
-const MDeptService = require("../m_dept/m_dept.service");
-const UserService = require("../user/user.service");
-const logger = require("../../config/logger");
-const syncConfig = require("../../config/sync.config");
+import ExternalDbService from './external-db.service.js';
+import storeService from '../store/storeService.js';
+import MDeptService from '../m_dept/m_dept.service.js';
+import UserService from '../user/user.service.js';
+import logger from '../../config/logger.js';
+import syncConfig from '../../config/sync.config.js';
 
 class SyncService {
   /**
@@ -231,4 +231,4 @@ class SyncService {
   }
 }
 
-module.exports = SyncService;
+export default SyncService;

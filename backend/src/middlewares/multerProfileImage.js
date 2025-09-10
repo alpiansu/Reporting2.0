@@ -1,6 +1,12 @@
-const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Ensure upload directory exists
 const uploadDir = path.join(__dirname, "../../public/uploads/profile-images");
@@ -37,4 +43,4 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
 });
 
-module.exports = upload;
+export default upload;

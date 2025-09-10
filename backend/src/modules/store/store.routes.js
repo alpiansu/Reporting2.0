@@ -1,103 +1,34 @@
-const express = require("express");
-const StoreController = require("./store.controller");
-const { authenticateJWT, authorizeRole } = require("../../middlewares");
-
-const storeController = new StoreController();
+import express from 'express';
+import { getAllStores,
+  getStoreById,
+  getStoresByBranch,
+  createStore,
+  updateStore,
+  deleteStore,
+  testConnection } from './store.controller.js';
+import { authenticateJWT, authorizeRole } from '../../middlewares/index.js';
 
 const router = express.Router();
 
-/**
- * @swagger
- * tags:
- *   name: Store
- *   description: Store management
- */
+// Get all stores with pagination
+router.get("/", authenticateJWT, getAllStores);
 
-/**
- * @swagger
- * /stores:
- *   get:
- *     summary: Get all stores
- *     tags: [Store]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: List of stores
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Store'
- *       401:
- *         description: Unauthorized
- */
+// Get stores by branch with pagination
+router.get("/branch/:branchCode", authenticateJWT, getStoresByBranch);
 
-/**
- * @swagger
- * components:
- *   schemas:
- *     Store:
- *       type: object
- *       properties:
- *         id:
- *           type: integer
- *         name:
- *           type: string
- *         address:
- *           type: string
- *         isActive:
- *           type: boolean
- */
+// Get store by ID
+router.get("/:id", authenticateJWT, getStoreById);
 
-/**
- * @route GET /api/stores
- * @desc Get all stores with pagination
- * @access Private
- */
-router.get("/", authenticateJWT, storeController.getAllStores);
+// Create a new store (Admin/Manager only)
+router.post("/", authenticateJWT, authorizeRole(["admin", "manager"]), createStore);
 
-/**
- * @route GET /api/stores/branch/:branchCode
- * @desc Get stores by branch with pagination
- * @access Private
- */
-router.get("/branch/:branchCode", authenticateJWT, storeController.getStoresByBranch);
+// Update store data (Admin/Manager only)
+router.put("/:id", authenticateJWT, authorizeRole(["admin", "manager"]), updateStore);
 
-/**
- * @route GET /api/stores/:id
- * @desc Get store by ID
- * @access Private
- */
-router.get("/:id", authenticateJWT, storeController.getStoreById);
+// Delete a store (Admin only)
+router.delete("/:id", authenticateJWT, authorizeRole("admin"), deleteStore);
 
-/**
- * @route POST /api/stores
- * @desc Create a new store
- * @access Private (Admin/Manager only)
- */
-router.post("/", authenticateJWT, authorizeRole(["admin", "manager"]), storeController.createStore);
+// Test connection to a store database
+router.post("/test-connection", authenticateJWT, testConnection);
 
-/**
- * @route PUT /api/stores/:id
- * @desc Update store data
- * @access Private (Admin/Manager only)
- */
-router.put("/:id", authenticateJWT, authorizeRole(["admin", "manager"]), storeController.updateStore);
-
-/**
- * @route DELETE /api/stores/:id
- * @desc Delete a store
- * @access Private (Admin only)
- */
-router.delete("/:id", authenticateJWT, authorizeRole("admin"), storeController.deleteStore);
-
-/**
- * @route POST /api/stores/test-connection
- * @desc Test connection to a store database
- * @access Private
- */
-router.post("/test-connection", authenticateJWT, storeController.testConnection);
-
-module.exports = router;
+export default router;

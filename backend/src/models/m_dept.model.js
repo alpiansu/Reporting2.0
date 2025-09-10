@@ -6,7 +6,7 @@
  *
  * The actual data operations are handled by the MDeptService.
  */
-const MDeptService = require("../modules/m_dept/m_dept.service");
+import MDeptService from '../modules/m_dept/m_dept.service.js';
 
 // Create a singleton instance of the service
 const mDeptService = new MDeptService();
@@ -102,4 +102,4 @@ const MDept = {
   },
 };
 
-module.exports = MDept;
+export default MDept;

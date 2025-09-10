@@ -6,7 +6,7 @@
  *
  * The actual data operations are handled by the storeService.
  */
-const storeService = require("../modules/store/store.service");
+import storeService from '../modules/store/store.service.js';
 
 // Define the Store model schema for documentation and validation
 const StoreSchema = {
@@ -125,4 +125,4 @@ const Store = {
   },
 };
 
-module.exports = Store;
+export default Store;

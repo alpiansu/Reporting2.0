@@ -1,10 +1,10 @@
 /**
  * Service for handling store operations using JSON file storage
  */
-const fs = require("fs").promises;
-const path = require("path");
-const logger = require("../../config/logger");
-const syncConfig = require("../../config/sync.config");
+import fs from 'fs/promises';
+import path from 'path';
+import logger from '../../config/logger.js';
+import syncConfig from '../../config/sync.config.js';
 
 class StoreService {
   constructor() {
@@ -457,4 +457,4 @@ class StoreService {
 }
 
 // Export the class
-module.exports = StoreService;
+export default StoreService;

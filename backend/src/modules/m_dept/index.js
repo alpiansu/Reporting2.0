@@ -1,11 +1,23 @@
 /**
  * MDept module index
  */
-const MDeptController = require("./m_dept.controller");
-const mDeptRoutes = require("./m_dept.routes");
-const MDeptService = require("./m_dept.service");
+import {
+  getAllDepartments,
+  createDepartment,
+  updateDepartment,
+  uploadDepartments,
+} from './m_dept.controller.js';
+import mDeptRoutes from './m_dept.routes.js';
+import MDeptService from './m_dept.service.js';
 
-module.exports = {
+const MDeptController = {
+  getAllDepartments,
+  createDepartment,
+  updateDepartment,
+  uploadDepartments,
+};
+
+export default {
   MDeptController,
   mDeptRoutes,
   MDeptService,

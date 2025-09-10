@@ -76,7 +76,7 @@ const notFound = (res, message = "Not Found") => {
   });
 };
 
-module.exports = {
+export default {
   success,
   created,
   error,

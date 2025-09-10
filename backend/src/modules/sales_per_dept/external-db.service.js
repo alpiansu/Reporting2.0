@@ -1,10 +1,10 @@
 /**
  * Service for connecting to external database
  */
-const mysql = require("mysql2/promise");
-const syncConfig = require("../../config/sync.config");
-const logger = require("../../config/logger");
-const { WrcService } = require("../../services/");
+import mysql from 'mysql2/promise';
+import syncConfig from '../../config/sync.config.js';
+import logger from '../../config/logger.js';
+import { WrcService } from '../../services/index.js';
 
 const wrcService = new WrcService();
 
@@ -70,4 +70,4 @@ class ExternalDbService {
   }
 }
 
-module.exports = ExternalDbService;
+export default ExternalDbService;

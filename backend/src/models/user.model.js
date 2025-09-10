@@ -6,7 +6,7 @@
  *
  * The actual data operations are handled by the UserService.
  */
-const UserService = require("../modules/user/user.service");
+import UserService from '../modules/user/user.service.js';
 
 // Create a singleton instance of the service
 const userService = new UserService();
@@ -184,4 +184,4 @@ const User = {
   },
 };
 
-module.exports = User;
+export default User;

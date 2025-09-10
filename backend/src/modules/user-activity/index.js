@@ -1,11 +1,11 @@
 /**
  * UserActivity module index
  */
-const UserActivityController = require('./userActivity.controller');
-const userActivityRoutes = require('./userActivity.routes');
-const UserActivityService = require('./userActivity.service');
+import UserActivityController from './userActivity.controller.js';
+import userActivityRoutes from './userActivity.routes.js';
+import UserActivityService from './userActivity.service.js';
 
-module.exports = {
+export default {
   UserActivityController,
   userActivityRoutes,
   UserActivityService,

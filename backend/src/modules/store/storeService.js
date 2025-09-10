@@ -4,7 +4,7 @@
  */
 
 // Import the store service class
-const StoreService = require('./store.service');
+import StoreService from './store.service.js';
 
 // Create a singleton instance of the store service
 const storeService = new StoreService();
@@ -15,4 +15,4 @@ storeService.initialize().catch(err => {
 });
 
 // Export the singleton instance for backward compatibility
-module.exports = storeService;
+export default storeService;

@@ -1,9 +1,9 @@
 /**
  * Service for connecting to external database
  */
-const mysql = require("mysql2/promise");
-const syncConfig = require("../config/sync.config");
-const logger = require("../config/logger");
+import mysql from 'mysql2/promise';
+import syncConfig from '../config/sync.config.js';
+import logger from '../config/logger.js';
 
 class serverBulananService {
   /**
@@ -14,7 +14,7 @@ class serverBulananService {
   async getConBulanan(cab) {
     let conDBEdp;
     try {
-      conDBEdp = await require("mysql2/promise").createConnection({
+      conDBEdp = await mysql.createConnection({
         host: this.config.host,
         user: this.config.user,
         password: this.config.password,
@@ -99,4 +99,4 @@ class serverBulananService {
   }
 }
 
-module.exports = serverBulananService;
+export default serverBulananService;

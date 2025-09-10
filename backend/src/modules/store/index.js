@@ -1,11 +1,29 @@
 /**
  * Store module index
  */
-const StoreController = require('./store.controller');
-const storeRoutes = require('./store.routes');
-const StoreService = require('./store.service');
+import {
+  getAllStores,
+  getStoreById,
+  getStoresByBranch,
+  createStore,
+  updateStore,
+  deleteStore,
+  testConnection,
+} from './store.controller.js';
+import storeRoutes from './store.routes.js';
+import StoreService from './store.service.js';
 
-module.exports = {
+const StoreController = {
+  getAllStores,
+  getStoreById,
+  getStoresByBranch,
+  createStore,
+  updateStore,
+  deleteStore,
+  testConnection,
+};
+
+export default {
   StoreController,
   storeRoutes,
   StoreService,

@@ -1,10 +1,10 @@
-const authController = require('./auth.controller');
-const storeController = require('./store.controller');
-const userActivityController = require('./userActivity.controller');
-const uploadController = require('./upload.controller');
-const syncController = require('./sync.controller');
+import authController from './auth.controller.js';
+import storeController from './store.controller.js';
+import userActivityController from './userActivity.controller.js';
+import uploadController from './upload.controller.js';
+import syncController from './sync.controller.js';
 
-module.exports = {
+export default {
   authController,
   storeController,
   userActivityController,

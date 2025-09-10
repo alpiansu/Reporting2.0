@@ -1,19 +1,19 @@
 /**
  * Controller for WT reconciliation
  */
-const rekonWtHarianService = require("./rekon_wt_harian.service");
-const rekonProgressService = require("./rekon_progress.service");
-const logger = require("../../config/logger");
-const config = require("../../config/rekon_wt_harian.config");
+import rekonWtHarianService from './rekon_wt_harian.service.js';
+import rekonProgressService from './rekon_progress.service.js';
+import logger from '../../config/logger.js';
+import config from '../../config/rekon_wt_harian.config.js';
+import storeService from '../../modules/store/storeService.js';
 
-class RekonWtHarianController {
-  /**
-   * Cleanup temporary files used in reconciliation
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @param {Function} next - Express next middleware function
-   */
-  async cleanupTempFiles(req, res, next) {
+/**
+ * Cleanup temporary files used in reconciliation
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+export const cleanupTempFiles = async (req, res, next) => {
     try {
       await rekonWtHarianService.cleanupTempFiles();
       res.status(200).json({
@@ -24,14 +24,15 @@ class RekonWtHarianController {
       logger.error(`Error in cleanupTempFiles: ${error.message}`);
       next(error);
     }
-  }
-  /**
-   * Start reconciliation process
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @param {Function} next - Express next middleware function
-   */
-  async startReconciliation(req, res, next) {
+};
+
+/**
+ * Start reconciliation process
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+export const startReconciliation = async (req, res, next) => {
     try {
       const { cab, periode } = req.body;
 
@@ -77,7 +78,6 @@ class RekonWtHarianController {
       // Handle 'SEMUA CABANG' option
       if (cabParam === "All") {
         // Initialize progress tracking
-        const storeService = require("../../modules/store/storeService");
         await storeService.ensureInitialized();
         const allStores = storeService.stores;
         const branches = [...new Set(allStores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))];
@@ -100,7 +100,6 @@ class RekonWtHarianController {
       }
 
       // Initialize progress tracking
-      const storeService = require("../../modules/store/storeService");
       await storeService.ensureInitialized();
       const branchStores = await storeService.getStoresByBranch(cab, true);
       const progressId = rekonProgressService.initProgress(cab, periode, branchStores.length);
@@ -119,15 +118,15 @@ class RekonWtHarianController {
       logger.error(`Error in startReconciliation: ${error.message}`);
       next(error);
     }
-  }
+};
 
-  /**
-   * Get reconciliation results
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @param {Function} next - Express next middleware function
-   */
-  async getResults(req, res) {
+/**
+ * Get reconciliation results
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+export const getResults = async (req, res) => {
     try {
       const { cab, periode } = req.params;
       const { page, limit, tipe, toko, tgl1, searchQuery, sortColumn, sortOrder, toleranceAmount } = req.query;
@@ -156,15 +155,15 @@ class RekonWtHarianController {
       logger.error(`Error in getResults: ${error.message}`);
       next(error);
     }
-  }
+};
 
-  /**
-   * Get summary of reconciliation results
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @param {Function} next - Express next middleware function
-   */
-  async getSummary(req, res, next) {
+/**
+ * Get summary of reconciliation results
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+export const getSummary = async (req, res, next) => {
     try {
       const { cab, periode } = req.params;
 
@@ -191,15 +190,15 @@ class RekonWtHarianController {
       logger.error(`Error in getSummary: ${error.message}`);
       next(error);
     }
-  }
+};
 
-  /**
-   * Delete reconciliation results
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @param {Function} next - Express next middleware function
-   */
-  async deleteResults(req, res, next) {
+/**
+ * Delete reconciliation results
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+export const deleteResults = async (req, res, next) => {
     try {
       const { cab, periode } = req.params;
 
@@ -232,15 +231,15 @@ class RekonWtHarianController {
       logger.error(`Error in deleteResults: ${error.message}`);
       next(error);
     }
-  }
+};
 
-  /**
-   * Get reconciliation progress
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @param {Function} next - Express next middleware function
-   */
-  async getProgress(req, res, next) {
+/**
+ * Get reconciliation progress
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+export const getProgress = async (req, res, next) => {
     try {
       const { progressId } = req.params;
 
@@ -268,44 +267,43 @@ class RekonWtHarianController {
       logger.error(`Error in getProgress: ${error.message}`);
       next(error);
     }
-  }
+};
 
-  /**
-   * Get latest reconciliation progress for a branch and period
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @param {Function} next - Express next middleware function
-   */
-  async getLatestProgress(req, res, next) {
-    try {
-      const { cab, periode } = req.params;
+/**
+ * Get latest reconciliation progress for a branch and period
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+export const getLatestProgress = async (req, res, next) => {
+  try {
+    const { cab, periode } = req.params;
 
-      if (!periode) {
-        return res.status(400).json({
-          success: false,
-          message: "Periode harus diisi",
-        });
-      }
-
-      const cabParam = cab === "SEMUA" ? "All" : cab;
-      const progress = rekonProgressService.getLatestProgress(cabParam, periode);
-
-      if (!progress) {
-        return res.status(404).json({
-          success: false,
-          message: "Progress tidak ditemukan",
-        });
-      }
-
-      res.status(200).json({
-        success: true,
-        data: progress,
+    if (!periode) {
+      return res.status(400).json({
+        success: false,
+        message: "Periode harus diisi",
       });
-    } catch (error) {
-      logger.error(`Error in getLatestProgress: ${error.message}`);
-      next(error);
     }
-  }
-}
 
-module.exports = new RekonWtHarianController();
+    const cabParam = cab === "SEMUA" ? "All" : cab;
+    const progress = rekonProgressService.getLatestProgress(cabParam, periode);
+
+    if (!progress) {
+      return res.status(404).json({
+        success: false,
+        message: "Progress tidak ditemukan",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: progress,
+    });
+  } catch (error) {
+    logger.error(`Error in getLatestProgress: ${error.message}`);
+    next(error);
+  }
+};
+
+// Removed default export - using named exports only

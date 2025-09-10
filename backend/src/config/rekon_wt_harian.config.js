@@ -2,7 +2,7 @@
  * Configuration for WT reconciliation module
  */
 
-module.exports = {
+export default {
   // Temporary storage for WRC data
   tempStorage: {
     filePath: "data/temp/wrc_data.json", // Relative to project root

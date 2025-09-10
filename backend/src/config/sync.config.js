@@ -2,7 +2,7 @@
  * Configuration for data synchronization schedules
  */
 
-module.exports = {
+export default {
   // Schedule for automatic synchronization (in 24-hour format)
   schedules: [
     {

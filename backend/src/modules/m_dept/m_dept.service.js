@@ -1,11 +1,11 @@
 /**
  * Service for m_dept data using JSON file storage
  */
-const fs = require("fs").promises;
-const path = require("path");
-const logger = require("../../config/logger");
-const csv = require("csv-parser");
-const { createReadStream } = require("fs");
+import fs from 'fs/promises';
+import path from 'path';
+import logger from '../../config/logger.js';
+import csv from 'csv-parser';
+import { createReadStream } from 'fs';
 
 class MDeptService {
   constructor() {
@@ -286,4 +286,4 @@ class MDeptService {
   }
 }
 
-module.exports = MDeptService;
+export default MDeptService;

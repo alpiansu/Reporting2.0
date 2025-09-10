@@ -1,14 +1,14 @@
 /**
  * Sync module index
  */
-const SyncController = require('./sync.controller');
-const syncRoutes = require('./sync.routes');
-const SyncService = require('./sync.service');
-const TriggerSyncService = require('./trigger-sync.service');
-const CronScheduler = require('./cron-scheduler.service');
-const ExternalDbService = require('./external-db.service');
+import SyncController from './sync.controller.js';
+import syncRoutes from './sync.routes.js';
+import SyncService from './sync.service.js';
+import TriggerSyncService from './trigger-sync.service.js';
+import CronScheduler from './cron-scheduler.service.js';
+import ExternalDbService from './external-db.service.js';
 
-module.exports = {
+export default {
   SyncController,
   syncRoutes,
   SyncService,

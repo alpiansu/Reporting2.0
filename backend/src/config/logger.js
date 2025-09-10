@@ -1,10 +1,16 @@
-const winston = require('winston');
-const path = require('path');
-const fs = require('fs');
-const dotenv = require('dotenv');
-require('winston-daily-rotate-file'); // Tambahkan ini
+import winston from 'winston';
+import path from 'path';
+import fs from 'fs';
+import dotenv from 'dotenv';
+import 'winston-daily-rotate-file';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 
 dotenv.config();
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Create logs directory if it doesn't exist
 const logDir = path.join(__dirname, '../../logs');
@@ -65,4 +71,4 @@ if (process.env.NODE_ENV !== 'production') {
   }));
 }
 
-module.exports = logger;
+export default logger;

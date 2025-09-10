@@ -1,5 +1,5 @@
-const SyncService = require("./sync.service");
-const logger = require("../../config/logger");
+import SyncService from './sync.service.js';
+import logger from '../../config/logger.js';
 
 class TriggerSyncService {
   /**
@@ -53,4 +53,4 @@ class TriggerSyncService {
   }
 }
 
-module.exports = TriggerSyncService;
+export default TriggerSyncService;

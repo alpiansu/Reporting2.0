@@ -1,8 +1,10 @@
-const User = require('../../models/user.model');
-const { jwt } = require('../../config');
-const logger = require('../../config/logger');
-const UserActivityService = require('../userActivity/userActivity.service');
-const UserService = require('../user/user.service');
+import User from '../../models/user.model.js';
+import jwt from '../../config/jwt.js';
+import logger from '../../config/logger.js';
+import UserActivityService from '../user-activity/userActivity.service.js';
+import UserService from '../user/user.service.js';
+import fs from 'fs';
+import path from 'path';
 
 const userActivityService = new UserActivityService();
 const userService = new UserService();
@@ -273,8 +275,7 @@ class AuthService {
         throw new Error("Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.");
       }
       
-      const fs = require("fs");
-      const path = require("path");
+
       
       // Define paths
       const uploadsDir = path.join(__dirname, "../../../public/uploads");
@@ -315,8 +316,7 @@ class AuthService {
    */
   async deleteProfileImage(userId) {
     try {
-      const fs = require("fs");
-      const path = require("path");
+
       
       // Define paths
       const profileImagesDir = path.join(__dirname, "../../../public/uploads/profile-images");
@@ -349,4 +349,4 @@ class AuthService {
 }
 
 // Export the class
-module.exports = AuthService;
+export default AuthService;

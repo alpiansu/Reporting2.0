@@ -2,8 +2,8 @@
  * Menu Manager Module
  * Exports menu routes for use in the application
  */
-const menuRoutes = require('./menu.routes');
+import menuRoutes from './menu.routes.js';
 
-module.exports = {
+export default {
   routes: menuRoutes
 };

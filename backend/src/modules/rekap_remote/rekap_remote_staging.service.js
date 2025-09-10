@@ -2,10 +2,10 @@
  * Staging service for rekap_remote module
  * Handles JSON file synchronization for staging environment
  */
-const fs = require("fs").promises;
-const path = require("path");
-const logger = require("../../config/logger");
-const RekapRemote = require("../../models/rekap_remote.model");
+import fs from 'fs/promises';
+import path from 'path';
+import logger from '../../config/logger.js';
+import RekapRemote from '../../models/rekap_remote.model.js';
 
 // Path untuk file JSON rekap_remote
 const REKAP_REMOTE_JSON_PATH = path.join(process.cwd(), "data/rekap_remote.json");
@@ -284,4 +284,4 @@ class RekapRemoteStagingService {
   }
 }
 
-module.exports = new RekapRemoteStagingService();
+export default new RekapRemoteStagingService();

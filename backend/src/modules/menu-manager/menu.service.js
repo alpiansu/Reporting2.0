@@ -2,9 +2,9 @@
  * Menu Service
  * Handles all menu-related data operations
  */
-const fs = require("fs").promises;
-const path = require("path");
-const { v4: uuidv4 } = require("uuid");
+import fs from 'fs/promises';
+import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
 
 class MenuService {
   constructor() {
@@ -402,4 +402,4 @@ class MenuService {
   }
 }
 
-module.exports = MenuService;
+export default MenuService;

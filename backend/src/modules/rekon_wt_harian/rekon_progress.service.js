@@ -1,8 +1,8 @@
 /**
  * Service for tracking reconciliation progress
  */
-const EventEmitter = require('events');
-const logger = require('../../config/logger');
+import EventEmitter from 'events';
+import logger from '../../config/logger.js';
 
 class RekonProgressService {
   constructor() {
@@ -252,4 +252,4 @@ setInterval(() => {
   rekonProgressService.cleanupOldProgress();
 }, 60 * 60 * 1000); // Run every hour
 
-module.exports = rekonProgressService;
+export default rekonProgressService;

@@ -1,11 +1,16 @@
-const express = require("express");
-const cors = require("cors");
-const helmet = require("helmet");
-const path = require("path");
-const routes = require("./routes");
-const modules = require("./modules");
-const { requestLogger, errorHandler, notFound } = require("./middlewares");
-const config = require("./config");
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import routes from './routes/index.js';
+import modules from './modules/index.js';
+import { requestLogger, errorHandler, notFound } from './middlewares/index.js';
+import config from './config/index.js';
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Initialize Express app
 const app = express();
@@ -45,4 +50,4 @@ app.use(notFound);
 // Error handler
 app.use(errorHandler);
 
-module.exports = app;
+export default app;

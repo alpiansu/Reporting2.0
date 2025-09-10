@@ -1,11 +1,23 @@
 /**
  * RekapRemote module index
  */
-const RekapRemoteController = require("./rekap_remote.controller");
-const rekapRemoteRoutes = require("./rekap_remote.routes");
-const rekapRemoteService = require("./rekap_remote.service");
+import {
+  getRekapData,
+  getSummary,
+  saveLogsManually,
+  clearLogs,
+} from './rekap_remote.controller.js';
+import rekapRemoteRoutes from './rekap_remote.routes.js';
+import rekapRemoteService from './rekap_remote.service.js';
 
-module.exports = {
+const RekapRemoteController = {
+  getRekapData,
+  getSummary,
+  saveLogsManually,
+  clearLogs,
+};
+
+export default {
   RekapRemoteController,
   rekapRemoteRoutes,
   rekapRemoteService,

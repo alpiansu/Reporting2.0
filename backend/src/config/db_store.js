@@ -1,8 +1,8 @@
 /**
  * Configuration for connecting to store databases
  */
-const mysql = require("mysql2/promise");
-const logger = require("./logger");
+import mysql from 'mysql2/promise';
+import logger from './logger.js';
 
 class DbStoreService {
   /**
@@ -91,4 +91,4 @@ class DbStoreService {
   }
 }
 
-module.exports = new DbStoreService();
+export default new DbStoreService();

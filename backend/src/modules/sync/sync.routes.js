@@ -1,10 +1,9 @@
 /**
  * Routes for synchronization
  */
-const express = require('express');
-const SyncController = require('./sync.controller');
-const syncController = new SyncController();
-const { authenticateJWT } = require('../../middlewares');
+import express from 'express';
+import { triggerSync } from './sync.controller.js';
+import { authenticateJWT } from '../../middlewares/index.js';
 
 const router = express.Router();
 
@@ -12,6 +11,6 @@ const router = express.Router();
 router.use(authenticateJWT);
 
 // Trigger manual synchronization
-router.post('/trigger', syncController.triggerSync.bind(syncController));
+router.post('/trigger', triggerSync);
 
-module.exports = router;
+export default router;

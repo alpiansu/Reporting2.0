@@ -1,9 +1,9 @@
-const app = require("./app");
-const http = require("http");
-const { sequelize } = require("./models");
-const config = require("./config");
-const logger = require("./config/logger");
-const User = require("./models/user.model");
+import app from './app.js';
+import http from 'http';
+import { sequelize } from './models/index.js';
+import config from './config/index.js';
+import logger from './config/logger.js';
+import User from './models/user.model.js';
 // Modules are now initialized in app.js
 
 // Set port

@@ -1,17 +1,18 @@
 /**
  * Service for WT reconciliation
  */
-const fs = require("fs").promises;
-const path = require("path");
-const os = require("os");
-const logger = require("../../config/logger");
-const dbStore = require("../../config/db_store");
-const RekonWtHarian = require("../../models/rekon_wt_harian.model");
-const config = require("../../config/rekon_wt_harian.config");
-const rekonProgressService = require("./rekon_progress.service");
-const storeService = require("../../modules/store/storeService");
-const wrcUtils = require("../../utils/wrc.utils");
-const RekapRemoteService = require("../rekap_remote/rekap_remote.service");
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import os from 'os';
+import logger from '../../config/logger.js';
+import dbStore from '../../config/db_store.js';
+import RekonWtHarian from '../../models/rekon_wt_harian.model.js';
+import config from '../../config/rekon_wt_harian.config.js';
+import rekonProgressService from './rekon_progress.service.js';
+import storeService from '../../modules/store/storeService.js';
+import wrcUtils from '../../utils/wrc.utils.js';
+import RekapRemoteService from '../rekap_remote/rekap_remote.service.js';
 
 // Path untuk file JSON rekon_wt_harian
 const REKON_WT_HARIAN_JSON_PATH = path.join(process.cwd(), "data/rekon_wt_harian.json");
@@ -918,6 +919,8 @@ class RekonWtHarianService {
       dbHost: store.dbHost,
       storeName: store.storeName,
     };
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
     const storeJsonDir = path.join(__dirname, "../../../data/rekon_wt_harian");
     const storeJsonFile = path.join(storeJsonDir, `${storeCode}_${period}.json`);
 
@@ -1743,4 +1746,4 @@ class RekonWtHarianService {
   }
 }
 
-module.exports = new RekonWtHarianService();
+export default new RekonWtHarianService();

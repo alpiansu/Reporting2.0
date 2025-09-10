@@ -1,11 +1,11 @@
 /**
  * Auth module index
  */
-const AuthController = require('./auth.controller');
-const authRoutes = require('./auth.routes');
-const AuthService = require('./auth.service');
+import AuthController from './auth.controller.js';
+import authRoutes from './auth.routes.js';
+import AuthService from './auth.service.js';
 
-module.exports = {
+export default {
   AuthController,
   authRoutes,
   AuthService,

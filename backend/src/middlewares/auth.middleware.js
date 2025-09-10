@@ -1,5 +1,5 @@
-const { jwt } = require('../config');
-const logger = require('../config/logger');
+import jwt from '../config/jwt.js';
+import logger from '../config/logger.js';
 
 /**
  * Middleware to authenticate JWT token
@@ -57,7 +57,11 @@ const authorizeRole = (roles) => {
   };
 };
 
-module.exports = {
+export default {
   authenticateJWT,
   authorizeRole,
 };
+
+// Named exports for backward compatibility
+export const authenticateToken = authenticateJWT;
+export { authenticateJWT, authorizeRole };

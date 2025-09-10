@@ -6,7 +6,7 @@
  *
  * The actual data operations are handled by the MCabangService.
  */
-const MCabangService = require("../modules/m_cabang/m_cabang.service");
+import MCabangService from '../modules/m_cabang/m_cabang.service.js';
 
 // Create a singleton instance of the service
 const mCabangService = new MCabangService();
@@ -94,4 +94,4 @@ const MCabang = {
   },
 };
 
-module.exports = MCabang;
+export default MCabang;

@@ -1,13 +1,11 @@
-const fs = require('fs').promises;
-const path = require('path');
-const os = require('os');
-const { v4: uuidv4 } = require('uuid');
-const logger = require('../../config/logger');
-const config = require('../../config');
-const dbWrc = require('../../services/wrc.service');
-const dbStore = require('../../config/db_store');
-const rekonProgressService = require('./rekon_progress.service');
-const rekonWtHarianService = require('./rekon_wt_harian.service');
+import fs from 'fs/promises';
+import path from 'path';
+import os from 'os';
+import logger from '../../config/logger.js';
+import config from '../../config/index.js';
+import dbWrc from '../../services/wrc.service.js';
+import rekonProgressService from './rekon_progress.service.js';
+import rekonWtHarianService from './rekon_wt_harian.service.js';
 
 class RekonWtHarianProgressService {
   constructor() {
@@ -648,4 +646,4 @@ class RekonWtHarianProgressService {
   }
 }
 
-module.exports = new RekonWtHarianProgressService();
+export default new RekonWtHarianProgressService();

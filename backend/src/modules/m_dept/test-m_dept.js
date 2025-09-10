@@ -1,10 +1,10 @@
 /**
  * Test script for m_dept JSON implementation
  */
-const MDeptService = require('./m_dept.service');
-const MDept = require('../../models/m_dept.model');
-const fs = require('fs');
-const path = require('path');
+import MDeptService from './m_dept.service.js';
+import MDept from '../../models/m_dept.model.js';
+import fs from 'fs';
+import path from 'path';
 
 async function testMDeptImplementation() {
   console.log('Starting m_dept JSON implementation test...');

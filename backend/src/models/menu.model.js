@@ -6,7 +6,7 @@
  *
  * The actual data operations are handled by the MenuService.
  */
-const MenuService = require("../modules/menu-manager/menu.service");
+import MenuService from '../modules/menu-manager/menu.service.js';
 
 // Create a singleton instance of the service
 const menuService = new MenuService();
@@ -175,4 +175,4 @@ const Menu = {
   },
 };
 
-module.exports = Menu;
+export default Menu;

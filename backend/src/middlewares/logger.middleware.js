@@ -1,5 +1,5 @@
-const morgan = require('morgan');
-const logger = require('../config/logger');
+import morgan from 'morgan';
+import logger from '../config/logger.js';
 
 /**
  * Custom morgan token to log request body (in development only)
@@ -34,4 +34,4 @@ const stream = {
  */
 const requestLogger = morgan(morganFormat, { stream });
 
-module.exports = requestLogger;
+export default requestLogger;

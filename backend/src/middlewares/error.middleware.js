@@ -1,4 +1,4 @@
-const logger = require('../config/logger');
+import logger from '../config/logger.js';
 
 /**
  * Error handling middleware
@@ -50,7 +50,7 @@ const notFound = (req, res, next) => {
   next(error);
 };
 
-module.exports = {
+export default {
   errorHandler,
   notFound,
 };

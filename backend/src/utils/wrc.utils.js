@@ -1,13 +1,13 @@
 /**
  * Utility functions for interacting with WRC (poscabang) database
  */
-const fs = require("fs").promises;
-const path = require("path");
-const os = require("os");
-const mysql = require("mysql2/promise");
-const logger = require("../config/logger");
-const wrcService = require("../services/wrc.service");
-const config = require("../config/rekon_wt_harian.config");
+import fs from 'fs/promises';
+import path from 'path';
+import os from 'os';
+import mysql from 'mysql2/promise';
+import logger from '../config/logger.js';
+import wrcService from '../services/wrc.service.js';
+import config from '../config/rekon_wt_harian.config.js';
 
 class WrcUtils {
   /**
@@ -158,4 +158,4 @@ class WrcUtils {
   }
 }
 
-module.exports = new WrcUtils();
+export default new WrcUtils();

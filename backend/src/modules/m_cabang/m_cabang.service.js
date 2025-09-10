@@ -1,9 +1,9 @@
 /**
  * Service for m_cabang data using JSON file storage
  */
-const fs = require("fs").promises;
-const path = require("path");
-const logger = require("../../config/logger");
+import fs from 'fs/promises';
+import path from 'path';
+import logger from '../../config/logger.js';
 
 class MCabangService {
   constructor() {
@@ -238,4 +238,4 @@ class MCabangService {
   }
 }
 
-module.exports = MCabangService;
+export default MCabangService;

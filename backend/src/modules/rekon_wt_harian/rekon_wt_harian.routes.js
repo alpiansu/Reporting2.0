@@ -1,343 +1,58 @@
 /**
  * Routes for WT reconciliation
  */
-const express = require("express");
+import express from 'express';
+import jwt from 'jsonwebtoken';
 const router = express.Router();
-const rekonWtHarianController = require("./rekon_wt_harian.controller");
-const { authenticateJWT, authorizeRole } = require("../../middlewares/auth.middleware");
+import {
+  cleanupTempFiles,
+  startReconciliation,
+  getResults,
+  getSummary,
+  deleteResults,
+  getProgress,
+  getLatestProgress,
+} from './rekon_wt_harian.controller.js';
+import { authenticateJWT, authorizeRole } from '../../middlewares/index.js';
 
-/**
- * @swagger
- * tags:
- *   name: RekonWtHarian
- *   description: Rekonsiliasi WT Harian API
- */
+const rekonWtHarianController = {
+  cleanupTempFiles,
+  startReconciliation,
+  getResults,
+  getSummary,
+  deleteResults,
+  getProgress,
+  getLatestProgress,
+};
 
-/**
- * @swagger
- * /rekon-wt-harian:
- *   post:
- *     summary: Start reconciliation process
- *     description: Start the reconciliation process for a specific branch and period. This will compare data from WRC and store databases and save differences.
- *     tags: [RekonWtHarian]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - cab
- *               - periode
- *             properties:
- *               cab:
- *                 type: string
- *                 description: Branch code
- *                 example: G001
- *               periode:
- *                 type: string
- *                 description: Period in YYMM format
- *                 example: 2507
- *     responses:
- *       200:
- *         description: Reconciliation started successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   description: Indicates if the operation was successful
- *                 totalStores:
- *                   type: integer
- *                   description: Total number of stores processed
- *                 processedStores:
- *                   type: integer
- *                   description: Number of stores successfully processed
- *                 storesWithDifferences:
- *                   type: integer
- *                   description: Number of stores with differences
- *                 totalDifferences:
- *                   type: integer
- *                   description: Total number of differences found
- *                 details:
- *                   type: array
- *                   description: Details of stores with differences
- *                   items:
- *                     type: object
- *                     properties:
- *                       store:
- *                         type: string
- *                         description: Store code
- *                       differences:
- *                         type: integer
- *                         description: Number of differences found
- *       400:
- *         description: Invalid input
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden - User does not have required role
- *       500:
- *         description: Server error
- */
-
-/**
- * @route POST /api/rekon-wt-harian
- * @desc Start reconciliation process
- * @access Private (Admin/Manager only)
- */
+// Start reconciliation process
+// POST /api/rekon-wt-harian
+// Access: Private (Admin/Manager only)
 router.post("/", authenticateJWT, authorizeRole(["admin", "manager"]), rekonWtHarianController.startReconciliation);
 
-/**
- * @route GET /api/rekon-wt-harian/progress/:progressId
- * @desc Get reconciliation progress
- * @access Private
- */
+// Get reconciliation progress
+// GET /api/rekon-wt-harian/progress/:progressId
+// Access: Private
 router.get("/progress/:progressId", authenticateJWT, rekonWtHarianController.getProgress);
 
-/**
- * @route GET /api/rekon-wt-harian/latest-progress/:cab/:periode
- * @desc Get latest reconciliation progress for a branch and period
- * @access Private
- */
+// Get latest reconciliation progress for a branch and period
+// GET /api/rekon-wt-harian/latest-progress/:cab/:periode
+// Access: Private
 router.get("/latest-progress/:cab/:periode", authenticateJWT, rekonWtHarianController.getLatestProgress);
 
-/**
- * @swagger
- * /rekon-wt-harian/{cab}/{periode}:
- *   get:
- *     summary: Get reconciliation results
- *     tags: [RekonWtHarian]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: cab
- *         required: true
- *         schema:
- *           type: string
- *         description: Branch code
- *       - in: path
- *         name: periode
- *         required: true
- *         schema:
- *           type: string
- *         description: Period in YYMM format
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *           default: 1
- *         description: Page number
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 10
- *           maximum: 100
- *         description: Number of items per page (max 100)
- *       - in: query
- *         name: source
- *         schema:
- *           type: string
- *           enum: [WRC, STORE, BOTH]
- *         description: Data source filter
- *       - in: query
- *         name: tipe
- *         schema:
- *           type: string
- *         description: Transaction type filter (NKL, BRK, PCAFE, etc.)
- *       - in: query
- *         name: toko
- *         schema:
- *           type: string
- *         description: Store code filter
- *       - in: query
- *         name: tgl1
- *         schema:
- *           type: string
- *           format: date
- *         description: Date filter (YYYY-MM-DD)
- *     responses:
- *       200:
- *         description: List of reconciliation results
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 total:
- *                   type: integer
- *                   description: Total number of records
- *                 page:
- *                   type: integer
- *                   description: Current page number
- *                 limit:
- *                   type: integer
- *                   description: Number of items per page
- *                 totalPages:
- *                   type: integer
- *                   description: Total number of pages
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/RekonWtHarian'
- *       400:
- *         description: Invalid input
- *       401:
- *         description: Unauthorized
- *       500:
- *         description: Server error
- *
- * @route GET /api/rekon-wt-harian/:cab/:periode
- * @desc Get reconciliation results
- * @access Private
- */
+// Get reconciliation results
+// GET /api/rekon-wt-harian/:periode/:cab
+// Access: Private
 router.get("/:periode/:cab", authenticateJWT, rekonWtHarianController.getResults);
 
-/**
- * @swagger
- * /rekon-wt-harian/{cab}/{periode}/summary:
- *   get:
- *     summary: Get summary of reconciliation results
- *     description: Get a summary of reconciliation results grouped by source (WRC, STORE, BOTH)
- *     tags: [RekonWtHarian]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: cab
- *         required: true
- *         schema:
- *           type: string
- *         description: Branch code
- *         example: G001
- *       - in: path
- *         name: periode
- *         required: true
- *         schema:
- *           type: string
- *         description: Period in YYMM format
- *         example: 2507
- *     responses:
- *       200:
- *         description: Summary of reconciliation results
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   description: Indicates if the operation was successful
- *                 data:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       source:
- *                         type: string
- *                         enum: [WRC, STORE, BOTH]
- *                         description: Data source
- *                       total_records:
- *                         type: integer
- *                         description: Total number of records
- *                       total_selisih_gross:
- *                         type: number
- *                         description: Total difference in gross value
- *                       total_selisih_ppn:
- *                         type: number
- *                         description: Total difference in PPN value
- *                       total_selisih_gross_idm:
- *                         type: number
- *                         description: Total difference in gross IDM value
- *                       total_selisih_ppn_idm:
- *                         type: number
- *                         description: Total difference in PPN IDM value
- *       400:
- *         description: Invalid input
- *       401:
- *         description: Unauthorized
- *       500:
- *         description: Server error
- *
- * @route GET /api/rekon-wt-harian/:cab/:periode/summary
- * @desc Get summary of reconciliation results
- * @access Private
- */
+// Get summary of reconciliation results
+// GET /api/rekon-wt-harian/:cab/:periode/summary
+// Access: Private
 router.get("/:cab/:periode/summary", authenticateJWT, rekonWtHarianController.getSummary);
 
-/**
- * @swagger
- * /rekon-wt-harian/{cab}/{periode}:
- *   delete:
- *     summary: Delete reconciliation results
- *     description: Delete all reconciliation results for a specific branch and period
- *     tags: [RekonWtHarian]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: cab
- *         required: true
- *         schema:
- *           type: string
- *         description: Branch code
- *         example: G001
- *       - in: path
- *         name: periode
- *         required: true
- *         schema:
- *           type: string
- *         description: Period in YYMM format
- *         example: 2507
- *     responses:
- *       200:
- *         description: Reconciliation results deleted successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   description: Indicates if the operation was successful
- *                   example: true
- *                 message:
- *                   type: string
- *                   description: Success message
- *                   example: 42 data berhasil dihapus
- *                 deletedCount:
- *                   type: integer
- *                   description: Number of deleted records
- *                   example: 42
- *       400:
- *         description: Invalid input
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden - User does not have required role
- *       500:
- *         description: Server error
- *
- * @route DELETE /api/rekon-wt-harian/:cab/:periode
- * @desc Delete reconciliation results
- * @access Private (Admin/Manager only)
- */
+// Delete reconciliation results
+// DELETE /api/rekon-wt-harian/:cab/:periode
+// Access: Private (Admin/Superadmin only)
 router.delete(
   "/:cab/:periode",
   authenticateJWT,
@@ -345,73 +60,83 @@ router.delete(
   rekonWtHarianController.deleteResults
 );
 
-/**
- * @swagger
- * /rekon-wt-harian/progress-updates/{progressId}:
- *   get:
- *     summary: Get real-time progress updates via SSE
- *     description: Establishes a Server-Sent Events connection to receive real-time updates on reconciliation progress
- *     tags: [RekonWtHarian]
- *     parameters:
- *       - in: path
- *         name: progressId
- *         required: true
- *         schema:
- *           type: string
- *         description: Progress ID to subscribe to
- *     responses:
- *       200:
- *         description: SSE connection established
- *         content:
- *           text/event-stream:
- *             schema:
- *               type: string
- *       401:
- *         description: Unauthorized
- *       404:
- *         description: Progress ID not found
- *       500:
- *         description: Server error
- */
-
-/**
- * @swagger
- * /rekon-wt-harian/cleanup-temp-files:
- *   get:
- *     summary: Clean up temporary difference files
- *     description: Deletes old temporary difference files that may not have been cleaned up due to connection loss
- *     tags: [RekonWtHarian]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Cleanup operation completed
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 message:
- *                   type: string
- *                 deletedFiles:
- *                   type: integer
- *                 totalFiles:
- *                   type: integer
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden - User does not have required role
- *       500:
- *         description: Server error
- */
+// Clean up temporary difference files
+// GET /api/rekon-wt-harian/cleanup-temp-files
+// Access: Private (Admin/Superadmin only)
 router.get(
   "/cleanup-temp-files",
   authenticateJWT,
   authorizeRole(["admin", "superadmin"]),
   rekonWtHarianController.cleanupTempFiles
 );
-// This endpoint is handled by rekonWebSocketService in server.js
 
-module.exports = router;
+// SSE endpoint for progress updates
+// GET /api/rekon-wt-harian/sse/progress-updates/:progressId
+// Access: Private
+import rekonWebSocketService from './rekon_websocket.service.js';
+
+// Custom authentication middleware for SSE
+const authenticateSSE = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(" ")[1];
+
+  if (!token) {
+    res.status(401);
+    res.write(`data: ${JSON.stringify({ error: "Access token required" })}\n\n`);
+    return res.end();
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    res.status(401);
+    res.write(`data: ${JSON.stringify({ error: "Invalid or expired token" })}\n\n`);
+    return res.end();
+  }
+};
+
+// SSE endpoint for real-time progress updates
+router.get("/sse/progress-updates/:progressId", authenticateSSE, (req, res) => {
+  const progressId = req.params.progressId;
+
+  // Set headers untuk SSE
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.flushHeaders();
+
+  // Kirim event awal
+  res.write(`data: ${JSON.stringify({ type: "connected", progressId })}\n\n`);
+  
+  // Implement heartbeat to keep connection alive
+  const heartbeatInterval = setInterval(() => {
+    res.write(":heartbeat\n\n");
+  }, 30000); // Send heartbeat every 30 seconds
+
+  // Simpan connection
+  const clientId = `client-${Date.now()}`;
+  rekonWebSocketService.clients.set(clientId, {
+    id: clientId,
+    response: res,
+    subscriptions: new Set([progressId]),
+    connectedAt: Date.now(),
+    heartbeatInterval: heartbeatInterval
+  });
+
+  // Subscribe ke progress events
+  rekonWebSocketService.subscribeToProgress(clientId, progressId);
+
+  // Handle client disconnect
+  req.on("close", () => {
+    // Clear heartbeat interval when client disconnects
+    if (rekonWebSocketService.clients.get(clientId)?.heartbeatInterval) {
+      clearInterval(rekonWebSocketService.clients.get(clientId).heartbeatInterval);
+    }
+    rekonWebSocketService.clients.delete(clientId);
+  });
+});
+
+export default router;

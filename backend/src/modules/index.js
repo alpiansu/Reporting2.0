@@ -3,19 +3,19 @@
  * Exports all modules and provides initialization function
  */
 
-const authModule = require('./auth');
-const storeModule = require('./store');
-const syncModule = require('./sync');
-const userActivityModule = require('./userActivity');
-const salesPerDeptModule = require('./sales_per_dept');
-const mDeptModule = require('./m_dept');
-const rekonWtHarianModule = require('./rekon_wt_harian');
-const mCabangModule = require('./m_cabang');
-const userModule = require('./user');
-const menuManagerModule = require('./menu-manager');
-const rekapRemoteModule = require('./rekap_remote');
+import authModule from './auth/index.js';
+import storeModule from './store/index.js';
+import syncModule from './sync/index.js';
+import userActivityModule from './user-activity/index.js';
+import salesPerDeptModule from './sales_per_dept/index.js';
+import mDeptModule from './m_dept/index.js';
+import rekonWtHarianModule from './rekon_wt_harian/index.js';
+import mCabangModule from './m_cabang/index.js';
+import userModule from './user/index.js';
+import menuManagerModule from './menu-manager/index.js';
+import rekapRemoteModule from './rekap_remote/index.js';
 
-module.exports = {
+export default {
   // Export all modules
   authModule,
   storeModule,

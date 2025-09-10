@@ -1,11 +1,25 @@
 /**
  * MCabang module index
  */
-const MCabangController = require("./m_cabang.controller");
-const mCabangRoutes = require("./m_cabang.routes");
-const MCabangService = require("./m_cabang.service");
+import {
+  getAllCabang,
+  getCabangByCode,
+  createCabang,
+  updateCabang,
+  deleteCabang,
+} from './m_cabang.controller.js';
+import mCabangRoutes from './m_cabang.routes.js';
+import MCabangService from './m_cabang.service.js';
 
-module.exports = {
+const MCabangController = {
+  getAllCabang,
+  getCabangByCode,
+  createCabang,
+  updateCabang,
+  deleteCabang,
+};
+
+export default {
   MCabangController,
   mCabangRoutes,
   MCabangService,

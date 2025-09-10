@@ -1,11 +1,11 @@
 /**
  * Service for scheduling synchronization tasks
  */
-const cron = require("node-cron");
-const SyncService = require("./sync.service");
+import cron from 'node-cron';
+import SyncService from './sync.service.js';
 const syncService = new SyncService();
-const syncConfig = require("../../config/sync.config");
-const logger = require("../../config/logger");
+import syncConfig from '../../config/sync.config.js';
+import logger from '../../config/logger.js';
 
 class CronScheduler {
   constructor() {
@@ -127,4 +127,4 @@ class CronScheduler {
   }
 }
 
-module.exports = CronScheduler;
+export default CronScheduler;

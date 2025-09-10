@@ -1,10 +1,10 @@
 /**
  * Service for user data using JSON file storage
  */
-const fs = require("fs").promises;
-const path = require("path");
-const logger = require("../../config/logger");
-const bcrypt = require("bcrypt");
+import fs from 'fs/promises';
+import path from 'path';
+import logger from '../../config/logger.js';
+import bcrypt from 'bcrypt';
 
 class UserService {
   constructor() {
@@ -453,4 +453,4 @@ class UserService {
   }
 }
 
-module.exports = UserService;
+export default UserService;

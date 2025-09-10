@@ -1,24 +1,32 @@
-const dotenv = require("dotenv");
-const path = require("path");
+import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
+import database from "./database.js";
+import jwt from "./jwt.js";
+import logger from "./logger.js";
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Load environment variables
 dotenv.config({ path: path.join(__dirname, "../../.env") });
 
-const allowedOrigins = ["http://localhost", "http://192.168.61.228", "http://192.168.133.10"];
+const allowedOrigins = ["http://localhost", "http://192.168.61.228", "http://192.168.133.10", "http://127.0.0.1"];
 
-module.exports = {
+export default {
   // Server configuration
   port: process.env.PORT || 3000,
   nodeEnv: process.env.NODE_ENV || "development",
 
   // Database configuration
-  database: require("./database"),
+  database,
 
   // JWT configuration
-  jwt: require("./jwt"),
+  jwt,
 
   // Logger configuration
-  logger: require("./logger"),
+  logger,
 
   // Connection timeout
   connectionTimeout: parseInt(process.env.CONNECTION_TIMEOUT) || 30000,

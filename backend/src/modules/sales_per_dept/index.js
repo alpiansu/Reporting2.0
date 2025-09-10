@@ -1,12 +1,22 @@
 /**
  * SalesPerDept module index
  */
-const SalesPerDeptController = require("./sales_per_dept.controller");
-const salesPerDeptRoutes = require("./sales_per_dept.routes");
-const SalesPerDeptService = require("./sales_per_dept.service");
-const ExternalDbService = require("./external-db.service");
+import {
+  syncSalesPerDept,
+  getSalesPerDept,
+  compareSalesPerDept,
+} from './sales_per_dept.controller.js';
+import salesPerDeptRoutes from './sales_per_dept.routes.js';
+import SalesPerDeptService from './sales_per_dept.service.js';
+import ExternalDbService from './external-db.service.js';
 
-module.exports = {
+const SalesPerDeptController = {
+  syncSalesPerDept,
+  getSalesPerDept,
+  compareSalesPerDept,
+};
+
+export default {
   SalesPerDeptController,
   salesPerDeptRoutes,
   SalesPerDeptService,

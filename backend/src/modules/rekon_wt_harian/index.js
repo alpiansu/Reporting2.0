@@ -1,14 +1,32 @@
 /**
  * Rekon WT Harian module index
  */
-const RekonWtHarianController = require("./rekon_wt_harian.controller");
-const rekonWtHarianRoutes = require("./rekon_wt_harian.routes");
-const RekonWtHarianService = require("./rekon_wt_harian.service");
-const RekonProgressService = require("./rekon_progress.service");
-const RekonWtHarianProgressService = require("./rekon_wt_harian_progress.service");
-const RekonWebSocketService = require("./rekon_websocket.service");
+import {
+  cleanupTempFiles,
+  startReconciliation,
+  getResults,
+  getSummary,
+  deleteResults,
+  getProgress,
+  getLatestProgress,
+} from './rekon_wt_harian.controller.js';
+import rekonWtHarianRoutes from './rekon_wt_harian.routes.js';
+import RekonWtHarianService from './rekon_wt_harian.service.js';
+import RekonProgressService from './rekon_progress.service.js';
+import RekonWtHarianProgressService from './rekon_wt_harian_progress.service.js';
+import RekonWebSocketService from './rekon_websocket.service.js';
 
-module.exports = {
+const RekonWtHarianController = {
+  cleanupTempFiles,
+  startReconciliation,
+  getResults,
+  getSummary,
+  deleteResults,
+  getProgress,
+  getLatestProgress,
+};
+
+export default {
   RekonWtHarianController,
   rekonWtHarianRoutes,
   RekonWtHarianService,

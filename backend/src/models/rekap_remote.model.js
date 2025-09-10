@@ -32,9 +32,9 @@
  *           description: Last update timestamp
  */
 
-const { DataTypes, Sequelize } = require("sequelize");
-const moment = require("moment-timezone");
-const { sequelize } = require("../config/database");
+import { DataTypes, Sequelize } from 'sequelize';
+import moment from 'moment-timezone';
+import { sequelize } from '../config/database.js';
 
 const RekapRemote = sequelize.define(
   "rekap_remote",
@@ -90,4 +90,4 @@ const RekapRemote = sequelize.define(
   }
 );
 
-module.exports = RekapRemote;
+export default RekapRemote;

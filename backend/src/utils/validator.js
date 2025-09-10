@@ -71,7 +71,7 @@ const validateConnectionParams = (connectionParams) => {
 
 
 
-module.exports = {
+export default {
   isValidEmail,
   validatePassword,
   validateConnectionParams,

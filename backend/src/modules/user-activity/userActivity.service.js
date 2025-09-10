@@ -1,8 +1,8 @@
-const User = require("../../models/user.model");
-const logger = require("../../config/logger");
-const fs = require("fs");
-const path = require("path");
-const { promisify } = require("util");
+import User from '../../models/user.model.js';
+import logger from '../../config/logger.js';
+import fs from 'fs';
+import path from 'path';
+import { promisify } from 'util';
 
 /**
  * Service for handling user activity tracking
@@ -208,4 +208,4 @@ class UserActivityService {
 }
 
 // Export the class
-module.exports = UserActivityService;
+export default UserActivityService;

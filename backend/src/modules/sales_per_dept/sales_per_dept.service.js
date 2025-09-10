@@ -1,9 +1,10 @@
 /**
  * Service for sales per department data
  */
-const SalesPerDept = require("../../models/sales_per_dept.model");
-const logger = require("../../config/logger");
-const ExternalDbService = require("./external-db.service");
+import SalesPerDept from '../../models/sales_per_dept.model.js';
+import logger from '../../config/logger.js';
+import ExternalDbService from './external-db.service.js';
+import MDept from '../../models/m_dept.model.js';
 
 class SalesPerDeptService {
   /**
@@ -214,8 +215,7 @@ class SalesPerDeptService {
    */
   async updateDepartmentName(dep_kd) {
     try {
-      // Import MDept model here to avoid circular dependency
-      const MDept = require("../../models/m_dept.model");
+      // Use MDept model
       
       // Find department in m_dept table (now JSON-based)
       const department = await MDept.findByPk(dep_kd);
@@ -354,4 +354,4 @@ class SalesPerDeptService {
   }
 }
 
-module.exports = SalesPerDeptService;
+export default SalesPerDeptService;

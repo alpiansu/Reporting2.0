@@ -81,10 +81,10 @@
  *           format: date-time
  *           description: Record update time
  */
-const { DataTypes } = require("sequelize");
-const moment = require("moment-timezone");
+import { DataTypes } from 'sequelize';
+import moment from 'moment-timezone';
 const getJakartaNow = () => moment().tz("Asia/Jakarta").toDate();
-const { sequelize } = require("../config/database");
+import { sequelize } from '../config/database.js';
 
 const RekonWtHarian = sequelize.define(
   "rekon_wt_harian",
@@ -263,4 +263,4 @@ const RekonWtHarian = sequelize.define(
   }
 );
 
-module.exports = RekonWtHarian;
+export default RekonWtHarian;

@@ -1,7 +1,10 @@
-const BulananService = require("./bulanan.service");
-const WrcService = require("./wrc.service");
+import BulananService from './bulanan.service.js';
+import WrcService from './wrc.service.js';
 
-module.exports = {
+export default {
   BulananService,
   WrcService,
 };
+
+// Named exports for convenience
+export { BulananService, WrcService };

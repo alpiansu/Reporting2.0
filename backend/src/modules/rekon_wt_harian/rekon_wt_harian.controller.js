@@ -54,16 +54,16 @@ export const startReconciliation = async (req, res, next) => {
       //cleanup old temp files
       await rekonWtHarianService.cleanupTempFiles();
 
-      // Check if there is already an active reconciliation process
+      // Check if there is already any active reconciliation process
       const cabParam = cab === "SEMUA" || !cab ? "All" : cab;
-      const activeProcess = progressService.getActiveProcess(cabParam, periode);
+      const activeProcess = progressService.getAnyActiveProcess();
 
       if (activeProcess) {
         return res.status(409).json({
           success: false,
           message: `Proses rekonsiliasi untuk ${
             activeProcess.cab === "All" ? "semua cabang" : `cabang ${activeProcess.cab}`
-          } periode ${periode} sedang berjalan. Silakan tunggu hingga proses selesai.`,
+          } periode ${activeProcess.periode} sedang berjalan. Silakan tunggu hingga proses selesai.`,
           activeProcess: {
             id: activeProcess.id,
             cab: activeProcess.cab,
@@ -71,6 +71,8 @@ export const startReconciliation = async (req, res, next) => {
             status: activeProcess.status,
             percentage: activeProcess.percentage,
             startTime: activeProcess.startTime,
+            totalItems: activeProcess.totalItems || 0,
+            processedItems: activeProcess.processedItems || 0,
           },
         });
       }

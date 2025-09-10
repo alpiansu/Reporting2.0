@@ -133,6 +133,19 @@ class ProgressService {
   }
 
   /**
+   * Check if there is any active reconciliation process running
+   * @returns {Object|null} Any active process data
+   */
+  getAnyActiveProcess() {
+    for (const [progressId, progress] of this.progressMap) {
+      if (progress.status === 'running') {
+        return progress;
+      }
+    }
+    return null;
+  }
+
+  /**
    * Complete progress tracking
    * @param {string} progressId - Progress ID
    * @param {Object} finalData - Final completion data

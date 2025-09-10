@@ -1,18 +1,18 @@
 /**
  * Service for WT reconciliation
  */
-import fs from 'fs/promises';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import os from 'os';
-import logger from '../../config/logger.js';
-import dbStore from '../../config/db_store.js';
-import RekonWtHarian from '../../models/rekon_wt_harian.model.js';
-import config from '../../config/rekon_wt_harian.config.js';
-import progressService from './progress.service.js';
-import storeService from '../../modules/store/storeService.js';
-import wrcUtils from '../../utils/wrc.utils.js';
-import RekapRemoteService from '../rekap_remote/rekap_remote.service.js';
+import fs from "fs/promises";
+import path from "path";
+import { fileURLToPath } from "url";
+import os from "os";
+import logger from "../../config/logger.js";
+import dbStore from "../../config/db_store.js";
+import RekonWtHarian from "../../models/rekon_wt_harian.model.js";
+import config from "../../config/rekon_wt_harian.config.js";
+import progressService from "./progress.service.js";
+import storeService from "../../modules/store/storeService.js";
+import wrcUtils from "../../utils/wrc.utils.js";
+import RekapRemoteService from "../rekap_remote/rekap_remote.service.js";
 
 // Path untuk file JSON rekon_wt_harian
 const REKON_WT_HARIAN_JSON_PATH = path.join(process.cwd(), "data/rekon_wt_harian.json");
@@ -593,8 +593,8 @@ class RekonWtHarianService {
         // Update progress without wave information
         if (progressId) {
           const progress = progressService.getProgress(progressId);
-           if (progress) {
-             progressService.updateProgress(progressId, {
+          if (progress) {
+            progressService.updateProgress(progressId, {
               details: {
                 ...progress.details,
                 // Removed wave information
@@ -645,10 +645,6 @@ class RekonWtHarianService {
                 await RekapRemoteService.addToTemp(cab, storeResult.storeCode, "rekon_wt_harian", `${msg}`);
               }
             } else {
-              // Store completed (successfully or permanently failed)
-              completedStores.push(storeResult);
-              results.processedStores++;
-
               // Collect non-timeout errors
               if (storeResult.errors && storeResult.errors.length > 0 && !isTimeout) {
                 storeErrors.push({
@@ -656,17 +652,32 @@ class RekonWtHarianService {
                   storeName: storeResult.storeName,
                   errors: storeResult.errors,
                 });
+              } else {
+                // Store completed (successfully or permanently failed)
+                completedStores.push(storeResult);
+                results.processedStores++;
               }
 
               // Count successful differences
+              logger.debug(
+                `[Wave ${wave}] ${storeResult.storeCode}: differences found = ${
+                  storeResult.differences ? storeResult.differences.length : "undefined"
+                }`
+              );
+
               if (storeResult.differences && storeResult.differences.length > 0) {
-                results.storesWithDifferences++;
-                results.totalDifferences += storeResult.differences.length;
+                results.storesWithDifferences += 1;
+                results.totalDifferences += 1;
                 results.details.push({
                   store: storeResult.storeCode,
                   storeName: storeResult.storeName,
                   differences: storeResult.differences.length,
                 });
+                logger.info(
+                  `[Wave ${wave}] ${storeResult.storeCode}: Added ${storeResult.differences.length} differences. Total: ${results.totalDifferences}, Stores with differences: ${results.storesWithDifferences}`
+                );
+              } else {
+                logger.debug(`[Wave ${wave}] ${storeResult.storeCode}: No differences found`);
               }
             }
           } else if (result.status === "rejected") {
@@ -695,6 +706,28 @@ class RekonWtHarianService {
 
         if (timeoutStores.length > 0) {
           logger.info(`⚠️ Timeout stores in wave ${wave}: ${timeoutStores.map(s => s.storeCode).join(", ")}`);
+        }
+
+        // Update progress after each wave with current totalDifferences
+        const progressEntries = Array.from(progressService.progressMap.entries());
+        const progressEntry = progressEntries.find(
+          ([_, progress]) => progress.cab === cab && progress.periode === period && progress.status === "running"
+        );
+
+        if (progressEntry) {
+          const [progressId, progress] = progressEntry;
+          progressService.updateProgress(progressId, {
+            processedItems: results.processedStores,
+            details: {
+              ...progress.details,
+              totalDifferences: results.totalDifferences,
+              storesWithDifferences: results.storesWithDifferences,
+              currentWave: wave,
+              completedInWave: completedStores.length,
+              timeoutsInWave: timeoutStores.length,
+              errorsInWave: storeErrors.length,
+            },
+          });
         }
 
         // Prepare for next wave with timeout stores
@@ -773,6 +806,28 @@ class RekonWtHarianService {
       } catch (error) {
         logger.error(`Error saving rekap_remote logs: ${error.message}`);
         results.rekapRemoteLogError = error.message;
+      }
+
+      // Final progress update with complete results
+      const progressEntries = Array.from(progressService.progressMap.entries());
+      const progressEntry = progressEntries.find(
+        ([_, progress]) => progress.cab === cab && progress.periode === period && progress.status === "running"
+      );
+
+      if (progressEntry) {
+        const [progressId, progress] = progressEntry;
+        progressService.updateProgress(progressId, {
+          processedItems: results.processedStores,
+          details: {
+            ...progress.details,
+            totalDifferences: results.totalDifferences,
+            storesWithDifferences: results.storesWithDifferences,
+            totalStores: results.totalStores,
+            status: "completed",
+            totalDuration: totalDuration,
+            saveResult: results.saveResult,
+          },
+        });
       }
 
       return results;

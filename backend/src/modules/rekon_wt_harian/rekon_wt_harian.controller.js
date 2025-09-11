@@ -2,7 +2,7 @@
  * Controller for WT reconciliation
  */
 import rekonWtHarianService from './rekon_wt_harian.service.js';
-import progressService from './progress.service.js';
+import { ProgressHelper } from '../../services/progress/index.js';
 import logger from '../../config/logger.js';
 import config from '../../config/rekon_wt_harian.config.js';
 import storeService from '../../modules/store/storeService.js';
@@ -54,20 +54,24 @@ export const startReconciliation = async (req, res, next) => {
       //cleanup old temp files
       await rekonWtHarianService.cleanupTempFiles();
 
-      // Check if there is already any active reconciliation process
+      // Check if there's already an active process in the entire system
       const cabParam = cab === "SEMUA" || !cab ? "All" : cab;
-      const activeProcess = progressService.getAnyActiveProcess();
+      const activeProcess = ProgressHelper.hasAnyActiveProcess();
 
       if (activeProcess) {
+        // Extract cab and period from metadata
+        const activeCab = activeProcess.metadata?.cab || 'Unknown';
+        const activePeriod = activeProcess.metadata?.period || 'Unknown';
+        
         return res.status(409).json({
           success: false,
           message: `Proses rekonsiliasi untuk ${
-            activeProcess.cab === "All" ? "semua cabang" : `cabang ${activeProcess.cab}`
-          } periode ${activeProcess.periode} sedang berjalan. Silakan tunggu hingga proses selesai.`,
+            activeCab === "All" ? "semua cabang" : `cabang ${activeCab}`
+          } periode ${activePeriod} sedang berjalan. Silakan tunggu hingga proses selesai.`,
           activeProcess: {
             id: activeProcess.id,
-            cab: activeProcess.cab,
-            periode: activeProcess.periode,
+            cab: activeCab,
+            periode: activePeriod,
             status: activeProcess.status,
             percentage: activeProcess.percentage,
             startTime: activeProcess.startTime,
@@ -86,7 +90,16 @@ export const startReconciliation = async (req, res, next) => {
 
         // Count total stores across all branches instead of just branch count
         const totalStores = allStores.filter(s => s.notes === "INDUK").length;
-        const progressId = progressService.initProgress("All", periode, totalStores);
+        const progressId = ProgressHelper.start({
+          cab: "All",
+          period: periode,
+          message: `Memulai rekonsiliasi untuk semua cabang periode ${periode}`,
+          details: {
+            totalStores: totalStores,
+            branches: branches.length,
+            operation: 'reconcile_all_branches'
+          }
+        });
 
         // Start reconciliation process for all branches (non-blocking)
         // Data lama akan dihapus setelah proses rekon selesai, bukan di awal
@@ -104,7 +117,15 @@ export const startReconciliation = async (req, res, next) => {
       // Initialize progress tracking
       await storeService.ensureInitialized();
       const branchStores = await storeService.getStoresByBranch(cab, true);
-      const progressId = progressService.initProgress(cab, periode, branchStores.length);
+      const progressId = ProgressHelper.start({
+        cab: cab,
+        period: periode,
+        message: `Memulai rekonsiliasi cabang ${cab} periode ${periode}`,
+        details: {
+          totalStores: branchStores.length,
+          operation: 'reconcile_branch'
+        }
+      });
 
       // Start reconciliation process (non-blocking)
       // Data lama akan dihapus setelah proses rekon selesai, bukan di awal
@@ -252,7 +273,7 @@ export const getProgress = async (req, res, next) => {
         });
       }
 
-      const progress = progressService.getProgress(progressId);
+      const progress = ProgressHelper.getProgress(progressId);
 
       if (!progress) {
         return res.status(404).json({
@@ -289,7 +310,7 @@ export const getLatestProgress = async (req, res, next) => {
     }
 
     const cabParam = cab === "SEMUA" ? "All" : cab;
-    const progress = progressService.getLatestProgress(cabParam, periode);
+    const progress = ProgressHelper.getLatestProgress(cabParam, periode);
 
     if (!progress) {
       return res.status(404).json({

@@ -9,7 +9,7 @@ import logger from "../../config/logger.js";
 import dbStore from "../../config/db_store.js";
 import RekonWtHarian from "../../models/rekon_wt_harian.model.js";
 import config from "../../config/rekon_wt_harian.config.js";
-import progressService from "./progress.service.js";
+import { ProgressHelper } from "../../services/progress/index.js";
 import storeService from "../../modules/store/storeService.js";
 import wrcUtils from "../../utils/wrc.utils.js";
 import RekapRemoteService from "../rekap_remote/rekap_remote.service.js";
@@ -154,7 +154,18 @@ class RekonWtHarianService {
       logger.info(`Found ${branches.length} branches to process`);
 
       // Initialize progress tracking
-      const progressId = progressService.initProgress("All", period, branches.length);
+      const progressId = ProgressHelper.start({
+        processType: 'rekon_wt_harian',
+        identifier: `ALL_${period}`,
+        totalSteps: branches.length,
+        title: 'Rekon WT Harian - All Branches',
+        description: `Processing rekon for all ${branches.length} branches, period ${period}`,
+        metadata: {
+          period,
+          totalBranches: branches.length,
+          processType: 'all_branches'
+        }
+      });
       logger.info(`Initialized progress tracking with ID: ${progressId}`);
 
       const results = {
@@ -183,9 +194,14 @@ class RekonWtHarianService {
 
             // Update progress after each branch is processed
             processedCount++;
-            progressService.updateProgress(progressId, {
-              processedItems: processedCount,
-              details: { lastProcessedBranch: cab },
+            ProgressHelper.updateStep(progressId, {
+              currentStep: processedCount,
+              message: `Processed branch ${cab} (${processedCount}/${branches.length})`,
+              details: { 
+                lastProcessedBranch: cab,
+                completedBranches: processedCount,
+                remainingBranches: branches.length - processedCount
+              }
             });
 
             return result;
@@ -249,19 +265,22 @@ class RekonWtHarianService {
       results.timestamp = new Date().toISOString();
       results.period = period;
 
-      // Mark progress as completed with total store count instead of branch count
-      progressService.updateProgress(progressId, {
-        processedItems: results.totalProcessedStores,
-        completedItems: results.totalProcessedStores,
-        itemsWithDifferences: results.totalStoresWithDifferences,
-        status: "completed",
-        details: {
-          branchesWithDifferences: results.branchesWithDifferences,
-          totalDifferences: results.totalDifferences,
-          totalProcessedStores: results.totalProcessedStores,
-        },
-        message: `Rekonsiliasi selesai: ${results.totalProcessedStores} toko diproses, ${results.totalStoresWithDifferences} toko memiliki perbedaan`,
-      });
+      // Mark progress as completed
+      ProgressHelper.complete(
+        progressId,
+        `Rekonsiliasi selesai: ${results.totalProcessedStores} toko diproses, ${results.totalStoresWithDifferences} toko memiliki perbedaan`,
+        {
+          details: {
+            totalBranches: results.processedBranches,
+            branchesWithDifferences: results.branchesWithDifferences,
+            totalProcessedStores: results.totalProcessedStores,
+            totalStoresWithDifferences: results.totalStoresWithDifferences,
+            totalDifferences: results.totalDifferences,
+            period: period,
+            completedAt: new Date().toISOString()
+          }
+        }
+      );
 
       logger.info(`Completed processing ${results.processedBranches}/${results.totalBranches} branches`);
       return results;
@@ -270,9 +289,11 @@ class RekonWtHarianService {
 
       // Mark progress as failed
       if (progressId) {
-        progressService.updateProgress(progressId, {
-          status: "failed",
-          errors: [error.message],
+        ProgressHelper.fail(progressId, error.message, {
+          errorType: error.name,
+          stack: error.stack,
+          period: period,
+          failedAt: new Date().toISOString()
         });
       }
 
@@ -318,9 +339,14 @@ class RekonWtHarianService {
       logger.info(`Started non-blocking reconciliation for all branches with progress ID: ${progressId}`);
     } catch (error) {
       logger.error(`Error starting non-blocking reconciliation: ${error.message}`);
-      progressService.updateProgress(progressId, {
-        status: "failed",
-        errors: [error.message],
+      ProgressHelper.fail(progressId, {
+        errorType: "reconciliation_error",
+        message: error.message,
+        stack: error.stack,
+        details: {
+          operation: "reconcileAllBranchesWithProgress",
+          failedAt: new Date().toISOString()
+        }
       });
     }
   }
@@ -341,15 +367,15 @@ class RekonWtHarianService {
           const totalStores = branchStores.length;
 
           // Inisialisasi progress dengan nilai awal yang benar
-          progressService.updateProgress(progressId, {
-            totalItems: totalStores,
-            processedItems: 0,
-            percentage: 0, // Explicitly set initial percentage to 0
+          ProgressHelper.updateStep(progressId, {
+            currentStep: 0,
             message: `Memulai proses rekonsiliasi untuk ${totalStores} toko`,
             details: {
               totalStores: totalStores,
               processedStores: 0,
-            },
+              cab: cab,
+              period: period
+            }
           });
 
           // Log initialization with explicit percentage
@@ -367,17 +393,17 @@ class RekonWtHarianService {
             const percentage = totalStores > 0 ? Math.round((processedStores / totalStores) * 100) : 0;
 
             // Update progress even if no new stores have been processed
-            progressService.updateProgress(progressId, {
-              processedItems: processedStores,
-              totalItems: totalStores,
-              percentage: percentage, // Explicitly set percentage
+            ProgressHelper.updateStep(progressId, {
+              currentStep: processedStores,
               message: `Memproses toko: ${processedStores}/${totalStores} (${percentage}%)`,
               details: {
                 currentProgress: `${processedStores}/${totalStores} toko`,
                 percentage: percentage,
                 storesWithDifferences: storesWithDifferences,
                 totalDifferences: totalDifferences,
-              },
+                cab: cab,
+                period: period
+              }
             });
 
             logger.debug(`Progress update: ${processedStores}/${totalStores} stores processed (${percentage}%)`);
@@ -407,10 +433,8 @@ class RekonWtHarianService {
             const percentage = totalStores > 0 ? Math.round((processedStores / totalStores) * 100) : 0;
 
             // Update progress immediately for each store
-            progressService.updateProgress(progressId, {
-              processedItems: processedStores,
-              totalItems: totalStores,
-              percentage: percentage, // Explicitly set percentage
+            ProgressHelper.updateStep(progressId, {
+              currentStep: processedStores,
               message: `Memproses toko: ${processedStores}/${totalStores} (${percentage}%)`,
               details: {
                 currentStore: store.storeCode,
@@ -418,7 +442,9 @@ class RekonWtHarianService {
                 percentage: percentage,
                 storesWithDifferences: storesWithDifferences,
                 totalDifferences: totalDifferences,
-              },
+                cab: cab,
+                period: period
+              }
             });
 
             // Log detailed progress information
@@ -443,23 +469,22 @@ class RekonWtHarianService {
           await this.syncToJsonFile();
 
           // Final progress update
-          progressService.updateProgress(progressId, {
-            processedItems: totalStores,
-            totalItems: totalStores,
-            completedItems: totalStores,
-            percentage: 100, // Explicitly set to 100% when completed
-            status: "completed",
-            message: `Rekonsiliasi selesai: ${result.storesWithDifferences} dari ${totalStores} toko memiliki perbedaan`,
-            details: {
-              storesWithDifferences: result.storesWithDifferences,
-              totalDifferences: result.totalDifferences,
-              percentage: 100,
-              completed: true,
-              // Include wave information in final update
-              totalWaves: result.waves ? result.waves.length : 1,
-              waveDetails: result.waves || [],
-            },
-          });
+          ProgressHelper.complete(
+            progressId, 
+            `Rekonsiliasi selesai: ${result.storesWithDifferences} dari ${totalStores} toko memiliki perbedaan`,
+            {
+              details: {
+                totalStores: totalStores,
+                storesWithDifferences: result.storesWithDifferences,
+                totalDifferences: result.totalDifferences,
+                totalWaves: result.waves ? result.waves.length : 1,
+                waveDetails: result.waves || [],
+                cab: cab,
+                period: period,
+                completedAt: new Date().toISOString()
+              }
+            }
+          );
 
           // Log final progress
           logger.info(`Reconciliation completed for ${cab}: ${totalStores}/${totalStores} stores processed (100%)`);
@@ -469,10 +494,16 @@ class RekonWtHarianService {
           );
         } catch (error) {
           logger.error(`Error in background reconciliation: ${error.message}`);
-          progressService.updateProgress(progressId, {
-            status: "failed",
-            message: `Error: ${error.message}`,
-            errors: [error.message],
+          ProgressHelper.fail(progressId, {
+            errorType: "reconciliation_error",
+            message: error.message,
+            stack: error.stack,
+            details: {
+              operation: "reconcileDataWithProgress",
+              cab: cab,
+              period: period,
+              failedAt: new Date().toISOString()
+            }
           });
         }
       }, 0);
@@ -480,10 +511,16 @@ class RekonWtHarianService {
       logger.info(`Started non-blocking reconciliation for branch ${cab} with progress ID: ${progressId}`);
     } catch (error) {
       logger.error(`Error starting non-blocking reconciliation: ${error.message}`);
-      progressService.updateProgress(progressId, {
-        status: "failed",
-        message: `Error: ${error.message}`,
-        errors: [error.message],
+      ProgressHelper.fail(progressId, {
+        errorType: "reconciliation_startup_error",
+        message: error.message,
+        stack: error.stack,
+        details: {
+          operation: "reconcileDataWithProgress_startup",
+          cab: cab,
+          period: period,
+          failedAt: new Date().toISOString()
+        }
       });
     }
   }
@@ -596,14 +633,18 @@ class RekonWtHarianService {
 
         // Update progress without wave information
         if (progressId) {
-          const progress = progressService.getProgress(progressId);
+          const progress = ProgressHelper.getProgress(progressId);
           if (progress) {
-            progressService.updateProgress(progressId, {
+            ProgressHelper.updateStep(progressId, {
+              currentStep: branchStores.length - currentStores.length,
+              message: `Wave ${wave}: Memproses ${currentStores.length} toko`,
               details: {
                 ...progress.details,
-                // Removed wave information
+                currentWave: wave,
                 storeProgress: `${currentStores.length} toko`,
-              },
+                cab: cab,
+                period: period
+              }
             });
           }
         }
@@ -713,24 +754,22 @@ class RekonWtHarianService {
         }
 
         // Update progress after each wave with current totalDifferences
-        const progressEntries = Array.from(progressService.progressMap.entries());
-        const progressEntry = progressEntries.find(
-          ([_, progress]) => progress.cab === cab && progress.periode === period && progress.status === "running"
-        );
-
-        if (progressEntry) {
-          const [progressId, progress] = progressEntry;
-          progressService.updateProgress(progressId, {
-            processedItems: results.processedStores,
+        const activeProcess = ProgressHelper.getActiveProcess(cab, period);
+        
+        if (activeProcess) {
+          ProgressHelper.updateStep(activeProcess.id, {
+            currentStep: results.processedStores,
+            message: `Wave ${wave} selesai: ${completedStores.length} berhasil, ${timeoutStores.length} timeout`,
             details: {
-              ...progress.details,
               totalDifferences: results.totalDifferences,
               storesWithDifferences: results.storesWithDifferences,
               currentWave: wave,
               completedInWave: completedStores.length,
               timeoutsInWave: timeoutStores.length,
               errorsInWave: storeErrors.length,
-            },
+              cab: cab,
+              period: period
+            }
           });
         }
 
@@ -813,24 +852,21 @@ class RekonWtHarianService {
       }
 
       // Final progress update with complete results
-      const progressEntries = Array.from(progressService.progressMap.entries());
-      const progressEntry = progressEntries.find(
-        ([_, progress]) => progress.cab === cab && progress.periode === period && progress.status === "running"
-      );
-
-      if (progressEntry) {
-        const [progressId, progress] = progressEntry;
-        progressService.updateProgress(progressId, {
-          processedItems: results.processedStores,
+      const activeProcess = ProgressHelper.getActiveProcess(cab, period);
+      
+      if (activeProcess) {
+        ProgressHelper.updateStep(activeProcess.id, {
+          currentStep: results.processedStores,
+          message: `Rekonsiliasi selesai untuk ${cab}`,
           details: {
-            ...progress.details,
             totalDifferences: results.totalDifferences,
             storesWithDifferences: results.storesWithDifferences,
             totalStores: results.totalStores,
-            status: "completed",
             totalDuration: totalDuration,
             saveResult: results.saveResult,
-          },
+            cab: cab,
+            period: period
+          }
         });
       }
 
@@ -904,21 +940,18 @@ class RekonWtHarianService {
     logger.info(`[Wave ${waveNumber}] [${storeCode}] Starting processing...`);
 
     // Update progress to show current store being processed
-    // Find the progress ID for this branch and period
-    const progressEntries = Array.from(progressService.progressMap.entries());
-    const progressEntry = progressEntries.find(
-      ([_, progress]) => progress.cab === cab && progress.periode === period && progress.status === "running"
-    );
-
-    if (progressEntry) {
-      const [progressId, progress] = progressEntry;
-      progressService.updateProgress(progressId, {
+    const activeProcess = ProgressHelper.getActiveProcess(cab, period);
+    
+    if (activeProcess) {
+      ProgressHelper.updateStep(activeProcess.id, {
+        message: `[Wave ${waveNumber}] Memproses toko ${storeCode}`,
         details: {
-          ...progress.details,
           currentStore: storeCode,
           currentStoreName: store.storeName,
-          // Removed wave information
-        },
+          currentWave: waveNumber,
+          cab: cab,
+          period: period
+        }
       });
     }
 

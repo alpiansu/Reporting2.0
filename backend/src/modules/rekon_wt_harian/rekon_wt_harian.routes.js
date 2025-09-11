@@ -70,73 +70,7 @@ router.get(
   rekonWtHarianController.cleanupTempFiles
 );
 
-// SSE endpoint for progress updates
-// GET /api/rekon-wt-harian/sse/progress-updates/:progressId
-// Access: Private
-import progressService from './progress.service.js';
-
-// Custom authentication middleware for SSE
-const authenticateSSE = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader && authHeader.split(" ")[1];
-
-  if (!token) {
-    res.status(401);
-    res.write(`data: ${JSON.stringify({ error: "Access token required" })}\n\n`);
-    return res.end();
-  }
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (error) {
-    res.status(401);
-    res.write(`data: ${JSON.stringify({ error: "Invalid or expired token" })}\n\n`);
-    return res.end();
-  }
-};
-
-// SSE endpoint for real-time progress updates
-router.get("/sse/progress-updates/:progressId", authenticateSSE, (req, res) => {
-  const progressId = req.params.progressId;
-
-  // Set headers untuk SSE
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.flushHeaders();
-
-  // Kirim event awal
-  res.write(`data: ${JSON.stringify({ type: "connected", progressId })}\n\n`);
-  
-  // Implement heartbeat to keep connection alive
-  const heartbeatInterval = setInterval(() => {
-    res.write(":heartbeat\n\n");
-  }, 30000); // Send heartbeat every 30 seconds
-
-  // Simpan connection
-  const clientId = `client-${Date.now()}`;
-  progressService.clients.set(clientId, {
-    id: clientId,
-    response: res,
-    subscriptions: new Set([progressId]),
-    connectedAt: Date.now(),
-    heartbeatInterval: heartbeatInterval
-  });
-
-  // Subscribe ke progress events
-  progressService.subscribeToProgress(clientId, progressId);
-
-  // Handle client disconnect
-  req.on("close", () => {
-    // Clear heartbeat interval when client disconnects
-    if (progressService.clients.get(clientId)?.heartbeatInterval) {
-      clearInterval(progressService.clients.get(clientId).heartbeatInterval);
-    }
-    progressService.clients.delete(clientId);
-  });
-});
+// SSE endpoint has been moved to /api/progress/sse/:progressId
+// Use the global progress routes instead of module-specific SSE
 
 export default router;

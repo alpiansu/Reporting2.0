@@ -56,6 +56,7 @@
       <!-- Progress Bar Component -->
       <ProgressBar 
         :visible="showProgressBar"
+        :title="progressTitle"
         :status="progressStatus"
         :processed="processedItems"
         :total="totalItems"
@@ -118,6 +119,7 @@ const maxWaves = ref(1);
 const currentBranch = ref('');
 const currentItem = ref('');
 const progressPercentage = ref(0);
+const progressTitle = ref('Proses Rekonsiliasi WT Harian');
 
 // Confirm dialog variables
 const showConfirmDialog = ref(false);
@@ -278,6 +280,11 @@ const startReconciliation = async () => {
     timeElapsed.value = 0;
     progressMessage.value = 'Memulai proses rekonsiliasi...';
     
+    // Set progress title with branch and period information
+    const cabangText = formData.cab === 'All' ? 'Semua Cabang' : `Cabang ${formData.cab}`;
+    const periodeText = formData.periode ? `Periode ${formData.periode}` : '';
+    progressTitle.value = `Rekonsiliasi WT Harian - ${cabangText} ${periodeText}`.trim();
+    
     // Start timer for elapsed time
     startProgressTimer();
     
@@ -307,8 +314,12 @@ const startReconciliation = async () => {
     if (error.response && error.response.status === 409) {
       const activeProcess = error.response.data.activeProcess;
       
+      // Extract metadata with fallback values
+      const activeCab = activeProcess.metadata?.cab || activeProcess.cab || 'Unknown';
+      const activePeriode = activeProcess.metadata?.period || activeProcess.periode || 'Unknown';
+      
       // Show more detailed error message
-      progressMessage.value = `Proses rekonsiliasi untuk ${activeProcess.cab === 'All' ? 'semua cabang' : `cabang ${activeProcess.cab}`} periode ${activeProcess.periode} sedang berjalan.`;
+      progressMessage.value = `Proses rekonsiliasi untuk ${activeCab === 'All' ? 'semua cabang' : `cabang ${activeCab}`} periode ${activePeriode} sedang berjalan.`;
       
       // If we have an active process ID, we can connect to it
       if (activeProcess && activeProcess.id) {
@@ -399,15 +410,22 @@ const handleProgressUpdate = (data) => {
     
     // Add wave and branch information if available
     if (progressData.details) {
-      // Tampilkan informasi cabang yang sedang direkon (cabang tertentu atau semua cabang)
-      const cabangInfo = formData.cab === 'All' ? 'SEMUA CABANG' : `Cabang: ${formData.cab}`;
+      // Determine current branch being processed from progress data
+      let currentProcessingBranch = '';
+      if (progressData.details.cab) {
+        currentProcessingBranch = progressData.details.cab;
+      } else if (progressData.details.currentBranch) {
+        currentProcessingBranch = progressData.details.currentBranch;
+      }
       
-      // If we have a current branch being processed
-      if (progressData.details.currentBranch) {
+      // Show information about which branch is currently being processed
+      if (currentProcessingBranch) {
         if (!detailMessage) {
-          detailMessage = `Rekonsiliasi ${cabangInfo}, memproses cabang: ${progressData.details.currentBranch}`;
+          detailMessage = `Memproses cabang: ${currentProcessingBranch}`;
         }
       } else {
+        // Fallback to selected branch info only if no current processing branch
+        const cabangInfo = formData.cab === 'All' ? 'SEMUA CABANG' : `Cabang: ${formData.cab}`;
         if (!detailMessage) {
           detailMessage = `Rekonsiliasi ${cabangInfo}`;
         }
@@ -439,8 +457,37 @@ const handleProgressUpdate = (data) => {
     // Update wave and branch information
     currentWave.value = progressData.currentWave || 1;
     maxWaves.value = progressData.maxWaves || 1;
-    currentBranch.value = progressData.currentBranch || '';
-    currentItem.value = progressData.currentItem || '';
+    
+    // Set current branch information
+    if (progressData.details && progressData.details.cab) {
+      // Backend sends current branch in details.cab
+      currentBranch.value = progressData.details.cab;
+    } else if (progressData.details && progressData.details.currentBranch) {
+      currentBranch.value = progressData.details.currentBranch;
+    } else if (progressData.currentBranch) {
+      currentBranch.value = progressData.currentBranch;
+    } else {
+      // If no specific branch is being processed, show the selected branch
+      currentBranch.value = formData.cab === 'All' ? 'Semua Cabang' : formData.cab;
+    }
+    
+    // Update progress title dynamically based on current branch being processed
+    if (currentBranch.value && currentBranch.value !== 'Semua Cabang') {
+      const cabangText = `Cabang ${currentBranch.value}`;
+      const periodeText = formData.periode ? `Periode ${formData.periode}` : '';
+      progressTitle.value = `Rekonsiliasi WT Harian - ${cabangText} ${periodeText}`.trim();
+    }
+    
+    // Set current item information (store being processed)
+    if (progressData.details && progressData.details.currentStore) {
+      currentItem.value = progressData.details.currentStore;
+    } else if (progressData.currentItem) {
+      currentItem.value = progressData.currentItem;
+    } else if (progressData.details && progressData.details.storeProgress) {
+      currentItem.value = progressData.details.storeProgress;
+    } else {
+      currentItem.value = '';
+    }
     
     // Update progress percentage
     progressPercentage.value = progressData.percentage !== undefined ? progressData.percentage : 
@@ -543,6 +590,29 @@ const checkExistingReconciliation = async () => {
       progressStatus.value = response.data.status;
       processedItems.value = response.data.processedItems || 0;
       totalItems.value = response.data.totalItems || 0;
+      
+      // Set progress title with branch and period information from progress data
+      let cabangText = '';
+      if (response.data.details && response.data.details.cab) {
+        cabangText = response.data.details.cab === 'All' ? 'Semua Cabang' : `Cabang ${response.data.details.cab}`;
+      } else if (response.data.details && response.data.details.currentBranch) {
+        cabangText = `Cabang ${response.data.details.currentBranch}`;
+      } else {
+        // Fallback to form data only if no progress data available
+        cabangText = formData.cab === 'All' ? 'Semua Cabang' : `Cabang ${formData.cab}`;
+      }
+      const periodeText = formData.periode ? `Periode ${formData.periode}` : '';
+      progressTitle.value = `Rekonsiliasi WT Harian - ${cabangText} ${periodeText}`.trim();
+      
+      // Set current branch information
+       if (response.data.details && response.data.details.cab) {
+         // Backend sends current branch in details.cab
+         currentBranch.value = response.data.details.cab;
+       } else if (response.data.details && response.data.details.currentBranch) {
+         currentBranch.value = response.data.details.currentBranch;
+       } else {
+         currentBranch.value = formData.cab === 'All' ? 'Semua Cabang' : formData.cab;
+       }
       
       // Update differences count if available
       if (response.data.details) {

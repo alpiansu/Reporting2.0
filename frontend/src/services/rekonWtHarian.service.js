@@ -31,8 +31,8 @@ export default {
     // Get auth token
     const token = localStorage.getItem("token");
 
-    // Create SSE connection with authorization header
-    const sseUrl = `${apiUrl}/rekon-wt-harian/sse/progress-updates/${progressId}`;
+    // Create SSE connection with authorization header using global progress routes
+    const sseUrl = `${apiUrl}/progress/sse/${progressId}`;
     const eventSource = new EventSourcePolyfill(sseUrl, {
       headers: {
         Authorization: `Bearer ${token}`,

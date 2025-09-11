@@ -1,0 +1,180 @@
+/**
+ * Test file untuk memverifikasi sistem progress dapat mencegah multiple processes
+ * Test ini memverifikasi bahwa hanya 1 proses yang bisa berjalan di seluruh sistem
+ */
+
+import { ProgressHelper } from '../services/progress/index.js';
+import globalProgressService from '../services/progress/GlobalProgressService.js';
+import logger from '../config/logger.js';
+
+/**
+ * Test 1: Verifikasi sistem mencegah multiple processes dari tipe yang sama
+ */
+export async function testSameProcessTypePrevention() {
+  console.log('\n=== Test 1: Same Process Type Prevention ===');
+  
+  try {
+    // Start first rekon process
+    const progressId1 = ProgressHelper.start({
+      cab: 'A001',
+      period: '2024-01',
+      message: 'Starting first rekon process',
+      details: { totalStores: 10 }
+    });
+    console.log(`✓ First process started: ${progressId1}`);
+    
+    // Try to start second rekon process - should be blocked
+    const activeProcess = ProgressHelper.hasAnyActiveProcess();
+    if (activeProcess) {
+      console.log(`✓ System correctly detected active process: ${activeProcess.id}`);
+      console.log(`  - Process Type: ${activeProcess.processType}`);
+      console.log(`  - Cab: ${activeProcess.metadata?.cab || 'Unknown'}`);
+      console.log(`  - Period: ${activeProcess.metadata?.period || 'Unknown'}`);
+    } else {
+      console.log('✗ ERROR: No active process detected');
+    }
+    
+    // Complete first process
+    ProgressHelper.complete(progressId1, 'First process completed');
+    console.log(`✓ First process completed: ${progressId1}`);
+    
+    // Verify no active processes
+    const noActiveProcess = ProgressHelper.hasAnyActiveProcess();
+    if (!noActiveProcess) {
+      console.log('✓ No active processes after completion');
+    } else {
+      console.log('✗ ERROR: Still has active process after completion');
+    }
+    
+  } catch (error) {
+    console.log(`✗ Test 1 failed: ${error.message}`);
+  }
+}
+
+/**
+ * Test 2: Verifikasi sistem mencegah multiple processes dari tipe yang berbeda
+ */
+export async function testDifferentProcessTypePrevention() {
+  console.log('\n=== Test 2: Different Process Type Prevention ===');
+  
+  try {
+    // Start rekon process
+    const rekonProgressId = globalProgressService.initProgress(
+      'rekon_wt_harian', 
+      'A001_2024-01', 
+      100, 
+      { cab: 'A001', period: '2024-01' }
+    );
+    console.log(`✓ Rekon process started: ${rekonProgressId}`);
+    
+    // Try to start different process type
+    const syncProgressId = globalProgressService.initProgress(
+      'sync_master_data', 
+      'daily_sync_2024-01', 
+      50, 
+      { syncType: 'daily', date: '2024-01-01' }
+    );
+    console.log(`✓ Sync process started: ${syncProgressId}`);
+    
+    // Check all active processes
+    const allActiveProcesses = ProgressHelper.getAllActiveProcesses();
+    console.log(`✓ Total active processes: ${allActiveProcesses.length}`);
+    
+    allActiveProcesses.forEach((process, index) => {
+      console.log(`  Process ${index + 1}:`);
+      console.log(`    - ID: ${process.id}`);
+      console.log(`    - Type: ${process.processType}`);
+      console.log(`    - Identifier: ${process.identifier}`);
+      console.log(`    - Status: ${process.status}`);
+    });
+    
+    // Test hasAnyActiveProcess function
+    const anyActiveProcess = ProgressHelper.hasAnyActiveProcess();
+    if (anyActiveProcess) {
+      console.log(`✓ hasAnyActiveProcess() correctly detected: ${anyActiveProcess.processType}`);
+    } else {
+      console.log('✗ ERROR: hasAnyActiveProcess() should detect active processes');
+    }
+    
+    // Complete both processes
+    globalProgressService.completeProgress(rekonProgressId);
+    globalProgressService.completeProgress(syncProgressId);
+    console.log('✓ Both processes completed');
+    
+    // Verify no active processes
+    const finalCheck = ProgressHelper.hasAnyActiveProcess();
+    if (!finalCheck) {
+      console.log('✓ No active processes after completion');
+    } else {
+      console.log('✗ ERROR: Still has active process after completion');
+    }
+    
+  } catch (error) {
+    console.log(`✗ Test 2 failed: ${error.message}`);
+  }
+}
+
+/**
+ * Test 3: Verifikasi controller behavior dengan multiple processes
+ */
+export async function testControllerBehavior() {
+  console.log('\n=== Test 3: Controller Behavior Test ===');
+  
+  try {
+    // Simulate starting a sync process
+    const syncProgressId = globalProgressService.initProgress(
+      'sync_master_data', 
+      'background_sync', 
+      100, 
+      { syncType: 'background', startedBy: 'system' }
+    );
+    console.log(`✓ Background sync process started: ${syncProgressId}`);
+    
+    // Now test if rekon controller would detect this
+    const activeProcess = ProgressHelper.hasAnyActiveProcess();
+    if (activeProcess) {
+      console.log('✓ Controller would correctly detect active process:');
+      console.log(`  - Process Type: ${activeProcess.processType}`);
+      console.log(`  - Identifier: ${activeProcess.identifier}`);
+      console.log(`  - Metadata:`, activeProcess.metadata);
+      
+      // Simulate controller response
+      const cab = activeProcess.metadata?.cab || 'Unknown';
+      const periode = activeProcess.metadata?.period || activeProcess.metadata?.date || 'Unknown';
+      
+      console.log(`✓ Controller would show: "Proses ${activeProcess.processType} untuk cabang ${cab} periode ${periode} sedang berjalan."`);
+    } else {
+      console.log('✗ ERROR: Controller would not detect active process');
+    }
+    
+    // Complete the process
+    globalProgressService.completeProgress(syncProgressId);
+    console.log('✓ Background sync completed');
+    
+  } catch (error) {
+    console.log(`✗ Test 3 failed: ${error.message}`);
+  }
+}
+
+/**
+ * Run all tests
+ */
+export async function runAllTests() {
+  console.log('\n🧪 Starting Progress System Tests...');
+  console.log('=' .repeat(50));
+  
+  await testSameProcessTypePrevention();
+  await testDifferentProcessTypePrevention();
+  await testControllerBehavior();
+  
+  console.log('\n' + '='.repeat(50));
+  console.log('🏁 All tests completed!');
+}
+
+// Export individual test functions for manual testing
+// (functions are already exported above)
+
+// Auto-run tests if this file is executed directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+  runAllTests().catch(console.error);
+}

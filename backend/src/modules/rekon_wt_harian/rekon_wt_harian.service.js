@@ -13,6 +13,7 @@ import progressService from "./progress.service.js";
 import storeService from "../../modules/store/storeService.js";
 import wrcUtils from "../../utils/wrc.utils.js";
 import RekapRemoteService from "../rekap_remote/rekap_remote.service.js";
+import { exit } from "process";
 
 // Path untuk file JSON rekon_wt_harian
 const REKON_WT_HARIAN_JSON_PATH = path.join(process.cwd(), "data/rekon_wt_harian.json");
@@ -391,7 +392,10 @@ class RekonWtHarianService {
             const result = await originalProcessStore.apply(this, [store, cab, period, wrcData]);
 
             // Update progress tracking variables
-            processedStores++;
+            if (result && result.errors.length == 0) {
+              processedStores++;
+            }
+            logger.info(`Store ${store.storeCode} processed with differences result:`, result.length);
 
             // Update differences if any
             if (result && result.differences && result.differences.length > 0) {
@@ -667,7 +671,7 @@ class RekonWtHarianService {
 
               if (storeResult.differences && storeResult.differences.length > 0) {
                 results.storesWithDifferences += 1;
-                results.totalDifferences += 1;
+                results.totalDifferences += storeResult.differences.length;
                 results.details.push({
                   store: storeResult.storeCode,
                   storeName: storeResult.storeName,
@@ -1726,9 +1730,7 @@ class RekonWtHarianService {
           // Simpan ke file temporary
           await fs.writeFile(tempFile, JSON.stringify(differences));
 
-          logger.info(
-            `[${storeCode}] Saved ${differences.length} differences to temporary file (total: ${allDifferences.length})`
-          );
+          logger.info(`[${storeCode}] Saved ${differences.length} differences to temporary file`);
 
           return differences;
         } catch (error) {

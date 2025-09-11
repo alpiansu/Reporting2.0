@@ -1,6 +1,6 @@
 import app from './app.js';
 import http from 'http';
-import { sequelize } from './models/index.js';
+import { getSequelizeConnection, closeSequelizeConnection } from './models/index.js';
 import config from './config/index.js';
 import logger from './config/logger.js';
 import User from './models/user.model.js';
@@ -40,21 +40,26 @@ async function createDummyUser() {
 // Start server
 async function startServer() {
   try {
-    // Connect to database
-    await sequelize.authenticate();
-    logger.info("Database connection established successfully");
+    // Try to connect to database (optional for resilient mode)
+    try {
+      const sequelize = await getSequelizeConnection();
+      logger.info("Database connection established successfully");
 
-    // Sync database models (in development only)
-    if (config.nodeEnv === "development") {
-      // Cek dan buat tabel jika belum ada, alter hanya jika field belum ada atau tidak sesuai
-      await sequelize.sync({ alter: false }); // Hanya create table jika belum ada
-      // Untuk alter, lakukan manual jika ada perubahan model
-      // Contoh: await sequelize.getQueryInterface().addColumn('users', 'fieldBaru', { type: Sequelize.STRING });
-      logger.info("Database models checked/created (no global alter)");
+      // Sync database models (in development only)
+      if (config.nodeEnv === "development") {
+        // Cek dan buat tabel jika belum ada, alter hanya jika field belum ada atau tidak sesuai
+        await sequelize.sync({ alter: false }); // Hanya create table jika belum ada
+        // Untuk alter, lakukan manual jika ada perubahan model
+        // Contoh: await sequelize.getQueryInterface().addColumn('users', 'fieldBaru', { type: Sequelize.STRING });
+        logger.info("Database models checked/created (no global alter)");
+      }
+
+      // Create dummy user
+      await createDummyUser();
+    } catch (dbError) {
+      logger.warn(`Database connection failed: ${dbError.message}`);
+      logger.info('Server will start in offline mode with limited functionality');
     }
-
-    // Create dummy user
-    await createDummyUser();
 
     // Store service and scheduler are now initialized in app.js through modules
     logger.info("Services initialized through module system");

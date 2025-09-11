@@ -84,9 +84,15 @@
 import { DataTypes } from 'sequelize';
 import moment from 'moment-timezone';
 const getJakartaNow = () => moment().tz("Asia/Jakarta").toDate();
-import { sequelize } from '../config/database.js';
+import { getSequelizeConnection } from '../config/database.js';
 
-const RekonWtHarian = sequelize.define(
+// Lazy model definition
+let RekonWtHarian = null;
+
+const getRekonWtHarianModel = async () => {
+  if (!RekonWtHarian) {
+    const sequelize = await getSequelizeConnection();
+    RekonWtHarian = sequelize.define(
   "rekon_wt_harian",
   {
     recid: {
@@ -262,5 +268,52 @@ const RekonWtHarian = sequelize.define(
     ],
   }
 );
+  }
+  return RekonWtHarian;
+};
 
-export default RekonWtHarian;
+// Export wrapper that handles lazy loading
+const RekonWtHarianWrapper = {
+  async findAll(options) {
+    const model = await getRekonWtHarianModel();
+    return model.findAll(options);
+  },
+  async findOne(options) {
+    const model = await getRekonWtHarianModel();
+    return model.findOne(options);
+  },
+  async findByPk(id, options) {
+    const model = await getRekonWtHarianModel();
+    return model.findByPk(id, options);
+  },
+  async create(data) {
+    const model = await getRekonWtHarianModel();
+    return model.create(data);
+  },
+  async update(data, options) {
+    const model = await getRekonWtHarianModel();
+    return model.update(data, options);
+  },
+  async destroy(options) {
+    const model = await getRekonWtHarianModel();
+    return model.destroy(options);
+  },
+  async count(options) {
+    const model = await getRekonWtHarianModel();
+    return model.count(options);
+  },
+  async bulkCreate(data, options) {
+    const model = await getRekonWtHarianModel();
+    return model.bulkCreate(data, options);
+  },
+  async upsert(data, options) {
+    const model = await getRekonWtHarianModel();
+    return model.upsert(data, options);
+  },
+  async findOrCreate(options) {
+    const model = await getRekonWtHarianModel();
+    return model.findOrCreate(options);
+  }
+};
+
+export default RekonWtHarianWrapper;

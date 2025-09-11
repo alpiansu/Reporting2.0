@@ -5,8 +5,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import routes from './routes/index.js';
 import modules from './modules/index.js';
-import { requestLogger, errorHandler, notFound } from './middlewares/index.js';
+import { requestLogger, errorHandler, notFound, databaseErrorHandler, addDatabaseStatus } from './middlewares/index.js';
 import config from './config/index.js';
+import resilientDb from './config/resilient-database.js';
 
 // Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -38,6 +39,12 @@ app.use(express.urlencoded({ extended: true }));
 // Request logging middleware
 app.use(requestLogger);
 
+// Database status middleware
+app.use(addDatabaseStatus);
+
+// Initialize resilient database
+resilientDb.initialize();
+
 // Initialize modules
 const initializedModules = modules.initialize(app);
 
@@ -46,6 +53,9 @@ app.use(routes);
 
 // 404 handler
 app.use(notFound);
+
+// Database error handler (before general error handler)
+app.use(databaseErrorHandler);
 
 // Error handler
 app.use(errorHandler);

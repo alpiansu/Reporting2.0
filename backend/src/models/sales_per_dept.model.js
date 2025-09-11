@@ -1,7 +1,15 @@
 import { DataTypes } from 'sequelize';
-import { sequelize } from '../config/database.js';
+import { getSequelizeConnection } from '../config/database.js';
+import { BaseService } from '../services/base.service.js';
+import salesPerDeptStagingService from '../modules/sales_per_dept/sales_per_dept_staging.service.js';
 
-const SalesPerDept = sequelize.define(
+// Lazy model definition
+let SalesPerDept = null;
+
+const getSalesPerDeptModel = async () => {
+  if (!SalesPerDept) {
+    const sequelize = await getSequelizeConnection();
+    SalesPerDept = sequelize.define(
   "SalesPerDept",
   {
     cab: {
@@ -75,5 +83,166 @@ const SalesPerDept = sequelize.define(
     underscored: true,
   }
 );
+  }
+  return SalesPerDept;
+};
 
-export default SalesPerDept;
+// Export wrapper that handles lazy loading with fallback to staging
+class SalesPerDeptWrapper extends BaseService {
+  async findAll(options = {}) {
+    return await this.executeWithFallback(
+      async () => {
+        const model = await getSalesPerDeptModel();
+        return await model.findAll(options);
+      },
+      null,
+      'sales_per_dept_findall'
+    ).catch(async () => {
+      // Fallback to staging service
+      const filters = this.extractFilters(options);
+      const result = await salesPerDeptStagingService.getSalesData(filters, options.limit, options.offset);
+      return result.data;
+    });
+  }
+
+  async findOne(options = {}) {
+    return await this.executeWithFallback(
+      async () => {
+        const model = await getSalesPerDeptModel();
+        return await model.findOne(options);
+      },
+      null,
+      'sales_per_dept_findone'
+    ).catch(async () => {
+      // Fallback to staging service
+      const filters = this.extractFilters(options);
+      const result = await salesPerDeptStagingService.getSalesData(filters, 1, 0);
+      return result.data[0] || null;
+    });
+  }
+
+  async findByPk(id, options = {}) {
+    return await this.executeWithFallback(
+      async () => {
+        const model = await getSalesPerDeptModel();
+        return await model.findByPk(id, options);
+      },
+      null,
+      `sales_per_dept_findpk_${id}`
+    ).catch(() => {
+      // For composite primary key, fallback is complex
+      return null;
+    });
+  }
+
+  async create(data) {
+    const result = await this.executeWriteOperation(async () => {
+      const model = await getSalesPerDeptModel();
+      return await model.create(data);
+    });
+    
+    // Sync to JSON file after database operation
+    try {
+      await salesPerDeptStagingService.syncToJsonFile();
+    } catch (syncError) {
+      console.warn('Failed to sync to JSON after create:', syncError.message);
+    }
+    
+    return result;
+  }
+
+  async update(data, options) {
+    const result = await this.executeWriteOperation(async () => {
+      const model = await getSalesPerDeptModel();
+      return await model.update(data, options);
+    });
+    
+    // Sync to JSON file after database operation
+    try {
+      await salesPerDeptStagingService.syncToJsonFile();
+    } catch (syncError) {
+      console.warn('Failed to sync to JSON after update:', syncError.message);
+    }
+    
+    return result;
+  }
+
+  async destroy(options) {
+    const result = await this.executeWriteOperation(async () => {
+      const model = await getSalesPerDeptModel();
+      return await model.destroy(options);
+    });
+    
+    // Sync to JSON file after database operation
+    try {
+      await salesPerDeptStagingService.syncToJsonFile();
+    } catch (syncError) {
+      console.warn('Failed to sync to JSON after destroy:', syncError.message);
+    }
+    
+    return result;
+  }
+
+  async count(options = {}) {
+    return await this.executeWithFallback(
+      async () => {
+        const model = await getSalesPerDeptModel();
+        return await model.count(options);
+      },
+      0,
+      'sales_per_dept_count'
+    ).catch(async () => {
+      // Fallback to staging service
+      const filters = this.extractFilters(options);
+      return await salesPerDeptStagingService.getCount(filters);
+    });
+  }
+
+  async bulkCreate(data, options) {
+    const result = await this.executeWriteOperation(async () => {
+      const model = await getSalesPerDeptModel();
+      return await model.bulkCreate(data, options);
+    });
+    
+    // Sync to JSON file after database operation
+    try {
+      await salesPerDeptStagingService.syncToJsonFile();
+    } catch (syncError) {
+      console.warn('Failed to sync to JSON after bulkCreate:', syncError.message);
+    }
+    
+    return result;
+  }
+
+  async upsert(data, options) {
+    const result = await this.executeWriteOperation(async () => {
+      const model = await getSalesPerDeptModel();
+      return await model.upsert(data, options);
+    });
+    
+    // Sync to JSON file after database operation
+    try {
+      await salesPerDeptStagingService.syncToJsonFile();
+    } catch (syncError) {
+      console.warn('Failed to sync to JSON after upsert:', syncError.message);
+    }
+    
+    return result;
+  }
+
+  // Helper method to extract filters from Sequelize options
+  extractFilters(options) {
+    const filters = {};
+    if (options.where) {
+      if (options.where.cab) filters.cab = options.where.cab;
+      if (options.where.periode) filters.periode = options.where.periode;
+      if (options.where.tipestore) filters.tipestore = options.where.tipestore;
+      if (options.where.dep_kd) filters.dep_kd = options.where.dep_kd;
+    }
+    return filters;
+  }
+}
+
+const salesPerDeptWrapper = new SalesPerDeptWrapper();
+
+export default salesPerDeptWrapper;

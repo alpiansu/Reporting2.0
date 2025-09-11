@@ -1,4 +1,4 @@
-import { sequelize } from '../config/database.js';
+import { getSequelizeConnection, closeSequelizeConnection } from '../config/database.js';
 import User from './user.model.js';
 import Store from './store.model.js';
 import SalesPerDept from './sales_per_dept.model.js';
@@ -14,7 +14,8 @@ import RekapRemote from './rekap_remote.model.js';
 
 // Export models
 export default {
-  sequelize,
+  getSequelizeConnection,
+  closeSequelizeConnection,
   User,
   Store,
   SalesPerDept,
@@ -24,7 +25,7 @@ export default {
 };
 
 // Named exports for backward compatibility
-export { sequelize, User, Store, SalesPerDept, MDept, RekonWtHarian, RekapRemote };
+export { getSequelizeConnection, closeSequelizeConnection, User, Store, SalesPerDept, MDept, RekonWtHarian, RekapRemote };
 
 
 

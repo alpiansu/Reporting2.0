@@ -34,9 +34,17 @@
 
 import { DataTypes, Sequelize } from 'sequelize';
 import moment from 'moment-timezone';
-import { sequelize } from '../config/database.js';
+import { getSequelizeConnection } from '../config/database.js';
+import { BaseService } from '../services/base.service.js';
+import rekapRemoteStagingService from '../modules/rekap_remote/rekap_remote_staging.service.js';
 
-const RekapRemote = sequelize.define(
+// Lazy model definition
+let RekapRemote = null;
+
+const getRekapRemoteModel = async () => {
+  if (!RekapRemote) {
+    const sequelize = await getSequelizeConnection();
+    RekapRemote = sequelize.define(
   "rekap_remote",
   {
     cab: {
@@ -89,5 +97,165 @@ const RekapRemote = sequelize.define(
     ],
   }
 );
+  }
+  return RekapRemote;
+};
 
-export default RekapRemote;
+// Export wrapper that handles lazy loading with fallback to staging
+class RekapRemoteWrapper extends BaseService {
+  async findAll(options = {}) {
+    return await this.executeWithFallback(
+      async () => {
+        const model = await getRekapRemoteModel();
+        return await model.findAll(options);
+      },
+      null,
+      'rekap_remote_findall'
+    ).catch(async () => {
+      // Fallback to staging service
+      const filters = this.extractFilters(options);
+      const result = await rekapRemoteStagingService.getRekapData(filters, options.limit, options.offset);
+      return result.data;
+    });
+  }
+
+  async findOne(options = {}) {
+    return await this.executeWithFallback(
+      async () => {
+        const model = await getRekapRemoteModel();
+        return await model.findOne(options);
+      },
+      null,
+      'rekap_remote_findone'
+    ).catch(async () => {
+      // Fallback to staging service
+      const filters = this.extractFilters(options);
+      const result = await rekapRemoteStagingService.getRekapData(filters, 1, 0);
+      return result.data[0] || null;
+    });
+  }
+
+  async findByPk(id, options = {}) {
+    return await this.executeWithFallback(
+      async () => {
+        const model = await getRekapRemoteModel();
+        return await model.findByPk(id, options);
+      },
+      null,
+      `rekap_remote_findpk_${id}`
+    ).catch(() => {
+      // For composite primary key, fallback is complex
+      return null;
+    });
+  }
+
+  async create(data) {
+    const result = await this.executeWriteOperation(async () => {
+      const model = await getRekapRemoteModel();
+      return await model.create(data);
+    });
+    
+    // Sync to JSON file after database operation
+    try {
+      await rekapRemoteStagingService.syncToJsonFile();
+    } catch (syncError) {
+      console.warn('Failed to sync to JSON after create:', syncError.message);
+    }
+    
+    return result;
+  }
+
+  async update(data, options) {
+    const result = await this.executeWriteOperation(async () => {
+      const model = await getRekapRemoteModel();
+      return await model.update(data, options);
+    });
+    
+    // Sync to JSON file after database operation
+    try {
+      await rekapRemoteStagingService.syncToJsonFile();
+    } catch (syncError) {
+      console.warn('Failed to sync to JSON after update:', syncError.message);
+    }
+    
+    return result;
+  }
+
+  async destroy(options) {
+    const result = await this.executeWriteOperation(async () => {
+      const model = await getRekapRemoteModel();
+      return await model.destroy(options);
+    });
+    
+    // Sync to JSON file after database operation
+    try {
+      await rekapRemoteStagingService.syncToJsonFile();
+    } catch (syncError) {
+      console.warn('Failed to sync to JSON after destroy:', syncError.message);
+    }
+    
+    return result;
+  }
+
+  async count(options = {}) {
+    return await this.executeWithFallback(
+      async () => {
+        const model = await getRekapRemoteModel();
+        return await model.count(options);
+      },
+      0,
+      'rekap_remote_count'
+    ).catch(async () => {
+      // Fallback to staging service
+      const filters = this.extractFilters(options);
+      return await rekapRemoteStagingService.getCount(filters);
+    });
+  }
+
+  async upsert(data, options) {
+    const result = await this.executeWriteOperation(async () => {
+      const model = await getRekapRemoteModel();
+      return await model.upsert(data, options);
+    });
+    
+    // Sync to JSON file after database operation
+    try {
+      await rekapRemoteStagingService.syncToJsonFile();
+    } catch (syncError) {
+      console.warn('Failed to sync to JSON after upsert:', syncError.message);
+    }
+    
+    return result;
+  }
+
+  async findOrCreate(options) {
+    const result = await this.executeWriteOperation(async () => {
+      const model = await getRekapRemoteModel();
+      return await model.findOrCreate(options);
+    });
+    
+    // Sync to JSON file after database operation
+    try {
+      await rekapRemoteStagingService.syncToJsonFile();
+    } catch (syncError) {
+      console.warn('Failed to sync to JSON after findOrCreate:', syncError.message);
+    }
+    
+    return result;
+  }
+
+  // Helper method to extract filters from Sequelize options
+  extractFilters(options) {
+    const filters = {};
+    if (options.where) {
+      if (options.where.cab) filters.cab = options.where.cab;
+      if (options.where.kdtk) filters.kdtk = options.where.kdtk;
+      if (options.where.module_name) filters.moduleName = options.where.module_name;
+    }
+    return filters;
+  }
+}
+
+const rekapRemoteWrapper = new RekapRemoteWrapper();
+
+export default rekapRemoteWrapper;

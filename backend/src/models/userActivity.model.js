@@ -1,7 +1,13 @@
 import { DataTypes } from 'sequelize';
-import { sequelize } from '../config/database.js';
+import { getSequelizeConnection } from '../config/database.js';
 
-const UserActivity = sequelize.define(
+// Lazy model definition
+let UserActivity = null;
+
+const getUserActivityModel = async () => {
+  if (!UserActivity) {
+    const sequelize = await getSequelizeConnection();
+    UserActivity = sequelize.define(
   "UserActivity",
   {
     id: {
@@ -55,5 +61,40 @@ const UserActivity = sequelize.define(
     underscored: true,
   }
 );
+  }
+  return UserActivity;
+};
 
-export default UserActivity;
+// Export wrapper that handles lazy loading
+const UserActivityWrapper = {
+  async findAll(options) {
+    const model = await getUserActivityModel();
+    return model.findAll(options);
+  },
+  async findOne(options) {
+    const model = await getUserActivityModel();
+    return model.findOne(options);
+  },
+  async findByPk(id, options) {
+    const model = await getUserActivityModel();
+    return model.findByPk(id, options);
+  },
+  async create(data) {
+    const model = await getUserActivityModel();
+    return model.create(data);
+  },
+  async update(data, options) {
+    const model = await getUserActivityModel();
+    return model.update(data, options);
+  },
+  async destroy(options) {
+    const model = await getUserActivityModel();
+    return model.destroy(options);
+  },
+  async count(options) {
+    const model = await getUserActivityModel();
+    return model.count(options);
+  }
+};
+
+export default UserActivityWrapper;

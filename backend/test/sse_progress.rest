@@ -1,0 +1,55 @@
+### SSE Progress Tracking Tests
+### Base URL: http://localhost:3000
+
+### 0. Login to get JWT Token
+POST http://localhost:3000/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin123"
+}
+
+### 1. Start Screening to get Progress ID
+POST http://localhost:3000/api/prep-closing/screening
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1ODA5ODQ0MiwiZXhwIjoxNzU4MTg0ODQyfQ.5pQMcr019dCoXQkFowIPo-q-rDCY8XdHuy3eiWeO0zU
+
+{
+  "strCab": "G033",
+  "strMonth": "12",
+  "strYear": "2024"
+}
+
+### 2. Get Progress (Regular API)
+GET http://localhost:3000/api/prep-closing/progress/PROGRESS_ID_HERE
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1ODA5ODQ0MiwiZXhwIjoxNzU4MTg0ODQyfQ.5pQMcr019dCoXQkFowIPo-q-rDCY8XdHuy3eiWeO0zU
+
+### 3. Stream Progress (SSE) - Replace PROGRESS_ID_HERE with actual progress ID
+GET http://localhost:3000/api/prep-closing/progress/stream/PROGRESS_ID_HERE
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1ODA5ODQ0MiwiZXhwIjoxNzU4MTg0ODQyfQ.5pQMcr019dCoXQkFowIPo-q-rDCY8XdHuy3eiWeO0zU
+
+### 4. Test SSE with Invalid Progress ID
+GET http://localhost:3000/api/prep-closing/progress/stream/invalid-id
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1ODA5ODQ0MiwiZXhwIjoxNzU4MTg0ODQyfQ.5pQMcr019dCoXQkFowIPo-q-rDCY8XdHuy3eiWeO0zU
+
+### 5. Test SSE without Progress ID
+GET http://localhost:3000/api/prep-closing/progress/stream/
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1ODA5ODQ0MiwiZXhwIjoxNzU4MTg0ODQyfQ.5pQMcr019dCoXQkFowIPo-q-rDCY8XdHuy3eiWeO0zU
+
+###
+### Instructions for Testing SSE:
+###
+### 1. First run the screening endpoint (#1) to start a screening process
+### 2. Copy the progressId from the response
+### 3. Replace "PROGRESS_ID_HERE" in endpoint #3 with the actual progress ID
+### 4. Run the SSE endpoint (#3) - you should see real-time progress updates
+### 
+### Expected SSE Response Format:
+### data: {"type":"connected","progressId":"your-progress-id"}
+### 
+### data: {"type":"progress","data":{"status":"running","currentStep":1,"totalSteps":5,"message":"Processing..."},"timestamp":"2024-01-17T10:30:00.000Z"}
+### 
+### data: {"type":"finished","status":"completed"}
+###
+### Note: SSE connections will automatically close when screening is completed or failed

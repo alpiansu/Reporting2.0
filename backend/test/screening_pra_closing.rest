@@ -1,0 +1,140 @@
+### Screening Pra Closing API Tests
+### Base URL: http://localhost:3000
+
+### 0. Login to get JWT Token
+POST http://localhost:3000/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin123"
+}
+
+### 1. Test Screening Pra Closing - Valid Request (G033 - TANGERANG 2)
+POST http://localhost:3000/api/prep-closing/screening
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1ODA5ODQ0MiwiZXhwIjoxNzU4MTg0ODQyfQ.5pQMcr019dCoXQkFowIPo-q-rDCY8XdHuy3eiWeO0zU
+
+{
+  "strCab": "G033",
+  "strMonth": "12",
+  "strYear": "2024"
+}
+
+### 2. Test Screening Pra Closing - Different Branch (G026 - TANGERANG 1)
+POST http://localhost:3000/api/prep-closing/screening
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1ODA5ODQ0MiwiZXhwIjoxNzU4MTg0ODQyfQ.5pQMcr019dCoXQkFowIPo-q-rDCY8XdHuy3eiWeO0zU
+
+{
+  "strCab": "G026",
+  "strMonth": "11",
+  "strYear": "2024"
+}
+
+### 3. Test Screening Pra Closing - Different Period (G113 - BOGOR 1)
+POST http://localhost:3000/api/prep-closing/screening
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1ODA5ODQ0MiwiZXhwIjoxNzU4MTg0ODQyfQ.5pQMcr019dCoXQkFowIPo-q-rDCY8XdHuy3eiWeO0zU
+
+{
+  "strCab": "G113",
+  "strMonth": "10",
+  "strYear": "2024"
+}
+
+### 4. Test Validation Error - Missing strCab
+POST http://localhost:3000/api/prep-closing/screening
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1ODA5ODQ0MiwiZXhwIjoxNzU4MTg0ODQyfQ.5pQMcr019dCoXQkFowIPo-q-rDCY8XdHuy3eiWeO0zU
+
+{
+  "strMonth": "12",
+  "strYear": "2024"
+}
+
+### 5. Test Validation Error - Missing strMonth
+POST http://localhost:3000/api/prep-closing/screening
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1ODA5ODQ0MiwiZXhwIjoxNzU4MTg0ODQyfQ.5pQMcr019dCoXQkFowIPo-q-rDCY8XdHuy3eiWeO0zU
+
+{
+  "strCab": "G033",
+  "strYear": "2024"
+}
+
+### 6. Test Validation Error - Missing strYear
+POST http://localhost:3000/api/prep-closing/screening
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1ODA5ODQ0MiwiZXhwIjoxNzU4MTg0ODQyfQ.5pQMcr019dCoXQkFowIPo-q-rDCY8XdHuy3eiWeO0zU
+
+{
+  "strCab": "G033",
+  "strMonth": "12"
+}
+
+### 7. Test Validation Error - Empty Body
+POST http://localhost:3000/api/prep-closing/screening
+Content-Type: application/json
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+{}
+
+### 8. Test Without Authentication
+POST http://localhost:3000/api/prep-closing/screening
+Content-Type: application/json
+
+{
+  "strCab": "0001",
+  "strMonth": "12",
+  "strYear": "2024",
+  "strIP": "192.168.1.100",
+  "kdtk": "0001001"
+}
+
+### 9. Test with Invalid Token
+POST http://localhost:3000/api/prep-closing/screening
+Content-Type: application/json
+Authorization: Bearer invalid_token
+
+{
+  "strCab": "0001",
+  "strMonth": "12",
+  "strYear": "2024",
+  "strIP": "192.168.1.100",
+  "kdtk": "0001001"
+}
+
+### 10. Test Multiple Stores in Same Branch
+POST http://localhost:3000/api/prep-closing/screening
+Content-Type: application/json
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+{
+  "strCab": "0001",
+  "strMonth": "12",
+  "strYear": "2024",
+  "strIP": "192.168.1.100"
+}
+
+### Notes:
+### - Replace YOUR_JWT_TOKEN_HERE with actual JWT token
+### - Server should be running on http://localhost:3000
+### - Make sure WRC database connection is properly configured
+### - Check backend logs for detailed error messages
+### - Expected response format:
+### {
+###   "success": true,
+###   "message": "Screening pra closing berhasil",
+###   "data": {
+###     "cab": "0001",
+###     "period": "202412",
+###     "totalStores": 5,
+###     "stores": [...],
+###     "summary": {
+###       "total_stores": 5,
+###       "stores_ok": 4,
+###       "stores_warning": 1
+###     }
+###   }
+### }

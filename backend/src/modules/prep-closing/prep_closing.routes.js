@@ -14,8 +14,13 @@ const {
   updatePrepClosing,
   deletePrepClosing,
   getPrepClosingStats,
+  screeningPraClosing,
+  getProgress,
+  getLatestProgress,
+  getProgressStream,
   createPrepClosingValidation,
-  updatePrepClosingValidation
+  updatePrepClosingValidation,
+  screeningPraClosingValidation
 } = prepClosingController;
 
 const router = express.Router();
@@ -78,6 +83,34 @@ router.get('/stats', getPrepClosingStats);
  * @access Private
  */
 router.get('/:id', validateIdParam, getPrepClosingById);
+
+/**
+ * @route POST /api/prep-closing/screening
+ * @desc Perform screening pra closing - check WRC saldo data
+ * @access Private
+ */
+router.post('/screening', screeningPraClosingValidation, screeningPraClosing);
+
+/**
+ * @route GET /api/prep-closing/progress/:progressId
+ * @desc Get screening progress by progress ID
+ * @access Private
+ */
+router.get('/progress/:progressId', getProgress);
+
+/**
+ * @route GET /api/prep-closing/progress/:cab/:periode
+ * @desc Get latest screening progress for a branch and period
+ * @access Private
+ */
+router.get('/progress/:cab/:periode', getLatestProgress);
+
+/**
+ * @route GET /api/prep-closing/progress/stream/:progressId
+ * @desc Stream real-time screening progress via SSE
+ * @access Private
+ */
+router.get('/progress/stream/:progressId', getProgressStream);
 
 /**
  * @route POST /api/prep-closing

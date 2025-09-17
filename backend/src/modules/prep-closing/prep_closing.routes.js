@@ -4,6 +4,7 @@
  */
 import express from 'express';
 import { param, query } from 'express-validator';
+import { authenticateJWT } from '../../middlewares/index.js';
 import prepClosingController from './prep_closing.controller.js';
 
 const {
@@ -18,6 +19,9 @@ const {
 } = prepClosingController;
 
 const router = express.Router();
+
+// Protect all routes with authentication
+router.use(authenticateJWT);
 
 // Validation middleware
 const validateIdParam = [
@@ -57,42 +61,42 @@ const validateQuery = [
 /**
  * @route GET /api/prep-closing
  * @desc Get all prep closing records with optional filters and pagination
- * @access Public
+ * @access Private
  */
 router.get('/', validateQuery, getAllPrepClosing);
 
 /**
  * @route GET /api/prep-closing/stats
  * @desc Get prep closing statistics
- * @access Public
+ * @access Private
  */
 router.get('/stats', getPrepClosingStats);
 
 /**
  * @route GET /api/prep-closing/:id
  * @desc Get prep closing record by ID
- * @access Public
+ * @access Private
  */
 router.get('/:id', validateIdParam, getPrepClosingById);
 
 /**
  * @route POST /api/prep-closing
  * @desc Create new prep closing record
- * @access Public
+ * @access Private
  */
 router.post('/', createPrepClosingValidation, createPrepClosing);
 
 /**
  * @route PUT /api/prep-closing/:id
  * @desc Update prep closing record by ID
- * @access Public
+ * @access Private
  */
 router.put('/:id', updatePrepClosingValidation, updatePrepClosing);
 
 /**
  * @route DELETE /api/prep-closing/:id
  * @desc Delete prep closing record by ID
- * @access Public
+ * @access Private
  */
 router.delete('/:id', validateIdParam, deletePrepClosing);
 

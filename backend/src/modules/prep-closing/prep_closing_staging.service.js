@@ -3,7 +3,8 @@
  * Handles database operations and synchronization with JSON file
  */
 import { DataTypes } from 'sequelize';
-import { getSequelizeConnection } from '../../config/database.js';
+import config from '../../config/index.js';
+const { resilientDb } = config;
 import PrepClosingService from './prep_closing.service.js';
 import logger from '../../config/logger.js';
 
@@ -18,7 +19,10 @@ class PrepClosingStagingService {
    */
   async getModel() {
     if (!this.model) {
-      const sequelize = await getSequelizeConnection();
+      const sequelize = await resilientDb.getDatabase();
+      if (!sequelize) {
+        throw new Error('Database connection not available');
+      }
       this.model = sequelize.define('PrepClosing', {
         cab: {
           type: DataTypes.CHAR(4),

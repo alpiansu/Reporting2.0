@@ -1,4 +1,5 @@
-import { getSequelizeConnection, closeSequelizeConnection } from '../config/database.js';
+import config from '../config/index.js';
+const { resilientDb } = config;
 import User from './user.model.js';
 import Store from './store.model.js';
 import SalesPerDept from './sales_per_dept.model.js';
@@ -14,8 +15,8 @@ import RekapRemote from './rekap_remote.model.js';
 
 // Export models
 export default {
-  getSequelizeConnection,
-  closeSequelizeConnection,
+  getDatabase: () => resilientDb.getDatabase(),
+  closeDatabase: () => resilientDb.close(),
   User,
   Store,
   SalesPerDept,
@@ -25,7 +26,11 @@ export default {
 };
 
 // Named exports for backward compatibility
-export { getSequelizeConnection, closeSequelizeConnection, User, Store, SalesPerDept, MDept, RekonWtHarian, RekapRemote };
+export { User, Store, SalesPerDept, MDept, RekonWtHarian, RekapRemote };
+
+// Database connection functions
+export const getDatabase = () => resilientDb.getDatabase();
+export const closeDatabase = () => resilientDb.close();
 
 
 

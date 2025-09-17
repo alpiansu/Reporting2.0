@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-import { dbConfig } from "./database.js";
+import resilientDb from './resilient-database.js';
 import jwt from "./jwt.js";
 import logger from "./logger.js";
 
@@ -20,7 +20,7 @@ export default {
   nodeEnv: process.env.NODE_ENV || "development",
 
   // Database configuration
-  database: dbConfig,
+  database: resilientDb.config,
 
   // JWT configuration
   jwt,
@@ -48,4 +48,7 @@ export default {
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   },
+
+  // Database instance
+  resilientDb,
 };

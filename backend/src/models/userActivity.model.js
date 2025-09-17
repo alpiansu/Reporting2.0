@@ -1,12 +1,16 @@
 import { DataTypes } from 'sequelize';
-import { getSequelizeConnection } from '../config/database.js';
+import config from '../config/index.js';
+const { resilientDb } = config;
 
 // Lazy model definition
 let UserActivity = null;
 
 const getUserActivityModel = async () => {
   if (!UserActivity) {
-    const sequelize = await getSequelizeConnection();
+    const sequelize = await resilientDb.getDatabase();
+    if (!sequelize) {
+      throw new Error('Database connection not available');
+    }
     UserActivity = sequelize.define(
   "UserActivity",
   {

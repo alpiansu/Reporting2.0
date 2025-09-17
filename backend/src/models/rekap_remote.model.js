@@ -34,7 +34,8 @@
 
 import { DataTypes, Sequelize } from 'sequelize';
 import moment from 'moment-timezone';
-import { getSequelizeConnection } from '../config/database.js';
+import config from '../config/index.js';
+const { resilientDb } = config;
 import { BaseService } from '../services/base.service.js';
 import rekapRemoteStagingService from '../modules/rekap_remote/rekap_remote_staging.service.js';
 
@@ -43,7 +44,10 @@ let RekapRemote = null;
 
 const getRekapRemoteModel = async () => {
   if (!RekapRemote) {
-    const sequelize = await getSequelizeConnection();
+    const sequelize = await resilientDb.getDatabase();
+    if (!sequelize) {
+      throw new Error('Database connection not available');
+    }
     RekapRemote = sequelize.define(
   "rekap_remote",
   {

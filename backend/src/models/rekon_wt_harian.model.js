@@ -84,14 +84,18 @@
 import { DataTypes } from 'sequelize';
 import moment from 'moment-timezone';
 const getJakartaNow = () => moment().tz("Asia/Jakarta").toDate();
-import { getSequelizeConnection } from '../config/database.js';
+import config from '../config/index.js';
+const { resilientDb } = config;
 
 // Lazy model definition
 let RekonWtHarian = null;
 
 const getRekonWtHarianModel = async () => {
   if (!RekonWtHarian) {
-    const sequelize = await getSequelizeConnection();
+    const sequelize = await resilientDb.getDatabase();
+    if (!sequelize) {
+      throw new Error('Database connection not available');
+    }
     RekonWtHarian = sequelize.define(
   "rekon_wt_harian",
   {

@@ -117,17 +117,20 @@ class ResilientDatabase {
   setupConnectionHandlers() {
     if (!this.sequelize) return;
 
-    // Handle connection errors
-    this.sequelize.connectionManager.on('error', (error) => {
-      logger.error(`Database connection error: ${error.message}`);
-      this.isConnected = false;
-    });
+    try {
+      // Handle connection errors using Sequelize hooks instead of connectionManager events
+      this.sequelize.addHook('afterConnect', () => {
+        logger.info('Database connection established via hook');
+        this.isConnected = true;
+      });
 
-    // Handle disconnection
-    this.sequelize.connectionManager.on('disconnect', () => {
-      logger.warn('Database disconnected');
-      this.isConnected = false;
-    });
+      this.sequelize.addHook('beforeDisconnect', () => {
+        logger.warn('Database disconnecting via hook');
+        this.isConnected = false;
+      });
+    } catch (error) {
+      logger.warn(`Could not setup connection handlers: ${error.message}`);
+    }
   }
 
   /**

@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-import database from "./database.js";
+import { dbConfig } from "./database.js";
 import jwt from "./jwt.js";
 import logger from "./logger.js";
 
@@ -20,7 +20,7 @@ export default {
   nodeEnv: process.env.NODE_ENV || "development",
 
   // Database configuration
-  database,
+  database: dbConfig,
 
   // JWT configuration
   jwt,

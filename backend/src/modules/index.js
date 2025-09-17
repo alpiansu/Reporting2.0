@@ -14,6 +14,7 @@ import mCabangModule from './m_cabang/index.js';
 import userModule from './user/index.js';
 import menuManagerModule from './menu-manager/index.js';
 import rekapRemoteModule from './rekap_remote/index.js';
+import prepClosingModule from './prep-closing/index.js';
 
 export default {
   // Export all modules
@@ -28,6 +29,7 @@ export default {
   userModule,
   menuManagerModule,
   rekapRemoteModule,
+  prepClosingModule,
   
   // Initialize all modules
   initialize: (app) => {
@@ -42,6 +44,7 @@ export default {
     const mCabang = mCabangModule.initialize(app);
     const user = userModule.initialize(app);
     const rekapRemote = rekapRemoteModule.initialize(app);
+    const prepClosing = prepClosingModule.initialize(app);
     
     // Initialize menu manager module
     app.use('/api/menu-manager', menuManagerModule.routes);
@@ -57,6 +60,7 @@ export default {
       mCabang,
       user,
       rekapRemote,
+      prepClosing,
       menuManager: true
     };
   }

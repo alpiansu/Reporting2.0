@@ -2,10 +2,9 @@
  * PrepClosing Model
  * Resilient backend pattern with JSON fallback
  */
-import BaseService from '../services/base.service.js';
-import PrepClosingService from '../modules/prep-closing/prep_closing.service.js';
-import PrepClosingStagingService from '../modules/prep-closing/prep_closing_staging.service.js';
-import logger from '../config/logger.js';
+import BaseService from "../services/base.service.js";
+import PrepClosingService from "../modules/prep-closing/prep_closing.service.js";
+import PrepClosingStagingService from "../modules/prep-closing/prep_closing_staging.service.js";
 
 class PrepClosingWrapper extends BaseService {
   constructor() {
@@ -23,16 +22,14 @@ class PrepClosingWrapper extends BaseService {
     return this.executeWithFallback(
       async () => {
         const { where = {}, limit, offset = 0, order } = options;
-        const result = await this.prepClosingStagingService.getPrepClosingData(
-          where, limit, offset
-        );
+        const result = await this.prepClosingStagingService.getPrepClosingData(where, limit, offset);
         return result.data;
       },
       async () => {
         const { where = {}, limit, offset = 0 } = options;
         return this.prepClosingService.getAllPrepClosing(where, limit, offset);
       },
-      'findAll prep_closing'
+      "findAll prep_closing"
     );
   }
 
@@ -44,16 +41,14 @@ class PrepClosingWrapper extends BaseService {
   async findOne(options = {}) {
     return this.executeWithFallback(
       async () => {
-        const result = await this.prepClosingStagingService.getPrepClosingData(
-          options.where || {}, 1, 0
-        );
+        const result = await this.prepClosingStagingService.getPrepClosingData(options.where || {}, 1, 0);
         return result.data.length > 0 ? result.data[0] : null;
       },
       async () => {
         const allData = this.prepClosingService.getAllPrepClosing(options.where || {});
         return allData.length > 0 ? allData[0] : null;
       },
-      'findOne prep_closing'
+      "findOne prep_closing"
     );
   }
 
@@ -65,7 +60,7 @@ class PrepClosingWrapper extends BaseService {
   async findByPk(pk) {
     const { cab, kdtk, key } = pk;
     return this.findOne({
-      where: { cab, kdtk, key }
+      where: { cab, kdtk, key },
     });
   }
 
@@ -75,18 +70,15 @@ class PrepClosingWrapper extends BaseService {
    * @returns {Promise<Object>} Created record
    */
   async create(data) {
-    const result = await this.executeWriteOperation(
-      async () => {
-        return await this.prepClosingStagingService.createPrepClosing(data);
-      },
-      'create prep_closing'
-    );
+    const result = await this.executeWriteOperation(async () => {
+      return await this.prepClosingStagingService.createPrepClosing(data);
+    }, "create prep_closing");
 
     // Sync to JSON file after successful database operation
     try {
       await this.prepClosingStagingService.syncToJsonFile();
     } catch (error) {
-      console.warn('Failed to sync prep_closing to JSON after create:', error.message);
+      console.warn("Failed to sync prep_closing to JSON after create:", error.message);
     }
 
     return result;
@@ -99,18 +91,15 @@ class PrepClosingWrapper extends BaseService {
    * @returns {Promise<Array>} Update result
    */
   async update(data, options) {
-    const result = await this.executeWriteOperation(
-      async () => {
-        return await this.prepClosingStagingService.updatePrepClosing(data, options.where);
-      },
-      'update prep_closing'
-    );
+    const result = await this.executeWriteOperation(async () => {
+      return await this.prepClosingStagingService.updatePrepClosing(data, options.where);
+    }, "update prep_closing");
 
     // Sync to JSON file after successful database operation
     try {
       await this.prepClosingStagingService.syncToJsonFile();
     } catch (error) {
-      console.warn('Failed to sync prep_closing to JSON after update:', error.message);
+      console.warn("Failed to sync prep_closing to JSON after update:", error.message);
     }
 
     return result;
@@ -122,18 +111,15 @@ class PrepClosingWrapper extends BaseService {
    * @returns {Promise<number>} Number of deleted records
    */
   async destroy(options) {
-    const result = await this.executeWriteOperation(
-      async () => {
-        return await this.prepClosingStagingService.deletePrepClosing(options.where);
-      },
-      'destroy prep_closing'
-    );
+    const result = await this.executeWriteOperation(async () => {
+      return await this.prepClosingStagingService.deletePrepClosing(options.where);
+    }, "destroy prep_closing");
 
     // Sync to JSON file after successful database operation
     try {
       await this.prepClosingStagingService.syncToJsonFile();
     } catch (error) {
-      console.warn('Failed to sync prep_closing to JSON after destroy:', error.message);
+      console.warn("Failed to sync prep_closing to JSON after destroy:", error.message);
     }
 
     return result;
@@ -153,7 +139,7 @@ class PrepClosingWrapper extends BaseService {
         const allData = this.prepClosingService.getAllPrepClosing(options.where || {});
         return allData.length;
       },
-      'count prep_closing'
+      "count prep_closing"
     );
   }
 
@@ -164,18 +150,15 @@ class PrepClosingWrapper extends BaseService {
    * @returns {Promise<Array>} Created records
    */
   async bulkCreate(dataArray, options = {}) {
-    const result = await this.executeWriteOperation(
-      async () => {
-        return await this.prepClosingStagingService.bulkCreatePrepClosing(dataArray);
-      },
-      'bulkCreate prep_closing'
-    );
+    const result = await this.executeWriteOperation(async () => {
+      return await this.prepClosingStagingService.bulkCreatePrepClosing(dataArray);
+    }, "bulkCreate prep_closing");
 
     // Sync to JSON file after successful database operation
     try {
       await this.prepClosingStagingService.syncToJsonFile();
     } catch (error) {
-      console.warn('Failed to sync prep_closing to JSON after bulkCreate:', error.message);
+      console.warn("Failed to sync prep_closing to JSON after bulkCreate:", error.message);
     }
 
     return result;
@@ -187,18 +170,15 @@ class PrepClosingWrapper extends BaseService {
    * @returns {Promise<Object>} Upsert result
    */
   async upsert(data) {
-    const result = await this.executeWriteOperation(
-      async () => {
-        return await this.prepClosingStagingService.upsertPrepClosing(data);
-      },
-      'upsert prep_closing'
-    );
+    const result = await this.executeWriteOperation(async () => {
+      return await this.prepClosingStagingService.upsertPrepClosing(data);
+    }, "upsert prep_closing");
 
     // Sync to JSON file after successful database operation
     try {
       await this.prepClosingStagingService.syncToJsonFile();
     } catch (error) {
-      console.warn('Failed to sync prep_closing to JSON after upsert:', error.message);
+      console.warn("Failed to sync prep_closing to JSON after upsert:", error.message);
     }
 
     return result;
@@ -210,22 +190,16 @@ class PrepClosingWrapper extends BaseService {
    * @returns {Promise<Object>} Find or create result
    */
   async findOrCreate(options) {
-    const result = await this.executeWriteOperation(
-      async () => {
-        return await this.prepClosingStagingService.findOrCreatePrepClosing(
-          options.where,
-          options.defaults
-        );
-      },
-      'findOrCreate prep_closing'
-    );
+    const result = await this.executeWriteOperation(async () => {
+      return await this.prepClosingStagingService.findOrCreatePrepClosing(options.where, options.defaults);
+    }, "findOrCreate prep_closing");
 
     // Sync to JSON file after successful database operation if record was created
     if (result.created) {
       try {
         await this.prepClosingStagingService.syncToJsonFile();
       } catch (error) {
-        console.warn('Failed to sync prep_closing to JSON after findOrCreate:', error.message);
+        console.warn("Failed to sync prep_closing to JSON after findOrCreate:", error.message);
       }
     }
 
@@ -239,15 +213,15 @@ class PrepClosingWrapper extends BaseService {
    */
   extractFilters(query) {
     const filters = {};
-    
+
     if (query.cab) filters.cab = query.cab;
     if (query.kdtk) filters.kdtk = query.kdtk;
     if (query.key) filters.key = query.key;
     if (query.nilai) filters.nilai = query.nilai;
     if (query.valid !== undefined) {
-      filters.valid = query.valid === 'true' || query.valid === true;
+      filters.valid = query.valid === "true" || query.valid === true;
     }
-    
+
     return filters;
   }
 
@@ -260,38 +234,36 @@ class PrepClosingWrapper extends BaseService {
    */
   async getPaginatedData(filters = {}, page = 1, limit = 50) {
     const offset = (page - 1) * limit;
-    
+
     return this.executeWithFallback(
       async () => {
-        const result = await this.prepClosingStagingService.getPrepClosingData(
-          filters, limit, offset
-        );
+        const result = await this.prepClosingStagingService.getPrepClosingData(filters, limit, offset);
         return {
           data: result.data,
           pagination: {
             page,
             limit,
             total: result.total,
-            totalPages: Math.ceil(result.total / limit)
-          }
+            totalPages: Math.ceil(result.total / limit),
+          },
         };
       },
       async () => {
         const allData = this.prepClosingService.getAllPrepClosing(filters);
         const total = allData.length;
         const data = allData.slice(offset, offset + limit);
-        
+
         return {
           data,
           pagination: {
             page,
             limit,
             total,
-            totalPages: Math.ceil(total / limit)
-          }
+            totalPages: Math.ceil(total / limit),
+          },
         };
       },
-      'getPaginatedData prep_closing'
+      "getPaginatedData prep_closing"
     );
   }
 }

@@ -1,376 +1,314 @@
 /**
- * PrepClosing Controller
- * Handles HTTP requests for prep closing operations
+ * Controller for prep closing operations
+ * Handles HTTP requests and responses for prep closing data
  */
-import prepClosingModel from '../../models/prep_closing.model.js';
+import prepClosingService from './prep_closing.service.js';
 import logger from '../../config/logger.js';
-import { validationResult } from 'express-validator';
+import { body, param, query, validationResult } from 'express-validator';
+/**
+ * Get all prep closing data with optional filters
+ */
+export const getAllPrepClosing = async (req, res) => {
+  try {
+    const { cab, kdtk, key, valid, limit = 100, offset = 0 } = req.query;
+    
+    const filters = {};
+    if (cab) filters.cab = cab;
+    if (kdtk) filters.kdtk = kdtk;
+    if (key) filters.key = key;
+    if (valid !== undefined) filters.valid = valid;
 
-class PrepClosingController {
-  /**
-   * Get all prep closing records with pagination and filters
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   */
-  async getAllPrepClosing(req, res) {
-    try {
-      const { page = 1, limit = 50, ...filterParams } = req.query;
-      const filters = prepClosingModel.extractFilters(filterParams);
-      
-      const result = await prepClosingModel.getPaginatedData(
-        filters,
-        parseInt(page),
-        parseInt(limit)
-      );
-      
-      res.json({
-        success: true,
-        message: 'Prep closing data retrieved successfully',
-        data: result.data,
-        pagination: result.pagination
-      });
-    } catch (error) {
-      logger.error('Error getting prep closing data:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to retrieve prep closing data',
-        error: error.message
-      });
-    }
-  }
-
-  /**
-   * Get prep closing record by primary key
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   */
-  async getPrepClosingByPk(req, res) {
-    try {
-      const { cab, kdtk, key } = req.params;
-      
-      if (!cab || !kdtk || !key) {
-        return res.status(400).json({
-          success: false,
-          message: 'Missing required parameters: cab, kdtk, key'
-        });
-      }
-      
-      const record = await prepClosingModel.findByPk({ cab, kdtk, key });
-      
-      if (!record) {
-        return res.status(404).json({
-          success: false,
-          message: 'Prep closing record not found'
-        });
-      }
-      
-      res.json({
-        success: true,
-        message: 'Prep closing record retrieved successfully',
-        data: record
-      });
-    } catch (error) {
-      logger.error('Error getting prep closing record by PK:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to retrieve prep closing record',
-        error: error.message
-      });
-    }
-  }
-
-  /**
-   * Create new prep closing record
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   */
-  async createPrepClosing(req, res) {
-    try {
-      // Check for validation errors
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({
-          success: false,
-          message: 'Validation failed',
-          errors: errors.array()
-        });
-      }
-      
-      const { cab, kdtk, key, nilai, valid = true } = req.body;
-      
-      const newRecord = await prepClosingModel.create({
-        cab,
-        kdtk,
-        key,
-        nilai,
-        valid
-      });
-      
-      res.status(201).json({
-        success: true,
-        message: 'Prep closing record created successfully',
-        data: newRecord
-      });
-    } catch (error) {
-      logger.error('Error creating prep closing record:', error);
-      
-      // Handle unique constraint violation
-      if (error.name === 'SequelizeUniqueConstraintError') {
-        return res.status(409).json({
-          success: false,
-          message: 'Prep closing record with this combination already exists',
-          error: error.message
-        });
-      }
-      
-      res.status(500).json({
-        success: false,
-        message: 'Failed to create prep closing record',
-        error: error.message
-      });
-    }
-  }
-
-  /**
-   * Update prep closing record
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   */
-  async updatePrepClosing(req, res) {
-    try {
-      // Check for validation errors
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({
-          success: false,
-          message: 'Validation failed',
-          errors: errors.array()
-        });
-      }
-      
-      const { cab, kdtk, key } = req.params;
-      const updateData = req.body;
-      
-      // Remove primary key fields from update data
-      delete updateData.cab;
-      delete updateData.kdtk;
-      delete updateData.key;
-      
-      if (Object.keys(updateData).length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'No valid fields to update'
-        });
-      }
-      
-      const [affectedRows] = await prepClosingModel.update(updateData, {
-        where: { cab, kdtk, key }
-      });
-      
-      if (affectedRows === 0) {
-        return res.status(404).json({
-          success: false,
-          message: 'Prep closing record not found or no changes made'
-        });
-      }
-      
-      // Get updated record
-      const updatedRecord = await prepClosingModel.findByPk({ cab, kdtk, key });
-      
-      res.json({
-        success: true,
-        message: 'Prep closing record updated successfully',
-        data: updatedRecord
-      });
-    } catch (error) {
-      logger.error('Error updating prep closing record:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to update prep closing record',
-        error: error.message
-      });
-    }
-  }
-
-  /**
-   * Delete prep closing record
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   */
-  async deletePrepClosing(req, res) {
-    try {
-      const { cab, kdtk, key } = req.params;
-      
-      const deletedCount = await prepClosingModel.destroy({
-        where: { cab, kdtk, key }
-      });
-      
-      if (deletedCount === 0) {
-        return res.status(404).json({
-          success: false,
-          message: 'Prep closing record not found'
-        });
-      }
-      
-      res.json({
-        success: true,
-        message: 'Prep closing record deleted successfully',
-        deletedCount
-      });
-    } catch (error) {
-      logger.error('Error deleting prep closing record:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to delete prep closing record',
-        error: error.message
-      });
-    }
-  }
-
-  /**
-   * Bulk create prep closing records
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   */
-  async bulkCreatePrepClosing(req, res) {
-    try {
-      const { records } = req.body;
-      
-      if (!Array.isArray(records) || records.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Records array is required and must not be empty'
-        });
-      }
-      
-      // Validate each record
-      for (let i = 0; i < records.length; i++) {
-        const record = records[i];
-        if (!record.cab || !record.kdtk || !record.key) {
-          return res.status(400).json({
-            success: false,
-            message: `Record at index ${i} is missing required fields: cab, kdtk, key`
-          });
-        }
-      }
-      
-      const createdRecords = await prepClosingModel.bulkCreate(records);
-      
-      res.status(201).json({
-        success: true,
-        message: `${createdRecords.length} prep closing records created successfully`,
-        data: createdRecords
-      });
-    } catch (error) {
-      logger.error('Error bulk creating prep closing records:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to bulk create prep closing records',
-        error: error.message
-      });
-    }
-  }
-
-  /**
-   * Upsert prep closing record
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   */
-  async upsertPrepClosing(req, res) {
-    try {
-      // Check for validation errors
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({
-          success: false,
-          message: 'Validation failed',
-          errors: errors.array()
-        });
-      }
-      
-      const { cab, kdtk, key, nilai, valid = true } = req.body;
-      
-      const result = await prepClosingModel.upsert({
-        cab,
-        kdtk,
-        key,
-        nilai,
-        valid
-      });
-      
-      res.json({
-        success: true,
-        message: `Prep closing record ${result.created ? 'created' : 'updated'} successfully`,
-        data: result.data,
-        created: result.created
-      });
-    } catch (error) {
-      logger.error('Error upserting prep closing record:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to upsert prep closing record',
-        error: error.message
-      });
-    }
-  }
-
-  /**
-   * Get count of prep closing records
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   */
-  async getCount(req, res) {
-    try {
-      const filters = prepClosingModel.extractFilters(req.query);
-      const count = await prepClosingModel.count({ where: filters });
-      
-      res.json({
-        success: true,
-        message: 'Count retrieved successfully',
-        count
-      });
-    } catch (error) {
-      logger.error('Error getting prep closing count:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to get count',
-        error: error.message
-      });
-    }
-  }
-
-  /**
-   * Get prep closing records by filters
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   */
-  async searchPrepClosing(req, res) {
-    try {
-      const filters = prepClosingModel.extractFilters(req.query);
-      const { limit = 100, offset = 0 } = req.query;
-      
-      const records = await prepClosingModel.findAll({
-        where: filters,
+    const data = await prepClosingService.getAllPrepClosing(filters, parseInt(limit), parseInt(offset));
+    const total = await prepClosingService.getCount(filters);
+    
+    res.json({
+      success: true,
+      data: data,
+      pagination: {
+        total: total,
         limit: parseInt(limit),
         offset: parseInt(offset),
-        order: [['cab', 'ASC'], ['kdtk', 'ASC'], ['key', 'ASC']]
-      });
-      
-      res.json({
-        success: true,
-        message: 'Search completed successfully',
-        data: records,
-        filters
-      });
-    } catch (error) {
-      logger.error('Error searching prep closing records:', error);
-      res.status(500).json({
+        hasMore: (parseInt(offset) + parseInt(limit)) < total
+      }
+    });
+  } catch (error) {
+    logger.error('Error in getAllPrepClosing:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get prep closing by ID
+ */
+export const getPrepClosingById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    if (!id) {
+      return res.status(400).json({
         success: false,
-        message: 'Failed to search prep closing records',
+        message: 'Missing required parameter: id'
+      });
+    }
+
+    const record = await prepClosingService.getPrepClosingById(parseInt(id));
+    
+    if (!record) {
+      return res.status(404).json({
+        success: false,
+        message: 'Prep closing record not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: record
+    });
+  } catch (error) {
+    logger.error('Error in getPrepClosingById:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Create new prep closing record
+ */
+export const createPrepClosing = async (req, res) => {
+  try {
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation errors',
+        errors: errors.array()
+      });
+    }
+
+    const { cab, kdtk, key, nilai, valid = 1 } = req.body;
+
+    const prepClosingData = {
+      cab,
+      kdtk,
+      key,
+      nilai,
+      valid: parseInt(valid)
+    };
+
+    const result = await prepClosingService.addPrepClosing(prepClosingData);
+    
+    res.status(201).json({
+      success: true,
+      message: 'Prep closing record created successfully',
+      data: result
+    });
+  } catch (error) {
+    logger.error('Error in createPrepClosing:', error);
+    
+    if (error.message.includes('already exists') || error.message.includes('duplicate')) {
+      return res.status(409).json({
+        success: false,
+        message: 'Prep closing record already exists',
         error: error.message
       });
     }
-  }
-}
 
-export default new PrepClosingController();
+    if (error.message.includes('Database sedang tidak tersedia')) {
+      return res.status(503).json({
+        success: false,
+        message: 'Database service unavailable',
+        error: error.message
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Update prep closing record by ID
+ */
+export const updatePrepClosing = async (req, res) => {
+  try {
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation errors',
+        errors: errors.array()
+      });
+    }
+
+    const { id } = req.params;
+    const updateData = req.body;
+    
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required parameter: id'
+      });
+    }
+
+    // Remove id from update data to prevent conflicts
+    delete updateData.id;
+
+    const result = await prepClosingService.updatePrepClosing(parseInt(id), updateData);
+
+    res.json({
+      success: true,
+      message: 'Prep closing record updated successfully',
+      data: result
+    });
+  } catch (error) {
+    logger.error('Error in updatePrepClosing:', error);
+    
+    if (error.message.includes('Record not found')) {
+      return res.status(404).json({
+        success: false,
+        message: 'Prep closing record not found',
+        error: error.message
+      });
+    }
+
+    if (error.message.includes('Database sedang tidak tersedia')) {
+      return res.status(503).json({
+        success: false,
+        message: 'Database service unavailable',
+        error: error.message
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Delete prep closing record by ID
+ */
+export const deletePrepClosing = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required parameter: id'
+      });
+    }
+
+    const result = await prepClosingService.deletePrepClosing(parseInt(id));
+
+    res.json({
+      success: true,
+      message: 'Prep closing record deleted successfully',
+      data: result
+    });
+  } catch (error) {
+    logger.error('Error in deletePrepClosing:', error);
+    
+    if (error.message.includes('Record not found')) {
+      return res.status(404).json({
+        success: false,
+        message: 'Prep closing record not found',
+        error: error.message
+      });
+    }
+
+    if (error.message.includes('Database sedang tidak tersedia')) {
+      return res.status(503).json({
+        success: false,
+        message: 'Database service unavailable',
+        error: error.message
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get prep closing statistics
+ */
+export const getPrepClosingStats = async (req, res) => {
+  try {
+    const { cab, kdtk } = req.query;
+    
+    const filters = {};
+    if (cab) filters.cab = cab;
+    if (kdtk) filters.kdtk = kdtk;
+
+    const total = await prepClosingService.getCount(filters);
+    const valid = await prepClosingService.getCount({ ...filters, valid: 1 });
+    const invalid = await prepClosingService.getCount({ ...filters, valid: 0 });
+    
+    const stats = {
+      total,
+      valid,
+      invalid,
+      filters
+    };
+    
+    res.json({
+      success: true,
+      data: stats
+    });
+  } catch (error) {
+    logger.error('Error in getPrepClosingStats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+// Validation rules
+export const createPrepClosingValidation = [
+  body('cab').notEmpty().withMessage('Cab is required').isLength({ max: 10 }).withMessage('Cab must be max 10 characters'),
+  body('kdtk').notEmpty().withMessage('Kdtk is required').isLength({ max: 10 }).withMessage('Kdtk must be max 10 characters'),
+  body('key').notEmpty().withMessage('Key is required').isLength({ max: 50 }).withMessage('Key must be max 50 characters'),
+  body('nilai').optional().isDecimal().withMessage('Nilai must be a decimal number'),
+  body('valid').optional().isInt({ min: 0, max: 1 }).withMessage('Valid must be 0 or 1')
+];
+
+export const updatePrepClosingValidation = [
+  param('id').isInt({ min: 1 }).withMessage('ID must be a positive integer'),
+  body('cab').optional().isLength({ max: 10 }).withMessage('Cab must be max 10 characters'),
+  body('kdtk').optional().isLength({ max: 10 }).withMessage('Kdtk must be max 10 characters'),
+  body('key').optional().isLength({ max: 50 }).withMessage('Key must be max 50 characters'),
+  body('nilai').optional().isDecimal().withMessage('Nilai must be a decimal number'),
+  body('valid').optional().isInt({ min: 0, max: 1 }).withMessage('Valid must be 0 or 1')
+];
+
+// Default export
+export default {
+  getAllPrepClosing,
+  getPrepClosingById,
+  createPrepClosing,
+  updatePrepClosing,
+  deletePrepClosing,
+  getPrepClosingStats,
+  createPrepClosingValidation,
+  updatePrepClosingValidation
+};

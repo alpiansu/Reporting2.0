@@ -319,9 +319,10 @@ class RekonWtHarianService {
   /**
    * Reconcile data for all branches
    * @param {string} period - Period in YYMM format
+   * @param {string} progressId - Progress tracking ID (optional, will create new if not provided)
    * @returns {Promise<Object>} Reconciliation results for all branches
    */
-  async reconcileAllBranches(period) {
+  async reconcileAllBranches(period, progressId = null) {
     try {
       // Ensure storeService is initialized
       await storeService.ensureInitialized();
@@ -332,20 +333,130 @@ class RekonWtHarianService {
 
       logger.info(`Found ${branches.length} branches to process`);
 
-      // Initialize progress tracking
-      const progressId = ProgressHelper.start({
-        processType: "rekon_wt_harian",
-        identifier: `ALL_${period}`,
-        totalSteps: branches.length,
-        title: "Rekon WT Harian - All Branches",
-        description: `Processing rekon for all ${branches.length} branches, period ${period}`,
-        metadata: {
-          period,
-          totalBranches: branches.length,
-          processType: "all_branches",
-        },
-      });
-      logger.info(`Initialized progress tracking with ID: ${progressId}`);
+      // Calculate total stores across all branches for accurate progress tracking
+      let totalStores = 0;
+      const branchStoreMap = {};
+      for (const cab of branches) {
+        const branchStores = await storeService.getStoresByBranch(cab, true);
+        branchStoreMap[cab] = branchStores;
+        totalStores += branchStores.length;
+      }
+
+      logger.info(`Total stores across all branches: ${totalStores}`);
+
+      // Use existing progressId or create new one if not provided
+      if (!progressId) {
+        progressId = ProgressHelper.start({
+          processType: "rekon_wt_harian",
+          identifier: `ALL_${period}`,
+          totalSteps: totalStores, // Use total stores for granular progress
+          title: "Rekon WT Harian - All Branches",
+          description: `Processing rekon for ${totalStores} stores across ${branches.length} branches, period ${period}`,
+          metadata: {
+            period,
+            totalBranches: branches.length,
+            totalStores: totalStores,
+            processType: "all_branches",
+          },
+        });
+        logger.info(`Created new progress tracking with ID: ${progressId}`);
+      } else {
+        logger.info(`Using existing progress tracking with ID: ${progressId}`);
+        
+        // Update progress with initial state and correct total steps
+        ProgressHelper.updateStep(progressId, {
+          currentStep: 0,
+          message: `Memulai rekonsiliasi untuk ${totalStores} toko di ${branches.length} cabang`,
+          details: {
+            totalStores: totalStores,
+            totalBranches: branches.length,
+            processedStores: 0,
+            period: period,
+            processType: "all_branches",
+          },
+        });
+      }
+
+      // Set up progress tracking variables (like single branch)
+      let processedStores = 0;
+      let storesWithDifferences = 0;
+      let totalDifferences = 0;
+      let currentBranch = '';
+
+      // Set up progress update interval - update every 2 seconds (like single branch)
+      const PROGRESS_UPDATE_INTERVAL = 2000;
+      const progressInterval = setInterval(() => {
+        // Calculate percentage directly here
+        const percentage = totalStores > 0 ? Math.round((processedStores / totalStores) * 100) : 0;
+
+        // Update progress even if no new stores have been processed
+        ProgressHelper.updateStep(progressId, {
+          currentStep: processedStores,
+          message: `Memproses toko: ${processedStores}/${totalStores} (${percentage}%) - Cabang: ${currentBranch}`,
+          details: {
+            currentProgress: `${processedStores}/${totalStores} toko`,
+            percentage: percentage,
+            currentBranch: currentBranch,
+            storesWithDifferences: storesWithDifferences,
+            totalDifferences: totalDifferences,
+            period: period,
+          },
+        });
+
+        logger.debug(`Progress update: ${processedStores}/${totalStores} stores processed (${percentage}%)`);
+      }, PROGRESS_UPDATE_INTERVAL);
+
+      // Override the processStore method to track progress per store (like single branch)
+      const originalProcessStore = this.processStore;
+      logger.info(`🔧 OVERRIDE: Setting up processStore override for all branches progress tracking`);
+      this.processStore = async (store, cab, period, wrcData) => {
+        logger.info(`🔧 OVERRIDE CALLED: Processing store ${store.storeCode} in branch ${cab} - ALL BRANCHES MODE`);
+
+        // Update current branch being processed
+        currentBranch = cab;
+
+        // Process the store with all required parameters
+        const result = await originalProcessStore.apply(this, [store, cab, period, wrcData]);
+
+        // Update progress tracking variables
+        if (result && result.errors.length == 0) {
+          processedStores++;
+        }
+        logger.info(`Store ${store.storeCode} processed with differences result:`, result.length);
+
+        // Update differences if any
+        if (result && result.differences && result.differences.length > 0) {
+          storesWithDifferences++;
+          totalDifferences += result.differences.length;
+        }
+
+        // Calculate percentage directly
+        const percentage = totalStores > 0 ? Math.round((processedStores / totalStores) * 100) : 0;
+
+        logger.info(`🔧 PROGRESS UPDATE: Store ${store.storeCode} processed. Total: ${processedStores}/${totalStores} (${percentage}%)`);
+
+        // Update progress immediately for each store (like single branch)
+        ProgressHelper.updateStep(progressId, {
+          currentStep: processedStores,
+          message: `Memproses toko: ${processedStores}/${totalStores} (${percentage}%) - Cabang: ${cab}`,
+          details: {
+            currentStore: store.storeCode,
+            currentBranch: cab,
+            currentProgress: `${processedStores}/${totalStores} toko`,
+            percentage: percentage,
+            storesWithDifferences: storesWithDifferences,
+            totalDifferences: totalDifferences,
+            period: period,
+          },
+        });
+
+        // Log detailed progress information
+        logger.debug(
+          `Store ${store.storeCode} processed. Progress: ${processedStores}/${totalStores} (${percentage}%)`
+        );
+
+        return result;
+      };
 
       const results = {
         success: true,
@@ -436,6 +547,12 @@ class RekonWtHarianService {
         }
       }
 
+      // Restore original method (like single branch)
+      this.processStore = originalProcessStore;
+
+      // Clear the interval (like single branch)
+      clearInterval(progressInterval);
+
       // Store total processed stores in results
       results.totalProcessedStores = totalProcessedStores;
       results.totalStoresWithDifferences = totalStoresWithDifferences;
@@ -465,6 +582,14 @@ class RekonWtHarianService {
       return results;
     } catch (error) {
       logger.error(`Error reconciling all branches: ${error.message}`);
+
+      // Cleanup: Restore original method and clear interval if they exist
+      if (typeof originalProcessStore !== 'undefined') {
+        this.processStore = originalProcessStore;
+      }
+      if (typeof progressInterval !== 'undefined') {
+        clearInterval(progressInterval);
+      }
 
       // Mark progress as failed
       if (progressId) {
@@ -508,7 +633,7 @@ class RekonWtHarianService {
       // Run in background (non-blocking)
       setTimeout(async () => {
         try {
-          await this.reconcileAllBranches(period);
+          await this.reconcileAllBranches(period, progressId);
         } catch (error) {
           logger.error(`Error in background reconciliation: ${error.message}`);
           // Progress status will be updated to 'failed' by reconcileAllBranches

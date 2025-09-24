@@ -390,9 +390,16 @@ const handleProgressUpdate = (data) => {
   if (data.type === 'progress' && data.data) {
     const progressData = data.data;
     
-    // Update progress values
-    processedItems.value = progressData.processedItems || 0;
-    totalItems.value = progressData.totalItems || totalItems.value;
+    // Update progress values - handle both stores and branches
+    if (progressData.details && progressData.details.processType === 'all_branches') {
+      // For all branches, use branch count
+      processedItems.value = progressData.details.completedBranches || progressData.currentStep || 0;
+      totalItems.value = progressData.details.totalBranches || totalItems.value;
+    } else {
+      // For single branch, use store count
+      processedItems.value = progressData.processedItems || progressData.currentStep || 0;
+      totalItems.value = progressData.totalItems || totalItems.value;
+    }
     
     // Update differences count from details if available
     if (progressData.details) {
@@ -410,24 +417,35 @@ const handleProgressUpdate = (data) => {
     
     // Add wave and branch information if available
     if (progressData.details) {
-      // Determine current branch being processed from progress data
-      let currentProcessingBranch = '';
-      if (progressData.details.cab) {
-        currentProcessingBranch = progressData.details.cab;
-      } else if (progressData.details.currentBranch) {
-        currentProcessingBranch = progressData.details.currentBranch;
-      }
-      
-      // Show information about which branch is currently being processed
-      if (currentProcessingBranch) {
-        if (!detailMessage) {
-          detailMessage = `Memproses cabang: ${currentProcessingBranch}`;
+      // Handle different process types
+      if (progressData.details.processType === 'all_branches') {
+        // For all branches processing
+        if (progressData.details.lastProcessedBranch) {
+          detailMessage = `Terakhir diproses: ${progressData.details.lastProcessedBranch}`;
+        } else {
+          detailMessage = `Memproses ${progressData.details.totalBranches || 'semua'} cabang`;
         }
       } else {
-        // Fallback to selected branch info only if no current processing branch
-        const cabangInfo = formData.cab === 'All' ? 'SEMUA CABANG' : `Cabang: ${formData.cab}`;
-        if (!detailMessage) {
-          detailMessage = `Rekonsiliasi ${cabangInfo}`;
+        // For single branch processing
+        // Determine current branch being processed from progress data
+        let currentProcessingBranch = '';
+        if (progressData.details.cab) {
+          currentProcessingBranch = progressData.details.cab;
+        } else if (progressData.details.currentBranch) {
+          currentProcessingBranch = progressData.details.currentBranch;
+        }
+        
+        // Show information about which branch is currently being processed
+        if (currentProcessingBranch) {
+          if (!detailMessage) {
+            detailMessage = `Memproses cabang: ${currentProcessingBranch}`;
+          }
+        } else {
+          // Fallback to selected branch info only if no current processing branch
+          const cabangInfo = formData.cab === 'All' ? 'SEMUA CABANG' : `Cabang: ${formData.cab}`;
+          if (!detailMessage) {
+            detailMessage = `Rekonsiliasi ${cabangInfo}`;
+          }
         }
       }
       
@@ -489,9 +507,14 @@ const handleProgressUpdate = (data) => {
       currentItem.value = '';
     }
     
-    // Update progress percentage
-    progressPercentage.value = progressData.percentage !== undefined ? progressData.percentage : 
-      (totalItems.value > 0 ? Math.round((processedItems.value / totalItems.value) * 100) : 0);
+    // Update progress percentage - use backend calculated percentage if available
+    if (progressData.details && progressData.details.percentage !== undefined) {
+      progressPercentage.value = progressData.details.percentage;
+    } else if (progressData.percentage !== undefined) {
+      progressPercentage.value = progressData.percentage;
+    } else {
+      progressPercentage.value = totalItems.value > 0 ? Math.round((processedItems.value / totalItems.value) * 100) : 0;
+    }
     // If reconciliation is complete, stop tracking
     if (progressData.status === 'completed' || progressData.status === 'failed' || progressData.status === 'error') {
       stopProgressTracking();

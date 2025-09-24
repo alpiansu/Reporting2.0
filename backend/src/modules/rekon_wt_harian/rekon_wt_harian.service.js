@@ -155,16 +155,16 @@ class RekonWtHarianService {
 
       // Initialize progress tracking
       const progressId = ProgressHelper.start({
-        processType: 'rekon_wt_harian',
+        processType: "rekon_wt_harian",
         identifier: `ALL_${period}`,
         totalSteps: branches.length,
-        title: 'Rekon WT Harian - All Branches',
+        title: "Rekon WT Harian - All Branches",
         description: `Processing rekon for all ${branches.length} branches, period ${period}`,
         metadata: {
           period,
           totalBranches: branches.length,
-          processType: 'all_branches'
-        }
+          processType: "all_branches",
+        },
       });
       logger.info(`Initialized progress tracking with ID: ${progressId}`);
 
@@ -197,11 +197,11 @@ class RekonWtHarianService {
             ProgressHelper.updateStep(progressId, {
               currentStep: processedCount,
               message: `Processed branch ${cab} (${processedCount}/${branches.length})`,
-              details: { 
+              details: {
                 lastProcessedBranch: cab,
                 completedBranches: processedCount,
-                remainingBranches: branches.length - processedCount
-              }
+                remainingBranches: branches.length - processedCount,
+              },
             });
 
             return result;
@@ -277,8 +277,8 @@ class RekonWtHarianService {
             totalStoresWithDifferences: results.totalStoresWithDifferences,
             totalDifferences: results.totalDifferences,
             period: period,
-            completedAt: new Date().toISOString()
-          }
+            completedAt: new Date().toISOString(),
+          },
         }
       );
 
@@ -293,7 +293,7 @@ class RekonWtHarianService {
           errorType: error.name,
           stack: error.stack,
           period: period,
-          failedAt: new Date().toISOString()
+          failedAt: new Date().toISOString(),
         });
       }
 
@@ -345,8 +345,8 @@ class RekonWtHarianService {
         stack: error.stack,
         details: {
           operation: "reconcileAllBranchesWithProgress",
-          failedAt: new Date().toISOString()
-        }
+          failedAt: new Date().toISOString(),
+        },
       });
     }
   }
@@ -374,8 +374,8 @@ class RekonWtHarianService {
               totalStores: totalStores,
               processedStores: 0,
               cab: cab,
-              period: period
-            }
+              period: period,
+            },
           });
 
           // Log initialization with explicit percentage
@@ -402,8 +402,8 @@ class RekonWtHarianService {
                 storesWithDifferences: storesWithDifferences,
                 totalDifferences: totalDifferences,
                 cab: cab,
-                period: period
-              }
+                period: period,
+              },
             });
 
             logger.debug(`Progress update: ${processedStores}/${totalStores} stores processed (${percentage}%)`);
@@ -443,8 +443,8 @@ class RekonWtHarianService {
                 storesWithDifferences: storesWithDifferences,
                 totalDifferences: totalDifferences,
                 cab: cab,
-                period: period
-              }
+                period: period,
+              },
             });
 
             // Log detailed progress information
@@ -470,7 +470,7 @@ class RekonWtHarianService {
 
           // Final progress update
           ProgressHelper.complete(
-            progressId, 
+            progressId,
             `Rekonsiliasi selesai: ${result.storesWithDifferences} dari ${totalStores} toko memiliki perbedaan`,
             {
               details: {
@@ -481,8 +481,8 @@ class RekonWtHarianService {
                 waveDetails: result.waves || [],
                 cab: cab,
                 period: period,
-                completedAt: new Date().toISOString()
-              }
+                completedAt: new Date().toISOString(),
+              },
             }
           );
 
@@ -502,8 +502,8 @@ class RekonWtHarianService {
               operation: "reconcileDataWithProgress",
               cab: cab,
               period: period,
-              failedAt: new Date().toISOString()
-            }
+              failedAt: new Date().toISOString(),
+            },
           });
         }
       }, 0);
@@ -519,8 +519,8 @@ class RekonWtHarianService {
           operation: "reconcileDataWithProgress_startup",
           cab: cab,
           period: period,
-          failedAt: new Date().toISOString()
-        }
+          failedAt: new Date().toISOString(),
+        },
       });
     }
   }
@@ -643,8 +643,8 @@ class RekonWtHarianService {
                 currentWave: wave,
                 storeProgress: `${currentStores.length} toko`,
                 cab: cab,
-                period: period
-              }
+                period: period,
+              },
             });
           }
         }
@@ -755,7 +755,7 @@ class RekonWtHarianService {
 
         // Update progress after each wave with current totalDifferences
         const activeProcess = ProgressHelper.getActiveProcess(cab, period);
-        
+
         if (activeProcess) {
           ProgressHelper.updateStep(activeProcess.id, {
             currentStep: results.processedStores,
@@ -768,8 +768,8 @@ class RekonWtHarianService {
               timeoutsInWave: timeoutStores.length,
               errorsInWave: storeErrors.length,
               cab: cab,
-              period: period
-            }
+              period: period,
+            },
           });
         }
 
@@ -853,7 +853,7 @@ class RekonWtHarianService {
 
       // Final progress update with complete results
       const activeProcess = ProgressHelper.getActiveProcess(cab, period);
-      
+
       if (activeProcess) {
         ProgressHelper.updateStep(activeProcess.id, {
           currentStep: results.processedStores,
@@ -865,8 +865,8 @@ class RekonWtHarianService {
             totalDuration: totalDuration,
             saveResult: results.saveResult,
             cab: cab,
-            period: period
-          }
+            period: period,
+          },
         });
       }
 
@@ -941,7 +941,7 @@ class RekonWtHarianService {
 
     // Update progress to show current store being processed
     const activeProcess = ProgressHelper.getActiveProcess(cab, period);
-    
+
     if (activeProcess) {
       ProgressHelper.updateStep(activeProcess.id, {
         message: `[Wave ${waveNumber}] Memproses toko ${storeCode}`,
@@ -950,8 +950,8 @@ class RekonWtHarianService {
           currentStoreName: store.storeName,
           currentWave: waveNumber,
           cab: cab,
-          period: period
-        }
+          period: period,
+        },
       });
     }
 
@@ -1163,41 +1163,70 @@ class RekonWtHarianService {
           totalDifferences += differences.length;
           logger.info(`Processing ${differences.length} differences from ${file}`);
 
-          // Simpan perbedaan ke database dalam batch
-          const BATCH_SIZE = 100;
+          // Simpan perbedaan ke database dalam batch menggunakan bulk upsert
+          const BATCH_SIZE = 300; // Increase batch size for bulk operations
           for (let i = 0; i < differences.length; i += BATCH_SIZE) {
             const batch = differences.slice(i, i + BATCH_SIZE);
             try {
-              // Gunakan upsert untuk setiap record agar bisa update jika sudah ada
-              const upsertPromises = batch.map(async difference => {
-                try {
-                  difference.recid = "*";
-                  const [record, created] = await RekonWtHarian.upsert(difference, {
-                    returning: true, // Return the record whether created or updated
-                  });
-                  return { success: true, created };
-                } catch (error) {
-                  logger.error(`Error upserting record: ${error.message}`);
-                  return { success: false, error: error.message };
-                }
+              // Set recid untuk semua record dalam batch
+              batch.forEach(difference => {
+                difference.recid = "*";
               });
 
-              const results = await Promise.allSettled(upsertPromises);
-              const successes = results.filter(r => r.status === "fulfilled" && r.value.success).length;
-              const failures = results.length - successes;
+              // Gunakan bulkCreate dengan updateOnDuplicate untuk bulk upsert
+              const result = await RekonWtHarian.bulkCreate(batch, {
+                updateOnDuplicate: [
+                  "gross_wrc",
+                  "ppn_wrc",
+                  "gross_idm_wrc",
+                  "ppn_idm_wrc",
+                  "gross_store",
+                  "ppn_store",
+                  "gross_idm_store",
+                  "ppn_idm_store",
+                  "selisih_gross",
+                  "selisih_ppn",
+                  "selisih_gross_idm",
+                  "selisih_ppn_idm",
+                  "recid",
+                  "updtime",
+                ],
+                returning: false, // Don't return records for better performance
+                ignoreDuplicates: false, // We want to update duplicates
+              });
 
-              totalSaved += successes;
-              totalErrors += failures;
+              const savedCount = batch.length; // All records in batch are processed
+              totalSaved += savedCount;
 
-              // Sync to JSON file after each batch
-              await this.syncToJsonFile();
-
-              logger.info(`Batch saved: ${successes} successful, ${failures} failed`);
+              logger.info(
+                `Bulk upsert completed: ${savedCount} records processed in batch ${Math.floor(i / BATCH_SIZE) + 1}`
+              );
             } catch (error) {
-              logger.error(`Error saving batch to database: ${error.message}`);
+              logger.error(`Error in bulk upsert for batch ${Math.floor(i / BATCH_SIZE) + 1}: ${error.message}`);
               totalErrors += batch.length;
+
+              // Fallback: try individual upserts for this batch if bulk fails
+              logger.info(`Attempting fallback individual upserts for failed batch...`);
+              let fallbackSaved = 0;
+              for (const difference of batch) {
+                try {
+                  await RekonWtHarian.upsert(difference);
+                  fallbackSaved++;
+                } catch (fallbackError) {
+                  logger.error(`Fallback upsert failed for record: ${fallbackError.message}`);
+                }
+              }
+
+              if (fallbackSaved > 0) {
+                totalSaved += fallbackSaved;
+                totalErrors -= fallbackSaved; // Adjust error count
+                logger.info(`Fallback saved ${fallbackSaved} records from failed batch`);
+              }
             }
           }
+
+          // Sync to JSON file after processing all batches for this file
+          await this.syncToJsonFile();
 
           // Hapus file temporary setelah berhasil disimpan ke database
           await fs.unlink(filePath);

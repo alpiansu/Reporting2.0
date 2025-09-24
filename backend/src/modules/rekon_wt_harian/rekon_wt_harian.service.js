@@ -137,6 +137,117 @@ class RekonWtHarianService {
       throw error;
     }
   }
+
+  /**
+   * Helper function to calculate differences between WRC and store data
+   * @param {Object} item - Data item containing WRC and store values
+   * @returns {Object} Object containing calculated differences
+   */
+  _calculateDifferences(item) {
+    return {
+      selisihGross: item.selisih_gross || (item.gross_wrc - item.gross_store) || 0,
+      selisihPpn: item.selisih_ppn || (item.ppn_wrc - item.ppn_store) || 0,
+      selisihGrossIdm: item.selisih_gross_idm || (item.gross_idm_wrc - item.gross_idm_store) || 0,
+      selisihPpnIdm: item.selisih_ppn_idm || (item.ppn_idm_wrc - item.ppn_idm_store) || 0
+    };
+  }
+
+  /**
+   * Helper function to calculate summary statistics from filtered data
+   * @param {Array} filteredData - Array of filtered reconciliation data
+   * @returns {Object} Summary statistics object
+   */
+  _calculateSummaryStats(filteredData) {
+    // Calculate summary statistics
+    const uniqueShops = new Set(filteredData.map(item => item.shop));
+
+    // Initialize summary object
+    const summary = {
+      jml_toko: uniqueShops.size,
+      sel_gross: 0,
+      sel_ppn: 0,
+      sel_gross_idm: 0,
+      sel_ppn_idm: 0,
+      max_gross: Number.MIN_SAFE_INTEGER,
+      min_gross: Number.MAX_SAFE_INTEGER,
+      max_ppn: Number.MIN_SAFE_INTEGER,
+      min_ppn: Number.MAX_SAFE_INTEGER,
+      max_gross_idm: Number.MIN_SAFE_INTEGER,
+      min_gross_idm: Number.MAX_SAFE_INTEGER,
+      max_ppn_idm: Number.MIN_SAFE_INTEGER,
+      min_ppn_idm: Number.MAX_SAFE_INTEGER,
+    };
+
+    // Calculate sums and find min/max values
+    filteredData.forEach(item => {
+      const differences = this._calculateDifferences(item);
+
+      // Sum values
+      summary.sel_gross += differences.selisihGross;
+      summary.sel_ppn += differences.selisihPpn;
+      summary.sel_gross_idm += differences.selisihGrossIdm;
+      summary.sel_ppn_idm += differences.selisihPpnIdm;
+
+      // Find max/min values
+      summary.max_gross = Math.max(summary.max_gross, differences.selisihGross);
+      summary.min_gross = Math.min(summary.min_gross, differences.selisihGross);
+
+      summary.max_ppn = Math.max(summary.max_ppn, differences.selisihPpn);
+      summary.min_ppn = Math.min(summary.min_ppn, differences.selisihPpn);
+
+      summary.max_gross_idm = Math.max(summary.max_gross_idm, differences.selisihGrossIdm);
+      summary.min_gross_idm = Math.min(summary.min_gross_idm, differences.selisihGrossIdm);
+
+      summary.max_ppn_idm = Math.max(summary.max_ppn_idm, differences.selisihPpnIdm);
+      summary.min_ppn_idm = Math.min(summary.min_ppn_idm, differences.selisihPpnIdm);
+    });
+
+    // Handle edge cases where no data is found
+    if (filteredData.length === 0) {
+      summary.max_gross = 0;
+      summary.min_gross = 0;
+      summary.max_ppn = 0;
+      summary.min_ppn = 0;
+      summary.max_gross_idm = 0;
+      summary.min_gross_idm = 0;
+      summary.max_ppn_idm = 0;
+      summary.min_ppn_idm = 0;
+    }
+
+    return summary;
+  }
+
+  /**
+   * Helper function to calculate group statistics (type or branch)
+   * @param {Array} data - Array of data to group
+   * @param {string} groupKey - Key to group by ('tipe' or 'cab')
+   * @returns {Array} Array of group statistics
+   */
+  _calculateGroupStats(data, groupKey) {
+    const groupMap = new Map();
+    
+    data.forEach(item => {
+      const groupValue = item[groupKey];
+      if (!groupMap.has(groupValue)) {
+        groupMap.set(groupValue, { 
+          [groupKey]: groupValue, 
+          count: 0, 
+          diffGross: 0, 
+          diffPpn: 0 
+        });
+      }
+
+      const groupData = groupMap.get(groupValue);
+      const differences = this._calculateDifferences(item);
+      
+      groupData.count += 1;
+      groupData.diffGross += differences.selisihGross;
+      groupData.diffPpn += differences.selisihPpn;
+    });
+    
+    return Array.from(groupMap.values());
+  }
+
   /**
    * Reconcile data for all branches
    * @param {string} period - Period in YYMM format
@@ -1445,95 +1556,14 @@ class RekonWtHarianService {
       // Filter data for the specified period and only show data with recid '*' (still has differences)
       const filteredData = this.rekonData.filter(item => item.periode === period && item.recid === "*");
 
-      // Calculate summary statistics
-      const uniqueShops = new Set(filteredData.map(item => item.shop));
+      // Use helper function to calculate main summary statistics
+      const mainSummary = this._calculateSummaryStats(filteredData);
 
-      // Initialize summary object
-      const mainSummary = {
-        jml_toko: uniqueShops.size,
-        sel_gross: 0,
-        sel_ppn: 0,
-        sel_gross_idm: 0,
-        sel_ppn_idm: 0,
-        max_gross: Number.MIN_SAFE_INTEGER,
-        min_gross: Number.MAX_SAFE_INTEGER,
-        max_ppn: Number.MIN_SAFE_INTEGER,
-        min_ppn: Number.MAX_SAFE_INTEGER,
-        max_gross_idm: Number.MIN_SAFE_INTEGER,
-        min_gross_idm: Number.MAX_SAFE_INTEGER,
-        max_ppn_idm: Number.MIN_SAFE_INTEGER,
-        min_ppn_idm: Number.MAX_SAFE_INTEGER,
-      };
+      // Use helper function to calculate type statistics
+      const typeStats = this._calculateGroupStats(filteredData, 'tipe');
 
-      // Calculate sums and find min/max values
-      filteredData.forEach(item => {
-        // Calculate selisih values if not already present
-        const selisihGross = item.selisih_gross || item.gross_wrc - item.gross_store || 0;
-        const selisihPpn = item.selisih_ppn || item.ppn_wrc - item.ppn_store || 0;
-        const selisihGrossIdm = item.selisih_gross_idm || item.gross_idm_wrc - item.gross_idm_store || 0;
-        const selisihPpnIdm = item.selisih_ppn_idm || item.ppn_idm_wrc - item.ppn_idm_store || 0;
-
-        // Sum values
-        mainSummary.sel_gross += selisihGross;
-        mainSummary.sel_ppn += selisihPpn;
-        mainSummary.sel_gross_idm += selisihGrossIdm;
-        mainSummary.sel_ppn_idm += selisihPpnIdm;
-
-        // Find max/min values
-        mainSummary.max_gross = Math.max(mainSummary.max_gross, selisihGross);
-        mainSummary.min_gross = Math.min(mainSummary.min_gross, selisihGross);
-
-        mainSummary.max_ppn = Math.max(mainSummary.max_ppn, selisihPpn);
-        mainSummary.min_ppn = Math.min(mainSummary.min_ppn, selisihPpn);
-
-        mainSummary.max_gross_idm = Math.max(mainSummary.max_gross_idm, selisihGrossIdm);
-        mainSummary.min_gross_idm = Math.min(mainSummary.min_gross_idm, selisihGrossIdm);
-
-        mainSummary.max_ppn_idm = Math.max(mainSummary.max_ppn_idm, selisihPpnIdm);
-        mainSummary.min_ppn_idm = Math.min(mainSummary.min_ppn_idm, selisihPpnIdm);
-      });
-
-      // Handle edge cases where no data is found
-      if (filteredData.length === 0) {
-        mainSummary.max_gross = 0;
-        mainSummary.min_gross = 0;
-        mainSummary.max_ppn = 0;
-        mainSummary.min_ppn = 0;
-        mainSummary.max_gross_idm = 0;
-        mainSummary.min_gross_idm = 0;
-        mainSummary.max_ppn_idm = 0;
-        mainSummary.min_ppn_idm = 0;
-      }
-
-      // Calculate type statistics
-      const typeMap = new Map();
-      filteredData.forEach(item => {
-        const tipe = item.tipe;
-        if (!typeMap.has(tipe)) {
-          typeMap.set(tipe, { tipe, count: 0, diffGross: 0, diffPpn: 0 });
-        }
-
-        const typeData = typeMap.get(tipe);
-        typeData.count += 1;
-        typeData.diffGross += item.selisih_gross || item.gross_wrc - item.gross_store || 0;
-        typeData.diffPpn += item.selisih_ppn || item.ppn_wrc - item.ppn_store || 0;
-      });
-      const typeStats = Array.from(typeMap.values());
-
-      // Calculate branch statistics
-      const branchMap = new Map();
-      filteredData.forEach(item => {
-        const cab = item.cab;
-        if (!branchMap.has(cab)) {
-          branchMap.set(cab, { cab, count: 0, diffGross: 0, diffPpn: 0 });
-        }
-
-        const branchData = branchMap.get(cab);
-        branchData.count += 1;
-        branchData.diffGross += item.selisih_gross || item.gross_wrc - item.gross_store || 0;
-        branchData.diffPpn += item.selisih_ppn || item.ppn_wrc - item.ppn_store || 0;
-      });
-      const branchStats = Array.from(branchMap.values());
+      // Use helper function to calculate branch statistics
+      const branchStats = this._calculateGroupStats(filteredData, 'cab');
 
       // Combine the main summary with additional stats
       const summary = {
@@ -1565,65 +1595,8 @@ class RekonWtHarianService {
         item => item.cab === cab && item.periode === period && item.recid === "*"
       );
 
-      // Calculate summary statistics
-      const uniqueShops = new Set(filteredData.map(item => item.shop));
-
-      // Initialize summary object
-      const summary = {
-        jml_toko: uniqueShops.size,
-        sel_gross: 0,
-        sel_ppn: 0,
-        sel_gross_idm: 0,
-        sel_ppn_idm: 0,
-        max_gross: Number.MIN_SAFE_INTEGER,
-        min_gross: Number.MAX_SAFE_INTEGER,
-        max_ppn: Number.MIN_SAFE_INTEGER,
-        min_ppn: Number.MAX_SAFE_INTEGER,
-        max_gross_idm: Number.MIN_SAFE_INTEGER,
-        min_gross_idm: Number.MAX_SAFE_INTEGER,
-        max_ppn_idm: Number.MIN_SAFE_INTEGER,
-        min_ppn_idm: Number.MAX_SAFE_INTEGER,
-      };
-
-      // Calculate sums and find min/max values
-      filteredData.forEach(item => {
-        // Calculate selisih values if not already present
-        const selisihGross = item.selisih_gross || item.gross_wrc - item.gross_store || 0;
-        const selisihPpn = item.selisih_ppn || item.ppn_wrc - item.ppn_store || 0;
-        const selisihGrossIdm = item.selisih_gross_idm || item.gross_idm_wrc - item.gross_idm_store || 0;
-        const selisihPpnIdm = item.selisih_ppn_idm || item.ppn_idm_wrc - item.ppn_idm_store || 0;
-
-        // Sum values
-        summary.sel_gross += selisihGross;
-        summary.sel_ppn += selisihPpn;
-        summary.sel_gross_idm += selisihGrossIdm;
-        summary.sel_ppn_idm += selisihPpnIdm;
-
-        // Find max/min values
-        summary.max_gross = Math.max(summary.max_gross, selisihGross);
-        summary.min_gross = Math.min(summary.min_gross, selisihGross);
-
-        summary.max_ppn = Math.max(summary.max_ppn, selisihPpn);
-        summary.min_ppn = Math.min(summary.min_ppn, selisihPpn);
-
-        summary.max_gross_idm = Math.max(summary.max_gross_idm, selisihGrossIdm);
-        summary.min_gross_idm = Math.min(summary.min_gross_idm, selisihGrossIdm);
-
-        summary.max_ppn_idm = Math.max(summary.max_ppn_idm, selisihPpnIdm);
-        summary.min_ppn_idm = Math.min(summary.min_ppn_idm, selisihPpnIdm);
-      });
-
-      // Handle edge cases where no data is found
-      if (filteredData.length === 0) {
-        summary.max_gross = 0;
-        summary.min_gross = 0;
-        summary.max_ppn = 0;
-        summary.min_ppn = 0;
-        summary.max_gross_idm = 0;
-        summary.min_gross_idm = 0;
-        summary.max_ppn_idm = 0;
-        summary.min_ppn_idm = 0;
-      }
+      // Use helper function to calculate summary statistics
+      const summary = this._calculateSummaryStats(filteredData);
 
       return summary;
     } catch (error) {
@@ -1725,18 +1698,9 @@ class RekonWtHarianService {
           TGL1: key.split("|")[3],
         };
 
-        // Hitung selisih
-        const grossDiff = storeItem.GROSS - wrcItem.GROSS;
-        const ppnDiff = storeItem.PPN - wrcItem.PPN;
-        const grossIdmDiff = storeItem.GROSS_IDM - wrcItem.GROSS_IDM;
-        const ppnIdmDiff = storeItem.PPN_IDM - wrcItem.PPN_IDM;
-
-        // Cek apakah selisih melebihi threshold
-        const hasSignificantDifference =
-          Math.abs(grossDiff) > config.differenceThreshold ||
-          Math.abs(ppnDiff) > config.differenceThreshold ||
-          Math.abs(grossIdmDiff) > config.differenceThreshold ||
-          Math.abs(ppnIdmDiff) > config.differenceThreshold;
+        // Use helper function to calculate differences
+        const { grossDiff, ppnDiff, grossIdmDiff, ppnIdmDiff, hasSignificantDifference } = 
+          this._calculateDifferences(wrcItem, storeItem);
 
         // Simpan jika ada selisih signifikan
         if (hasSignificantDifference) {

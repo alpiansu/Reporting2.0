@@ -329,4 +329,24 @@ export const getLatestProgress = async (req, res, next) => {
   }
 };
 
+/**
+ * Invalidate cache manually
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+export const invalidateCache = async (req, res, next) => {
+  try {
+    rekonWtHarianService.invalidateCache();
+    
+    res.status(200).json({
+      success: true,
+      message: "Cache invalidated successfully. Data will be reloaded on next request.",
+    });
+  } catch (error) {
+    logger.error(`Error in invalidateCache: ${error.message}`);
+    next(error);
+  }
+};
+
 // Removed default export - using named exports only

@@ -11,6 +11,7 @@ import {
   deleteResults,
   getProgress,
   getLatestProgress,
+  invalidateCache,
 } from "./rekon_wt_harian.controller.js";
 import { authenticateJWT, authorizeRole } from "../../middlewares/index.js";
 
@@ -22,6 +23,7 @@ const rekonWtHarianController = {
   deleteResults,
   getProgress,
   getLatestProgress,
+  invalidateCache,
 };
 
 // Start reconciliation process
@@ -67,6 +69,16 @@ router.get(
   authenticateJWT,
   authorizeRole(["admin", "superadmin"]),
   rekonWtHarianController.cleanupTempFiles
+);
+
+// Invalidate cache manually
+// POST /api/rekon-wt-harian/invalidate-cache
+// Access: Private (Admin/Superadmin only)
+router.post(
+  "/invalidate-cache",
+  authenticateJWT,
+  authorizeRole(["admin", "superadmin"]),
+  rekonWtHarianController.invalidateCache
 );
 
 // SSE endpoint has been moved to /api/progress/sse/:progressId

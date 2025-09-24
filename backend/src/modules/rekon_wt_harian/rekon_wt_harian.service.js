@@ -22,6 +22,11 @@ class RekonWtHarianService {
   constructor() {
     this.rekonData = [];
     this.initialized = false;
+    
+    // TTL Cache Management
+    this.lastLoadTime = null;
+    this.TTL = 60 * 60 * 1000; // 1 hour in milliseconds
+    this.isLoading = false; // Prevent concurrent loading
   }
 
   /**
@@ -89,7 +94,65 @@ class RekonWtHarianService {
   }
 
   /**
+   * Check if cached data is still valid based on TTL
+   * @returns {boolean} True if cache is valid, false if expired
+   */
+  isCacheValid() {
+    if (!this.initialized || !this.lastLoadTime) {
+      return false;
+    }
+    
+    const now = Date.now();
+    const isExpired = (now - this.lastLoadTime) > this.TTL;
+    return !isExpired;
+  }
+
+  /**
+   * Invalidate cache manually (useful when database is updated)
+   */
+  invalidateCache() {
+    this.rekonData = [];
+    this.initialized = false;
+    this.lastLoadTime = null;
+    this.isLoading = false;
+    logger.info('Cache invalidated manually');
+  }
+
+  /**
+   * Ensure data is loaded with TTL-based lazy loading
+   * Only loads data when needed and cache is expired
+   */
+  async ensureDataLoaded() {
+    // If cache is still valid, no need to reload
+    if (this.isCacheValid()) {
+      return;
+    }
+
+    // Prevent concurrent loading
+    if (this.isLoading) {
+      // Wait for ongoing loading to complete
+      while (this.isLoading) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      return;
+    }
+
+    try {
+      this.isLoading = true;
+      logger.info('Loading data from JSON file (cache expired or empty)');
+      
+      await this.initialize();
+      this.lastLoadTime = Date.now();
+      
+      logger.info(`Data loaded successfully. TTL expires at: ${new Date(this.lastLoadTime + this.TTL).toISOString()}`);
+    } finally {
+      this.isLoading = false;
+    }
+  }
+
+  /**
    * Ensure the service is initialized before performing operations
+   * @deprecated Use ensureDataLoaded() instead for TTL-based loading
    */
   async ensureInitialized() {
     if (!this.initialized) {
@@ -130,7 +193,12 @@ class RekonWtHarianService {
       // Save to file
       await this.saveToFile();
 
+      // Update cache timestamp since we just loaded fresh data
+      this.lastLoadTime = Date.now();
+      this.initialized = true;
+
       logger.info(`Synchronized ${this.rekonData.length} rekon_wt_harian records to JSON file`);
+      logger.info(`Cache refreshed. TTL expires at: ${new Date(this.lastLoadTime + this.TTL).toISOString()}`);
       return this.rekonData.length;
     } catch (error) {
       logger.error(`Failed to synchronize rekon_wt_harian data: ${error.message}`);
@@ -1376,8 +1444,8 @@ class RekonWtHarianService {
       const validLimit = Math.min(limit, config.pagination.maxLimit);
       const offset = (page - 1) * validLimit;
 
-      // Ensure data is loaded from JSON file
-      await this.ensureInitialized();
+      // Ensure data is loaded with TTL-based lazy loading
+      await this.ensureDataLoaded();
 
       // Filter data from JSON file
       let filteredData = this.rekonData.filter(item => {
@@ -1550,8 +1618,8 @@ class RekonWtHarianService {
    */
   async getAllCabangSummary(period) {
     try {
-      // Ensure data is loaded from JSON file
-      await this.ensureInitialized();
+      // Ensure data is loaded with TTL-based lazy loading
+      await this.ensureDataLoaded();
 
       // Filter data for the specified period and only show data with recid '*' (still has differences)
       const filteredData = this.rekonData.filter(item => item.periode === period && item.recid === "*");
@@ -1587,8 +1655,8 @@ class RekonWtHarianService {
    */
   async getSummary(cab, period) {
     try {
-      // Ensure data is loaded from JSON file
-      await this.ensureInitialized();
+      // Ensure data is loaded with TTL-based lazy loading
+      await this.ensureDataLoaded();
 
       // Filter data for the specified cab and period, only show data with recid '*' (still has differences)
       const filteredData = this.rekonData.filter(

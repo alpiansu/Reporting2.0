@@ -1,13 +1,13 @@
 /**
  * Utility functions for interacting with WRC (poscabang) database
  */
-import fs from 'fs/promises';
-import path from 'path';
-import os from 'os';
-import mysql from 'mysql2/promise';
-import logger from '../config/logger.js';
-import wrcService from '../services/wrc.service.js';
-import config from '../config/rekon_wt_harian.config.js';
+import fs from "fs/promises";
+import path from "path";
+import os from "os";
+import mysql from "mysql2/promise";
+import logger from "../config/logger.js";
+import wrcService from "../services/wrc.service.js";
+import config from "../config/rekon_wt_harian.config.js";
 
 class WrcUtils {
   /**
@@ -44,35 +44,18 @@ class WrcUtils {
   }
 
   /**
-   * Get query for WRC data based on table type
-   * @param {string} tableName - Table name
-   * @param {string} tableType - Table type (wt, dt, pr)
-   * @returns {string} SQL query
-   */
-  getWrcQuery(tableName, tableType = 'wt') {
-    const tableDate = tableName.substring(3);
-    
-    switch (tableType.toLowerCase()) {
-      case 'dt':
-        return config.queries.dt ? config.queries.dt.replace("{date}", tableDate) : 
-          "SELECT * FROM " + tableName;
-      case 'pr':
-        return config.queries.pr ? config.queries.pr.replace("{date}", tableDate) : 
-          "SELECT * FROM " + tableName;
-      case 'wt':
-      default:
-        return config.queries.wrc.replace("{date}", tableDate);
-    }
-  }
-
-  /**
    * Get data from WRC for a specific period
    * @param {string} cab - Branch code
    * @param {string} period - Period in YYMM format
-   * @param {string} tableType - Table type (wt, dt, pr)
-   * @returns {Promise<Array>} Array of WRC data
+   * @param {string} tableType - Table type (wt, dt, pr, etc.) for file naming and logging
+   * @param {string} strQuery - SQL query template to execute (with {date} placeholder)
+   * @returns {Promise<string>} Path to temporary file containing WRC data
    */
-  async getWrcData(cab, period, tableType = 'wt') {
+  async getWrcData(cab, period, tableType = "wt", strQuery) {
+    if (!strQuery) {
+      throw new Error("Query parameter (strQuery) is required");
+    }
+
     const wrcInstance = new wrcService();
     const wrcConfig = await wrcInstance.getConnWRC(cab);
     const connection = await mysql.createConnection(wrcConfig);
@@ -91,15 +74,12 @@ class WrcUtils {
       const dates = this.getAllDatesInMonth(year, month, isCurrentMonth);
 
       if (dates.length === 0) {
-        return [];
+        return null;
       }
 
       // Create temporary file to store WRC data
       const tempDir = path.join(os.tmpdir());
-      const tempFile = path.join(
-        tempDir,
-        `${tableType}_data_${cab}_${period}_${Date.now()}.json`
-      );
+      const tempFile = path.join(tempDir, `${tableType}_data_${cab}_${period}_${Date.now()}.json`);
 
       // Ensure temp directory exists
       try {
@@ -110,25 +90,55 @@ class WrcUtils {
         }
       }
 
-      // Initialize empty array for all WRC data
-      const allWrcData = [];
+      // Build UNION ALL query for all dates
+      const unionQueries = [];
+      const validDates = [];
 
-      // Query each table for each date
       for (const date of dates) {
         const dateParts = date.split("-");
         const tableDate = dateParts[0].substring(2) + dateParts[1] + dateParts[2];
-        const tableName = `${tableType}_${tableDate}`;
 
-        try {
-          const query = this.getWrcQuery(tableName, tableType);
-          const [rows] = await connection.execute(query);
+        // Replace {date} placeholder in query with actual table date
+        const finalQuery = strQuery.replace("{date}", tableDate);
+        unionQueries.push(`(${finalQuery})`);
+        validDates.push(tableDate);
+      }
 
-          if (rows && rows.length > 0) {
-            allWrcData.push(...rows);
+      // Combine all queries with UNION ALL
+      const combinedQuery = unionQueries.join(" UNION ALL ");
+
+      logger.info(
+        `Executing combined query for ${validDates.length} tables: ${tableType}_${validDates[0]} to ${tableType}_${
+          validDates[validDates.length - 1]
+        }`
+      );
+
+      // Execute the combined query once
+      let allWrcData = [];
+      try {
+        const [rows] = await connection.execute(combinedQuery);
+        allWrcData = rows || [];
+        logger.info(`Retrieved ${allWrcData.length} records from ${validDates.length} tables`);
+      } catch (error) {
+        logger.error(`Error executing combined query: ${error.message}`);
+        // If combined query fails, fallback to individual queries for debugging
+        logger.info("Falling back to individual queries for error diagnosis...");
+
+        for (let i = 0; i < dates.length; i++) {
+          const date = dates[i];
+          const tableDate = validDates[i];
+
+          try {
+            const finalQuery = strQuery.replace("{date}", tableDate);
+            const [rows] = await connection.execute(finalQuery);
+
+            if (rows && rows.length > 0) {
+              allWrcData.push(...rows);
+            }
+          } catch (individualError) {
+            logger.error(`Error querying ${tableType}_${tableDate}: ${individualError.message}`);
+            // Continue with next date even if there's an error
           }
-        } catch (error) {
-          logger.error(`Error querying ${tableName}: ${error.message}`);
-          // Continue with next date even if there's an error
         }
       }
 

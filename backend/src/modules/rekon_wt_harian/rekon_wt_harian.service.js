@@ -22,7 +22,7 @@ class RekonWtHarianService {
   constructor() {
     this.rekonData = [];
     this.initialized = false;
-    
+
     // TTL Cache Management
     this.lastLoadTime = null;
     this.TTL = 60 * 60 * 1000; // 1 hour in milliseconds
@@ -101,9 +101,9 @@ class RekonWtHarianService {
     if (!this.initialized || !this.lastLoadTime) {
       return false;
     }
-    
+
     const now = Date.now();
-    const isExpired = (now - this.lastLoadTime) > this.TTL;
+    const isExpired = now - this.lastLoadTime > this.TTL;
     return !isExpired;
   }
 
@@ -115,7 +115,7 @@ class RekonWtHarianService {
     this.initialized = false;
     this.lastLoadTime = null;
     this.isLoading = false;
-    logger.info('Cache invalidated manually');
+    logger.info("Cache invalidated manually");
   }
 
   /**
@@ -139,15 +139,84 @@ class RekonWtHarianService {
 
     try {
       this.isLoading = true;
-      logger.info('Loading data from JSON file (cache expired or empty)');
-      
+      logger.info("Loading data from JSON file (cache expired or empty)");
+
       await this.initialize();
       this.lastLoadTime = Date.now();
-      
+
       logger.info(`Data loaded successfully. TTL expires at: ${new Date(this.lastLoadTime + this.TTL).toISOString()}`);
     } finally {
       this.isLoading = false;
     }
+  }
+
+  /**
+   * Update progress bar dengan parameter yang fleksibel
+   * @param {string} progressId - ID progress yang sedang berjalan
+   * @param {Object} options - Opsi untuk update progress
+   * @param {number} options.processedStores - Jumlah toko yang sudah diproses (default: 0)
+   * @param {number} options.totalStores - Total toko yang akan diproses (required)
+   * @param {string} options.currentStore - Kode toko yang sedang diproses (optional)
+   * @param {number} options.storesWithDifferences - Jumlah toko dengan perbedaan (default: 0)
+   * @param {number} options.totalDifferences - Total perbedaan yang ditemukan (default: 0)
+   * @param {string} options.cab - Kode cabang (optional)
+   * @param {string} options.period - Periode (optional)
+   * @param {string} options.customMessage - Pesan custom (optional)
+   */
+  updateProgressBar(progressId, options = {}) {
+    const {
+      processedStores = 0,
+      totalStores,
+      currentStore = '',
+      storesWithDifferences = 0,
+      totalDifferences = 0,
+      cab = '',
+      period = '',
+      customMessage = ''
+    } = options;
+
+    // Validasi parameter wajib
+    if (!progressId) {
+      throw new Error('progressId is required');
+    }
+    if (totalStores === undefined || totalStores === null) {
+      throw new Error('totalStores is required');
+    }
+
+    // Calculate percentage
+    const percentage = totalStores > 0 ? Math.round((processedStores / totalStores) * 100) : 0;
+
+    // Generate message
+    let message;
+    if (customMessage) {
+      message = customMessage;
+    } else if (processedStores === 0) {
+      message = `Memulai proses rekonsiliasi: 0/${totalStores} toko (0%)`;
+    } else {
+      message = `Memproses toko: ${processedStores}/${totalStores} (${percentage}%)`;
+    }
+
+    // Prepare details object
+    const details = {
+      currentProgress: `${processedStores}/${totalStores} toko`,
+      percentage: percentage,
+      storesWithDifferences: storesWithDifferences,
+      totalDifferences: totalDifferences
+    };
+
+    // Add optional details if provided
+    if (currentStore) details.currentStore = currentStore;
+    if (cab) details.cab = cab;
+    if (period) details.period = period;
+
+    // Update progress
+    ProgressHelper.updateStep(progressId, {
+      currentStep: processedStores,
+      message: message,
+      details: details,
+    });
+
+    logger.debug(`Progress updated: ${processedStores}/${totalStores} (${percentage}%)`);
   }
 
   /**
@@ -208,15 +277,44 @@ class RekonWtHarianService {
 
   /**
    * Helper function to calculate differences between WRC and store data
+   * @param {Object} wrcItem - WRC data item
+   * @param {Object} storeItem - Store data item  
+   * @returns {Object} Object containing calculated differences and significance check
+   */
+  _calculateDifferences(wrcItem, storeItem) {
+    // Calculate differences
+    const grossDiff = (wrcItem.GROSS || 0) - (storeItem.GROSS || 0);
+    const ppnDiff = (wrcItem.PPN || 0) - (storeItem.PPN || 0);
+    const grossIdmDiff = (wrcItem.GROSS_IDM || 0) - (storeItem.GROSS_IDM || 0);
+    const ppnIdmDiff = (wrcItem.PPN_IDM || 0) - (storeItem.PPN_IDM || 0);
+
+    // Check if differences exceed threshold (using config.differenceThreshold)
+    const hasSignificantDifference = 
+      Math.abs(grossDiff) > config.differenceThreshold || 
+      Math.abs(ppnDiff) > config.differenceThreshold || 
+      Math.abs(grossIdmDiff) > config.differenceThreshold || 
+      Math.abs(ppnIdmDiff) > config.differenceThreshold;
+
+    return {
+      grossDiff,
+      ppnDiff,
+      grossIdmDiff,
+      ppnIdmDiff,
+      hasSignificantDifference
+    };
+  }
+
+  /**
+   * Helper function to calculate differences for single item (backward compatibility)
    * @param {Object} item - Data item containing WRC and store values
    * @returns {Object} Object containing calculated differences
    */
-  _calculateDifferences(item) {
+  _calculateDifferencesLegacy(item) {
     return {
-      selisihGross: item.selisih_gross || (item.gross_wrc - item.gross_store) || 0,
-      selisihPpn: item.selisih_ppn || (item.ppn_wrc - item.ppn_store) || 0,
-      selisihGrossIdm: item.selisih_gross_idm || (item.gross_idm_wrc - item.gross_idm_store) || 0,
-      selisihPpnIdm: item.selisih_ppn_idm || (item.ppn_idm_wrc - item.ppn_idm_store) || 0
+      selisihGross: item.selisih_gross || item.gross_wrc - item.gross_store || 0,
+      selisihPpn: item.selisih_ppn || item.ppn_wrc - item.ppn_store || 0,
+      selisihGrossIdm: item.selisih_gross_idm || item.gross_idm_wrc - item.gross_idm_store || 0,
+      selisihPpnIdm: item.selisih_ppn_idm || item.ppn_idm_wrc - item.ppn_idm_store || 0,
     };
   }
 
@@ -248,7 +346,7 @@ class RekonWtHarianService {
 
     // Calculate sums and find min/max values
     filteredData.forEach(item => {
-      const differences = this._calculateDifferences(item);
+      const differences = this._calculateDifferencesLegacy(item);
 
       // Sum values
       summary.sel_gross += differences.selisihGross;
@@ -293,26 +391,26 @@ class RekonWtHarianService {
    */
   _calculateGroupStats(data, groupKey) {
     const groupMap = new Map();
-    
+
     data.forEach(item => {
       const groupValue = item[groupKey];
       if (!groupMap.has(groupValue)) {
-        groupMap.set(groupValue, { 
-          [groupKey]: groupValue, 
-          count: 0, 
-          diffGross: 0, 
-          diffPpn: 0 
+        groupMap.set(groupValue, {
+          [groupKey]: groupValue,
+          count: 0,
+          diffGross: 0,
+          diffPpn: 0,
         });
       }
 
       const groupData = groupMap.get(groupValue);
-      const differences = this._calculateDifferences(item);
-      
+      const differences = this._calculateDifferencesLegacy(item);
+
       groupData.count += 1;
       groupData.diffGross += differences.selisihGross;
       groupData.diffPpn += differences.selisihPpn;
     });
-    
+
     return Array.from(groupMap.values());
   }
 
@@ -362,7 +460,7 @@ class RekonWtHarianService {
         logger.info(`Created new progress tracking with ID: ${progressId}`);
       } else {
         logger.info(`Using existing progress tracking with ID: ${progressId}`);
-        
+
         // Update progress with initial state and correct total steps
         ProgressHelper.updateStep(progressId, {
           currentStep: 0,
@@ -381,7 +479,7 @@ class RekonWtHarianService {
       let processedStores = 0;
       let storesWithDifferences = 0;
       let totalDifferences = 0;
-      let currentBranch = '';
+      let currentBranch = "";
 
       // Set up progress update interval - update every 2 seconds (like single branch)
       const PROGRESS_UPDATE_INTERVAL = 2000;
@@ -430,24 +528,20 @@ class RekonWtHarianService {
           totalDifferences += result.differences.length;
         }
 
-        // Calculate percentage directly
-        const percentage = totalStores > 0 ? Math.round((processedStores / totalStores) * 100) : 0;
+        logger.info(
+          `🔧 PROGRESS UPDATE: Store ${store.storeCode} processed. Total: ${processedStores}/${totalStores}`
+        );
 
-        logger.info(`🔧 PROGRESS UPDATE: Store ${store.storeCode} processed. Total: ${processedStores}/${totalStores} (${percentage}%)`);
-
-        // Update progress immediately for each store (like single branch)
-        ProgressHelper.updateStep(progressId, {
-          currentStep: processedStores,
-          message: `Memproses toko: ${processedStores}/${totalStores} (${percentage}%) - Cabang: ${cab}`,
-          details: {
-            currentStore: store.storeCode,
-            currentBranch: cab,
-            currentProgress: `${processedStores}/${totalStores} toko`,
-            percentage: percentage,
-            storesWithDifferences: storesWithDifferences,
-            totalDifferences: totalDifferences,
-            period: period,
-          },
+        // Update progress using the new function
+        this.updateProgressBar(progressId, {
+          processedStores: processedStores,
+          totalStores: totalStores,
+          currentStore: store.storeCode,
+          storesWithDifferences: storesWithDifferences,
+          totalDifferences: totalDifferences,
+          cab: cab,
+          period: period,
+          customMessage: `Memproses toko: ${processedStores}/${totalStores} - Cabang: ${cab}`
         });
 
         // Log detailed progress information
@@ -584,10 +678,10 @@ class RekonWtHarianService {
       logger.error(`Error reconciling all branches: ${error.message}`);
 
       // Cleanup: Restore original method and clear interval if they exist
-      if (typeof originalProcessStore !== 'undefined') {
+      if (typeof originalProcessStore !== "undefined") {
         this.processStore = originalProcessStore;
       }
-      if (typeof progressInterval !== 'undefined') {
+      if (typeof progressInterval !== "undefined") {
         clearInterval(progressInterval);
       }
 
@@ -670,16 +764,13 @@ class RekonWtHarianService {
           const branchStores = await storeService.getStoresByBranch(cab, true);
           const totalStores = branchStores.length;
 
-          // Inisialisasi progress dengan nilai awal yang benar
-          ProgressHelper.updateStep(progressId, {
-            currentStep: 0,
-            message: `Memulai proses rekonsiliasi untuk ${totalStores} toko`,
-            details: {
-              totalStores: totalStores,
-              processedStores: 0,
-              cab: cab,
-              period: period,
-            },
+          // Inisialisasi progress dengan nilai awal menggunakan function baru
+          this.updateProgressBar(progressId, {
+            processedStores: 0,
+            totalStores: totalStores,
+            cab: cab,
+            period: period,
+            customMessage: `Memulai proses rekonsiliasi untuk ${totalStores} toko`
           });
 
           // Log initialization with explicit percentage
@@ -694,23 +785,17 @@ class RekonWtHarianService {
           const PROGRESS_UPDATE_INTERVAL = 2000;
           const progressInterval = setInterval(() => {
             // Calculate percentage directly here
-            const percentage = totalStores > 0 ? Math.round((processedStores / totalStores) * 100) : 0;
-
             // Update progress even if no new stores have been processed
-            ProgressHelper.updateStep(progressId, {
-              currentStep: processedStores,
-              message: `Memproses toko: ${processedStores}/${totalStores} (${percentage}%)`,
-              details: {
-                currentProgress: `${processedStores}/${totalStores} toko`,
-                percentage: percentage,
-                storesWithDifferences: storesWithDifferences,
-                totalDifferences: totalDifferences,
-                cab: cab,
-                period: period,
-              },
+            this.updateProgressBar(progressId, {
+              processedStores: processedStores,
+              totalStores: totalStores,
+              storesWithDifferences: storesWithDifferences,
+              totalDifferences: totalDifferences,
+              cab: cab,
+              period: period
             });
 
-            logger.debug(`Progress update: ${processedStores}/${totalStores} stores processed (${percentage}%)`);
+            logger.debug(`Progress update: ${processedStores}/${totalStores} stores processed`);
           }, PROGRESS_UPDATE_INTERVAL);
 
           // Override the processStore method to track progress
@@ -726,30 +811,6 @@ class RekonWtHarianService {
               processedStores++;
             }
             logger.info(`Store ${store.storeCode} processed with differences result:`, result.length);
-
-            // Update differences if any
-            if (result && result.differences && result.differences.length > 0) {
-              storesWithDifferences++;
-              totalDifferences += result.differences.length;
-            }
-
-            // Calculate percentage directly
-            const percentage = totalStores > 0 ? Math.round((processedStores / totalStores) * 100) : 0;
-
-            // Update progress immediately for each store
-            ProgressHelper.updateStep(progressId, {
-              currentStep: processedStores,
-              message: `Memproses toko: ${processedStores}/${totalStores} (${percentage}%)`,
-              details: {
-                currentStore: store.storeCode,
-                currentProgress: `${processedStores}/${totalStores} toko`,
-                percentage: percentage,
-                storesWithDifferences: storesWithDifferences,
-                totalDifferences: totalDifferences,
-                cab: cab,
-                period: period,
-              },
-            });
 
             // Log detailed progress information
             logger.debug(
@@ -830,33 +891,16 @@ class RekonWtHarianService {
   }
 
   /**
-   * Get all dates in a month
-   * @param {string} year - Year in YYYY format
-   * @param {string} month - Month in MM format
-   * @param {boolean} untilYesterday - If true, get dates until yesterday
-   * @returns {Array} Array of dates in YYYY-MM-DD format
-   */
-  getAllDatesInMonth(year, month, untilYesterday = false) {
-    return wrcUtils.getAllDatesInMonth(year, month, untilYesterday);
-  }
-
-  /**
-   * Get query for WRC data
-   * @param {string} tableName - WT table name
-   * @param {string} tableType - Table type (wt, dt, pr)
-   * @returns {string} SQL query
-   */
-  getWrcQuery(tableName, tableType = "wt") {
-    return wrcUtils.getWrcQuery(tableName, tableType);
-  }
-
-  /**
    * Get query for store data
    * @param {string} period - Period in YYMM format
    * @returns {string} SQL query
    */
   getStoreQuery(period) {
-    return wrcUtils.getStoreQuery(period);
+    const year = "20" + period.substring(0, 2);
+    const month = period.substring(2, 4);
+    const periodStr = `${year}-${month}`;
+
+    return config.queries.store.replace("{period}", periodStr);
   }
 
   /**
@@ -867,7 +911,7 @@ class RekonWtHarianService {
    * @returns {Promise<Array>} Array of WRC data
    */
   async getWrcData(cab, period, tableType = "wt") {
-    return wrcUtils.getWrcData(cab, period, tableType);
+    return wrcUtils.getWrcData(cab, period, tableType, config.queries.wrc);
   }
 
   /**
@@ -1232,15 +1276,6 @@ class RekonWtHarianService {
     const storeCode = store.storeCode;
     const STORE_TIMEOUT = config.parallelProcessing?.storeTimeoutMs || 10000; // Reduced to 10 seconds for more realistic timeout testing
 
-    // FOR TESTING: Simulate timeout on specific stores to test wave system
-    const SIMULATE_TIMEOUT = config.testing?.simulateTimeoutStores || [];
-    const shouldSimulateTimeout = SIMULATE_TIMEOUT.includes(storeCode);
-
-    if (shouldSimulateTimeout && waveNumber <= 2) {
-      logger.warn(`[Wave ${waveNumber}] [${storeCode}] 🧪 SIMULATING TIMEOUT for testing purposes`);
-      await new Promise(resolve => setTimeout(resolve, STORE_TIMEOUT + 1000)); // Force timeout
-    }
-
     logger.info(`[Wave ${waveNumber}] [${storeCode}] Starting processing...`);
 
     // Update progress to show current store being processed
@@ -1337,10 +1372,13 @@ class RekonWtHarianService {
             logger.debug(`[${storeCode}] Executing query...`);
             const queryTimeout = config.parallelProcessing?.queryTimeoutMs || 15000;
             const queryPromise = storeConnection.query(storeQuery);
+
             const timeoutPromise = new Promise((_, reject) => {
               setTimeout(() => reject(new Error("Query timeout")), queryTimeout);
             });
+
             [storeData] = await Promise.race([queryPromise, timeoutPromise]);
+
             const msg = `[${storeCode}] Query completed, got ${storeData.length} records`;
             logger.debug(`${msg}`);
             await RekapRemoteService.addToTemp(cab, storeCode, "rekon_wt_harian", `${msg}`);
@@ -1770,10 +1808,10 @@ class RekonWtHarianService {
       const mainSummary = this._calculateSummaryStats(filteredData);
 
       // Use helper function to calculate type statistics
-      const typeStats = this._calculateGroupStats(filteredData, 'tipe');
+      const typeStats = this._calculateGroupStats(filteredData, "tipe");
 
       // Use helper function to calculate branch statistics
-      const branchStats = this._calculateGroupStats(filteredData, 'cab');
+      const branchStats = this._calculateGroupStats(filteredData, "cab");
 
       // Combine the main summary with additional stats
       const summary = {
@@ -1909,8 +1947,10 @@ class RekonWtHarianService {
         };
 
         // Use helper function to calculate differences
-        const { grossDiff, ppnDiff, grossIdmDiff, ppnIdmDiff, hasSignificantDifference } = 
-          this._calculateDifferences(wrcItem, storeItem);
+        const { grossDiff, ppnDiff, grossIdmDiff, ppnIdmDiff, hasSignificantDifference } = this._calculateDifferences(
+          wrcItem,
+          storeItem
+        );
 
         // Simpan jika ada selisih signifikan
         if (hasSignificantDifference) {

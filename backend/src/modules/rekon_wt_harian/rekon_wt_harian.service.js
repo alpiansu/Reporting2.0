@@ -829,9 +829,26 @@ class RekonWtHarianService {
     }
   }
 
+  /**
+   * Get all dates in a month
+   * @param {string} year - Year in YYYY format
+   * @param {string} month - Month in MM format
+   * @param {boolean} untilYesterday - If true, get dates until yesterday
+   * @returns {Array} Array of dates in YYYY-MM-DD format
+   */
+  getAllDatesInMonth(year, month, untilYesterday = false) {
+    return wrcUtils.getAllDatesInMonth(year, month, untilYesterday);
+  }
 
-
-
+  /**
+   * Get query for WRC data
+   * @param {string} tableName - WT table name
+   * @param {string} tableType - Table type (wt, dt, pr)
+   * @returns {string} SQL query
+   */
+  getWrcQuery(tableName, tableType = "wt") {
+    return wrcUtils.getWrcQuery(tableName, tableType);
+  }
 
   /**
    * Get query for store data

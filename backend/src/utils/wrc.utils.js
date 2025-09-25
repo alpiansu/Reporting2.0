@@ -7,7 +7,6 @@ import os from "os";
 import mysql from "mysql2/promise";
 import logger from "../config/logger.js";
 import wrcService from "../services/wrc.service.js";
-import config from "../config/rekon_wt_harian.config.js";
 
 class WrcUtils {
   /**
@@ -180,19 +179,6 @@ class WrcUtils {
     } finally {
       await connection.end();
     }
-  }
-
-  /**
-   * Get query for store data
-   * @param {string} period - Period in YYMM format
-   * @returns {string} SQL query
-   */
-  getStoreQuery(period) {
-    const year = "20" + period.substring(0, 2);
-    const month = period.substring(2, 4);
-    const periodStr = `${year}-${month}`;
-
-    return config.queries.store.replace("{period}", periodStr);
   }
 }
 

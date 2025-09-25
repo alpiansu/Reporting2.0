@@ -7,6 +7,7 @@ import os from "os";
 import mysql from "mysql2/promise";
 import logger from "../config/logger.js";
 import wrcService from "../services/wrc.service.js";
+import MemoryUtils from "./memory.utils.js";
 
 class WrcUtils {
   /**
@@ -16,15 +17,7 @@ class WrcUtils {
    * @returns {null} Always returns null
    */
   cleanupMemory(arrayRef, logCleanup = false) {
-    if (arrayRef && Array.isArray(arrayRef)) {
-      const originalLength = arrayRef.length;
-      arrayRef.length = 0; // Clear array contents immediately
-
-      if (logCleanup && originalLength > 0) {
-        logger.debug(`Memory cleanup: cleared array with ${originalLength} elements`);
-      }
-    }
-    return null; // Return null to assign back to variable
+    return MemoryUtils.cleanupMemory(arrayRef, logCleanup);
   }
 
   /**

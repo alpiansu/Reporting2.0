@@ -22,30 +22,7 @@
             </div>
           </form>
 
-          <!-- Filter Toleransi Selisih -->
-          <div class="tolerance-filter">
-            <div class="tolerance-header">
-              <i class="pi pi-filter"></i>
-              <label for="toleranceAmount">Toleransi Selisih</label>
-            </div>
-            <div class="tolerance-input-container">
-              <span class="currency-symbol">Rp</span>
-              <input 
-                type="number" 
-                id="toleranceAmount" 
-                v-model="toleranceAmount" 
-                @input="handleToleranceChange" 
-                min="0" 
-                step="100"
-                class="tolerance-input" 
-                placeholder="Masukkan nilai"
-              />
-              <button type="button" @click="resetTolerance" class="reset-tolerance-button" title="Reset filter">
-                <i class="pi pi-refresh"></i>
-              </button>
-            </div>
-            <small class="tolerance-help">Tampilkan selisih di atas nilai ini</small>
-          </div>
+
         </div>
       </div>
     </template>
@@ -56,103 +33,61 @@
         Cab
         <i v-if="sortColumn === 'cab'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
       </th>
-      <th class="sortable" :class="{ 'sort-asc': sortColumn === 'tgl1' && sortOrder === 'asc', 'sort-desc': sortColumn === 'tgl1' && sortOrder === 'desc' }" @click="handleSort('tgl1')">
+      <th class="sortable" :class="{ 'sort-asc': sortColumn === 'tanggal' && sortOrder === 'asc', 'sort-desc': sortColumn === 'tanggal' && sortOrder === 'desc' }" @click="handleSort('tanggal')">
         Tanggal
-        <i v-if="sortColumn === 'tgl1'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+        <i v-if="sortColumn === 'tanggal'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
       </th>
       <th class="sortable" :class="{ 'sort-asc': sortColumn === 'shop' && sortOrder === 'asc', 'sort-desc': sortColumn === 'shop' && sortOrder === 'desc' }" @click="handleSort('shop')">
         Shop
         <i v-if="sortColumn === 'shop'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
       </th>
-      <th class="sortable" :class="{ 'sort-asc': sortColumn === 'tipe' && sortOrder === 'asc', 'sort-desc': sortColumn === 'tipe' && sortOrder === 'desc' }" @click="handleSort('tipe')">
-        Tipe
-        <i v-if="sortColumn === 'tipe'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'sum_sel_gross' && sortOrder === 'asc', 'sort-desc': sortColumn === 'sum_sel_gross' && sortOrder === 'desc' }" @click="handleSort('sum_sel_gross')">
+        Total Selisih Gross
+        <i v-if="sortColumn === 'sum_sel_gross'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
       </th>
-      <th class="sortable" :class="{ 'sort-asc': sortColumn === 'toko' && sortOrder === 'asc', 'sort-desc': sortColumn === 'toko' && sortOrder === 'desc' }" @click="handleSort('toko')">
-        Toko
-        <i v-if="sortColumn === 'toko'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'sum_sel_ppn' && sortOrder === 'asc', 'sort-desc': sortColumn === 'sum_sel_ppn' && sortOrder === 'desc' }" @click="handleSort('sum_sel_ppn')">
+        Total Selisih PPN
+        <i v-if="sortColumn === 'sum_sel_ppn'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
       </th>
-      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'gross_wrc' && sortOrder === 'asc', 'sort-desc': sortColumn === 'gross_wrc' && sortOrder === 'desc' }" @click="handleSort('gross_wrc')">
-        Gross WRC
-        <i v-if="sortColumn === 'gross_wrc'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'sum_sel_gross_idm' && sortOrder === 'asc', 'sort-desc': sortColumn === 'sum_sel_gross_idm' && sortOrder === 'desc' }" @click="handleSort('sum_sel_gross_idm')">
+        Total Selisih Gross IDM
+        <i v-if="sortColumn === 'sum_sel_gross_idm'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
       </th>
-      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'gross_store' && sortOrder === 'asc', 'sort-desc': sortColumn === 'gross_store' && sortOrder === 'desc' }" @click="handleSort('gross_store')">
-        Gross Toko
-        <i v-if="sortColumn === 'gross_store'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'sum_sel_ppn_idm' && sortOrder === 'asc', 'sort-desc': sortColumn === 'sum_sel_ppn_idm' && sortOrder === 'desc' }" @click="handleSort('sum_sel_ppn_idm')">
+        Total Selisih PPN IDM
+        <i v-if="sortColumn === 'sum_sel_ppn_idm'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
       </th>
-      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'selisih_gross' && sortOrder === 'asc', 'sort-desc': sortColumn === 'selisih_gross' && sortOrder === 'desc' }" @click="handleSort('selisih_gross')">
-        Selisih Gross
-        <i v-if="sortColumn === 'selisih_gross'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'record_count' && sortOrder === 'asc', 'sort-desc': sortColumn === 'record_count' && sortOrder === 'desc' }" @click="handleSort('record_count')">
+        Jumlah Record
+        <i v-if="sortColumn === 'record_count'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
       </th>
-      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'ppn_wrc' && sortOrder === 'asc', 'sort-desc': sortColumn === 'ppn_wrc' && sortOrder === 'desc' }" @click="handleSort('ppn_wrc')">
-        PPN WRC
-        <i v-if="sortColumn === 'ppn_wrc'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
-      </th>
-      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'ppn_store' && sortOrder === 'asc', 'sort-desc': sortColumn === 'ppn_store' && sortOrder === 'desc' }" @click="handleSort('ppn_store')">
-        PPN Toko
-        <i v-if="sortColumn === 'ppn_store'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
-      </th>
-      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'selisih_ppn' && sortOrder === 'asc', 'sort-desc': sortColumn === 'selisih_ppn' && sortOrder === 'desc' }" @click="handleSort('selisih_ppn')">
-        Selisih PPN
-        <i v-if="sortColumn === 'selisih_ppn'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
-      </th>
-      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'gross_idm_wrc' && sortOrder === 'asc', 'sort-desc': sortColumn === 'gross_idm_wrc' && sortOrder === 'desc' }" @click="handleSort('gross_idm_wrc')">
-        Gross Idm WRC
-        <i v-if="sortColumn === 'gross_idm_wrc'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
-      </th>
-      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'gross_idm_store' && sortOrder === 'asc', 'sort-desc': sortColumn === 'gross_idm_store' && sortOrder === 'desc' }" @click="handleSort('gross_idm_store')">
-        Gross Idm Toko
-        <i v-if="sortColumn === 'gross_idm_store'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
-      </th>
-      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'selisih_gross_idm' && sortOrder === 'asc', 'sort-desc': sortColumn === 'selisih_gross_idm' && sortOrder === 'desc' }" @click="handleSort('selisih_gross_idm')">
-        Selisih Gross Idm
-        <i v-if="sortColumn === 'selisih_gross_idm'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
-      </th>
-      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'ppn_idm_wrc' && sortOrder === 'asc', 'sort-desc': sortColumn === 'ppn_idm_wrc' && sortOrder === 'desc' }" @click="handleSort('ppn_idm_wrc')">
-        PPN Idm WRC
-        <i v-if="sortColumn === 'ppn_idm_wrc'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
-      </th>
-      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'ppn_idm_store' && sortOrder === 'asc', 'sort-desc': sortColumn === 'ppn_idm_store' && sortOrder === 'desc' }" @click="handleSort('ppn_idm_store')">
-        PPN Idm Toko
-        <i v-if="sortColumn === 'ppn_idm_store'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
-      </th>
-      <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'selisih_ppn_idm' && sortOrder === 'asc', 'sort-desc': sortColumn === 'selisih_ppn_idm' && sortOrder === 'desc' }" @click="handleSort('selisih_ppn_idm')">
-        Selisih PPN Idm
-        <i v-if="sortColumn === 'selisih_ppn_idm'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+      <th class="sortable" :class="{ 'sort-asc': sortColumn === 'updtime' && sortOrder === 'asc', 'sort-desc': sortColumn === 'updtime' && sortOrder === 'desc' }" @click="handleSort('updtime')">
+        Update Time
+        <i v-if="sortColumn === 'updtime'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
       </th>
     </template>
 
     <!-- Table Row -->
     <template #table-row="{ item }">
       <td>{{ item.cab }}</td>
-      <td>{{ formatDate(item.tgl1) }}</td>
+      <td>{{ formatDate(item.tanggal) }}</td>
       <td>{{ item.shop }}</td>
-      <td>
-        <span :class="`badge badge-${item.tipe === 'CASH' ? 'cash' : 'non-cash'}`">
-          {{ item.tipe }}
-        </span>
+      <td class="text-right" :class="getAmountClass(item.sum_sel_gross)">
+        {{ formatCurrency(item.sum_sel_gross) }}
       </td>
-      <td>{{ item.toko }}</td>
-      <td class="text-right">{{ formatCurrency(item.gross_wrc) }}</td>
-      <td class="text-right">{{ formatCurrency(item.gross_store) }}</td>
-      <td class="text-right" :class="getAmountClass(item.selisih_gross)">
-        {{ formatCurrency(item.selisih_gross) }}
+      <td class="text-right" :class="getAmountClass(item.sum_sel_ppn)">
+        {{ formatCurrency(item.sum_sel_ppn) }}
       </td>
-      <td class="text-right">{{ formatCurrency(item.ppn_wrc) }}</td>
-      <td class="text-right">{{ formatCurrency(item.ppn_store) }}</td>
-      <td class="text-right" :class="getAmountClass(item.selisih_ppn)">
-        {{ formatCurrency(item.selisih_ppn) }}
+      <td class="text-right" :class="getAmountClass(item.sum_sel_gross_idm)">
+        {{ formatCurrency(item.sum_sel_gross_idm) }}
       </td>
-      <td class="text-right">{{ formatCurrency(item.gross_idm_wrc) }}</td>
-      <td class="text-right">{{ formatCurrency(item.gross_idm_store) }}</td>
-      <td class="text-right" :class="getAmountClass(item.selisih_gross_idm)">
-        {{ formatCurrency(item.selisih_gross_idm) }}
+      <td class="text-right" :class="getAmountClass(item.sum_sel_ppn_idm)">
+        {{ formatCurrencyDecimal(item.sum_sel_ppn_idm) }}
       </td>
-      <td class="text-right">{{ formatCurrency(item.ppn_idm_wrc) }}</td>
-      <td class="text-right">{{ formatCurrency(item.ppn_idm_store) }}</td>
-      <td class="text-right" :class="getAmountClass(item.selisih_ppn_idm)">
-        {{ formatCurrencyDecimal(item.selisih_ppn_idm) }}
+      <td class="text-right">
+        <span class="badge badge-info">{{ item.record_count }}</span>
       </td>
+      <td>{{ formatDateTime(item.updtime) }}</td>
     </template>
   </DataTable>
 </template>
@@ -201,43 +136,19 @@ const toast = useToastService();
 const searchQuery = ref('');
 const searchTimeout = ref(null);
 
-// Toleransi selisih filter
-const toleranceAmount = ref(100); // Default 100 rupiah
-const toleranceTimeout = ref(null);
+
 
 // Computed properties
 const filteredData = computed(() => {
-  // Filter data berdasarkan toleransi selisih
-  let result = [];
-  
   // Pastikan kita mengembalikan array, bukan objek pagination
   if (Array.isArray(props.data)) {
-    result = props.data;
+    return props.data;
   } else if (props.data && Array.isArray(props.data.data)) {
     // Jika data adalah objek pagination dari backend
-    result = props.data.data;
+    return props.data.data;
   } else {
     return [];
   }
-  
-  // Jika toleransi diatur, filter data berdasarkan selisih
-  if (toleranceAmount.value > 0) {
-    result = result.filter(item => {
-      // Konversi nilai ke absolut untuk perbandingan
-      const absSelisihGross = Math.abs(Number(item.selisih_gross) || 0);
-      const absSelisihPpn = Math.abs(Number(item.selisih_ppn) || 0);
-      const absSelisihGrossIdm = Math.abs(Number(item.selisih_gross_idm) || 0);
-      const absSelisihPpnIdm = Math.abs(Number(item.selisih_ppn_idm) || 0);
-      
-      // Tampilkan jika salah satu selisih melebihi toleransi
-      return absSelisihGross > toleranceAmount.value || 
-             absSelisihPpn > toleranceAmount.value || 
-             absSelisihGrossIdm > toleranceAmount.value || 
-             absSelisihPpnIdm > toleranceAmount.value;
-    });
-  }
-  
-  return result;
 });
 
 // Debug untuk melihat data yang diterima
@@ -249,29 +160,7 @@ watch(() => props.pagination, (newPagination) => {
   console.log('RekonWtHarianTable received pagination:', newPagination);
 }, { immediate: true, deep: true });
 
-// Handle tolerance change with debounce
-const handleToleranceChange = () => {
-  // Clear any existing timeout
-  if (toleranceTimeout.value) {
-    clearTimeout(toleranceTimeout.value);
-  }
-  
-  // Set a new timeout to debounce the filter
-  toleranceTimeout.value = setTimeout(() => {
-    // Emit event to parent component to refresh data with tolerance filter
-    emit('refresh', { 
-      toleranceAmount: toleranceAmount.value,
-      page: 1, // Reset to first page when filter changes
-      itemsPerPage: props.pagination.itemsPerPage || 10
-    });
-  }, 500); // 500ms debounce
-};
 
-// Reset tolerance filter
-const resetTolerance = () => {
-  toleranceAmount.value = 100; // Reset to default 100 rupiah
-  handleToleranceChange(); // Apply the reset
-};
 
 // Handle search with debounce
 const handleSearch = (event) => {
@@ -289,7 +178,6 @@ const handleSearch = (event) => {
     // Hanya emit refresh dengan searchQuery, tidak perlu emit page-change
     emit('refresh', { 
       searchQuery: searchQuery.value,
-      toleranceAmount: toleranceAmount.value, // Include tolerance filter
       page: 1,
       itemsPerPage: props.pagination.itemsPerPage || 10
     });
@@ -305,7 +193,6 @@ const clearSearch = (event) => {
   // Emit event to parent component to refresh data without search query
   // Gabungkan reset halaman dalam satu emit refresh
   emit('refresh', {
-    toleranceAmount: toleranceAmount.value, // Keep tolerance filter
     page: 1,
     itemsPerPage: props.pagination.itemsPerPage || 10
   });
@@ -335,7 +222,6 @@ const resetFilters = (event) => {
   if (event) event.preventDefault();
   
   searchQuery.value = '';
-  toleranceAmount.value = 100; // Reset tolerance to default
   
   // Gabungkan reset halaman dalam satu emit refresh
   emit('refresh', {
@@ -391,6 +277,28 @@ const formatDate = (dateString) => {
   } catch (error) {
     console.error('Error formatting date:', error);
     return dateString;
+  }
+};
+
+// Format date time for display
+const formatDateTime = (dateTimeString) => {
+  if (!dateTimeString) return '-';
+  
+  try {
+    const date = new Date(dateTimeString);
+    if (isNaN(date.getTime())) return dateTimeString;
+    
+    return date.toLocaleString('id-ID', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  } catch (error) {
+    console.error('Error formatting datetime:', error);
+    return dateTimeString;
   }
 };
 
@@ -473,7 +381,6 @@ const printResults = () => {
         <div>
           <p><strong>Cabang:</strong> ${props.cab === 'SEMUA' ? 'SEMUA CABANG' : props.cab}</p>
           <p><strong>Periode:</strong> ${formatPeriode(props.periode)}</p>
-          <p><strong>Toleransi Selisih:</strong> ${formatCurrency(toleranceAmount.value)}</p>
         </div>
         
         <table>
@@ -637,99 +544,7 @@ const printResults = () => {
   color: #333;
 }
 
-/* Tolerance Filter Styles */
-.tolerance-filter {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  min-width: 280px;
-  background-color: #f8f9fa;
-  padding: 12px 15px;
-  border-radius: 6px;
-  border: 1px solid #e9ecef;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-}
 
-.tolerance-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.tolerance-header i {
-  color: var(--primary-color);
-  font-size: 0.9rem;
-}
-
-.tolerance-filter label {
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: #333;
-  margin: 0;
-}
-
-.tolerance-input-container {
-  position: relative;
-  display: flex;
-  align-items: center;
-  background-color: #fff;
-  border-radius: 4px;
-  border: 1px solid #ddd;
-  overflow: hidden;
-}
-
-.currency-symbol {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 10px;
-  background-color: #f1f3f5;
-  border-right: 1px solid #ddd;
-  color: #495057;
-  font-weight: 500;
-  height: 100%;
-}
-
-.tolerance-input {
-  flex: 1;
-  border: none;
-  padding: 10px 40px 10px 10px;
-  font-size: 14px;
-  transition: all 0.3s ease;
-  width: 100%;
-}
-
-.tolerance-input:focus {
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.1);
-}
-
-.reset-tolerance-button {
-  position: absolute;
-  right: 10px;
-  background: none;
-  border: none;
-  color: #adb5bd;
-  cursor: pointer;
-  padding: 5px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-}
-
-.reset-tolerance-button:hover {
-  color: var(--primary-color);
-  transform: rotate(90deg);
-}
-
-.tolerance-help {
-  font-size: 0.8rem;
-  color: #6c757d;
-  margin-top: 4px;
-  font-style: italic;
-}
 
 .same-amount {
   color: #61CE70;

@@ -102,7 +102,7 @@ export default {
    * Get reconciliation results
    * @param {String} cab - Branch code (empty string for all branches)
    * @param {String} periode - Period in YYMM format
-   * @param {Object} params - Query parameters (page, limit, tipe, toko, tgl1, sortColumn, sortOrder, toleranceAmount)
+   * @param {Object} params - Query parameters (page, limit, tipe, toko, tgl1, sortColumn, sortOrder)
    * @returns {Promise}
    */
   getResults(cab, periode, params = {}) {
@@ -121,6 +121,19 @@ export default {
     // Jika cab kosong, gunakan 'SEMUA' sebagai nilai default
     const cabParam = cab || "SEMUA";
     return api.get(`/rekon-wt-harian/${cabParam}/${periode}/summary`);
+  },
+
+  /**
+   * Get daily shop summary - rekap data per toko per tanggal
+   * @param {String} cab - Branch code (empty string for all branches)
+   * @param {String} periode - Period in YYMM format
+   * @param {Object} params - Query parameters (page, limit, toko, tgl1, searchQuery, sortColumn, sortOrder)
+   * @returns {Promise}
+   */
+  getDailyShopSummary(cab, periode, params = {}) {
+    // Jika cab kosong, gunakan 'All' sebagai nilai default
+    const cabParam = cab || "All";
+    return api.get(`/rekon-wt-harian/${periode}/${cabParam}/daily-summary`, { params });
   },
 
   /**

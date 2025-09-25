@@ -77,10 +77,7 @@ const loadResults = async (options = {}) => {
       params.searchQuery = options.searchQuery;
     }
 
-    // Add tolerance filter if provided
-    if (options.toleranceAmount !== undefined) {
-      params.toleranceAmount = options.toleranceAmount;
-    }
+
 
     // Add sorting parameters if available
     if (sortColumn.value) {
@@ -88,8 +85,8 @@ const loadResults = async (options = {}) => {
       params.sortOrder = sortOrder.value;
     }
     
-    // Load results
-const resultsResponse = await rekonWtHarianService.getResults(
+    // Load results using getDailyShopSummary
+const resultsResponse = await rekonWtHarianService.getDailyShopSummary(
   props.cab, 
   props.periode,
   params

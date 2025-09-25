@@ -2224,31 +2224,11 @@ class RekonWtHarianService {
       );
 
       return {
-        success: true,
+        total: totalRecords,
+        page,
+        limit: validLimit,
+        totalPages: Math.ceil(totalRecords / validLimit),
         data: paginatedData,
-        pagination: {
-          currentPage: page,
-          totalPages,
-          totalRecords,
-          limit: validLimit,
-          hasNextPage: page < totalPages,
-          hasPrevPage: page > 1,
-        },
-        summary: {
-          total_sum_sel_gross: totalSumSelGross,
-          total_sum_sel_ppn: totalSumSelPpn,
-          total_sum_sel_gross_idm: totalSumSelGrossIdm,
-          total_sum_sel_ppn_idm: totalSumSelPpnIdm,
-          total_detail_records: totalDetailRecords,
-          total_summary_records: totalRecords,
-        },
-        filters: {
-          cab: cab || "All",
-          period,
-          toko: toko || null,
-          tgl1: tgl1 || null,
-          searchQuery: searchQuery || null,
-        },
       };
     } catch (error) {
       logger.error(`Error in getDailyShopSummary: ${error.message}`);

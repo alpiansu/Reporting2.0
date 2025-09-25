@@ -8,9 +8,26 @@ import mysql from "mysql2/promise";
 import logger from "../config/logger.js";
 import wrcService from "../services/wrc.service.js";
 import config from "../config/rekon_wt_harian.config.js";
-import memoryUtils from "./memory.utils.js";
 
 class WrcUtils {
+  /**
+   * Clean up memory by clearing array and removing reference
+   * @param {Array} arrayRef - Array reference to cleanup
+   * @param {boolean} logCleanup - Whether to log cleanup action (default: false)
+   * @returns {null} Always returns null
+   */
+  cleanupMemory(arrayRef, logCleanup = false) {
+    if (arrayRef && Array.isArray(arrayRef)) {
+      const originalLength = arrayRef.length;
+      arrayRef.length = 0; // Clear array contents immediately
+
+      if (logCleanup && originalLength > 0) {
+        logger.debug(`Memory cleanup: cleared array with ${originalLength} elements`);
+      }
+    }
+    return null; // Return null to assign back to variable
+  }
+
   /**
    * Get all dates in a month
    * @param {string} year - Year in YYYY format
@@ -147,7 +164,7 @@ class WrcUtils {
       await fs.writeFile(tempFile, JSON.stringify(allWrcData));
 
       // Explicit memory cleanup to prevent memory leaks
-      allWrcData = memoryUtils.cleanupMemory(allWrcData, true);
+      allWrcData = this.cleanupMemory(allWrcData, true);
 
       logger.info(`Data saved to temporary file: ${tempFile}`);
       return tempFile;
@@ -156,7 +173,7 @@ class WrcUtils {
 
       // Cleanup memory in case of error
       if (typeof allWrcData !== "undefined" && allWrcData !== null) {
-        allWrcData = memoryUtils.cleanupMemory(allWrcData);
+        allWrcData = this.cleanupMemory(allWrcData);
       }
 
       throw error;

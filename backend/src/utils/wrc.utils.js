@@ -11,6 +11,24 @@ import config from "../config/rekon_wt_harian.config.js";
 
 class WrcUtils {
   /**
+   * Clean up memory by clearing array and removing reference
+   * @param {Array} arrayRef - Array reference to cleanup
+   * @param {boolean} logCleanup - Whether to log cleanup action (default: false)
+   * @returns {null} Always returns null
+   */
+  cleanupMemory(arrayRef, logCleanup = false) {
+    if (arrayRef && Array.isArray(arrayRef)) {
+      const originalLength = arrayRef.length;
+      arrayRef.length = 0; // Clear array contents immediately
+
+      if (logCleanup && originalLength > 0) {
+        logger.debug(`Memory cleanup: cleared array with ${originalLength} elements`);
+      }
+    }
+    return null; // Return null to assign back to variable
+  }
+
+  /**
    * Get all dates in a month
    * @param {string} year - Year in YYYY format
    * @param {string} month - Month in MM format
@@ -145,9 +163,19 @@ class WrcUtils {
       // Save data to temporary file
       await fs.writeFile(tempFile, JSON.stringify(allWrcData));
 
+      // Explicit memory cleanup to prevent memory leaks
+      allWrcData = this.cleanupMemory(allWrcData, true);
+
+      logger.info(`Data saved to temporary file: ${tempFile}`);
       return tempFile;
     } catch (error) {
       logger.error(`Error getting ${tableType.toUpperCase()} data: ${error.message}`);
+
+      // Cleanup memory in case of error
+      if (typeof allWrcData !== "undefined" && allWrcData !== null) {
+        allWrcData = this.cleanupMemory(allWrcData);
+      }
+
       throw error;
     } finally {
       await connection.end();

@@ -12,6 +12,7 @@ import {
   getProgress,
   getLatestProgress,
   invalidateCache,
+  getDailyShopSummary,
 } from "./rekon_wt_harian.controller.js";
 import { authenticateJWT, authorizeRole } from "../../middlewares/index.js";
 
@@ -24,6 +25,7 @@ const rekonWtHarianController = {
   getProgress,
   getLatestProgress,
   invalidateCache,
+  getDailyShopSummary,
 };
 
 // Start reconciliation process
@@ -60,6 +62,11 @@ router.delete(
   authorizeRole(["admin", "superadmin"]),
   rekonWtHarianController.deleteResults
 );
+
+// Get daily shop summary - rekap data per toko per tanggal
+// GET /api/rekon-wt-harian/:periode/:cab/daily-summary
+// Access: Private
+router.get("/:periode/:cab/daily-summary", authenticateJWT, rekonWtHarianController.getDailyShopSummary);
 
 // Clean up temporary difference files
 // GET /api/rekon-wt-harian/cleanup-temp-files

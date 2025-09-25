@@ -167,20 +167,20 @@ class RekonWtHarianService {
     const {
       processedStores = 0,
       totalStores,
-      currentStore = '',
+      currentStore = "",
       storesWithDifferences = 0,
       totalDifferences = 0,
-      cab = '',
-      period = '',
-      customMessage = ''
+      cab = "",
+      period = "",
+      customMessage = "",
     } = options;
 
     // Validasi parameter wajib
     if (!progressId) {
-      throw new Error('progressId is required');
+      throw new Error("progressId is required");
     }
     if (totalStores === undefined || totalStores === null) {
-      throw new Error('totalStores is required');
+      throw new Error("totalStores is required");
     }
 
     // Calculate percentage
@@ -201,7 +201,7 @@ class RekonWtHarianService {
       currentProgress: `${processedStores}/${totalStores} toko`,
       percentage: percentage,
       storesWithDifferences: storesWithDifferences,
-      totalDifferences: totalDifferences
+      totalDifferences: totalDifferences,
     };
 
     // Add optional details if provided
@@ -278,7 +278,7 @@ class RekonWtHarianService {
   /**
    * Helper function to calculate differences between WRC and store data
    * @param {Object} wrcItem - WRC data item
-   * @param {Object} storeItem - Store data item  
+   * @param {Object} storeItem - Store data item
    * @returns {Object} Object containing calculated differences and significance check
    */
   _calculateDifferences(wrcItem, storeItem) {
@@ -289,10 +289,10 @@ class RekonWtHarianService {
     const ppnIdmDiff = (wrcItem.PPN_IDM || 0) - (storeItem.PPN_IDM || 0);
 
     // Check if differences exceed threshold (using config.differenceThreshold)
-    const hasSignificantDifference = 
-      Math.abs(grossDiff) > config.differenceThreshold || 
-      Math.abs(ppnDiff) > config.differenceThreshold || 
-      Math.abs(grossIdmDiff) > config.differenceThreshold || 
+    const hasSignificantDifference =
+      Math.abs(grossDiff) > config.differenceThreshold ||
+      Math.abs(ppnDiff) > config.differenceThreshold ||
+      Math.abs(grossIdmDiff) > config.differenceThreshold ||
       Math.abs(ppnIdmDiff) > config.differenceThreshold;
 
     return {
@@ -300,7 +300,7 @@ class RekonWtHarianService {
       ppnDiff,
       grossIdmDiff,
       ppnIdmDiff,
-      hasSignificantDifference
+      hasSignificantDifference,
     };
   }
 
@@ -528,9 +528,7 @@ class RekonWtHarianService {
           totalDifferences += result.differences.length;
         }
 
-        logger.info(
-          `🔧 PROGRESS UPDATE: Store ${store.storeCode} processed. Total: ${processedStores}/${totalStores}`
-        );
+        logger.info(`🔧 PROGRESS UPDATE: Store ${store.storeCode} processed. Total: ${processedStores}/${totalStores}`);
 
         // Update progress using the new function
         this.updateProgressBar(progressId, {
@@ -541,7 +539,7 @@ class RekonWtHarianService {
           totalDifferences: totalDifferences,
           cab: cab,
           period: period,
-          customMessage: `Memproses toko: ${processedStores}/${totalStores} - Cabang: ${cab}`
+          customMessage: `Memproses toko: ${processedStores}/${totalStores} - Cabang: ${cab}`,
         });
 
         // Log detailed progress information
@@ -770,7 +768,7 @@ class RekonWtHarianService {
             totalStores: totalStores,
             cab: cab,
             period: period,
-            customMessage: `Memulai proses rekonsiliasi untuk ${totalStores} toko`
+            customMessage: `Memulai proses rekonsiliasi untuk ${totalStores} toko`,
           });
 
           // Log initialization with explicit percentage
@@ -792,7 +790,7 @@ class RekonWtHarianService {
               storesWithDifferences: storesWithDifferences,
               totalDifferences: totalDifferences,
               cab: cab,
-              period: period
+              period: period,
             });
 
             logger.debug(`Progress update: ${processedStores}/${totalStores} stores processed`);
@@ -1513,6 +1511,7 @@ class RekonWtHarianService {
               // Set recid untuk semua record dalam batch
               batch.forEach(difference => {
                 difference.recid = "*";
+                difference.updtime = new Date().toISOString().slice(0, 19).replace("T", " ");
               });
 
               // Gunakan bulkCreate dengan updateOnDuplicate untuk bulk upsert
@@ -2058,6 +2057,202 @@ class RekonWtHarianService {
         message: `Error cleaning up temporary files: ${error.message}`,
         error: error.message,
       };
+    }
+  }
+
+  /**
+   * Get daily shop summary - rekap data per toko per tanggal
+   * @param {string} cab - Branch code (optional, "All" untuk semua cabang)
+   * @param {string} period - Period in YYMM format
+   * @param {Object} options - Query options
+   * @returns {Promise<Object>} Daily shop summary results
+   */
+  async getDailyShopSummary(cab, period, options = {}) {
+    try {
+      const {
+        page = 1,
+        limit = config.pagination.defaultLimit,
+        toko,
+        tgl1,
+        searchQuery,
+        sortColumn = "tgl1",
+        sortOrder = "asc",
+      } = options;
+
+      // Ensure limit doesn't exceed maximum
+      const validLimit = Math.min(limit, config.pagination.maxLimit);
+      const offset = (page - 1) * validLimit;
+
+      // Ensure data is loaded
+      await this.ensureDataLoaded();
+
+      // Filter data from JSON file
+      let filteredData = this.rekonData.filter(item => {
+        // Wajib: hanya tampilkan data dengan recid '*' (masih ada selisih)
+        if (item.recid !== "*") return false;
+
+        // Wajib: periode harus cocok
+        if (String(item.periode) !== String(period)) return false;
+
+        // Cab fleksibel: jika "All"/null/undefined/"" -> jangan filter cab
+        const isAllCab = !cab || String(cab).trim().toLowerCase() === "all";
+        if (!isAllCab) {
+          const itemCab = (item.cab ?? "").toString().trim().toUpperCase();
+          const cabNorm = String(cab).trim().toUpperCase();
+          if (itemCab !== cabNorm) return false;
+        }
+
+        // Filter tambahan (opsional)
+        if (
+          toko &&
+          !String(item.toko ?? "")
+            .toLowerCase()
+            .includes(String(toko).toLowerCase())
+        ) {
+          return false;
+        }
+
+        if (tgl1) {
+          // Samakan ke tanggal (YYYY-MM-DD)
+          const itemDate = new Date(item.tgl1).toISOString().split("T")[0];
+          const filterDate = new Date(tgl1).toISOString().split("T")[0];
+          if (itemDate !== filterDate) return false;
+        }
+
+        return true;
+      });
+
+      // Group data by cab, tanggal, shop untuk membuat summary
+      const summaryMap = new Map();
+
+      filteredData.forEach(item => {
+        // Create unique key: cab-tanggal-shop
+        const dateStr = new Date(item.tgl1).toISOString().split("T")[0]; // YYYY-MM-DD format
+        const key = `${item.cab}-${dateStr}-${item.shop}`;
+
+        if (!summaryMap.has(key)) {
+          summaryMap.set(key, {
+            cab: item.cab,
+            tanggal: dateStr,
+            shop: item.shop,
+            sum_sel_gross: 0,
+            sum_sel_ppn: 0,
+            sum_sel_gross_idm: 0,
+            sum_sel_ppn_idm: 0,
+            updtime: item.updtime,
+            record_count: 0,
+          });
+        }
+
+        const summary = summaryMap.get(key);
+
+        // Sum selisih values
+        summary.sum_sel_gross += parseFloat(item.selisih_gross || 0);
+        summary.sum_sel_ppn += parseFloat(item.selisih_ppn || 0);
+        summary.sum_sel_gross_idm += parseFloat(item.selisih_gross_idm || 0);
+        summary.sum_sel_ppn_idm += parseFloat(item.selisih_ppn_idm || 0);
+        summary.record_count += 1;
+
+        // Update updtime to latest
+        if (item.updtime && item.updtime > summary.updtime) {
+          summary.updtime = item.updtime;
+        }
+      });
+
+      // Convert Map to Array
+      let summaryData = Array.from(summaryMap.values());
+
+      // Apply search filter on summary data
+      if (searchQuery) {
+        const q = searchQuery.toString().trim().toLowerCase();
+        summaryData = summaryData.filter(item => {
+          const haystack = [
+            item.cab,
+            item.tanggal,
+            item.shop,
+            item.sum_sel_gross,
+            item.sum_sel_ppn,
+            item.sum_sel_gross_idm,
+            item.sum_sel_ppn_idm,
+          ]
+            .map(v => (v === null || v === undefined ? "" : String(v).toLowerCase()))
+            .join(" ");
+
+          return haystack.includes(q);
+        });
+      }
+
+      // Sort data
+      summaryData.sort((a, b) => {
+        let aVal = a[sortColumn];
+        let bVal = b[sortColumn];
+
+        // Handle numeric columns
+        if (
+          ["sum_sel_gross", "sum_sel_ppn", "sum_sel_gross_idm", "sum_sel_ppn_idm", "record_count"].includes(sortColumn)
+        ) {
+          aVal = parseFloat(aVal || 0);
+          bVal = parseFloat(bVal || 0);
+        } else {
+          aVal = String(aVal || "").toLowerCase();
+          bVal = String(bVal || "").toLowerCase();
+        }
+
+        if (sortOrder === "desc") {
+          return bVal > aVal ? 1 : bVal < aVal ? -1 : 0;
+        } else {
+          return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+        }
+      });
+
+      // Calculate totals
+      const totalRecords = summaryData.length;
+      const totalPages = Math.ceil(totalRecords / validLimit);
+
+      // Apply pagination
+      const paginatedData = summaryData.slice(offset, offset + validLimit);
+
+      // Calculate summary statistics
+      const totalSumSelGross = summaryData.reduce((sum, item) => sum + parseFloat(item.sum_sel_gross || 0), 0);
+      const totalSumSelPpn = summaryData.reduce((sum, item) => sum + parseFloat(item.sum_sel_ppn || 0), 0);
+      const totalSumSelGrossIdm = summaryData.reduce((sum, item) => sum + parseFloat(item.sum_sel_gross_idm || 0), 0);
+      const totalSumSelPpnIdm = summaryData.reduce((sum, item) => sum + parseFloat(item.sum_sel_ppn_idm || 0), 0);
+      const totalDetailRecords = summaryData.reduce((sum, item) => sum + parseInt(item.record_count || 0), 0);
+
+      logger.info(
+        `getDailyShopSummary completed: ${totalRecords} summary records, ${totalDetailRecords} detail records`
+      );
+
+      return {
+        success: true,
+        data: paginatedData,
+        pagination: {
+          currentPage: page,
+          totalPages,
+          totalRecords,
+          limit: validLimit,
+          hasNextPage: page < totalPages,
+          hasPrevPage: page > 1,
+        },
+        summary: {
+          total_sum_sel_gross: totalSumSelGross,
+          total_sum_sel_ppn: totalSumSelPpn,
+          total_sum_sel_gross_idm: totalSumSelGrossIdm,
+          total_sum_sel_ppn_idm: totalSumSelPpnIdm,
+          total_detail_records: totalDetailRecords,
+          total_summary_records: totalRecords,
+        },
+        filters: {
+          cab: cab || "All",
+          period,
+          toko: toko || null,
+          tgl1: tgl1 || null,
+          searchQuery: searchQuery || null,
+        },
+      };
+    } catch (error) {
+      logger.error(`Error in getDailyShopSummary: ${error.message}`);
+      throw new Error(`Failed to get daily shop summary: ${error.message}`);
     }
   }
 }

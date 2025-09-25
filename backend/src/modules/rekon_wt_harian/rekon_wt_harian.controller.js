@@ -330,6 +330,54 @@ export const getLatestProgress = async (req, res, next) => {
 };
 
 /**
+ * Get daily shop summary - rekap data per toko per tanggal
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+export const getDailyShopSummary = async (req, res, next) => {
+  try {
+    const { cab, periode } = req.params;
+    const {
+      page = 1,
+      limit = 50,
+      toko,
+      tgl1,
+      searchQuery,
+      sortColumn = 'tanggal',
+      sortOrder = 'asc',
+    } = req.query;
+
+    if (!periode) {
+      return res.status(400).json({
+        success: false,
+        message: "Periode harus diisi",
+      });
+    }
+
+    // Handle 'SEMUA CABANG' option
+    const cabFilter = cab === "SEMUA CABANG" ? "All" : cab;
+
+    logger.info(`getDailyShopSummary request: cab=${cabFilter}, periode=${periode}, page=${page}, limit=${limit}`);
+
+    const results = await rekonWtHarianService.getDailyShopSummary(cabFilter, periode, {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      toko,
+      tgl1,
+      searchQuery,
+      sortColumn,
+      sortOrder,
+    });
+
+    res.status(200).json(results);
+  } catch (error) {
+    logger.error(`Error in getDailyShopSummary: ${error.message}`);
+    next(error);
+  }
+};
+
+/**
  * Invalidate cache manually
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object

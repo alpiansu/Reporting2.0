@@ -2108,13 +2108,14 @@ class RekonWtHarianService {
         ) {
           return false;
         }
-
+        /*
         if (tgl1) {
           // Samakan ke tanggal (YYYY-MM-DD)
           const itemDate = new Date(item.tgl1).toISOString().split("T")[0];
           const filterDate = new Date(tgl1).toISOString().split("T")[0];
           if (itemDate !== filterDate) return false;
         }
+          */
 
         return true;
       });
@@ -2123,14 +2124,12 @@ class RekonWtHarianService {
       const summaryMap = new Map();
 
       filteredData.forEach(item => {
-        // Create unique key: cab-tanggal-shop
-        const dateStr = new Date(item.tgl1).toISOString().split("T")[0]; // YYYY-MM-DD format
-        const key = `${item.cab}-${dateStr}-${item.shop}`;
+        // Create unique key: cab-shop
+        const key = `${item.cab}-${item.shop}`;
 
         if (!summaryMap.has(key)) {
           summaryMap.set(key, {
             cab: item.cab,
-            tanggal: dateStr,
             shop: item.shop,
             sum_sel_gross: 0,
             sum_sel_ppn: 0,
@@ -2165,7 +2164,6 @@ class RekonWtHarianService {
         summaryData = summaryData.filter(item => {
           const haystack = [
             item.cab,
-            item.tanggal,
             item.shop,
             item.sum_sel_gross,
             item.sum_sel_ppn,
@@ -2202,19 +2200,14 @@ class RekonWtHarianService {
         }
       });
 
-      // Calculate totals
-      const totalRecords = summaryData.length;
-      const totalPages = Math.ceil(totalRecords / validLimit);
-
       // Apply pagination
       const paginatedData = summaryData.slice(offset, offset + validLimit);
 
       // Calculate summary statistics
-      const totalSumSelGross = summaryData.reduce((sum, item) => sum + parseFloat(item.sum_sel_gross || 0), 0);
-      const totalSumSelPpn = summaryData.reduce((sum, item) => sum + parseFloat(item.sum_sel_ppn || 0), 0);
-      const totalSumSelGrossIdm = summaryData.reduce((sum, item) => sum + parseFloat(item.sum_sel_gross_idm || 0), 0);
-      const totalSumSelPpnIdm = summaryData.reduce((sum, item) => sum + parseFloat(item.sum_sel_ppn_idm || 0), 0);
       const totalDetailRecords = summaryData.reduce((sum, item) => sum + parseInt(item.record_count || 0), 0);
+
+      // Calculate totals
+      const totalRecords = summaryData.length;
 
       logger.info(
         `getDailyShopSummary completed: ${totalRecords} summary records, ${totalDetailRecords} detail records`

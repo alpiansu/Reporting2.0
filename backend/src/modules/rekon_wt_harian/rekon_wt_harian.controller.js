@@ -1,11 +1,11 @@
 /**
  * Controller for WT reconciliation
  */
-import rekonWtHarianService from './rekon_wt_harian.service.js';
-import { ProgressHelper } from '../../services/progress/index.js';
-import logger from '../../config/logger.js';
-import config from '../../config/rekon_wt_harian.config.js';
-import storeService from '../../modules/store/storeService.js';
+import rekonWtHarianService from "./rekon_wt_harian.service.js";
+import { ProgressHelper } from "../../services/progress/index.js";
+import logger from "../../config/logger.js";
+import config from "../../config/rekon_wt_harian.config.js";
+import storeService from "../../modules/store/storeService.js";
 
 /**
  * Cleanup temporary files used in reconciliation
@@ -14,16 +14,16 @@ import storeService from '../../modules/store/storeService.js';
  * @param {Function} next - Express next middleware function
  */
 export const cleanupTempFiles = async (req, res, next) => {
-    try {
-      await rekonWtHarianService.cleanupTempFiles();
-      res.status(200).json({
-        success: true,
-        message: "Temporary files cleaned up successfully",
-      });
-    } catch (error) {
-      logger.error(`Error in cleanupTempFiles: ${error.message}`);
-      next(error);
-    }
+  try {
+    await rekonWtHarianService.cleanupTempFiles();
+    res.status(200).json({
+      success: true,
+      message: "Temporary files cleaned up successfully",
+    });
+  } catch (error) {
+    logger.error(`Error in cleanupTempFiles: ${error.message}`);
+    next(error);
+  }
 };
 
 /**
@@ -33,114 +33,114 @@ export const cleanupTempFiles = async (req, res, next) => {
  * @param {Function} next - Express next middleware function
  */
 export const startReconciliation = async (req, res, next) => {
-    try {
-      const { cab, periode } = req.body;
+  try {
+    const { cab, periode } = req.body;
 
-      if (!periode) {
-        return res.status(400).json({
-          success: false,
-          message: "Periode harus diisi",
-        });
-      }
+    if (!periode) {
+      return res.status(400).json({
+        success: false,
+        message: "Periode harus diisi",
+      });
+    }
 
-      // Validate periode format (YYMM)
-      if (!/^\d{4}$/.test(periode)) {
-        return res.status(400).json({
-          success: false,
-          message: "Format periode tidak valid. Gunakan format YYMM (contoh: 2507 untuk Juli 2025)",
-        });
-      }
+    // Validate periode format (YYMM)
+    if (!/^\d{4}$/.test(periode)) {
+      return res.status(400).json({
+        success: false,
+        message: "Format periode tidak valid. Gunakan format YYMM (contoh: 2507 untuk Juli 2025)",
+      });
+    }
 
-      //cleanup old temp files
-      await rekonWtHarianService.cleanupTempFiles();
+    //cleanup old temp files
+    await rekonWtHarianService.cleanupTempFiles();
 
-      // Check if there's already an active process in the entire system
-      const cabParam = cab === "SEMUA" || !cab ? "All" : cab;
-      const activeProcess = ProgressHelper.hasAnyActiveProcess();
+    // Check if there's already an active process in the entire system
+    const cabParam = cab === "SEMUA" || !cab ? "All" : cab;
+    const activeProcess = ProgressHelper.hasAnyActiveProcess();
 
-      if (activeProcess) {
-        // Extract cab and period from metadata
-        const activeCab = activeProcess.metadata?.cab || 'Unknown';
-        const activePeriod = activeProcess.metadata?.period || 'Unknown';
-        
-        return res.status(409).json({
-          success: false,
-          message: `Proses rekonsiliasi untuk ${
-            activeCab === "All" ? "semua cabang" : `cabang ${activeCab}`
-          } periode ${activePeriod} sedang berjalan. Silakan tunggu hingga proses selesai.`,
-          activeProcess: {
-            id: activeProcess.id,
-            cab: activeCab,
-            periode: activePeriod,
-            status: activeProcess.status,
-            percentage: activeProcess.percentage,
-            startTime: activeProcess.startTime,
-            totalItems: activeProcess.totalItems || 0,
-            processedItems: activeProcess.processedItems || 0,
-          },
-        });
-      }
+    if (activeProcess) {
+      // Extract cab and period from metadata
+      const activeCab = activeProcess.metadata?.cab || "Unknown";
+      const activePeriod = activeProcess.metadata?.period || "Unknown";
 
-      // Handle 'SEMUA CABANG' option
-      if (cabParam === "All") {
-        // Initialize progress tracking
-        await storeService.ensureInitialized();
-        const allStores = storeService.stores;
-        const branches = [...new Set(allStores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))];
+      return res.status(409).json({
+        success: false,
+        message: `Proses rekonsiliasi untuk ${
+          activeCab === "All" ? "semua cabang" : `cabang ${activeCab}`
+        } periode ${activePeriod} sedang berjalan. Silakan tunggu hingga proses selesai.`,
+        activeProcess: {
+          id: activeProcess.id,
+          cab: activeCab,
+          periode: activePeriod,
+          status: activeProcess.status,
+          percentage: activeProcess.percentage,
+          startTime: activeProcess.startTime,
+          totalItems: activeProcess.totalItems || 0,
+          processedItems: activeProcess.processedItems || 0,
+        },
+      });
+    }
 
-        // Count total stores across all branches instead of just branch count
-        const totalStores = allStores.filter(s => s.notes === "INDUK").length;
-        const progressId = ProgressHelper.start({
-          cab: "All",
-          period: periode,
-          message: `Memulai rekonsiliasi untuk semua cabang periode ${periode}`,
-          details: {
-            totalStores: totalStores,
-            branches: branches.length,
-            operation: 'reconcile_all_branches'
-          }
-        });
-
-        // Start reconciliation process for all branches (non-blocking)
-        // Data lama akan dihapus setelah proses rekon selesai, bukan di awal
-        rekonWtHarianService.reconcileAllBranchesWithProgress(periode, progressId);
-
-        return res.status(200).json({
-          success: true,
-          message: "Proses rekonsiliasi dimulai",
-          progressId,
-          totalBranches: branches.length,
-          totalStores: totalStores,
-        });
-      }
-
+    // Handle 'SEMUA CABANG' option
+    if (cabParam === "All") {
       // Initialize progress tracking
       await storeService.ensureInitialized();
-      const branchStores = await storeService.getStoresByBranch(cab, true);
+      const allStores = storeService.stores;
+      const branches = [...new Set(allStores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))];
+
+      // Count total stores across all branches instead of just branch count
+      const totalStores = allStores.filter(s => s.notes === "INDUK").length;
       const progressId = ProgressHelper.start({
-        cab: cab,
+        cab: "All",
         period: periode,
-        message: `Memulai rekonsiliasi cabang ${cab} periode ${periode}`,
+        message: `Memulai rekonsiliasi untuk semua cabang periode ${periode}`,
         details: {
-          totalStores: branchStores.length,
-          operation: 'reconcile_branch'
-        }
+          totalStores: totalStores,
+          branches: branches.length,
+          operation: "reconcile_all_branches",
+        },
       });
 
-      // Start reconciliation process (non-blocking)
+      // Start reconciliation process for all branches (non-blocking)
       // Data lama akan dihapus setelah proses rekon selesai, bukan di awal
-      rekonWtHarianService.reconcileDataWithProgress(cab, periode, progressId);
+      rekonWtHarianService.reconcileAllBranchesWithProgress(periode, progressId);
 
-      res.status(200).json({
+      return res.status(200).json({
         success: true,
         message: "Proses rekonsiliasi dimulai",
         progressId,
-        totalStores: branchStores.length,
+        totalBranches: branches.length,
+        totalStores: totalStores,
       });
-    } catch (error) {
-      logger.error(`Error in startReconciliation: ${error.message}`);
-      next(error);
     }
+
+    // Initialize progress tracking
+    await storeService.ensureInitialized();
+    const branchStores = await storeService.getStoresByBranch(cab, true);
+    const progressId = ProgressHelper.start({
+      cab: cab,
+      period: periode,
+      message: `Memulai rekonsiliasi cabang ${cab} periode ${periode}`,
+      details: {
+        totalStores: branchStores.length,
+        operation: "reconcile_branch",
+      },
+    });
+
+    // Start reconciliation process (non-blocking)
+    // Data lama akan dihapus setelah proses rekon selesai, bukan di awal
+    rekonWtHarianService.reconcileDataWithProgress(cab, periode, progressId);
+
+    res.status(200).json({
+      success: true,
+      message: "Proses rekonsiliasi dimulai",
+      progressId,
+      totalStores: branchStores.length,
+    });
+  } catch (error) {
+    logger.error(`Error in startReconciliation: ${error.message}`);
+    next(error);
+  }
 };
 
 /**
@@ -150,33 +150,33 @@ export const startReconciliation = async (req, res, next) => {
  * @param {Function} next - Express next middleware function
  */
 export const getResults = async (req, res) => {
-    try {
-      const { cab, periode, toko } = req.params;
-      const { page, limit, tipe, tgl1, searchQuery, sortColumn, sortOrder, toleranceAmount } = req.query;
+  try {
+    const { cab, periode, toko } = req.params;
+    const { page, limit, tipe, tgl1, searchQuery, sortColumn, sortOrder, toleranceAmount } = req.query;
 
-      if (!periode) {
-        return res.status(400).json({
-          success: false,
-          message: "Periode harus diisi",
-        });
-      }
-
-      const results = await rekonWtHarianService.getResults(cab, periode, toko, {
-        page: parseInt(page) || 1,
-        limit: parseInt(limit) || config.pagination.defaultLimit,
-        tipe,
-        tgl1,
-        searchQuery,
-        sortColumn,
-        sortOrder,
-        toleranceAmount: toleranceAmount ? parseInt(toleranceAmount) : undefined,
+    if (!periode) {
+      return res.status(400).json({
+        success: false,
+        message: "Periode harus diisi",
       });
-
-      res.status(200).json(results);
-    } catch (error) {
-      logger.error(`Error in getResults: ${error.message}`);
-      next(error);
     }
+
+    const results = await rekonWtHarianService.getResults(cab, periode, toko, {
+      page: parseInt(page) || 1,
+      limit: parseInt(limit) || config.pagination.defaultLimit,
+      tipe,
+      tgl1,
+      searchQuery,
+      sortColumn,
+      sortOrder,
+      toleranceAmount: toleranceAmount ? parseInt(toleranceAmount) : undefined,
+    });
+
+    res.status(200).json(results);
+  } catch (error) {
+    logger.error(`Error in getResults: ${error.message}`);
+    next(error);
+  }
 };
 
 /**
@@ -186,32 +186,32 @@ export const getResults = async (req, res) => {
  * @param {Function} next - Express next middleware function
  */
 export const getSummary = async (req, res, next) => {
-    try {
-      const { cab, periode } = req.params;
+  try {
+    const { cab, periode } = req.params;
 
-      if (!periode) {
-        return res.status(400).json({
-          success: false,
-          message: "Periode harus diisi",
-        });
-      }
-
-      // Handle 'SEMUA CABANG' option
-      let summary;
-      if (cab === "SEMUA" || cab === "All" || !cab) {
-        summary = await rekonWtHarianService.getAllCabangSummary(periode);
-      } else {
-        summary = await rekonWtHarianService.getSummary(cab, periode);
-      }
-
-      res.status(200).json({
-        success: true,
-        data: summary,
+    if (!periode) {
+      return res.status(400).json({
+        success: false,
+        message: "Periode harus diisi",
       });
-    } catch (error) {
-      logger.error(`Error in getSummary: ${error.message}`);
-      next(error);
     }
+
+    // Handle 'SEMUA CABANG' option
+    let summary;
+    if (cab === "SEMUA" || cab === "All" || !cab) {
+      summary = await rekonWtHarianService.getAllCabangSummary(periode);
+    } else {
+      summary = await rekonWtHarianService.getSummary(cab, periode);
+    }
+
+    res.status(200).json({
+      success: true,
+      data: summary,
+    });
+  } catch (error) {
+    logger.error(`Error in getSummary: ${error.message}`);
+    next(error);
+  }
 };
 
 /**
@@ -221,38 +221,38 @@ export const getSummary = async (req, res, next) => {
  * @param {Function} next - Express next middleware function
  */
 export const deleteResults = async (req, res, next) => {
-    try {
-      const { cab, periode } = req.params;
+  try {
+    const { cab, periode } = req.params;
 
-      if (!periode) {
-        return res.status(400).json({
-          success: false,
-          message: "Periode harus diisi",
-        });
-      }
+    if (!periode) {
+      return res.status(400).json({
+        success: false,
+        message: "Periode harus diisi",
+      });
+    }
 
-      // Handle 'SEMUA CABANG' option
-      if (cab === "SEMUA") {
-        const count = await rekonWtHarianService.deleteAllCabangResults(periode);
+    // Handle 'SEMUA CABANG' option
+    if (cab === "SEMUA") {
+      const count = await rekonWtHarianService.deleteAllCabangResults(periode);
 
-        return res.status(200).json({
-          success: true,
-          message: `${count} data rekonsiliasi untuk semua cabang berhasil dihapus`,
-          deletedCount: count,
-        });
-      }
-
-      const count = await rekonWtHarianService.deleteResults(cab, periode);
-
-      res.status(200).json({
+      return res.status(200).json({
         success: true,
-        message: `${count} data berhasil dihapus`,
+        message: `${count} data rekonsiliasi untuk semua cabang berhasil dihapus`,
         deletedCount: count,
       });
-    } catch (error) {
-      logger.error(`Error in deleteResults: ${error.message}`);
-      next(error);
     }
+
+    const count = await rekonWtHarianService.deleteResults(cab, periode);
+
+    res.status(200).json({
+      success: true,
+      message: `${count} data berhasil dihapus`,
+      deletedCount: count,
+    });
+  } catch (error) {
+    logger.error(`Error in deleteResults: ${error.message}`);
+    next(error);
+  }
 };
 
 /**
@@ -262,33 +262,33 @@ export const deleteResults = async (req, res, next) => {
  * @param {Function} next - Express next middleware function
  */
 export const getProgress = async (req, res, next) => {
-    try {
-      const { progressId } = req.params;
+  try {
+    const { progressId } = req.params;
 
-      if (!progressId) {
-        return res.status(400).json({
-          success: false,
-          message: "Progress ID harus diisi",
-        });
-      }
-
-      const progress = ProgressHelper.getProgress(progressId);
-
-      if (!progress) {
-        return res.status(404).json({
-          success: false,
-          message: "Progress tidak ditemukan",
-        });
-      }
-
-      res.status(200).json({
-        success: true,
-        data: progress,
+    if (!progressId) {
+      return res.status(400).json({
+        success: false,
+        message: "Progress ID harus diisi",
       });
-    } catch (error) {
-      logger.error(`Error in getProgress: ${error.message}`);
-      next(error);
     }
+
+    const progress = ProgressHelper.getProgress(progressId);
+
+    if (!progress) {
+      return res.status(404).json({
+        success: false,
+        message: "Progress tidak ditemukan",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: progress,
+    });
+  } catch (error) {
+    logger.error(`Error in getProgress: ${error.message}`);
+    next(error);
+  }
 };
 
 /**
@@ -337,15 +337,7 @@ export const getLatestProgress = async (req, res, next) => {
 export const getDailyShopSummary = async (req, res, next) => {
   try {
     const { cab, periode } = req.params;
-    const {
-      page = 1,
-      limit = 50,
-      toko,
-      tgl1,
-      searchQuery,
-      sortColumn = 'tanggal',
-      sortOrder = 'asc',
-    } = req.query;
+    const { page = 1, limit = 50, toko, tgl1, searchQuery, sortColumn = "tanggal", sortOrder = "asc" } = req.query;
 
     if (!periode) {
       return res.status(400).json({
@@ -385,7 +377,7 @@ export const getDailyShopSummary = async (req, res, next) => {
 export const invalidateCache = async (req, res, next) => {
   try {
     rekonWtHarianService.invalidateCache();
-    
+
     res.status(200).json({
       success: true,
       message: "Cache invalidated successfully. Data will be reloaded on next request.",

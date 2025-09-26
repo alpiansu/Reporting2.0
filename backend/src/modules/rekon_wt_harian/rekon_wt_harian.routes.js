@@ -44,14 +44,19 @@ router.get("/progress/:progressId", authenticateJWT, rekonWtHarianController.get
 router.get("/latest-progress/:cab/:periode", authenticateJWT, rekonWtHarianController.getLatestProgress);
 
 // Get summary of reconciliation results
-// GET /api/rekon-wt-harian/:cab/:periode/summary
+// GET /api/rekon-wt-harian/summary/:cab/:periode
 // Access: Private
-router.get("/:cab/:periode/summary", authenticateJWT, rekonWtHarianController.getSummary);
+router.get("/summary/:cab/:periode", authenticateJWT, rekonWtHarianController.getSummary);
+
+// Get daily shop summary - rekap data per toko per tanggal
+// GET /api/rekon-wt-harian/daily-summary/:periode/:cab
+// Access: Private
+router.get("/daily-summary/:periode/:cab", authenticateJWT, rekonWtHarianController.getDailyShopSummary);
 
 // Get reconciliation results
 // GET /api/rekon-wt-harian/:periode/:cab/:toko
 // Access: Private
-router.get("/:periode/:cab/:toko", authenticateJWT, rekonWtHarianController.getResults);
+router.get("/get-result-detail/:periode/:cab/:toko", authenticateJWT, rekonWtHarianController.getResults);
 
 // Delete reconciliation results
 // DELETE /api/rekon-wt-harian/:cab/:periode
@@ -62,11 +67,6 @@ router.delete(
   authorizeRole(["admin", "superadmin"]),
   rekonWtHarianController.deleteResults
 );
-
-// Get daily shop summary - rekap data per toko per tanggal
-// GET /api/rekon-wt-harian/:periode/:cab/daily-summary
-// Access: Private
-router.get("/:periode/:cab/daily-summary", authenticateJWT, rekonWtHarianController.getDailyShopSummary);
 
 // Clean up temporary difference files
 // GET /api/rekon-wt-harian/cleanup-temp-files

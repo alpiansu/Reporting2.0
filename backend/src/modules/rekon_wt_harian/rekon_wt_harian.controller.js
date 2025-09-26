@@ -151,8 +151,8 @@ export const startReconciliation = async (req, res, next) => {
  */
 export const getResults = async (req, res) => {
     try {
-      const { cab, periode } = req.params;
-      const { page, limit, tipe, toko, tgl1, searchQuery, sortColumn, sortOrder, toleranceAmount } = req.query;
+      const { cab, periode, toko } = req.params;
+      const { page, limit, tipe, tgl1, searchQuery, sortColumn, sortOrder, toleranceAmount } = req.query;
 
       if (!periode) {
         return res.status(400).json({
@@ -161,11 +161,10 @@ export const getResults = async (req, res) => {
         });
       }
 
-      const results = await rekonWtHarianService.getResults(cab, periode, {
+      const results = await rekonWtHarianService.getResults(cab, periode, toko, {
         page: parseInt(page) || 1,
         limit: parseInt(limit) || config.pagination.defaultLimit,
         tipe,
-        toko,
         tgl1,
         searchQuery,
         sortColumn,

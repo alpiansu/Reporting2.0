@@ -1602,16 +1602,16 @@ class RekonWtHarianService {
    * Get reconciliation results
    * @param {string} cab - Branch code
    * @param {string} period - Period in YYMM format
+   * @param {string} toko - Store code
    * @param {Object} options - Query options
    * @returns {Promise<Object>} Reconciliation results
    */
-  async getResults(cab, period, options = {}) {
+  async getResults(cab, period, toko, options = {}) {
     try {
       const {
         page = 1,
         limit = config.pagination.defaultLimit,
         tipe,
-        toko,
         tgl1,
         searchQuery,
         sortColumn,
@@ -1642,17 +1642,14 @@ class RekonWtHarianService {
           if (itemCab !== cabNorm) return false;
         }
 
+        // Wajib: toko harus cocok (exact match)
+        if (!toko) return false; // toko wajib ada
+        const itemToko = (item.shop ?? "").toString().trim().toUpperCase();
+        const tokoNorm = String(toko).trim().toUpperCase();
+        if (itemToko !== tokoNorm) return false;
+
         // Filter tambahan (opsional)
         if (tipe && item.tipe !== tipe) return false;
-
-        // Catatan: ini exact match. Jika mau partial, ganti jadi includes (case-insensitive)
-        if (
-          toko &&
-          !String(item.toko ?? "")
-            .toLowerCase()
-            .includes(String(toko).toLowerCase())
-        )
-          return false;
 
         if (tgl1) {
           // Samakan ke tanggal (YYYY-MM-DD)

@@ -43,15 +43,15 @@ router.get("/progress/:progressId", authenticateJWT, rekonWtHarianController.get
 // Access: Private
 router.get("/latest-progress/:cab/:periode", authenticateJWT, rekonWtHarianController.getLatestProgress);
 
-// Get reconciliation results
-// GET /api/rekon-wt-harian/:periode/:cab
-// Access: Private
-router.get("/:periode/:cab", authenticateJWT, rekonWtHarianController.getResults);
-
 // Get summary of reconciliation results
 // GET /api/rekon-wt-harian/:cab/:periode/summary
 // Access: Private
 router.get("/:cab/:periode/summary", authenticateJWT, rekonWtHarianController.getSummary);
+
+// Get reconciliation results
+// GET /api/rekon-wt-harian/:periode/:cab/:toko
+// Access: Private
+router.get("/:periode/:cab/:toko", authenticateJWT, rekonWtHarianController.getResults);
 
 // Delete reconciliation results
 // DELETE /api/rekon-wt-harian/:cab/:periode

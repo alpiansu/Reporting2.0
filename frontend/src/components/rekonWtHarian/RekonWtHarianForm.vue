@@ -3,7 +3,7 @@
     <div class="card">
       <h2 class="form-title">Hasil Rekonsiliasi WT Harian</h2>
       <p class="form-description">
-        Lihat hasil rekonsiliasi data transaksi antara WRC dan toko per tanggal.
+        Lihat hasil rekonsiliasi data transaksi antara WRC dan toko per toko.
       </p>
 
       <form @submit.prevent="submitForm" class="rekon-form">

@@ -33,10 +33,6 @@
         Cab
         <i v-if="sortColumn === 'cab'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
       </th>
-      <th class="sortable" :class="{ 'sort-asc': sortColumn === 'tanggal' && sortOrder === 'asc', 'sort-desc': sortColumn === 'tanggal' && sortOrder === 'desc' }" @click="handleSort('tanggal')">
-        Tanggal
-        <i v-if="sortColumn === 'tanggal'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
-      </th>
       <th class="sortable" :class="{ 'sort-asc': sortColumn === 'shop' && sortOrder === 'asc', 'sort-desc': sortColumn === 'shop' && sortOrder === 'desc' }" @click="handleSort('shop')">
         Shop
         <i v-if="sortColumn === 'shop'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
@@ -70,7 +66,6 @@
     <!-- Table Row -->
     <template #table-row="{ item }">
       <td>{{ item.cab }}</td>
-      <td>{{ formatDate(item.tanggal) }}</td>
       <td>{{ item.shop }}</td>
       <td class="text-right" :class="getAmountClass(item.sum_sel_gross)">
         {{ formatCurrency(item.sum_sel_gross) }}
@@ -388,7 +383,6 @@ const printResults = () => {
             <tr>
               <th>No</th>
               <th>Cab</th>
-              <th>Tanggal</th>
               <th>Shop</th>
               <th>Tipe</th>
               <th class="text-right">Gross WRC</th>
@@ -414,7 +408,6 @@ const printResults = () => {
         <tr class="${rowClass}">
           <td class="text-center">${index + 1}</td>
           <td>${item.cab}</td>
-          <td>${formatDate(item.tgl1)}</td>
           <td>${item.shop}</td>
           <td>
             <span class="badge badge-${item.tipe === 'CASH' ? 'cash' : 'non-cash'}">

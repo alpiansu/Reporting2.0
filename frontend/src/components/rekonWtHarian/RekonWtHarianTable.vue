@@ -61,6 +61,7 @@
         Update Time
         <i v-if="sortColumn === 'updtime'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
       </th>
+      <th class="text-center">Aksi</th>
     </template>
 
     <!-- Table Row -->
@@ -83,14 +84,35 @@
         <span class="badge badge-info">{{ item.record_count }}</span>
       </td>
       <td>{{ formatDateTime(item.updtime) }}</td>
+      <td class="text-center">
+        <button 
+          @click="showDetailModal(item)" 
+          class="btn btn-detail"
+          title="Lihat Detail Data"
+          :disabled="!item.record_count || item.record_count === 0"
+        >
+          <i class="pi pi-eye"></i>
+          Detail
+        </button>
+      </td>
     </template>
   </DataTable>
+
+  <!-- Detail Modal -->
+  <RekonWtHarianDetailModal
+    :show="detailModalVisible"
+    :periode="selectedItem?.periode || periode"
+    :cab="selectedItem?.cab || ''"
+    :toko="selectedItem?.shop || ''"
+    @close="closeDetailModal"
+  />
 </template>
 
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { useToastService } from '../../utils/toast';
 import DataTable from '../common/DataTable.vue';
+import RekonWtHarianDetailModal from './RekonWtHarianDetailModal.vue';
 
 const props = defineProps({
   data: {
@@ -126,6 +148,10 @@ const props = defineProps({
 
 const emit = defineEmits(['refresh', 'page-change', 'items-per-page-change', 'sort-change']);
 const toast = useToastService();
+
+// Modal functionality
+const detailModalVisible = ref(false);
+const selectedItem = ref(null);
 
 // Search functionality
 const searchQuery = ref('');
@@ -457,6 +483,20 @@ const printResults = () => {
     });
   }
 };
+
+// Modal methods
+const showDetailModal = (item) => {
+  selectedItem.value = {
+    ...item,
+    periode: props.periode
+  };
+  detailModalVisible.value = true;
+};
+
+const closeDetailModal = () => {
+  detailModalVisible.value = false;
+  selectedItem.value = null;
+};
 </script>
 
 <style scoped>
@@ -621,6 +661,44 @@ const printResults = () => {
   min-width: 100px;
   max-width: 300px;
   white-space: nowrap;
+}
+
+.btn-detail {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+}
+
+.btn-detail:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+}
+
+.btn-detail:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+}
+
+.btn-detail:disabled {
+  background: #e0e0e0;
+  color: #9e9e9e;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-detail i {
+  font-size: 0.875rem;
 }
 
 :deep(.text-right) {

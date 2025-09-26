@@ -137,6 +137,18 @@ export default {
   },
 
   /**
+   * Get detailed reconciliation results for specific shop
+   * @param {String} periode - Period in YYMM format
+   * @param {String} cab - Branch code
+   * @param {String} toko - Shop code
+   * @param {Object} params - Query parameters (page, limit, sortColumn, sortOrder)
+   * @returns {Promise}
+   */
+  getResultDetail(periode, cab, toko, params = {}) {
+    return api.get(`/rekon-wt-harian/get-result-detail/${periode}/${cab}/${toko}`, { params });
+  },
+
+  /**
    * Delete reconciliation results
    * @param {String} cab - Branch code (empty string for all branches)
    * @param {String} periode - Period in YYMM format

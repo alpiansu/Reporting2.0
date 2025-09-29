@@ -17,7 +17,7 @@ class WrcUtils {
    * @returns {null} Always returns null
    */
   cleanupMemory(arrayRef, logCleanup = false) {
-    return MemoryUtils.cleanupArray(arrayRef, logCleanup);
+    return MemoryUtils.cleanupMemory(arrayRef, logCleanup);
   }
 
   /**

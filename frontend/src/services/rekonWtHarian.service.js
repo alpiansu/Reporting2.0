@@ -159,4 +159,15 @@ export default {
     const cabParam = cab || "SEMUA";
     return api.delete(`/rekon-wt-harian/${cabParam}/${periode}`);
   },
+
+  /**
+   * Refresh reconciliation data for specific shop
+   * @param {String} periode - Period in YYMM format
+   * @param {String} cab - Branch code
+   * @param {String} toko - Shop code
+   * @returns {Promise}
+   */
+  refreshShopReconciliation(periode, cab, toko) {
+    return api.post(`/rekon-wt-harian/refresh-shop/${periode}/${cab}/${toko}`);
+  },
 };

@@ -85,15 +85,27 @@
       </td>
       <td>{{ formatDateTime(item.updtime) }}</td>
       <td class="text-center">
-        <button 
-          @click="showDetailModal(item)" 
-          class="btn btn-detail"
-          title="Lihat Detail Data"
-          :disabled="!item.record_count || item.record_count === 0"
-        >
-          <i class="pi pi-eye"></i>
-          Detail
-        </button>
+        <div class="action-buttons">
+          <button 
+            @click="showDetailModal(item)" 
+            class="btn btn-detail"
+            title="Lihat Detail Data"
+            :disabled="!item.record_count || item.record_count === 0"
+          >
+            <i class="pi pi-eye"></i>
+            Detail
+          </button>
+          <button 
+            @click="refreshShopData(item)" 
+            class="btn btn-refresh"
+            title="Refresh Data Rekonsiliasi"
+            :disabled="refreshingShops.has(`${item.cab}_${item.shop}`) || isRefreshing"
+            :class="{ 'btn-processing': refreshingShops.has(`${item.cab}_${item.shop}`) }"
+          >
+            <i class="pi pi-refresh" :class="{ 'pi-spin': refreshingShops.has(`${item.cab}_${item.shop}`) }"></i>
+            {{ refreshingShops.has(`${item.cab}_${item.shop}`) ? 'Memproses...' : 'Refresh' }}
+          </button>
+        </div>
       </td>
     </template>
   </DataTable>
@@ -111,6 +123,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { useToastService } from '../../utils/toast';
+import { rekonWtHarianService } from '../../services';
 import DataTable from '../common/DataTable.vue';
 import RekonWtHarianDetailModal from './RekonWtHarianDetailModal.vue';
 
@@ -156,6 +169,10 @@ const selectedItem = ref(null);
 // Search functionality
 const searchQuery = ref('');
 const searchTimeout = ref(null);
+
+// Refresh functionality
+const refreshingShops = ref(new Set());
+const isRefreshing = ref(false);
 
 
 
@@ -348,20 +365,18 @@ const formatPeriode = (periode) => {
 const exportToExcel = async () => {
   try {
     // Implementasi export ke Excel
-    toast.add({
-      severity: 'success',
-      summary: 'Ekspor Berhasil',
-      detail: 'Data berhasil diekspor ke Excel',
-      life: 3000
-    });
+    toast.showSuccess(
+      'Ekspor Berhasil',
+      'Data berhasil diekspor ke Excel',
+      3000
+    );
   } catch (err) {
     console.error('Error exporting data:', err);
-    toast.add({
-      severity: 'error',
-      summary: 'Ekspor Gagal',
-      detail: 'Terjadi kesalahan saat mengekspor data',
-      life: 3000
-    });
+    toast.showError(
+      'Ekspor Gagal',
+      'Terjadi kesalahan saat mengekspor data',
+      3000
+    );
   }
 };
 
@@ -475,14 +490,72 @@ const printResults = () => {
     };
   } catch (err) {
     console.error('Error printing data:', err);
-    toast.add({
-      severity: 'error',
-      summary: 'Cetak Gagal',
-      detail: 'Terjadi kesalahan saat mencetak data',
-      life: 3000
-    });
+    toast.showError(
+      'Cetak Gagal',
+      'Terjadi kesalahan saat mencetak data',
+      3000
+    );
   }
 };
+
+// Refresh shop data and wait for completion
+const refreshShopData = async (item) => {
+  const shopKey = `${item.cab}_${item.shop}`;
+  
+  try {
+    // Add shop to refreshing set
+    refreshingShops.value.add(shopKey);
+    
+    toast.showInfo(
+      'Proses Dimulai',
+      `Rekonsiliasi toko ${item.shop} sedang diproses. Mohon tunggu...`,
+      4000
+    );
+    
+    // Call refresh endpoint and wait for completion
+    const response = await rekonWtHarianService.refreshShopReconciliation(
+      props.periode, 
+      item.cab, 
+      item.shop
+    );
+    
+    // Remove from refreshing set
+    refreshingShops.value.delete(shopKey);
+    
+    if (response.data.success) {
+      toast.showSuccess(
+        'Proses Selesai',
+        `Rekonsiliasi toko ${item.shop} telah selesai. Silakan refresh halaman untuk melihat hasil terbaru.`,
+        6000
+      );
+      
+      // Refresh the table data
+      emit('refresh');
+    } else {
+      throw new Error(response.data.message || 'Refresh gagal');
+    }
+  } catch (error) {
+    console.error('Error refreshing shop data:', error);
+    
+    // Remove from refreshing set on error
+    refreshingShops.value.delete(shopKey);
+    
+    let errorMessage = 'Terjadi kesalahan saat refresh data';
+    if (error.response?.data?.message) {
+      errorMessage = error.response.data.message;
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    toast.showError(
+      'Refresh Gagal',
+      errorMessage,
+      5000
+    );
+  }
+};
+
+
 
 // Modal methods
 const showDetailModal = (item) => {
@@ -699,6 +772,86 @@ const closeDetailModal = () => {
 
 .btn-detail i {
   font-size: 0.875rem;
+}
+
+.btn-refresh {
+  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+  margin-left: 8px;
+}
+
+.btn-refresh:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+  background: linear-gradient(135deg, #218838 0%, #1e7e34 100%);
+}
+
+.btn-refresh:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+}
+
+.btn-refresh:disabled {
+  background: #e0e0e0;
+  color: #9e9e9e;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.btn-refresh i {
+  font-size: 0.875rem;
+}
+
+.btn-refresh i.pi-spin {
+  animation: spin 1s linear infinite;
+}
+
+.btn-processing {
+  background: linear-gradient(135deg, #17a2b8 0%, #138496 100%) !important;
+  border-color: #17a2b8 !important;
+  color: white !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-processing::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes shimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+.action-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
 }
 
 :deep(.text-right) {

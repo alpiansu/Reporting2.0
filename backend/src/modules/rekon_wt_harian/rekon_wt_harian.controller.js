@@ -393,25 +393,39 @@ export const refreshShopReconciliation = async (req, res, next) => {
       });
     }
 
-    // Start reconciliation process for specific shop in background
-    rekonWtHarianService
-      .reconcileSpecificShop(cab, periode, toko)
-      .then((result) => {
-        logger.info(`Rekonsiliasi toko ${toko} cabang ${cab} periode ${periode} selesai`);
-      })
-      .catch((error) => {
-        logger.error(`Error in shop reconciliation: ${error.message}`);
-      });
+    try {
+      // Start reconciliation process and wait for completion
+      const result = await rekonWtHarianService.reconcileSpecificShop(
+        cab, 
+        periode, 
+        toko
+      );
 
-    res.status(202).json({
-      success: true,
-      message: `Proses rekonsiliasi untuk toko ${toko} cabang ${cab} periode ${periode} telah dimulai`,
-      data: {
-        cab: cab,
-        periode: periode,
-        toko: toko,
-      },
-    });
+      logger.info(`Rekonsiliasi toko ${toko} cabang ${cab} periode ${periode} selesai`);
+      
+      res.status(200).json({
+        success: true,
+        message: `Rekonsiliasi untuk toko ${toko} cabang ${cab} periode ${periode} telah selesai`,
+        data: {
+          cab: cab,
+          periode: periode,
+          toko: toko,
+          result: result
+        },
+      });
+    } catch (reconciliationError) {
+      logger.error(`Error in shop reconciliation: ${reconciliationError.message}`);
+      
+      res.status(500).json({
+        success: false,
+        message: `Gagal melakukan rekonsiliasi: ${reconciliationError.message}`,
+        data: {
+          cab: cab,
+          periode: periode,
+          toko: toko
+        },
+      });
+    }
   } catch (error) {
     logger.error(`Error in refreshShopReconciliation: ${error.message}`);
     next(error);

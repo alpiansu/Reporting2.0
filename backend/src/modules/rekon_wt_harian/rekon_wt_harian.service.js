@@ -889,6 +889,84 @@ class RekonWtHarianService {
   }
 
   /**
+   * Start reconciliation process for specific shop (non-blocking)
+   * @param {string} cab - Branch code
+   * @param {string} period - Period in YYMM format
+   * @param {string} toko - Shop code
+   * @returns {Promise<Object>} Reconciliation result
+   */
+  async reconcileSpecificShop(cab, period, toko) {
+    try {
+      // Get WRC data
+      const shops = [toko]; // toko is a single shop code string, not an array
+      const wrcDataFile = await wrcUtils.getWrcData(cab, period, "wt", config.queries.wrc, shops);
+
+      if (!wrcDataFile) {
+        throw new Error("No WRC data found");
+      }
+
+      // Read WRC data from file
+      const wrcDataRaw = await fs.readFile(wrcDataFile, "utf8");
+      const wrcData = JSON.parse(wrcDataRaw);
+
+      // Ensure storeService is initialized
+      await storeService.ensureInitialized();
+
+      // Get specific store by code
+      const store = await storeService.getStoreByCode(toko);
+      if (!store) {
+        throw new Error(`Store with code ${toko} not found`);
+      }
+
+      // Validate that store belongs to the specified branch
+      if (store.branch !== cab && store.cab !== cab) {
+        throw new Error(`Store ${toko} does not belong to branch ${cab}`);
+      }
+
+      logger.info(`Starting reconciliation for specific shop: ${toko} in branch ${cab}`);
+
+      // Update existing data to mark as reconciled (recid = 1) and update timestamp
+      await RekonWtHarian.update(
+        { 
+          recid: "1",
+          updtime: new Date()
+        },
+        {
+          where: {
+            cab: cab,
+            periode: period,
+            shop: toko,
+          },
+        }
+      );
+      logger.info(`Updated existing data to recid=1 for shop ${toko} in ${cab} for period ${period}`);
+
+      // Process the specific store
+      const result = await this.processStore(store, cab, period, wrcData);
+
+      // Save differences to database for this specific shop
+      await this.saveDifferencesToDatabaseForShop(cab, period, toko);
+      await this.syncToJsonFile();
+
+      logger.info(`Completed reconciliation for shop ${toko} in branch ${cab}`);
+
+      return {
+        success: true,
+        shop: toko,
+        cab: cab,
+        period: period,
+        processedStores: 1,
+        storesWithDifferences: result.hasDifferences ? 1 : 0,
+        totalDifferences: result.totalDifferences || 0,
+        message: `Rekonsiliasi selesai untuk toko ${toko}`,
+      };
+    } catch (error) {
+      logger.error(`Error in shop reconciliation for ${toko}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * Get query for store data
    * @param {string} period - Period in YYMM format
    * @returns {string} SQL query
@@ -941,7 +1019,10 @@ class RekonWtHarianService {
 
       // Set recid to '1' for all processed records to mark them in active history at the beginning of reconciliation
       await RekonWtHarian.update(
-        { recid: "1" },
+        { 
+          recid: "1",
+          updtime: new Date()
+        },
         {
           where: {
             cab: cab,
@@ -949,7 +1030,7 @@ class RekonWtHarianService {
           },
         }
       );
-      logger.info(`Updated recid to '1' for all existing records in ${cab} for period ${period}`);
+      logger.info(`Updated recid to '1' and updtime for all existing records in ${cab} for period ${period}`);
 
       // Get store connection and data for each store
       const results = {
@@ -1593,6 +1674,150 @@ class RekonWtHarianService {
       return {
         success: false,
         message: `Error saving differences to database: ${error.message}`,
+        error: error.message,
+      };
+    }
+  }
+
+  /**
+   * Save differences to database for specific shop
+   * @param {string} cab - Branch code
+   * @param {string} period - Period in YYMM format
+   * @param {string} toko - Store code
+   * @returns {Promise<Object>} Save result
+   */
+  async saveDifferencesToDatabaseForShop(cab, period, toko) {
+    try {
+      logger.info(`Saving differences for shop ${toko} in ${cab} ${period} from temporary files to database`);
+
+      // Buat path untuk direktori temporary
+      const tempDir = os.tmpdir();
+
+      // Cari file temporary yang spesifik untuk toko ini
+      const files = await fs.readdir(tempDir);
+      const differenceFiles = files.filter(file => {
+        return file.startsWith(`differences_wtharian_${cab}_${period}_${toko}`) && file.endsWith(".json");
+      });
+
+      if (differenceFiles.length === 0) {
+        logger.info(`No difference files found for shop ${toko} in ${cab} ${period}`);
+        return { success: true, message: "No differences to save", savedCount: 0 };
+      }
+
+      logger.info(`Found ${differenceFiles.length} difference files for shop ${toko} in ${cab} ${period}`);
+
+      let totalDifferences = 0;
+      let totalSaved = 0;
+      let totalErrors = 0;
+
+      // Proses setiap file perbedaan
+      for (const file of differenceFiles) {
+        try {
+          const filePath = path.join(tempDir, file);
+          const fileContent = await fs.readFile(filePath, "utf8");
+          const differences = JSON.parse(fileContent);
+
+          if (differences.length === 0) {
+            continue;
+          }
+
+          totalDifferences += differences.length;
+          logger.info(`Processing ${differences.length} differences from ${file}`);
+
+          // Simpan perbedaan ke database dalam batch menggunakan bulk upsert
+          const BATCH_SIZE = 300;
+          for (let i = 0; i < differences.length; i += BATCH_SIZE) {
+            const batch = differences.slice(i, i + BATCH_SIZE);
+            try {
+              // Set recid untuk semua record dalam batch
+              batch.forEach(difference => {
+                difference.recid = "*";
+                difference.updtime = new Date().toISOString().slice(0, 19).replace("T", " ");
+              });
+
+              // Gunakan bulkCreate dengan updateOnDuplicate untuk bulk upsert
+              await RekonWtHarian.bulkCreate(batch, {
+                updateOnDuplicate: [
+                  "gross_wrc",
+                  "ppn_wrc",
+                  "gross_idm_wrc",
+                  "ppn_idm_wrc",
+                  "gross_store",
+                  "ppn_store",
+                  "gross_idm_store",
+                  "ppn_idm_store",
+                  "selisih_gross",
+                  "selisih_ppn",
+                  "selisih_gross_idm",
+                  "selisih_ppn_idm",
+                  "recid",
+                  "updtime",
+                ],
+                returning: false,
+                ignoreDuplicates: false,
+              });
+
+              const savedCount = batch.length;
+              totalSaved += savedCount;
+
+              logger.info(
+                `Bulk upsert completed for shop ${toko}: ${savedCount} records processed in batch ${
+                  Math.floor(i / BATCH_SIZE) + 1
+                }`
+              );
+            } catch (error) {
+              logger.error(
+                `Error in bulk upsert for shop ${toko} batch ${Math.floor(i / BATCH_SIZE) + 1}: ${error.message}`
+              );
+              totalErrors += batch.length;
+
+              // Fallback: try individual upserts for this batch if bulk fails
+              logger.info(`Attempting fallback individual upserts for failed batch...`);
+              let fallbackSaved = 0;
+              for (const difference of batch) {
+                try {
+                  await RekonWtHarian.upsert(difference);
+                  fallbackSaved++;
+                } catch (fallbackError) {
+                  logger.error(`Fallback upsert failed for record: ${fallbackError.message}`);
+                }
+              }
+
+              if (fallbackSaved > 0) {
+                totalSaved += fallbackSaved;
+                totalErrors -= fallbackSaved;
+                logger.info(`Fallback saved ${fallbackSaved} records from failed batch`);
+              }
+            }
+          }
+
+          // Sync to JSON file after processing all batches for this file
+          await this.syncToJsonFile();
+
+          // Hapus file temporary setelah berhasil disimpan ke database
+          await fs.unlink(filePath);
+          logger.info(`Deleted temporary file ${file} after saving to database`);
+        } catch (error) {
+          logger.error(`Error processing file ${file}: ${error.message}`);
+        }
+      }
+
+      logger.info(
+        `Completed saving differences for shop ${toko} to database: ${totalSaved} saved, ${totalErrors} errors out of ${totalDifferences} total`
+      );
+
+      return {
+        success: true,
+        message: `Saved ${totalSaved} differences for shop ${toko} to database`,
+        savedCount: totalSaved,
+        errorCount: totalErrors,
+        totalCount: totalDifferences,
+      };
+    } catch (error) {
+      logger.error(`Error saving differences for shop ${toko} to database: ${error.message}`);
+      return {
+        success: false,
+        message: `Error saving differences for shop ${toko} to database: ${error.message}`,
         error: error.message,
       };
     }

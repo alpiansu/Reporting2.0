@@ -207,7 +207,6 @@ class WrcUtils {
 
       // Combine all queries with UNION ALL
       const combinedQuery = unionQueries.join(" UNION ALL ");
-      logger.info(`querynyaa : ${combinedQuery}`);
       logger.info(
         `Executing combined query for ${validDates.length} tables: ${tableType}_${validDates[0]} to ${tableType}_${
           validDates[validDates.length - 1]

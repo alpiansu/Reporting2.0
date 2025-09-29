@@ -369,6 +369,56 @@ export const getDailyShopSummary = async (req, res, next) => {
 };
 
 /**
+ * Start reconciliation process for specific shop
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+export const refreshShopReconciliation = async (req, res, next) => {
+  try {
+    const { periode, cab, toko } = req.params;
+
+    if (!periode || !cab || !toko) {
+      return res.status(400).json({
+        success: false,
+        message: "Periode, cabang, dan toko harus diisi",
+      });
+    }
+
+    // Validate periode format (YYMM)
+    if (!/^\d{4}$/.test(periode)) {
+      return res.status(400).json({
+        success: false,
+        message: "Format periode tidak valid. Gunakan format YYMM (contoh: 2507 untuk Juli 2025)",
+      });
+    }
+
+    // Start reconciliation process for specific shop in background
+    rekonWtHarianService
+      .reconcileSpecificShop(cab, periode, toko)
+      .then((result) => {
+        logger.info(`Rekonsiliasi toko ${toko} cabang ${cab} periode ${periode} selesai`);
+      })
+      .catch((error) => {
+        logger.error(`Error in shop reconciliation: ${error.message}`);
+      });
+
+    res.status(202).json({
+      success: true,
+      message: `Proses rekonsiliasi untuk toko ${toko} cabang ${cab} periode ${periode} telah dimulai`,
+      data: {
+        cab: cab,
+        periode: periode,
+        toko: toko,
+      },
+    });
+  } catch (error) {
+    logger.error(`Error in refreshShopReconciliation: ${error.message}`);
+    next(error);
+  }
+};
+
+/**
  * Invalidate cache manually
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object

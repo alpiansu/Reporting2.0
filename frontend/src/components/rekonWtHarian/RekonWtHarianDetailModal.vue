@@ -62,11 +62,37 @@
                 <h4 class="table-title">
                   <i class="pi pi-table"></i> Detail Transaksi
                 </h4>
-                <div class="table-stats">
-                  <span class="stat-item">
-                    <i class="pi pi-list"></i>
-                    Total: {{ totalRecords }} record
-                  </span>
+                <div class="table-controls">
+                  <div class="search-container">
+                    <div class="search-box">
+                      <i class="pi pi-search search-icon"></i>
+                      <input 
+                        type="text" 
+                        v-model="searchQuery" 
+                        placeholder="Cari data transaksi..." 
+                        class="search-input"
+                      >
+                      <button 
+                        v-if="searchQuery" 
+                        @click="clearSearch" 
+                        class="clear-search-btn"
+                        title="Hapus pencarian"
+                      >
+                        <i class="pi pi-times"></i>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="table-stats">
+                    <span class="stat-item">
+                      <i class="pi pi-list"></i>
+                      <span v-if="searchQuery">
+                        {{ filteredData.length }} dari {{ totalRecords }} record
+                      </span>
+                      <span v-else>
+                        Total: {{ totalRecords }} record
+                      </span>
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -88,11 +114,12 @@
                       <th class="text-right">PPN IDM Store</th>
                       <th class="text-right">Selisih Gross</th>
                       <th class="text-right">Selisih PPN</th>
-                      <th class="text-center">Status</th>
+                      <th class="text-right">Selisih Gross IDM</th>
+                      <th class="text-right">Selisih PPN IDM</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="(item, index) in paginatedData" :key="index" :class="getRowClass(item)">
+                    <tr v-for="(item, index) in paginatedData" :key="index">
                       <td class="text-center">{{ (currentPage - 1) * itemsPerPage + index + 1 }}</td>
                       <td>{{ formatDate(item.tgl1) }}</td>
                       <td>{{ item.tipe || '-' }}</td>
@@ -107,11 +134,8 @@
                       <td class="text-right">{{ formatCurrency(item.ppn_idm_store) }}</td>
                       <td class="text-right">{{ formatCurrency(item.selisih_gross) }}</td>
                       <td class="text-right">{{ formatCurrency(item.selisih_ppn) }}</td>
-                      <td class="text-center">
-                        <span :class="getStatusClass(item)">
-                          {{ getStatusText(item) }}
-                        </span>
-                      </td>
+                      <td class="text-right">{{ formatCurrency(item.selisih_gross_idm) }}</td>
+                      <td class="text-right">{{ formatCurrency(item.selisih_ppn_idm) }}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -197,16 +221,44 @@ const detailData = ref([]);
 const currentPage = ref(1);
 const itemsPerPage = ref(25);
 const totalRecords = ref(0);
+const searchQuery = ref('');
 
 // Computed properties
-const totalPages = computed(() => Math.ceil(totalRecords.value / itemsPerPage.value));
+const filteredData = computed(() => {
+  if (!searchQuery.value.trim()) {
+    return detailData.value;
+  }
+  
+  const query = searchQuery.value.toLowerCase();
+  return detailData.value.filter(item => {
+    return (
+      (item.tgl1 && item.tgl1.toString().toLowerCase().includes(query)) ||
+      (item.tipe && item.tipe.toString().toLowerCase().includes(query)) ||
+      (item.shop && item.shop.toString().toLowerCase().includes(query)) ||
+      (item.gross_wrc && item.gross_wrc.toString().toLowerCase().includes(query)) ||
+      (item.ppn_wrc && item.ppn_wrc.toString().toLowerCase().includes(query)) ||
+      (item.gross_idm_wrc && item.gross_idm_wrc.toString().toLowerCase().includes(query)) ||
+      (item.ppn_idm_wrc && item.ppn_idm_wrc.toString().toLowerCase().includes(query)) ||
+      (item.gross_store && item.gross_store.toString().toLowerCase().includes(query)) ||
+      (item.ppn_store && item.ppn_store.toString().toLowerCase().includes(query)) ||
+      (item.gross_idm_store && item.gross_idm_store.toString().toLowerCase().includes(query)) ||
+      (item.ppn_idm_store && item.ppn_idm_store.toString().toLowerCase().includes(query)) ||
+      (item.selisih_gross && item.selisih_gross.toString().toLowerCase().includes(query)) ||
+      (item.selisih_ppn && item.selisih_ppn.toString().toLowerCase().includes(query)) ||
+      (item.selisih_gross_idm && item.selisih_gross_idm.toString().toLowerCase().includes(query)) ||
+      (item.selisih_ppn_idm && item.selisih_ppn_idm.toString().toLowerCase().includes(query))
+    );
+  });
+});
+
+const totalPages = computed(() => Math.ceil(filteredData.value.length / itemsPerPage.value));
 const startIndex = computed(() => (currentPage.value - 1) * itemsPerPage.value);
-const endIndex = computed(() => Math.min(startIndex.value + itemsPerPage.value, totalRecords.value));
+const endIndex = computed(() => Math.min(startIndex.value + itemsPerPage.value, filteredData.value.length));
 
 const paginatedData = computed(() => {
   const start = startIndex.value;
   const end = start + itemsPerPage.value;
-  return detailData.value.slice(start, end);
+  return filteredData.value.slice(start, end);
 });
 
 // Methods
@@ -281,45 +333,9 @@ function formatCurrency(value) {
   }).format(numValue);
 }
 
-function getRowClass(item) {
-  const classes = [];
-  
-  // Check for differences using selisih fields from backend
-  const grossDiff = Math.abs(item.selisih_gross || 0);
-  const ppnDiff = Math.abs(item.selisih_ppn || 0);
-  const grossIdmDiff = Math.abs(item.selisih_gross_idm || 0);
-  const ppnIdmDiff = Math.abs(item.selisih_ppn_idm || 0);
-  
-  if (grossDiff > 0 || ppnDiff > 0 || grossIdmDiff > 0 || ppnIdmDiff > 0) {
-    classes.push('row-difference');
-  }
-  
-  return classes.join(' ');
-}
 
-function getStatusClass(item) {
-  const grossDiff = Math.abs(item.selisih_gross || 0);
-  const ppnDiff = Math.abs(item.selisih_ppn || 0);
-  const grossIdmDiff = Math.abs(item.selisih_gross_idm || 0);
-  const ppnIdmDiff = Math.abs(item.selisih_ppn_idm || 0);
-  
-  if (grossDiff > 0 || ppnDiff > 0 || grossIdmDiff > 0 || ppnIdmDiff > 0) {
-    return 'status-badge status-difference';
-  }
-  return 'status-badge status-match';
-}
 
-function getStatusText(item) {
-  const grossDiff = Math.abs(item.selisih_gross || 0);
-  const ppnDiff = Math.abs(item.selisih_ppn || 0);
-  const grossIdmDiff = Math.abs(item.selisih_gross_idm || 0);
-  const ppnIdmDiff = Math.abs(item.selisih_ppn_idm || 0);
-  
-  if (grossDiff > 0 || ppnDiff > 0 || grossIdmDiff > 0 || ppnIdmDiff > 0) {
-    return 'Selisih';
-  }
-  return 'Cocok';
-}
+
 
 // Pagination methods
 function goToFirstPage() {
@@ -342,11 +358,21 @@ function goToLastPage() {
   currentPage.value = totalPages.value;
 }
 
+// Search methods
+function clearSearch() {
+  searchQuery.value = '';
+}
+
 // Watch for prop changes
 watch(() => props.show, (newValue) => {
   if (newValue) {
     loadDetailData();
   }
+});
+
+// Watch for search changes to reset pagination
+watch(searchQuery, () => {
+  currentPage.value = 1;
 });
 
 // Load data when component mounts if modal is already shown
@@ -542,6 +568,71 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 1rem;
+}
+
+.table-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.search-container {
+  position: relative;
+}
+
+.search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-input {
+  padding: 0.5rem 2.5rem 0.5rem 2.5rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  width: 250px;
+  transition: all 0.3s ease;
+  background: white;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.search-input::placeholder {
+  color: #9ca3af;
+}
+
+.search-icon {
+  position: absolute;
+  left: 0.75rem;
+  color: #6b7280;
+  font-size: 0.875rem;
+  pointer-events: none;
+}
+
+.clear-search-btn {
+  position: absolute;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.clear-search-btn:hover {
+  color: #ef4444;
+  background: #fef2f2;
 }
 
 .table-title {
@@ -570,6 +661,8 @@ onMounted(() => {
 
 .table-responsive {
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: 400px; /* Set maximum height for scrollable area */
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   min-width: 100%;
@@ -577,7 +670,7 @@ onMounted(() => {
 
 .detail-table {
   width: 100%;
-  min-width: 1400px; /* Minimum width to accommodate all columns */
+  min-width: 1600px; /* Increased width to accommodate new columns */
   border-collapse: collapse;
   font-size: 0.875rem;
 }
@@ -590,6 +683,10 @@ onMounted(() => {
   color: #374151;
   border-bottom: 2px solid #e5e7eb;
   white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .detail-table td {
@@ -610,34 +707,7 @@ onMounted(() => {
   text-align: right;
 }
 
-/* Row highlighting for differences */
-.row-difference {
-  background: #fef2f2 !important;
-}
 
-.row-difference:hover {
-  background: #fee2e2 !important;
-}
-
-/* Status Badge */
-.status-badge {
-  padding: 0.25rem 0.75rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.status-match {
-  background: #d1fae5;
-  color: #065f46;
-}
-
-.status-difference {
-  background: #fee2e2;
-  color: #991b1b;
-}
 
 /* Pagination Styles */
 .pagination-container {

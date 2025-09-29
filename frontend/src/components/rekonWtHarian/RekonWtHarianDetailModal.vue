@@ -132,10 +132,10 @@
                       <td class="text-right">{{ formatCurrency(item.ppn_store) }}</td>
                       <td class="text-right">{{ formatCurrency(item.gross_idm_store) }}</td>
                       <td class="text-right">{{ formatCurrency(item.ppn_idm_store) }}</td>
-                      <td class="text-right">{{ formatCurrency(item.selisih_gross) }}</td>
-                      <td class="text-right">{{ formatCurrency(item.selisih_ppn) }}</td>
-                      <td class="text-right">{{ formatCurrency(item.selisih_gross_idm) }}</td>
-                      <td class="text-right">{{ formatCurrency(item.selisih_ppn_idm) }}</td>
+                      <td class="text-right difference-cell" :style="getDifferenceStyle(item.selisih_gross)">{{ formatCurrency(item.selisih_gross) }}</td>
+                      <td class="text-right difference-cell" :style="getDifferenceStyle(item.selisih_ppn)">{{ formatCurrency(item.selisih_ppn) }}</td>
+                      <td class="text-right difference-cell" :style="getDifferenceStyle(item.selisih_gross_idm)">{{ formatCurrency(item.selisih_gross_idm) }}</td>
+                      <td class="text-right difference-cell" :style="getDifferenceStyle(item.selisih_ppn_idm)">{{ formatCurrency(item.selisih_ppn_idm) }}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -386,6 +386,50 @@ function goToLastPage() {
 // Search methods
 function clearSearch() {
   searchQuery.value = '';
+}
+
+// Function to calculate color intensity for difference highlighting
+function getDifferenceStyle(value) {
+  if (value === null || value === undefined || value === '' || value === 0) {
+    return {};
+  }
+  
+  const numValue = Math.abs(parseFloat(value));
+  if (isNaN(numValue)) {
+    return {};
+  }
+  
+  // Calculate intensity based on absolute value
+  // You can adjust these thresholds based on your data range
+  let intensity = 0;
+  
+  if (numValue <= 100000) {
+    // Light red for small differences (0-100k)
+    intensity = Math.min(numValue / 100000 * 0.3, 0.3);
+  } else if (numValue <= 500000) {
+    // Medium red for moderate differences (100k-500k)
+    intensity = 0.3 + Math.min((numValue - 100000) / 400000 * 0.3, 0.3);
+  } else if (numValue <= 1000000) {
+    // Strong red for large differences (500k-1M)
+    intensity = 0.6 + Math.min((numValue - 500000) / 500000 * 0.25, 0.25);
+  } else {
+    // Maximum red for very large differences (>1M)
+    intensity = Math.min(0.85 + (numValue - 1000000) / 2000000 * 0.15, 1);
+  }
+  
+  // Generate red background with calculated intensity
+  const redValue = Math.floor(220 + (255 - 220) * intensity); // Red component (220-255)
+  const greenBlueValue = Math.floor(255 * (1 - intensity)); // Green and blue components decrease with intensity
+  
+  const backgroundColor = `rgb(${redValue}, ${greenBlueValue}, ${greenBlueValue})`;
+  const textColor = intensity > 0.5 ? '#ffffff' : '#000000'; // White text for dark backgrounds
+  
+  return {
+    backgroundColor,
+    color: textColor,
+    fontWeight: intensity > 0.3 ? '600' : '500',
+    transition: 'all 0.2s ease'
+  };
 }
 
 // Watch for prop changes
@@ -773,7 +817,19 @@ onMounted(() => {
   text-overflow: ellipsis;
 }
 
+/* Difference cell styling for highlighting */
+.difference-cell {
+  position: relative;
+  font-weight: 500;
+  border-radius: 4px;
+  padding: 0.75rem 0.5rem !important;
+}
 
+.difference-cell:hover {
+  transform: scale(1.02);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 5;
+}
 
 /* Pagination Styles */
 .pagination-container {

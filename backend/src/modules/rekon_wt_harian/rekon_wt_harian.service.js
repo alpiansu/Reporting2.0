@@ -896,10 +896,12 @@ class RekonWtHarianService {
    * @returns {Promise<Object>} Reconciliation result
    */
   async reconcileSpecificShop(cab, period, toko) {
+    let wrcDataFile = null; // Declare outside try block for cleanup access
+    
     try {
       // Get WRC data
       const shops = [toko]; // toko is a single shop code string, not an array
-      const wrcDataFile = await wrcUtils.getWrcData(cab, period, "wt", config.queries.wrc, shops);
+      wrcDataFile = await wrcUtils.getWrcData(cab, period, "wt", config.queries.wrc, shops);
 
       if (!wrcDataFile) {
         throw new Error("No WRC data found");
@@ -948,6 +950,14 @@ class RekonWtHarianService {
       await this.saveDifferencesToDatabaseForShop(cab, period, toko);
       await this.syncToJsonFile();
 
+      // Clean up temporary WRC data file
+      try {
+        await fs.unlink(wrcDataFile);
+        logger.info(`Temporary file ${wrcDataFile} cleaned up successfully`);
+      } catch (cleanupError) {
+        logger.warn(`Error deleting temporary file ${wrcDataFile}: ${cleanupError.message}`);
+      }
+
       logger.info(`Completed reconciliation for shop ${toko} in branch ${cab}`);
 
       return {
@@ -962,6 +972,17 @@ class RekonWtHarianService {
       };
     } catch (error) {
       logger.error(`Error in shop reconciliation for ${toko}: ${error.message}`);
+      
+      // Clean up temporary WRC data file even on error
+      if (wrcDataFile) {
+        try {
+          await fs.unlink(wrcDataFile);
+          logger.info(`Temporary file ${wrcDataFile} cleaned up after error`);
+        } catch (cleanupError) {
+          logger.warn(`Error deleting temporary file ${wrcDataFile} after error: ${cleanupError.message}`);
+        }
+      }
+      
       throw error;
     }
   }

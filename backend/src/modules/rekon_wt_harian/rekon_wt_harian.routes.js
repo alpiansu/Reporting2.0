@@ -6,6 +6,7 @@ const router = express.Router();
 import {
   cleanupTempFiles,
   startReconciliation,
+  refreshShopReconciliation,
   getResults,
   getSummary,
   deleteResults,
@@ -19,6 +20,7 @@ import { authenticateJWT, authorizeRole } from "../../middlewares/index.js";
 const rekonWtHarianController = {
   cleanupTempFiles,
   startReconciliation,
+  refreshShopReconciliation,
   getResults,
   getSummary,
   deleteResults,
@@ -32,6 +34,11 @@ const rekonWtHarianController = {
 // POST /api/rekon-wt-harian
 // Access: Private (Admin/Manager only)
 router.post("/", authenticateJWT, authorizeRole(["admin", "manager"]), rekonWtHarianController.startReconciliation);
+
+// Start reconciliation process for specific shop
+// POST /api/rekon-wt-harian/refresh-shop/:periode/:cab/:toko
+// Access: Private (Admin/Manager only)
+router.post("/refresh-shop/:periode/:cab/:toko", authenticateJWT, rekonWtHarianController.refreshShopReconciliation);
 
 // Get reconciliation progress
 // GET /api/rekon-wt-harian/progress/:progressId

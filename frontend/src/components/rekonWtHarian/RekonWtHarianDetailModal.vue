@@ -30,7 +30,7 @@
                 </div>
                 <div class="detail-info-item">
                   <span class="detail-label">Toko:</span>
-                  <span class="detail-value">{{ toko }}</span>
+                  <span class="detail-value">{{ toko }}{{ storeName ? ` - ${storeName}` : '' }}</span>
                 </div>
               </div>
             </div>
@@ -123,7 +123,7 @@
                       <td class="text-center">{{ (currentPage - 1) * itemsPerPage + index + 1 }}</td>
                       <td>{{ formatDate(item.tgl1) }}</td>
                       <td>{{ item.tipe || '-' }}</td>
-                      <td>{{ item.shop || '-' }}</td>
+                      <td>{{ item.shop || '-' }}{{ getStoreNameByCode(item.shop) ? ` - ${getStoreNameByCode(item.shop)}` : '' }}</td>
                       <td class="text-right">{{ formatCurrency(item.gross_wrc) }}</td>
                       <td class="text-right">{{ formatCurrency(item.ppn_wrc) }}</td>
                       <td class="text-right">{{ formatCurrency(item.gross_idm_wrc) }}</td>
@@ -192,6 +192,7 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue';
 import rekonWtHarianService from '@/services/rekonWtHarian.service';
+import storeService from '@/services/store.service';
 
 const props = defineProps({
   show: {
@@ -222,6 +223,8 @@ const currentPage = ref(1);
 const itemsPerPage = ref(25);
 const totalRecords = ref(0);
 const searchQuery = ref('');
+const storesData = ref([]);
+const storeName = ref('');
 
 // Computed properties
 const filteredData = computed(() => {
@@ -255,6 +258,13 @@ const totalPages = computed(() => Math.ceil(filteredData.value.length / itemsPer
 const startIndex = computed(() => (currentPage.value - 1) * itemsPerPage.value);
 const endIndex = computed(() => Math.min(startIndex.value + itemsPerPage.value, filteredData.value.length));
 
+// Function to get store name by store code
+const getStoreNameByCode = (storeCode) => {
+  if (!storeCode || !storesData.value.length) return '';
+  const store = storesData.value.find(s => s.storeCode === storeCode);
+  return store ? store.storeName : '';
+};
+
 const paginatedData = computed(() => {
   const start = startIndex.value;
   const end = start + itemsPerPage.value;
@@ -262,6 +272,21 @@ const paginatedData = computed(() => {
 });
 
 // Methods
+async function loadStoreData() {
+  try {
+    const response = await storeService.getStoresByBranch(props.cab, { limit: 1000 });
+    if (response.data && Array.isArray(response.data.stores)) {
+      storesData.value = response.data.stores;
+      // Find store name for current toko
+      const store = storesData.value.find(s => s.storeCode === props.toko);
+      storeName.value = store ? store.storeName : '';
+    }
+  } catch (err) {
+    console.error('Error loading store data:', err);
+    storeName.value = '';
+  }
+}
+
 async function loadDetailData() {
   if (!props.periode || !props.cab || !props.toko) return;
   
@@ -366,6 +391,7 @@ function clearSearch() {
 // Watch for prop changes
 watch(() => props.show, (newValue) => {
   if (newValue) {
+    loadStoreData();
     loadDetailData();
   }
 });
@@ -378,6 +404,7 @@ watch(searchQuery, () => {
 // Load data when component mounts if modal is already shown
 onMounted(() => {
   if (props.show) {
+    loadStoreData();
     loadDetailData();
   }
 });
@@ -670,7 +697,7 @@ onMounted(() => {
 
 .detail-table {
   width: 100%;
-  min-width: 1600px; /* Increased width to accommodate new columns */
+  min-width: 1800px; /* Increased width to accommodate new columns and store names */
   border-collapse: collapse;
   font-size: 0.875rem;
 }
@@ -705,6 +732,16 @@ onMounted(() => {
 
 .detail-table .text-right {
   text-align: right;
+}
+
+/* Shop column styling for store code and name */
+.detail-table th:nth-child(4),
+.detail-table td:nth-child(4) {
+  min-width: 200px;
+  max-width: 300px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 

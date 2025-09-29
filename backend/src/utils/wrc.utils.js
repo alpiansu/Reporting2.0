@@ -17,7 +17,38 @@ class WrcUtils {
    * @returns {null} Always returns null
    */
   cleanupMemory(arrayRef, logCleanup = false) {
-    return MemoryUtils.cleanupMemory(arrayRef, logCleanup);
+    return MemoryUtils.cleanupArray(arrayRef, logCleanup);
+  }
+
+  /**
+   * Add shop filter to SQL query
+   * @param {string} query - Original SQL query
+   * @param {Array} shops - Array of shop codes
+   * @param {string} tableType - Table type (wt, dt, pr)
+   * @returns {string} Modified query with shop filter
+   */
+  addShopFilter(query, shops, tableType) {
+    if (!shops || !Array.isArray(shops) || shops.length === 0) {
+      return query;
+    }
+
+    // Determine column name based on table type
+    const columnName = tableType === "pr" ? "toko" : "shop";
+    
+    // Create shop filter condition
+    const shopList = shops.map(shop => `'${shop}'`).join(", ");
+    const shopFilter = `${columnName} IN (${shopList})`;
+
+    // Check if query already has WHERE clause
+    const hasWhere = /\bWHERE\b/i.test(query);
+    
+    if (hasWhere) {
+      // Add AND condition
+      return query + ` AND ${shopFilter}`;
+    } else {
+      // Add WHERE condition
+      return query + ` WHERE ${shopFilter}`;
+    }
   }
 
   /**
@@ -61,7 +92,7 @@ class WrcUtils {
    * @param {string} strQuery - SQL query template to execute (with {date} placeholder)
    * @returns {Promise<string>} Path to temporary file containing WRC data
    */
-  async getWrcData(cab, period, tableType = "wt", strQuery) {
+  async getWrcData(cab, period, tableType = "wt", strQuery, shops = null) {
     if (!strQuery) {
       throw new Error("Query parameter (strQuery) is required");
     }
@@ -89,7 +120,8 @@ class WrcUtils {
 
       // Create temporary file to store WRC data
       const tempDir = path.join(os.tmpdir());
-      const tempFile = path.join(tempDir, `${tableType}_data_${cab}_${period}_${Date.now()}.json`);
+      const shopSuffix = shops && shops.length > 0 ? `_shops_${shops.join('_')}` : '';
+      const tempFile = path.join(tempDir, `${tableType}_data_${cab}_${period}${shopSuffix}_${Date.now()}.json`);
 
       // Ensure temp directory exists
       try {
@@ -109,7 +141,13 @@ class WrcUtils {
         const tableDate = dateParts[0].substring(2) + dateParts[1] + dateParts[2];
 
         // Replace {date} placeholder in query with actual table date
-        const finalQuery = strQuery.replace("{date}", tableDate);
+        let finalQuery = strQuery.replace("{date}", tableDate);
+        
+        // Add shop filter if shops parameter is provided
+        if (shops && Array.isArray(shops) && shops.length > 0) {
+          finalQuery = this.addShopFilter(finalQuery, shops, tableType);
+        }
+        
         unionQueries.push(`(${finalQuery})`);
         validDates.push(tableDate);
       }
@@ -139,7 +177,13 @@ class WrcUtils {
           const tableDate = validDates[i];
 
           try {
-            const finalQuery = strQuery.replace("{date}", tableDate);
+            let finalQuery = strQuery.replace("{date}", tableDate);
+            
+            // Add shop filter if shops parameter is provided
+            if (shops && Array.isArray(shops) && shops.length > 0) {
+              finalQuery = this.addShopFilter(finalQuery, shops, tableType);
+            }
+            
             const [rows] = await connection.execute(finalQuery);
 
             if (rows && rows.length > 0) {

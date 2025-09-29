@@ -576,6 +576,35 @@ onMounted(() => {
   margin-bottom: 1rem;
 }
 
+.loading-state .pi-spinner {
+  animation: smoothSpin 2s cubic-bezier(0.4, 0, 0.6, 1) infinite,
+             breathe 3s ease-in-out infinite;
+  color: #3b82f6;
+}
+
+@keyframes smoothSpin {
+  0% { 
+    transform: rotate(0deg);
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% { 
+    transform: rotate(360deg);
+    opacity: 0.8;
+  }
+}
+
+@keyframes breathe {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
 .error-state {
   color: #dc3545;
 }

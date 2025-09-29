@@ -15,6 +15,8 @@
       @page-change="handlePageChange"
       @items-per-page-change="handleItemsPerPageChange"
       @sort-change="handleSortChange"
+      @shop-updated="handleShopUpdated"
+      @shop-removed="handleShopRemoved"
     />
     
     <!-- Pagination Info sudah ditampilkan di dalam DataTable -->
@@ -168,6 +170,56 @@ const handleSortChange = (data) => {
   pagination.value.currentPage = 1;
   // Load results with new sorting parameters
   loadResults();
+};
+
+// Handle shop updated event - update specific shop data reactively
+const handleShopUpdated = (data) => {
+  console.log('RekonWtHarianResults handleShopUpdated:', data);
+  
+  const { cab, shop, updatedData } = data;
+  
+  // Find the shop in current results and update it
+  const shopIndex = results.value.findIndex(
+    item => item.cab === cab && item.shop === shop
+  );
+  
+  if (shopIndex !== -1) {
+    // Update the specific shop data reactively
+    results.value[shopIndex] = {
+      ...results.value[shopIndex],
+      ...updatedData,
+      updtime: new Date().toISOString() // Ensure fresh timestamp
+    };
+    
+    console.log(`Shop ${shop} data updated in results`);
+  } else {
+    console.log(`Shop ${shop} not found in current results, may need to refresh`);
+  }
+};
+
+// Handle shop removed event - remove shop data when refresh results are clean
+const handleShopRemoved = (data) => {
+  console.log('RekonWtHarianResults handleShopRemoved:', data);
+  
+  const { cab, shop } = data;
+  
+  // Find the shop in current results and remove it
+  const shopIndex = results.value.findIndex(
+    item => item.cab === cab && item.shop === shop
+  );
+  
+  if (shopIndex !== -1) {
+    // Remove the shop from results array
+    results.value.splice(shopIndex, 1);
+    
+    // Update pagination total count
+    pagination.value.total = Math.max(0, pagination.value.total - 1);
+    pagination.value.totalPages = Math.ceil(pagination.value.total / pagination.value.itemsPerPage);
+    
+    console.log(`Shop ${shop} removed from results - data is now clean`);
+  } else {
+    console.log(`Shop ${shop} not found in current results for removal`);
+  }
 };
 
 // Auto-load data when component is mounted

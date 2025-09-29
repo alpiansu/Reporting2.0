@@ -34,20 +34,78 @@ class WrcUtils {
 
     // Determine column name based on table type
     const columnName = tableType === "pr" ? "toko" : "shop";
-    
+
     // Create shop filter condition
     const shopList = shops.map(shop => `'${shop}'`).join(", ");
     const shopFilter = `${columnName} IN (${shopList})`;
 
     // Check if query already has WHERE clause
     const hasWhere = /\bWHERE\b/i.test(query);
-    
+
     if (hasWhere) {
       // Add AND condition
-      return query + ` AND ${shopFilter}`;
+      return query + ` AND ${shopFilter} `;
     } else {
       // Add WHERE condition
-      return query + ` WHERE ${shopFilter}`;
+      return query + ` WHERE ${shopFilter} `;
+    }
+  }
+
+  /**
+   * Smart replace date and add shop filter in one operation
+   * Places shop filter in the correct position (after FROM but before GROUP BY/ORDER BY/HAVING)
+   * @param {string} query - Original SQL query with {date} placeholder
+   * @param {string} tableDate - Table date to replace {date}
+   * @param {Array} shops - Array of shop codes
+   * @param {string} tableType - Table type (wt, dt, pr)
+   * @returns {string} Modified query with date replaced and shop filter added
+   */
+  smartReplaceAndFilter(query, tableDate, shops, tableType) {
+    // First replace the {date} placeholder
+    let finalQuery = query.replace("{date}", tableDate);
+
+    // If no shops filter needed, return the query as is
+    if (!shops || !Array.isArray(shops) || shops.length === 0) {
+      return finalQuery;
+    }
+
+    // Determine column name based on table type
+    const columnName = tableType === "pr" ? "toko" : "shop";
+
+    // Create shop filter condition
+    const shopList = shops.map(shop => `'${shop}'`).join(", ");
+    const shopFilter = `${columnName} IN (${shopList})`;
+
+    // Find the best position to insert the WHERE clause
+    // Look for GROUP BY, ORDER BY, HAVING, LIMIT clauses (case insensitive)
+    const clauseRegex = /\b(GROUP\s+BY|ORDER\s+BY|HAVING|LIMIT)\b/i;
+    const clauseMatch = finalQuery.match(clauseRegex);
+
+    if (clauseMatch) {
+      // Found a clause, insert WHERE before it
+      const clauseIndex = clauseMatch.index;
+      const beforeClause = finalQuery.substring(0, clauseIndex).trim();
+      const afterClause = finalQuery.substring(clauseIndex);
+
+      // Check if WHERE already exists in the before part
+      const hasWhere = /\bWHERE\b/i.test(beforeClause);
+
+      if (hasWhere) {
+        // Add AND condition before the clause
+        return `${beforeClause} AND ${shopFilter} ${afterClause}`;
+      } else {
+        // Add WHERE condition before the clause
+        return `${beforeClause} WHERE ${shopFilter} ${afterClause}`;
+      }
+    } else {
+      // No special clauses found, use the simple approach
+      const hasWhere = /\bWHERE\b/i.test(finalQuery);
+
+      if (hasWhere) {
+        return `${finalQuery} AND ${shopFilter}`;
+      } else {
+        return `${finalQuery} WHERE ${shopFilter}`;
+      }
     }
   }
 
@@ -92,7 +150,7 @@ class WrcUtils {
    * @param {string} strQuery - SQL query template to execute (with {date} placeholder)
    * @returns {Promise<string>} Path to temporary file containing WRC data
    */
-  async getWrcData(cab, period, tableType = "wt", strQuery, shops = null) {
+  async getWrcData(cab, period, tableType, strQuery, shops) {
     if (!strQuery) {
       throw new Error("Query parameter (strQuery) is required");
     }
@@ -120,7 +178,7 @@ class WrcUtils {
 
       // Create temporary file to store WRC data
       const tempDir = path.join(os.tmpdir());
-      const shopSuffix = shops && shops.length > 0 ? `_shops_${shops.join('_')}` : '';
+      const shopSuffix = shops && shops.length > 0 ? `_shops_${shops.join("_")}` : "";
       const tempFile = path.join(tempDir, `${tableType}_data_${cab}_${period}${shopSuffix}_${Date.now()}.json`);
 
       // Ensure temp directory exists
@@ -140,21 +198,16 @@ class WrcUtils {
         const dateParts = date.split("-");
         const tableDate = dateParts[0].substring(2) + dateParts[1] + dateParts[2];
 
-        // Replace {date} placeholder in query with actual table date
-        let finalQuery = strQuery.replace("{date}", tableDate);
-        
-        // Add shop filter if shops parameter is provided
-        if (shops && Array.isArray(shops) && shops.length > 0) {
-          finalQuery = this.addShopFilter(finalQuery, shops, tableType);
-        }
-        
+        // Smart replace {date} and add shop filter in one operation
+        const finalQuery = this.smartReplaceAndFilter(strQuery, tableDate, shops, tableType);
+
         unionQueries.push(`(${finalQuery})`);
         validDates.push(tableDate);
       }
 
       // Combine all queries with UNION ALL
       const combinedQuery = unionQueries.join(" UNION ALL ");
-
+      logger.info(`querynyaa : ${combinedQuery}`);
       logger.info(
         `Executing combined query for ${validDates.length} tables: ${tableType}_${validDates[0]} to ${tableType}_${
           validDates[validDates.length - 1]
@@ -177,13 +230,9 @@ class WrcUtils {
           const tableDate = validDates[i];
 
           try {
-            let finalQuery = strQuery.replace("{date}", tableDate);
-            
-            // Add shop filter if shops parameter is provided
-            if (shops && Array.isArray(shops) && shops.length > 0) {
-              finalQuery = this.addShopFilter(finalQuery, shops, tableType);
-            }
-            
+            // Smart replace {date} and add shop filter in one operation
+            const finalQuery = this.smartReplaceAndFilter(strQuery, tableDate, shops, tableType);
+
             const [rows] = await connection.execute(finalQuery);
 
             if (rows && rows.length > 0) {

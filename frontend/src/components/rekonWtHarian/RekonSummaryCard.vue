@@ -102,7 +102,6 @@ import { computed } from 'vue';
 import { useCabangStore } from '../../stores';
 
 const cabangStore = useCabangStore();
-console.log('cabangStore:', cabangStore);
 
 const props = defineProps({
   summary: {

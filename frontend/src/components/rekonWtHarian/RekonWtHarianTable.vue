@@ -194,11 +194,11 @@ const filteredData = computed(() => {
 
 // Debug untuk melihat data yang diterima
 watch(() => props.data, (newData) => {
-  console.log('RekonWtHarianTable received data:', newData);
+  // Data received
 }, { immediate: true, deep: true });
 
 watch(() => props.pagination, (newPagination) => {
-  console.log('RekonWtHarianTable received pagination:', newPagination);
+  // Pagination received
 }, { immediate: true, deep: true });
 
 
@@ -251,7 +251,6 @@ const handleItemsPerPageChange = (data) => {
 
 // Handle sort change
 const handleSortChange = (data) => {
-  console.log('Sort changed:', data);
   emit('sort-change', data);
   // Reset to page 1 when sorting changes
   emit('page-change', { page: 1, itemsPerPage: props.pagination.itemsPerPage || 10 });
@@ -309,8 +308,6 @@ const refreshShopData = async (item) => {
       throw new Error(response.data.message || 'Refresh gagal');
     }
   } catch (error) {
-    console.error('Error refreshing shop data:', error);
-    
     // Remove from refreshing set on error
     refreshingShops.value.delete(shopKey);
     
@@ -364,8 +361,6 @@ const updateShopDataReactive = async (cab, shop) => {
           shop,
           updatedData: updatedShopData
         });
-        
-        console.log(`Shop ${shop} data updated reactively`);
       } else {
         // Shop data not found after refresh - means data is now clean/empty
         // Remove this shop from the table
@@ -373,8 +368,6 @@ const updateShopDataReactive = async (cab, shop) => {
           cab,
           shop
         });
-        
-        console.log(`Shop ${shop} data removed - refresh result is clean`);
         
         toast.showInfo(
           'Data Bersih',
@@ -389,8 +382,6 @@ const updateShopDataReactive = async (cab, shop) => {
         shop
       });
       
-      console.log(`Shop ${shop} data removed - no data returned`);
-      
       toast.showInfo(
         'Data Bersih',
         `Toko ${shop} tidak memiliki selisih lagi setelah refresh.`,
@@ -398,7 +389,6 @@ const updateShopDataReactive = async (cab, shop) => {
       );
     }
   } catch (error) {
-    console.error('Error updating shop data reactively:', error);
     // Fallback to full refresh if reactive update fails
     emit('refresh');
   }
@@ -454,7 +444,6 @@ const formatDate = (dateString) => {
       year: 'numeric'
     }).format(date);
   } catch (error) {
-    console.error('Error formatting date:', error);
     return dateString;
   }
 };
@@ -476,7 +465,6 @@ const formatDateTime = (dateTimeString) => {
       second: '2-digit'
     });
   } catch (error) {
-    console.error('Error formatting datetime:', error);
     return dateTimeString;
   }
 };
@@ -512,7 +500,6 @@ const exportToExcel = async () => {
       3000
     );
   } catch (err) {
-    console.error('Error exporting data:', err);
     toast.showError(
       'Ekspor Gagal',
       'Terjadi kesalahan saat mengekspor data',
@@ -630,7 +617,6 @@ const printResults = () => {
       // printWindow.close();
     };
   } catch (err) {
-    console.error('Error printing data:', err);
     toast.showError(
       'Cetak Gagal',
       'Terjadi kesalahan saat mencetak data',

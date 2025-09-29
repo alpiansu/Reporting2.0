@@ -282,7 +282,6 @@ async function loadStoreData() {
       storeName.value = store ? store.storeName : '';
     }
   } catch (err) {
-    console.error('Error loading store data:', err);
     storeName.value = '';
   }
 }
@@ -312,7 +311,6 @@ async function loadDetailData() {
       throw new Error('Format response tidak valid');
     }
   } catch (err) {
-    console.error('Error loading detail data:', err);
     error.value = `Error loading detail data: ${err.response?.data?.message || err.message || 'Terjadi kesalahan saat memuat detail data'}`;
     detailData.value = [];
     totalRecords.value = 0;

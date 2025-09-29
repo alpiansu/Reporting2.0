@@ -94,8 +94,6 @@ const resultsResponse = await rekonWtHarianService.getDailyShopSummary(
   params
 );
 
-console.log('RekonWtHarianResults loadResults response:', resultsResponse.data);
-
 // Update results and pagination info
 results.value = resultsResponse.data.data || [];
 pagination.value = {
@@ -105,9 +103,6 @@ pagination.value = {
   currentPage: resultsResponse.data.page || 1,
   itemsPerPage: resultsResponse.data.limit || pagination.value.itemsPerPage
 };
-
-console.log('RekonWtHarianResults updated results:', results.value);
-console.log('RekonWtHarianResults updated pagination:', pagination.value);
     
     // Load summary
     const summaryResponse = await rekonWtHarianService.getSummary(
@@ -116,7 +111,6 @@ console.log('RekonWtHarianResults updated pagination:', pagination.value);
     );
     summary.value = summaryResponse.data.data;
   } catch (err) {
-    console.error('Error loading reconciliation data:', err);
     error.value = 'Terjadi kesalahan saat memuat data rekonsiliasi';
     
     if (err.response?.data?.message) {
@@ -147,7 +141,6 @@ const handleRefresh = (data = {}, event) => {
 
 // Handle page change
 const handlePageChange = (data) => {
-  console.log('RekonWtHarianResults handlePageChange:', data);
   pagination.value.currentPage = data.page;
   pagination.value.itemsPerPage = data.itemsPerPage;
   loadResults();
@@ -163,7 +156,6 @@ const handleItemsPerPageChange = (data) => {
 
 // Handle sort change
 const handleSortChange = (data) => {
-  console.log('RekonWtHarianResults handleSortChange:', data);
   sortColumn.value = data.sortColumn;
   sortOrder.value = data.sortOrder;
   // Reset to first page when sorting changes
@@ -174,8 +166,6 @@ const handleSortChange = (data) => {
 
 // Handle shop updated event - update specific shop data reactively
 const handleShopUpdated = (data) => {
-  console.log('RekonWtHarianResults handleShopUpdated:', data);
-  
   const { cab, shop, updatedData } = data;
   
   // Find the shop in current results and update it
@@ -191,16 +181,14 @@ const handleShopUpdated = (data) => {
       updtime: new Date().toISOString() // Ensure fresh timestamp
     };
     
-    console.log(`Shop ${shop} data updated in results`);
+    // Shop data updated in results
   } else {
-    console.log(`Shop ${shop} not found in current results, may need to refresh`);
+    // Shop not found in current results, may need to refresh
   }
 };
 
 // Handle shop removed event - remove shop data when refresh results are clean
 const handleShopRemoved = (data) => {
-  console.log('RekonWtHarianResults handleShopRemoved:', data);
-  
   const { cab, shop } = data;
   
   // Find the shop in current results and remove it
@@ -216,9 +204,9 @@ const handleShopRemoved = (data) => {
     pagination.value.total = Math.max(0, pagination.value.total - 1);
     pagination.value.totalPages = Math.ceil(pagination.value.total / pagination.value.itemsPerPage);
     
-    console.log(`Shop ${shop} removed from results - data is now clean`);
+    // Shop removed from results - data is now clean
   } else {
-    console.log(`Shop ${shop} not found in current results for removal`);
+    // Shop not found in current results for removal
   }
 };
 

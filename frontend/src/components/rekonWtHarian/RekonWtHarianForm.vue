@@ -165,7 +165,6 @@ onMounted(async () => {
       emitViewResults();
     }
   } catch (error) {
-    console.error('Error fetching cabang data:', error);
     toast.showError('Error', 'Gagal memuat data cabang');
   } finally {
     loading.value = false;
@@ -216,14 +215,8 @@ const submitForm = async () => {
     // Emit event to parent component to load results
     emitViewResults();
     
-    console.log('Emitting view-results event with data:', {
-      cab: formData.cab,
-      periode: formData.periode
-    });
-    
     toast.showInfo('Info', 'Mencari data rekonsiliasi...', 3000);
   } catch (error) {
-    console.error('Error:', error);
     toast.showError('Error', 'Terjadi kesalahan saat memuat data', 3000);
   } finally {
     loading.value = false;
@@ -307,7 +300,6 @@ const startReconciliation = async () => {
       throw new Error('Tidak dapat memulai rekonsiliasi');
     }
   } catch (error) {
-    console.error('Error starting reconciliation:', error);
     progressStatus.value = 'error';
     
     // Handle case where another reconciliation process is already running (409 Conflict)
@@ -372,7 +364,6 @@ const connectToWebSocket = () => {
   
   // Validasi progressId sebelum membuat koneksi
   if (!progressId.value || progressId.value === 'rekon__' || progressId.value.includes('undefined')) {
-    console.error('Invalid progressId:', progressId.value);
     toast.showError('Error', 'Progress ID tidak valid');
     return;
   }
@@ -530,10 +521,9 @@ const handleProgressUpdate = (data) => {
   } else if (data.type === 'connected') {
     // Connected to progress updates
   } else if (data.type === 'error') {
-    console.error('SSE error:', data.message);
     toast.showError('Error', data.message || 'Terjadi kesalahan pada koneksi progress');
   } else {
-    console.log('Unknown message type received:', data.type, data);
+    // Unknown message type received
   }
 };
 
@@ -698,7 +688,6 @@ const checkExistingReconciliation = async () => {
     
     return false; // Tidak ada rekonsiliasi yang sedang berjalan
   } catch (error) {
-    console.error('Error checking existing reconciliation:', error);
     return false;
   }
 };

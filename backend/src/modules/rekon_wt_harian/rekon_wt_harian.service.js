@@ -898,7 +898,7 @@ class RekonWtHarianService {
    */
   async reconcileSpecificShop(cab, period, toko) {
     let wrcDataFile = null; // Declare outside try block for cleanup access
-    
+
     try {
       // Get WRC data
       const shops = [toko]; // toko is a single shop code string, not an array
@@ -930,9 +930,9 @@ class RekonWtHarianService {
 
       // Update existing data to mark as reconciled (recid = 1) and update timestamp
       await RekonWtHarian.update(
-        { 
+        {
           recid: "1",
-          updtime: new Date()
+          updtime: new Date(),
         },
         {
           where: {
@@ -946,6 +946,13 @@ class RekonWtHarianService {
 
       // Process the specific store
       const result = await this.processStore(store, cab, period, wrcData);
+
+      try {
+        const saveLogResult = await RekapRemoteService.saveLogsToDatabase();
+        logger.info(`Rekap_remote logs saved: ${JSON.stringify(saveLogResult)}`);
+      } catch (error) {
+        logger.error(`Error saving rekap_remote logs: ${error.message}`);
+      }
 
       // Save differences to database for this specific shop
       await this.saveDifferencesToDatabaseForShop(cab, period, toko);
@@ -973,7 +980,7 @@ class RekonWtHarianService {
       };
     } catch (error) {
       logger.error(`Error in shop reconciliation for ${toko}: ${error.message}`);
-      
+
       // Clean up temporary WRC data file even on error
       if (wrcDataFile) {
         try {
@@ -983,7 +990,7 @@ class RekonWtHarianService {
           logger.warn(`Error deleting temporary file ${wrcDataFile} after error: ${cleanupError.message}`);
         }
       }
-      
+
       throw error;
     }
   }
@@ -1041,9 +1048,9 @@ class RekonWtHarianService {
 
       // Set recid to '1' for all processed records to mark them in active history at the beginning of reconciliation
       await RekonWtHarian.update(
-        { 
+        {
           recid: "1",
-          updtime: new Date()
+          updtime: new Date(),
         },
         {
           where: {
@@ -1292,7 +1299,7 @@ class RekonWtHarianService {
 
       // Save rekap_remote logs to database at the end of reconciliation process
       try {
-        const saveLogResult = await RekapRemoteService.saveToDatabase();
+        const saveLogResult = await RekapRemoteService.saveLogsToDatabase();
         logger.info(`Rekap_remote logs saved: ${JSON.stringify(saveLogResult)}`);
         results.rekapRemoteLogResult = saveLogResult;
       } catch (error) {
@@ -2451,7 +2458,7 @@ class RekonWtHarianService {
       let rekapRemoteData = [];
       try {
         rekapRemoteData = await RekapRemoteStagingService.getAllRekapData({
-          moduleName: 'rekon_wt_harian'
+          moduleName: "rekon_wt_harian",
         });
         logger.info(`Retrieved ${rekapRemoteData.length} records from rekap_remote for status mapping`);
       } catch (error) {
@@ -2463,14 +2470,14 @@ class RekonWtHarianService {
       const statusMap = new Map();
       rekapRemoteData.forEach(item => {
         if (item.kdtk) {
-          statusMap.set(item.kdtk, item.status || 'unknown');
+          statusMap.set(item.kdtk, item.status || "unknown");
         }
       });
 
       // Add status column to summary data by matching kdtk with shop
       summaryData = summaryData.map(item => ({
         ...item,
-        status: statusMap.get(item.shop) || 'no_data'
+        status: statusMap.get(item.shop) || "no_data",
       }));
 
       // Apply pagination

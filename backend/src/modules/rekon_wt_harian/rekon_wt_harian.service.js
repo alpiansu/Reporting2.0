@@ -13,6 +13,7 @@ import { ProgressHelper } from "../../services/progress/index.js";
 import storeService from "../../modules/store/storeService.js";
 import wrcUtils from "../../utils/wrc.utils.js";
 import RekapRemoteService from "../rekap_remote/rekap_remote.service.js";
+import RekapRemoteStagingService from "../rekap_remote/rekap_remote_staging.service.js";
 import { exit } from "process";
 
 // Path untuk file JSON rekon_wt_harian
@@ -2446,6 +2447,32 @@ class RekonWtHarianService {
         }
       });
 
+      // Get rekap_remote data for status information
+      let rekapRemoteData = [];
+      try {
+        rekapRemoteData = await RekapRemoteStagingService.getAllRekapData({
+          moduleName: 'rekon_wt_harian'
+        });
+        logger.info(`Retrieved ${rekapRemoteData.length} records from rekap_remote for status mapping`);
+      } catch (error) {
+        logger.warn(`Failed to get rekap_remote data: ${error.message}`);
+        // Continue without status data if rekap_remote is unavailable
+      }
+
+      // Create a map for quick status lookup by kdtk
+      const statusMap = new Map();
+      rekapRemoteData.forEach(item => {
+        if (item.kdtk) {
+          statusMap.set(item.kdtk, item.status || 'unknown');
+        }
+      });
+
+      // Add status column to summary data by matching kdtk with shop
+      summaryData = summaryData.map(item => ({
+        ...item,
+        status: statusMap.get(item.shop) || 'no_data'
+      }));
+
       // Apply pagination
       const paginatedData = summaryData.slice(offset, offset + validLimit);
 
@@ -2456,7 +2483,7 @@ class RekonWtHarianService {
       const totalRecords = summaryData.length;
 
       logger.info(
-        `getDailyShopSummary completed: ${totalRecords} summary records, ${totalDetailRecords} detail records`
+        `getDailyShopSummary completed: ${totalRecords} summary records, ${totalDetailRecords} detail records, ${statusMap.size} status mappings`
       );
 
       return {

@@ -2,10 +2,10 @@
  * Staging service for rekap_remote module
  * Handles JSON file synchronization for staging environment
  */
-import fs from 'fs/promises';
-import path from 'path';
-import logger from '../../config/logger.js';
-import RekapRemote from '../../models/rekap_remote.model.js';
+import fs from "fs/promises";
+import path from "path";
+import logger from "../../config/logger.js";
+import RekapRemote from "../../models/rekap_remote.model.js";
 
 // Path untuk file JSON rekap_remote
 const REKAP_REMOTE_JSON_PATH = path.join(process.cwd(), "data/rekap_remote.json");
@@ -44,6 +44,18 @@ class RekapRemoteStagingService {
           logger.info("Created new rekap_remote.json file");
         } else {
           throw error;
+        }
+      }
+
+      // Guard: jika file JSON tidak ada nilainya, lakukan tarik data dari database ke file json
+      if (!this.rekapData || this.rekapData.length === 0) {
+        logger.info("JSON file is empty, syncing from database");
+        try {
+          await this.syncToJsonFile();
+          logger.info(`Synced ${this.rekapData.length} records from database to JSON file`);
+        } catch (syncError) {
+          logger.warn(`Failed to sync from database: ${syncError.message}. Using empty data.`);
+          this.rekapData = [];
         }
       }
 
@@ -118,7 +130,9 @@ class RekapRemoteStagingService {
       await this.initialize();
       this.lastLoadTime = Date.now();
 
-      logger.info(`Rekap remote data loaded successfully. TTL expires at: ${new Date(this.lastLoadTime + this.TTL).toISOString()}`);
+      logger.info(
+        `Rekap remote data loaded successfully. TTL expires at: ${new Date(this.lastLoadTime + this.TTL).toISOString()}`
+      );
     } finally {
       this.isLoading = false;
     }
@@ -144,6 +158,7 @@ class RekapRemoteStagingService {
 
       // Convert to plain objects
       this.rekapData = dbData.map(item => item.get({ plain: true }));
+      logger.info(`Fetched ${this.rekapData.length} rekap_remote records from database`);
 
       // Save to file
       await this.saveToFile();
@@ -152,7 +167,13 @@ class RekapRemoteStagingService {
       this.initialized = true;
       this.lastLoadTime = Date.now();
 
-      logger.info(`Synchronized ${this.rekapData.length} rekap_remote records to JSON file. Cache refreshed. TTL expires at: ${new Date(this.lastLoadTime + this.TTL).toISOString()}`);
+      logger.info(
+        `Synchronized ${
+          this.rekapData.length
+        } rekap_remote records to JSON file. Cache refreshed. TTL expires at: ${new Date(
+          this.lastLoadTime + this.TTL
+        ).toISOString()}`
+      );
       return this.rekapData.length;
     } catch (error) {
       logger.error(`Failed to synchronize rekap_remote data: ${error.message}`);
@@ -207,7 +228,7 @@ class RekapRemoteStagingService {
         data: paginatedData,
         total,
         limit,
-        offset
+        offset,
       };
     } catch (error) {
       logger.error(`Error getting rekap data from staging: ${error.message}`);
@@ -236,24 +257,24 @@ class RekapRemoteStagingService {
         total: filteredData.length,
         byStatus: {},
         byCab: {},
-        byModule: {}
+        byModule: {},
       };
 
       // Group by status
       filteredData.forEach(item => {
-        const status = item.status || 'unknown';
+        const status = item.status || "unknown";
         summary.byStatus[status] = (summary.byStatus[status] || 0) + 1;
       });
 
       // Group by cab
       filteredData.forEach(item => {
-        const cab = item.cab || 'unknown';
+        const cab = item.cab || "unknown";
         summary.byCab[cab] = (summary.byCab[cab] || 0) + 1;
       });
 
       // Group by module
       filteredData.forEach(item => {
-        const module = item.module_name || 'unknown';
+        const module = item.module_name || "unknown";
         summary.byModule[module] = (summary.byModule[module] || 0) + 1;
       });
 
@@ -273,17 +294,19 @@ class RekapRemoteStagingService {
     try {
       // Upsert to database
       const [record, created] = await RekapRemote.upsert(data, {
-        returning: true
+        returning: true,
       });
 
       // Sync to JSON file after database operation
       await this.syncToJsonFile();
 
-      logger.info(`${created ? 'Created' : 'Updated'} rekap_remote record: ${data.cab}-${data.kdtk}-${data.module_name}`);
-      
+      logger.info(
+        `${created ? "Created" : "Updated"} rekap_remote record: ${data.cab}-${data.kdtk}-${data.module_name}`
+      );
+
       return {
         record: record.get({ plain: true }),
-        created
+        created,
       };
     } catch (error) {
       logger.error(`Error upserting rekap_remote record: ${error.message}`);
@@ -305,7 +328,7 @@ class RekapRemoteStagingService {
       await this.syncToJsonFile();
 
       logger.info(`Deleted ${deletedCount} rekap_remote records`);
-      
+
       return deletedCount;
     } catch (error) {
       logger.error(`Error deleting rekap_remote records: ${error.message}`);
@@ -346,6 +369,67 @@ class RekapRemoteStagingService {
       return filteredData.length;
     } catch (error) {
       logger.error(`Error getting count from staging: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all rekap data without pagination (for module integration)
+   * @param {Object} filters - Optional filter options
+   * @param {string} filters.cab - Filter by cab
+   * @param {string} filters.kdtk - Filter by kdtk  
+   * @param {string} filters.moduleName - Filter by module_name
+   * @returns {Promise<Array>} Array of rekap data (clean copy, no reference to internal data)
+   */
+  async getAllRekapData(filters = {}) {
+    try {
+      // Ensure data is loaded with TTL-based lazy loading
+      await this.ensureDataLoaded();
+
+      // Create a clean copy of data to avoid reference issues
+      let filteredData = [];
+
+      // Filter data from JSON file
+      for (const item of this.rekapData) {
+        // Filter by cab
+        if (filters.cab && item.cab !== filters.cab) {
+          continue;
+        }
+
+        // Filter by kdtk
+        if (filters.kdtk && item.kdtk !== filters.kdtk) {
+          continue;
+        }
+
+        // Filter by moduleName
+        if (filters.moduleName && item.module_name !== filters.moduleName) {
+          continue;
+        }
+
+        // Create clean copy of item to prevent reference issues
+        filteredData.push({
+          cab: item.cab,
+          kdtk: item.kdtk,
+          module_name: item.module_name,
+          status: item.status,
+          updtime: item.updtime,
+          message: item.message || null
+        });
+      }
+
+      // Sort by updtime descending (newest first)
+      filteredData.sort((a, b) => {
+        const dateA = new Date(a.updtime || 0);
+        const dateB = new Date(b.updtime || 0);
+        return dateB - dateA;
+      });
+
+      logger.debug(`Retrieved ${filteredData.length} rekap records for module integration`);
+      
+      // Return clean array - no references to internal data
+      return filteredData;
+    } catch (error) {
+      logger.error(`Error getting all rekap data from staging: ${error.message}`);
       throw error;
     }
   }

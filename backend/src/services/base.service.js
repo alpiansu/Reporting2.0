@@ -29,7 +29,7 @@ export class BaseService {
    * Get database connection with lazy loading
    */
   async getConnection() {
-    return await resilientDb.getConnection();
+    return await resilientDb.getDatabase();
   }
 
   /**

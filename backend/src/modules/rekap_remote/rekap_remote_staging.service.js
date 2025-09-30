@@ -14,6 +14,11 @@ class RekapRemoteStagingService {
   constructor() {
     this.rekapData = [];
     this.initialized = false;
+
+    // TTL Cache Management
+    this.lastLoadTime = null;
+    this.TTL = 60 * 60 * 1000; // 1 hour in milliseconds
+    this.isLoading = false; // Prevent concurrent loading
   }
 
   /**
@@ -63,7 +68,65 @@ class RekapRemoteStagingService {
   }
 
   /**
+   * Check if cached data is still valid based on TTL
+   * @returns {boolean} True if cache is valid, false if expired
+   */
+  isCacheValid() {
+    if (!this.initialized || !this.lastLoadTime) {
+      return false;
+    }
+
+    const now = Date.now();
+    const isExpired = now - this.lastLoadTime > this.TTL;
+    return !isExpired;
+  }
+
+  /**
+   * Invalidate cache manually (useful when database is updated)
+   */
+  invalidateCache() {
+    this.rekapData = [];
+    this.initialized = false;
+    this.lastLoadTime = null;
+    this.isLoading = false;
+    logger.info("Rekap remote cache invalidated manually");
+  }
+
+  /**
+   * Ensure data is loaded with TTL-based lazy loading
+   * Only loads data when needed and cache is expired
+   */
+  async ensureDataLoaded() {
+    // If cache is still valid, no need to reload
+    if (this.isCacheValid()) {
+      return;
+    }
+
+    // Prevent concurrent loading
+    if (this.isLoading) {
+      // Wait for ongoing loading to complete
+      while (this.isLoading) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      return;
+    }
+
+    try {
+      this.isLoading = true;
+      logger.info("Loading rekap remote data from JSON file (cache expired or empty)");
+
+      await this.initialize();
+      this.lastLoadTime = Date.now();
+
+      logger.info(`Rekap remote data loaded successfully. TTL expires at: ${new Date(this.lastLoadTime + this.TTL).toISOString()}`);
+    } finally {
+      this.isLoading = false;
+    }
+  }
+
+  /**
    * Ensure the service is initialized before performing operations
+   * @deprecated Use ensureDataLoaded() instead for TTL-based loading
    */
   async ensureInitialized() {
     if (!this.initialized) {
@@ -85,7 +148,11 @@ class RekapRemoteStagingService {
       // Save to file
       await this.saveToFile();
 
-      logger.info(`Synchronized ${this.rekapData.length} rekap_remote records to JSON file`);
+      // Update cache timestamp and mark as initialized
+      this.initialized = true;
+      this.lastLoadTime = Date.now();
+
+      logger.info(`Synchronized ${this.rekapData.length} rekap_remote records to JSON file. Cache refreshed. TTL expires at: ${new Date(this.lastLoadTime + this.TTL).toISOString()}`);
       return this.rekapData.length;
     } catch (error) {
       logger.error(`Failed to synchronize rekap_remote data: ${error.message}`);
@@ -102,8 +169,8 @@ class RekapRemoteStagingService {
    */
   async getRekapData(filters = {}, limit = 100, offset = 0) {
     try {
-      // Ensure data is loaded from JSON file
-      await this.ensureInitialized();
+      // Ensure data is loaded with TTL-based lazy loading
+      await this.ensureDataLoaded();
 
       // Filter data from JSON file
       let filteredData = this.rekapData.filter(item => {
@@ -155,8 +222,8 @@ class RekapRemoteStagingService {
    */
   async getSummary(moduleName = null) {
     try {
-      // Ensure data is loaded from JSON file
-      await this.ensureInitialized();
+      // Ensure data is loaded with TTL-based lazy loading
+      await this.ensureDataLoaded();
 
       // Filter data by module name if provided
       let filteredData = this.rekapData;
@@ -253,8 +320,8 @@ class RekapRemoteStagingService {
    */
   async getCount(filters = {}) {
     try {
-      // Ensure data is loaded from JSON file
-      await this.ensureInitialized();
+      // Ensure data is loaded with TTL-based lazy loading
+      await this.ensureDataLoaded();
 
       // Filter data from JSON file
       const filteredData = this.rekapData.filter(item => {

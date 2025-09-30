@@ -156,8 +156,15 @@ class RekapRemoteStagingService {
       // Get all data from database
       const dbData = await RekapRemote.findAll();
 
-      // Convert to plain objects
-      this.rekapData = dbData.map(item => item.get({ plain: true }));
+      // Convert to plain objects - handle both Sequelize instances and plain objects
+      this.rekapData = dbData.map(item => {
+        // Check if item is a Sequelize model instance
+        if (item && typeof item.get === 'function') {
+          return item.get({ plain: true });
+        }
+        // If it's already a plain object (from fallback), return as is
+        return item;
+      });
       logger.info(`Fetched ${this.rekapData.length} rekap_remote records from database`);
 
       // Save to file
@@ -176,8 +183,29 @@ class RekapRemoteStagingService {
       );
       return this.rekapData.length;
     } catch (error) {
+      // Handle specific database errors gracefully
+      if (error.message.includes('Database sedang tidak tersedia')) {
+        logger.warn(`JSON sync skipped - database not available [REKAP REMOTE STAGING]`);
+        return; // Don't throw error, just skip sync
+      } else if (error.message.includes('item.get is not a function')) {
+        logger.error(`JSON sync error - data format issue: ${error.message} [REKAP REMOTE STAGING]`);
+        // Try to handle the data differently
+        try {
+          const data = await RekapRemote.findAll({ raw: true }); // Get raw data
+          this.rekapData = data;
+          await this.saveToFile();
+          this.initialized = true;
+          this.lastLoadTime = Date.now();
+          logger.info(`Data synced to JSON file (raw mode): ${data.length} records [REKAP REMOTE STAGING]`);
+          return data.length;
+        } catch (retryError) {
+          logger.error(`JSON sync retry failed: ${retryError.message} [REKAP REMOTE STAGING]`);
+        }
+      }
+      
       logger.error(`Failed to synchronize rekap_remote data: ${error.message}`);
-      throw error;
+      // Don't throw error to prevent crashing the main process
+      return;
     }
   }
 

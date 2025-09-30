@@ -15,6 +15,7 @@ import os from "os";
 import { Mutex } from "async-mutex";
 import rekapRemoteStagingService from "./rekap_remote_staging.service.js";
 import { Op } from "sequelize";
+import resilientDb from "../../config/resilient-database.js";
 
 class RekapRemoteService {
   constructor() {
@@ -199,24 +200,78 @@ class RekapRemoteService {
 
       for (let i = 0; i < logsToSave.length; i += BATCH_SIZE) {
         const batch = logsToSave.slice(i, i + BATCH_SIZE);
+        const MAX_RETRIES = 3;
+        let retryCount = 0;
+        let batchSaved = false;
 
-        try {
-          // Use bulkCreate with updateOnDuplicate for upsert behavior
-          const result = await Promise.race([
-            RekapRemote.bulkCreate(batch, {
-              updateOnDuplicate: ["status", "updtime"],
-              validate: true,
-            }),
-            new Promise((_, reject) =>
-              setTimeout(() => reject(new Error("Database operation timeout after 60 seconds")), 60000)
-            ),
-          ]);
+        while (retryCount < MAX_RETRIES && !batchSaved) {
+          try {
+            // Check if database is available, if not, force reconnect
+            if (!resilientDb.isDatabaseAvailable()) {
+              logger.info(`Database not available, attempting force reconnect... [REKAP REMOTE]`);
+              try {
+                await resilientDb.forceReconnect();
+                logger.info(`Database reconnection successful [REKAP REMOTE]`);
+              } catch (reconnectError) {
+                logger.error(`Force reconnect failed: ${reconnectError.message} [REKAP REMOTE]`);
+                throw new Error(`Database sedang tidak tersedia dan gagal melakukan reconnect: ${reconnectError.message}`);
+              }
+            }
 
-          savedCount += result.length;
-          logger.debug(`Saved batch ${Math.floor(i / BATCH_SIZE) + 1}: ${result.length} records [REKAP REMOTE]`);
-        } catch (batchError) {
-          logger.error(`Error saving batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batchError.message} [REKAP REMOTE]`);
-          errors.push(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batchError.message}`);
+            // Use bulkCreate with updateOnDuplicate for upsert behavior
+            const result = await Promise.race([
+              RekapRemote.bulkCreate(batch, {
+                updateOnDuplicate: ["status", "updtime"],
+                validate: true,
+              }),
+              new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("Database operation timeout after 60 seconds")), 60000)
+              ),
+            ]);
+
+            savedCount += result.length;
+            logger.debug(`Saved batch ${Math.floor(i / BATCH_SIZE) + 1}: ${result.length} records [REKAP REMOTE]`);
+            batchSaved = true;
+          } catch (batchError) {
+            retryCount++;
+            
+            // Provide more specific error messages
+            let errorMessage = batchError.message;
+            
+            if (errorMessage.includes('Database sedang tidak tersedia') || 
+                errorMessage.includes('ECONNREFUSED') || 
+                errorMessage.includes('ETIMEDOUT')) {
+              errorMessage = 'Database sedang tidak tersedia. Mencoba reconnect...';
+              // Attempt force reconnect on database unavailable error
+              try {
+                logger.info(`Attempting force reconnect due to database error [REKAP REMOTE]`);
+                await resilientDb.forceReconnect();
+                logger.info(`Database reconnection successful, retrying operation [REKAP REMOTE]`);
+                // Don't increment retry count for reconnect attempts
+                retryCount--;
+              } catch (reconnectError) {
+                logger.error(`Force reconnect failed: ${reconnectError.message} [REKAP REMOTE]`);
+                errorMessage = `Database sedang tidak tersedia dan gagal melakukan reconnect: ${reconnectError.message}`;
+              }
+            } else if (errorMessage.includes('timeout')) {
+              errorMessage = 'Database operation timeout - koneksi terlalu lambat';
+            } else if (errorMessage.includes('ECONNREFUSED')) {
+              errorMessage = 'Koneksi database ditolak - pastikan database server berjalan';
+            } else if (errorMessage.includes('ETIMEDOUT')) {
+              errorMessage = 'Koneksi database timeout - periksa jaringan';
+            } else if (errorMessage.includes('ER_ACCESS_DENIED')) {
+              errorMessage = 'Akses database ditolak - periksa kredensial';
+            }
+
+            if (retryCount < MAX_RETRIES) {
+              const waitTime = Math.pow(2, retryCount) * 1000; // Exponential backoff
+              logger.warn(`Batch ${Math.floor(i / BATCH_SIZE) + 1} failed (attempt ${retryCount}/${MAX_RETRIES}): ${errorMessage}. Retrying in ${waitTime}ms... [REKAP REMOTE]`);
+              await new Promise(resolve => setTimeout(resolve, waitTime));
+            } else {
+              logger.error(`Batch ${Math.floor(i / BATCH_SIZE) + 1} failed after ${MAX_RETRIES} attempts: ${errorMessage} [REKAP REMOTE]`);
+              errors.push(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${errorMessage} (after ${MAX_RETRIES} retries)`);
+            }
+          }
         }
       }
 

@@ -61,6 +61,10 @@
         Update Time
         <i v-if="sortColumn === 'updtime'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
       </th>
+      <th class="text-center sortable" :class="{ 'sort-asc': sortColumn === 'status' && sortOrder === 'asc', 'sort-desc': sortColumn === 'status' && sortOrder === 'desc' }" @click="handleSort('status')">
+        Status
+        <i v-if="sortColumn === 'status'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+      </th>
       <th class="text-center">Aksi</th>
     </template>
 
@@ -84,6 +88,15 @@
         <span class="badge badge-info">{{ item.record_count }}</span>
       </td>
       <td>{{ formatDateTime(item.updtime) }}</td>
+      <td class="text-center">
+        <span 
+          class="badge" 
+          :class="getStatusBadgeClass(item.status)"
+          :title="item.status || 'Tidak ada data'"
+        >
+          {{ getStatusText(item.status) }}
+        </span>
+      </td>
       <td class="text-center">
         <div class="action-buttons">
           <button 
@@ -126,6 +139,7 @@ import { useToastService } from '../../utils/toast';
 import { rekonWtHarianService } from '../../services';
 import DataTable from '../common/DataTable.vue';
 import RekonWtHarianDetailModal from './RekonWtHarianDetailModal.vue';
+import * as XLSX from 'xlsx';
 
 const props = defineProps({
   data: {
@@ -490,16 +504,78 @@ const formatPeriode = (periode) => {
   return `${monthNames[month - 1]} ${year}`;
 };
 
+// Get status badge class
+const getStatusBadgeClass = (status) => {
+  if (!status) return 'badge-danger';
+  
+  // Jika status mengandung [kdtk] berarti sukses (hijau)
+  if (status.includes('[') && status.includes(']')) {
+    return 'badge-success';
+  }
+  
+  // Selain itu gagal (merah)
+  return 'badge-danger';
+};
+
+// Get status text
+const getStatusText = (status) => {
+  if (!status) return 'Tidak ada data';
+  
+  // Jika status mengandung [kdtk] berarti sukses, ambil kalimat setelah [kdtk]
+  if (status.includes('[') && status.includes(']')) {
+    const closingBracketIndex = status.lastIndexOf(']');
+    if (closingBracketIndex < status.length - 1) {
+      // Ada teks setelah ], ambil teks tersebut dan trim whitespace
+      const textAfter = status.substring(closingBracketIndex + 1).trim();
+      return textAfter || 'Berhasil';
+    }
+    return 'Berhasil';
+  }
+  
+  // Selain itu gagal, return teks apa adanya
+  return status;
+};
+
 // Export to Excel
 const exportToExcel = async () => {
   try {
-    // Implementasi export ke Excel
+    // Prepare data for export
+    const exportData = filteredData.value.map((item, index) => ({
+      'No': index + 1,
+      'Cab': item.cab,
+      'Shop': item.shop,
+      'Tipe': item.tipe,
+      'Gross WRC': item.gross_wrc,
+      'Gross Toko': item.gross_store,
+      'Selisih Gross': item.selisih_gross,
+      'PPN WRC': item.ppn_wrc,
+      'PPN Toko': item.ppn_store,
+      'Selisih PPN': item.selisih_ppn,
+      'Total Selisih': item.selisih_gross + item.selisih_ppn,
+      'Status': getStatusText(item.status),
+      'Update Time': item.updtime ? formatDateTime(item.updtime) : '-'
+    }));
+
+    // Create worksheet
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Rekonsiliasi WT Harian');
+    
+    // Generate filename
+    const filename = `rekonsiliasi_wt_harian_${props.cab}_${props.periode}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    
+    // Save file
+    XLSX.writeFile(wb, filename);
+    
     toast.showSuccess(
       'Ekspor Berhasil',
       'Data berhasil diekspor ke Excel',
       3000
     );
   } catch (err) {
+    console.error('Export error:', err);
     toast.showError(
       'Ekspor Gagal',
       'Terjadi kesalahan saat mengekspor data',
@@ -537,6 +613,11 @@ const printResults = () => {
           .badge { display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 12px; font-weight: bold; }
           .badge-cash { background-color: #e8f5e9; color: #4caf50; }
           .badge-non-cash { background-color: #e3f2fd; color: #2196f3; }
+          .badge-success { background-color: #d4edda; color: #155724; }
+          .badge-danger { background-color: #f8d7da; color: #721c24; }
+          .badge-warning { background-color: #fff3cd; color: #856404; }
+          .badge-secondary { background-color: #e2e3e5; color: #383d41; }
+          .badge-light { background-color: #f8f9fa; color: #6c757d; }
           .has-diff { background-color: #fff8e1; }
         </style>
       </head>
@@ -561,6 +642,7 @@ const printResults = () => {
               <th class="text-right">PPN Toko</th>
               <th class="text-right">Selisih PPN</th>
               <th class="text-right">Total Selisih</th>
+              <th class="text-center">Status</th>
             </tr>
           </thead>
           <tbody>
@@ -590,6 +672,11 @@ const printResults = () => {
           <td class="text-right">${formatCurrency(item.ppn_store)}</td>
           <td class="text-right ${diffPpnClass}">${formatCurrency(item.selisih_ppn)}</td>
           <td class="text-right ${totalDiffClass}">${formatCurrency(item.selisih_gross + item.selisih_ppn)}</td>
+          <td class="text-center">
+            <span class="badge badge-${getStatusBadgeClass(item.status).replace('badge-', '')}">
+              ${getStatusText(item.status)}
+            </span>
+          </td>
         </tr>
       `;
     });
@@ -641,582 +728,6 @@ const closeDetailModal = () => {
 </script>
 
 <style scoped>
-.search-container {
-  margin-bottom: 1rem;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.filters-row {
-  display: flex;
-  flex-direction: row;
-  align-items: stretch;
-  gap: 1.5rem;
-  width: 100%;
-}
-
-.search-form {
-  flex: 1;
-  display: flex;
-  align-items: center;
-}
-
-.search-box {
-  position: relative;
-  width: 100%;
-  max-width: 400px;
-}
-
-.search-input {
-  width: 100%;
-  padding: 0.75rem 2.5rem 0.75rem 2.5rem;
-  border: 2px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  transition: all 0.2s ease;
-  background: white;
-}
-
-.search-input:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.search-icon {
-  position: absolute;
-  left: 0.75rem;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #6b7280;
-  font-size: 1rem;
-}
-
-.clear-button {
-  position: absolute;
-  right: 0.75rem;
-  top: 50%;
-  transform: translateY(-50%);
-  background: none;
-  border: none;
-  color: #6b7280;
-  cursor: pointer;
-  padding: 0.25rem;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-}
-
-.clear-button:hover {
-  color: #374151;
-  background: #f3f4f6;
-}
-
-/* Enhanced table styling with horizontal scroll and frozen headers */
-.table-responsive {
-  overflow-x: auto;
-  overflow-y: auto;
-  max-height: 70vh;
-  width: 100%;
-  position: relative;
-  margin-bottom: 1rem;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-}
-
-.results-table {
-  width: 100%;
-  min-width: 1200px; /* Ensure minimum width for all columns */
-  border-collapse: separate;
-  border-spacing: 0;
-  background-color: #fff;
-  position: relative;
-}
-
-.results-table thead {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background-color: #f8f9fa;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.results-table th {
-  background-color: #f8f9fa;
-  color: #495057;
-  font-weight: 600;
-  text-align: left;
-  padding: 1rem 0.75rem;
-  border-bottom: 2px solid #dee2e6;
-  border-right: 1px solid #dee2e6;
-  white-space: nowrap;
-  position: sticky;
-  top: 0;
-  z-index: 5;
-}
-
-.results-table th:last-child {
-  border-right: none;
-  min-width: 180px; /* Ensure action column has enough space */
-  width: 180px;
-}
-
-.results-table td {
-  padding: 0.875rem 0.75rem;
-  border-bottom: 1px solid #e9ecef;
-  border-right: 1px solid #f1f3f4;
-  vertical-align: middle;
-  white-space: nowrap;
-}
-
-.results-table td:last-child {
-  border-right: none;
-  min-width: 180px; /* Match header width */
-  width: 180px;
-}
-
-/* Action buttons styling */
-.action-buttons {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: nowrap;
-  min-width: 160px; /* Ensure buttons don't get cramped */
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.375rem;
-  padding: 0.5rem 0.875rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  border-radius: 6px;
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-decoration: none;
-  white-space: nowrap;
-  min-width: 70px;
-}
-
-.btn-detail {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: white;
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
-}
-
-.btn-detail:hover:not(:disabled) {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.4);
-}
-
-.btn-detail:disabled {
-  background: #9ca3af;
-  color: #6b7280;
-  cursor: not-allowed;
-  box-shadow: none;
-  transform: none;
-}
-
-.btn-refresh {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: white;
-  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
-}
-
-.btn-refresh:hover:not(:disabled) {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.4);
-}
-
-.btn-refresh:disabled {
-  background: #9ca3af;
-  color: #6b7280;
-  cursor: not-allowed;
-  box-shadow: none;
-  transform: none;
-}
-
-.btn-processing {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  cursor: not-allowed;
-  position: relative;
-  overflow: hidden;
-}
-
-.btn-processing::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-  animation: shimmer 1.5s ease-in-out infinite;
-}
-
-.pi-spin {
-  animation: smoothSpin 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  transform-origin: center;
-  display: inline-block;
-}
-
-@keyframes smoothSpin {
-  0% { 
-    transform: rotate(0deg);
-    opacity: 0.8;
-  }
-  50% {
-    opacity: 1;
-  }
-  100% { 
-    transform: rotate(360deg);
-    opacity: 0.8;
-  }
-}
-
-@keyframes shimmer {
-  0% {
-    left: -100%;
-  }
-  100% {
-    left: 100%;
-  }
-}
-
-/* Enhanced loading states */
-.btn-processing .pi-spin {
-  animation: smoothSpin 2s cubic-bezier(0.4, 0, 0.6, 1) infinite,
-             pulse 1.5s ease-in-out infinite alternate;
-}
-
-@keyframes pulse {
-  0% {
-    transform: scale(1) rotate(0deg);
-  }
-  100% {
-    transform: scale(1.1) rotate(360deg);
-  }
-}
-
-/* Column width specifications for better layout */
-.results-table th:nth-child(1), /* NO */
-.results-table td:nth-child(1) {
-  width: 60px;
-  min-width: 60px;
-  text-align: center;
-}
-
-.results-table th:nth-child(2), /* Cab */
-.results-table td:nth-child(2) {
-  width: 80px;
-  min-width: 80px;
-}
-
-.results-table th:nth-child(3), /* Shop */
-.results-table td:nth-child(3) {
-  width: 80px;
-  min-width: 80px;
-}
-
-.results-table th:nth-child(4), /* Total Selisih Gross */
-.results-table td:nth-child(4) {
-  width: 140px;
-  min-width: 140px;
-}
-
-.results-table th:nth-child(5), /* Total Selisih PPN */
-.results-table td:nth-child(5) {
-  width: 140px;
-  min-width: 140px;
-}
-
-.results-table th:nth-child(6), /* Total Selisih Gross IDM */
-.results-table td:nth-child(6) {
-  width: 160px;
-  min-width: 160px;
-}
-
-.results-table th:nth-child(7), /* Total Selisih PPN IDM */
-.results-table td:nth-child(7) {
-  width: 160px;
-  min-width: 160px;
-}
-
-.results-table th:nth-child(8), /* Jumlah Record */
-.results-table td:nth-child(8) {
-  width: 120px;
-  min-width: 120px;
-}
-
-.results-table th:nth-child(9), /* Update Time */
-.results-table td:nth-child(9) {
-  width: 140px;
-  min-width: 140px;
-}
-
-/* Horizontal scroll indicator */
-.table-responsive::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 20px;
-  height: 100%;
-  background: linear-gradient(to left, rgba(0,0,0,0.1), transparent);
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.table-responsive:hover::after {
-  opacity: 1;
-}
-
-/* Scrollbar styling */
-.table-responsive::-webkit-scrollbar {
-  height: 8px;
-  width: 8px;
-}
-
-.table-responsive::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
-}
-
-.table-responsive::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 4px;
-}
-
-.table-responsive::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
-}
-
-/* Row highlight animation for updated data */
-.row-updated {
-  background: linear-gradient(90deg, #dcfce7 0%, #bbf7d0 50%, #dcfce7 100%) !important;
-  animation: highlightFade 2s ease-in-out;
-  border-left: 4px solid #10b981 !important;
-}
-
-@keyframes highlightFade {
-  0% {
-    background: linear-gradient(90deg, #10b981 0%, #059669 50%, #10b981 100%);
-    transform: scale(1.01);
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-  }
-  25% {
-    background: linear-gradient(90deg, #34d399 0%, #10b981 50%, #34d399 100%);
-  }
-  50% {
-    background: linear-gradient(90deg, #6ee7b7 0%, #34d399 50%, #6ee7b7 100%);
-  }
-  75% {
-    background: linear-gradient(90deg, #a7f3d0 0%, #6ee7b7 50%, #a7f3d0 100%);
-  }
-  100% {
-    background: linear-gradient(90deg, #dcfce7 0%, #bbf7d0 50%, #dcfce7 100%);
-    transform: scale(1);
-    box-shadow: none;
-  }
-}
-
-/* Enhanced styling for rows with differences */
-.has-diff {
-  background-color: #fef3c7;
-  border-left: 3px solid #f59e0b;
-}
-
-.has-diff.row-updated {
-  /* Updated row takes precedence over difference styling */
-  background: linear-gradient(90deg, #dcfce7 0%, #bbf7d0 50%, #dcfce7 100%) !important;
-  border-left: 4px solid #10b981 !important;
-}
-
-/* Smooth transitions for all table rows */
-tbody tr {
-  transition: all 0.3s ease;
-}
-
-tbody tr:hover {
-  background-color: #f8fafc;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-/* Ensure updated rows maintain hover effect */
-.row-updated:hover {
-  background: linear-gradient(90deg, #bbf7d0 0%, #a7f3d0 50%, #bbf7d0 100%) !important;
-}
-
-/* Amount styling */
-.same-amount {
-  color: #6b7280;
-}
-
-.different-amount {
-  color: #dc2626;
-  font-weight: 600;
-}
-
-/* Badge styling */
-.badge {
-  display: inline-block;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.badge-info {
-  background-color: #dbeafe;
-  color: #1e40af;
-}
-
-/* Responsive design */
-@media (max-width: 768px) {
-  .filters-row {
-    flex-direction: column;
-    gap: 1rem;
-  }
-  
-  .search-box {
-    max-width: 100%;
-  }
-  
-  .action-buttons {
-    flex-direction: column;
-    gap: 0.375rem;
-    min-width: 120px;
-  }
-  
-  .btn {
-    min-width: 100px;
-    padding: 0.5rem 0.75rem;
-    font-size: 0.8rem;
-  }
-  
-  .results-table {
-    min-width: 1000px; /* Reduced for mobile but still scrollable */
-  }
-  
-  .results-table th,
-  .results-table td {
-    padding: 0.75rem 0.5rem;
-    font-size: 0.85rem;
-  }
-  
-  .results-table th:last-child,
-  .results-table td:last-child {
-    min-width: 140px;
-    width: 140px;
-  }
-}
-
-@media (max-width: 576px) {
-  .action-buttons {
-    min-width: 100px;
-  }
-  
-  .btn {
-    min-width: 90px;
-    padding: 0.4rem 0.6rem;
-    font-size: 0.75rem;
-    gap: 0.25rem;
-  }
-  
-  .results-table {
-    min-width: 900px;
-  }
-  
-  .results-table th,
-  .results-table td {
-    padding: 0.6rem 0.4rem;
-    font-size: 0.8rem;
-  }
-  
-  .results-table th:last-child,
-  .results-table td:last-child {
-    min-width: 120px;
-    width: 120px;
-  }
-  
-  /* Compact column widths for mobile */
-  .results-table th:nth-child(1),
-  .results-table td:nth-child(1) {
-    width: 50px;
-    min-width: 50px;
-  }
-  
-  .results-table th:nth-child(2),
-  .results-table td:nth-child(2) {
-    width: 70px;
-    min-width: 70px;
-  }
-  
-  .results-table th:nth-child(3),
-  .results-table td:nth-child(3) {
-    width: 70px;
-    min-width: 70px;
-  }
-  
-  .results-table th:nth-child(4),
-  .results-table td:nth-child(4) {
-    width: 120px;
-    min-width: 120px;
-  }
-  
-  .results-table th:nth-child(5),
-  .results-table td:nth-child(5) {
-    width: 120px;
-    min-width: 120px;
-  }
-  
-  .results-table th:nth-child(6),
-  .results-table td:nth-child(6) {
-    width: 140px;
-    min-width: 140px;
-  }
-  
-  .results-table th:nth-child(7),
-  .results-table td:nth-child(7) {
-    width: 140px;
-    min-width: 140px;
-  }
-  
-  .results-table th:nth-child(8),
-  .results-table td:nth-child(8) {
-    width: 100px;
-    min-width: 100px;
-  }
-  
-  .results-table th:nth-child(9),
-  .results-table td:nth-child(9) {
-    width: 120px;
-    min-width: 120px;
-  }
-}
-
-/* Print styles */
-@media print {
-  .action-buttons,
-  .search-container {
-    display: none !important;
-  }
-  
-  .row-updated {
-    background: #f0f0f0 !important;
-    animation: none !important;
-  }
-}
+@import './RekonWtHarianTable.css';
 </style>
 

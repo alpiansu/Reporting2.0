@@ -7,14 +7,14 @@
  * - Retry mechanism untuk menangani file yang sedang diakses proses lain
  * - Atomic write menggunakan temporary file + rename untuk konsistensi data
  */
-import RekapRemote from '../../models/rekap_remote.model.js';
-import logger from '../../config/logger.js';
-import fs from 'fs/promises';
-import path from 'path';
-import os from 'os';
-import { Mutex } from 'async-mutex';
-import rekapRemoteStagingService from './rekap_remote_staging.service.js';
-import { Op } from 'sequelize';
+import RekapRemote from "../../models/rekap_remote.model.js";
+import logger from "../../config/logger.js";
+import fs from "fs/promises";
+import path from "path";
+import os from "os";
+import { Mutex } from "async-mutex";
+import rekapRemoteStagingService from "./rekap_remote_staging.service.js";
+import { Op } from "sequelize";
 
 class RekapRemoteService {
   constructor() {
@@ -168,7 +168,7 @@ class RekapRemoteService {
     // Gunakan mutex dengan timeout untuk mencegah hang
     const release = await this.fileMutex.acquire();
     const timeoutId = setTimeout(() => {
-      logger.error("saveToDatabase mutex acquisition timeout after 30 seconds");
+      logger.error("saveToDatabase mutex acquisition timeout after 30 seconds [REKAP REMOTE]");
       release();
     }, 30000); // 30 second timeout
 
@@ -178,19 +178,19 @@ class RekapRemoteService {
 
       // Jika logs kosong, kemungkinan file tidak ada atau corrupted
       if (Object.keys(logs).length === 0) {
-        logger.info("No rekap logs to save - temp file empty or not found");
+        logger.info("No rekap logs to save - temp file empty or not found [REKAP REMOTE]");
         return { success: true, savedCount: 0, message: "No logs to save" };
       }
 
       const logsToSave = Object.values(logs);
 
       if (logsToSave.length === 0) {
-        logger.info("No rekap logs to save - temp file empty");
+        logger.info("No rekap logs to save - temp file empty [REKAP REMOTE]");
         await this.cleanupTempFiles();
         return { success: true, savedCount: 0, message: "No logs to save" };
       }
 
-      logger.info(`Saving ${logsToSave.length} rekap logs to database`);
+      logger.info(`Saving ${logsToSave.length} rekap logs to database [REKAP REMOTE]`);
 
       // Process in batches to avoid overwhelming the database
       const BATCH_SIZE = 100;
@@ -213,9 +213,9 @@ class RekapRemoteService {
           ]);
 
           savedCount += result.length;
-          logger.debug(`Saved batch ${Math.floor(i / BATCH_SIZE) + 1}: ${result.length} records`);
+          logger.debug(`Saved batch ${Math.floor(i / BATCH_SIZE) + 1}: ${result.length} records [REKAP REMOTE]`);
         } catch (batchError) {
-          logger.error(`Error saving batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batchError.message}`);
+          logger.error(`Error saving batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batchError.message} [REKAP REMOTE]`);
           errors.push(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batchError.message}`);
         }
       }
@@ -223,19 +223,23 @@ class RekapRemoteService {
       // Sync to JSON file after database operation
       try {
         await rekapRemoteStagingService.syncToJsonFile();
-        logger.info("Synced rekap data to JSON file");
+        logger.info("Synced rekap data to JSON file [REKAP REMOTE]");
       } catch (syncError) {
-        logger.error(`Error syncing to JSON file: ${syncError.message}`);
+        logger.error(`Error syncing to JSON file: ${syncError.message} [REKAP REMOTE]`);
         errors.push(`JSON sync error: ${syncError.message}`);
       }
 
       // Clean up temporary files after save attempt (without mutex since we're already in mutex)
       try {
         await fs.unlink(this.tempFilePath);
-        logger.info("Cleaned up rekap_remote temporary files");
+        logger.info("Cleaned up rekap_remote temporary files [REKAP REMOTE]");
       } catch (error) {
         // File doesn't exist, ignore error
-        logger.debug(`Cleanup temp file: ${error.message}`);
+        if (error.code === "ENOENT") {
+          logger.debug(`Temporary file not found, no cleanup needed: ${error.message}`);
+        } else {
+          logger.error(`Error cleaning up temp file: ${error.message} [REKAP REMOTE]`);
+        }
       }
 
       const result = {
@@ -245,39 +249,20 @@ class RekapRemoteService {
         errors: errors,
         message:
           errors.length === 0
-            ? `Successfully saved ${savedCount} rekap logs, synced to JSON, and cleaned up temp files`
-            : `Saved ${savedCount} logs with ${errors.length} batch errors`,
+            ? `Successfully saved ${savedCount} rekap logs, synced to JSON, and cleaned up temp files [REKAP REMOTE]`
+            : `Saved ${savedCount} logs with ${errors.length} batch errors [REKAP REMOTE]`,
       };
 
-      logger.info(`Rekap logs save result: ${result.message}`);
+      logger.info(`Rekap logs save result: ${result.message} [REKAP REMOTE]`);
       return result;
     } catch (error) {
-      logger.error(`Error saving rekap logs to database: ${error.message}`);
+      logger.error(`Error saving rekap logs to database: ${error.message} [REKAP REMOTE]`);
       throw error;
     } finally {
       // Selalu release mutex
       release();
     }
   }
-
-  // Legacy methods for backward compatibility - will be removed later
-  async logSuccess(kdtk, moduleName) {
-    logger.warn("logSuccess is deprecated, use addToTemp instead");
-  }
-
-  async logTimeout(kdtk, moduleName, attempts = 3) {
-    logger.warn("logTimeout is deprecated, use addToTemp instead");
-  }
-
-  async logError(kdtk, moduleName, errorMessage) {
-    logger.warn("logError is deprecated, use addToTemp instead");
-  }
-
-  async logFailure(kdtk, moduleName, reason) {
-    logger.warn("logFailure is deprecated, use addToTemp instead");
-  }
-
-
 
   async clearLogs() {
     await this.cleanupTempFiles();
@@ -287,8 +272,6 @@ class RekapRemoteService {
     return await this.saveToDatabase();
   }
 
-
-
   /**
    * Delete rekap logs based on filters (with staging sync)
    * @param {Object} filters - Delete filters
@@ -297,26 +280,26 @@ class RekapRemoteService {
   async deleteRekapLogs(filters = {}) {
     try {
       const whereClause = {};
-      
+
       if (filters.cab) {
         whereClause.cab = filters.cab;
       }
-      
+
       if (filters.kdtk) {
         whereClause.kdtk = filters.kdtk;
       }
-      
+
       if (filters.moduleName) {
         whereClause.module_name = filters.moduleName;
       }
-      
+
       // Use staging service to delete and sync
       const deletedCount = await rekapRemoteStagingService.deleteRecords(whereClause);
-      
+
       return {
         success: true,
         deletedCount,
-        message: `Deleted ${deletedCount} rekap logs and synced to JSON`
+        message: `Deleted ${deletedCount} rekap logs and synced to JSON`,
       };
     } catch (error) {
       logger.error(`Error deleting rekap logs: ${error.message}`);

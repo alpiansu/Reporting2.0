@@ -248,6 +248,22 @@ class RekapRemoteWrapper extends BaseService {
     return result;
   }
 
+  async bulkCreate(data, options = {}) {
+    const result = await this.executeWriteOperation(async () => {
+      const model = await getRekapRemoteModel();
+      return await model.bulkCreate(data, options);
+    });
+    
+    // Sync to JSON file after database operation
+    try {
+      await rekapRemoteStagingService.syncToJsonFile();
+    } catch (syncError) {
+      console.warn('Failed to sync to JSON after bulkCreate:', syncError.message);
+    }
+    
+    return result;
+  }
+
   // Helper method to extract filters from Sequelize options
   extractFilters(options) {
     const filters = {};

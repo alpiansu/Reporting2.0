@@ -1,9 +1,10 @@
-import { parse } from "csv-parse";
+import csvParser from "csv-parser";
 import { Readable } from "stream";
 import logger from "../../config/logger.js";
 import config from "../../config/adjust.config.js";
-import storeService from "../store/store.service.js";
-import { createStoreConnection, executeQuery, closeConnection } from "../../utils/db.utils.js";
+import storeService from "../store/storeService.js";
+import dbStore from "../../config/db_store.js";
+import moment from "moment-timezone";
 
 class AdjustService {
   /**
@@ -85,30 +86,22 @@ class AdjustService {
   async parseCsvBuffer(buffer) {
     return new Promise((resolve, reject) => {
       const records = [];
-      const parser = parse({
-        columns: true,
-        skip_empty_lines: true,
-        trim: true,
-      });
-
-      parser.on("readable", () => {
-        let record;
-        while ((record = parser.read()) !== null) {
-          records.push(record);
-        }
-      });
-
-      parser.on("error", err => {
-        reject(new Error(`Error parsing CSV: ${err.message}`));
-      });
-
-      parser.on("end", () => {
-        resolve(records);
-      });
-
-      // Create readable stream from buffer and pipe to parser
       const readable = Readable.from(buffer);
-      readable.pipe(parser);
+
+      readable
+        .pipe(
+          csvParser({
+            mapHeaders: ({ header }) => header.trim(),
+            mapValues: ({ value }) => value.trim(),
+          })
+        )
+        .on("data", data => records.push(data))
+        .on("error", err => {
+          reject(new Error(`Error parsing CSV: ${err.message}`));
+        })
+        .on("end", () => {
+          resolve(records);
+        });
     });
   }
 
@@ -119,10 +112,16 @@ class AdjustService {
    * @returns {Promise<Object>} Processing result
    */
   async processStore(store, records) {
-    let connection;
+    let storeConnection;
     try {
-      // Create connection
-      connection = await createStoreConnection(store);
+      // Get store info first
+      const storeInfo = await storeService.getStoreIPHost(store.storeCode);
+      if (!storeInfo) {
+        throw new Error(`Store information not found for ${store.storeCode}`);
+      }
+
+      // Create database connection
+      storeConnection = await dbStore.createDbStoreInterfence(storeInfo.dbHost, 2);
 
       // Initialize result object
       const result = {
@@ -132,29 +131,55 @@ class AdjustService {
       };
 
       // Execute init queries
-      for (const query of config.queries.store.init) {
-        await executeQuery(connection, query);
-      }
+      await (async () => {
+        for (const query of config.queries.store.init) {
+          await storeConnection.query(query);
+        }
+      })();
 
       // Process each record
-      for (const record of records) {
-        const params = [
-          record.PRDCD, // prdcd
-          record.PRDCD, // plu_nas
-          record.QTY_ADJ, // qty for gross
-          record.QTY_ADJ, // qty
-          record.QTY_ADJ, // qty for gross_jual
-          record.PRDCD, // prdcd for WHERE clause
-        ];
+      await Promise.all(
+        records.map(async record => {
+          // Extract YY and MM
+          const lastMonth = moment().tz("Asia/Jakarta").subtract(1, "months");
+          const yy = lastMonth.format("YY");
+          const mm = lastMonth.format("MM");
 
-        await executeQuery(connection, config.queries.store.insertPlu, params);
-        result.processed++;
-      }
+          // Combine store code with YYMM
+          record.FILET = record.KDTK + yy + mm;
+          console.log(currentPeriod);
+          console.log(record.FILET);
+
+          // Prepare parameters for insert query
+          const params = [
+            record.PRDCD, // prdcd
+            record.PRDCD, // plu_nas
+            record.QTY_ADJ, // qty for gross
+            record.QTY_ADJ, // qty
+            record.QTY_ADJ, // qty for gross_jual
+            record.PRDCD, // prdcd for WHERE clause
+            currentPeriod,
+            currentPeriod,
+            record.FILET,
+          ];
+
+          await storeConnection.query(config.queries.store.insertPlu, params);
+          result.processed++;
+        })
+      );
+
+      await Promise.all(
+        records.map(async record => {
+          await storeConnection.query(config.queries.store.safetyCek, [record.FILET]);
+        })
+      );
 
       // Execute finalize queries
-      for (const query of config.queries.store.finalize) {
-        await executeQuery(connection, query);
-      }
+      await (async () => {
+        for (const query of config.queries.store.finalize) {
+          await storeConnection.query(query);
+        }
+      })();
 
       result.success = true;
       return result;
@@ -166,8 +191,8 @@ class AdjustService {
         error: error.message,
       };
     } finally {
-      if (connection) {
-        await closeConnection(connection);
+      if (storeConnection) {
+        await storeConnection.end();
       }
     }
   }

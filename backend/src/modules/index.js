@@ -3,18 +3,19 @@
  * Exports all modules and provides initialization function
  */
 
-import authModule from './auth/index.js';
-import storeModule from './store/index.js';
-import syncModule from './sync/index.js';
-import userActivityModule from './user-activity/index.js';
-import salesPerDeptModule from './sales_per_dept/index.js';
-import mDeptModule from './m_dept/index.js';
-import rekonWtHarianModule from './rekon_wt_harian/index.js';
-import mCabangModule from './m_cabang/index.js';
-import userModule from './user/index.js';
-import menuManagerModule from './menu-manager/index.js';
-import rekapRemoteModule from './rekap_remote/index.js';
-import prepClosingModule from './prep-closing/index.js';
+import authModule from "./auth/index.js";
+import storeModule from "./store/index.js";
+import syncModule from "./sync/index.js";
+import userActivityModule from "./user-activity/index.js";
+import salesPerDeptModule from "./sales_per_dept/index.js";
+import mDeptModule from "./m_dept/index.js";
+import rekonWtHarianModule from "./rekon_wt_harian/index.js";
+import mCabangModule from "./m_cabang/index.js";
+import userModule from "./user/index.js";
+import menuManagerModule from "./menu-manager/index.js";
+import rekapRemoteModule from "./rekap_remote/index.js";
+import prepClosingModule from "./prep-closing/index.js";
+import adjustModule from "./adjust/index.js";
 
 export default {
   // Export all modules
@@ -30,9 +31,10 @@ export default {
   menuManagerModule,
   rekapRemoteModule,
   prepClosingModule,
-  
+  adjustModule,
+
   // Initialize all modules
-  initialize: (app) => {
+  initialize: app => {
     // Initialize each module
     const auth = authModule.initialize(app);
     const store = storeModule.initialize(app);
@@ -45,10 +47,11 @@ export default {
     const user = userModule.initialize(app);
     const rekapRemote = rekapRemoteModule.initialize(app);
     const prepClosing = prepClosingModule.initialize(app);
-    
+    const adjust = adjustModule.initialize(app);
+
     // Initialize menu manager module
-    app.use('/api/menu-manager', menuManagerModule.routes);
-    
+    app.use("/api/menu-manager", menuManagerModule.routes);
+
     return {
       auth,
       store,
@@ -61,7 +64,8 @@ export default {
       user,
       rekapRemote,
       prepClosing,
-      menuManager: true
+      adjust,
+      menuManager: true,
     };
-  }
+  },
 };

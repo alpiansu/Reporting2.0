@@ -1,6 +1,6 @@
 import logger from "../../config/logger.js";
 import adjustService from "./adjust.service.js";
-import { apiResponse } from "../../utils/apiResponse.js";
+import { apiResponse } from "../../utils/index.js";
 
 /**
  * Upload and process CSV file for item adjustment
@@ -19,10 +19,14 @@ export const uploadAdjustCsv = async (req, res) => {
 
     // Return response based on results
     if (results.failedStores.length > 0) {
-      return apiResponse.partialContent(res, {
-        message: "Process completed with some failures",
-        data: results,
-      });
+      return apiResponse.success(
+        res,
+        {
+          message: "Process completed with some failures",
+          data: results,
+        },
+        207
+      ); // Using 207 Multi-Status for partial success
     }
 
     return apiResponse.success(res, {
@@ -31,6 +35,6 @@ export const uploadAdjustCsv = async (req, res) => {
     });
   } catch (error) {
     logger.error(`Error processing adjust CSV: ${error.message}`);
-    return apiResponse.serverError(res, error.message);
+    return apiResponse.error(res, error.message, 500);
   }
 };

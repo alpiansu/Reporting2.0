@@ -1,9 +1,9 @@
-import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
-import { menuService } from '../services';
-import { loadDynamicRoutes } from '../router/dynamicRoutes';
+import { defineStore } from "pinia";
+import { ref, computed } from "vue";
+import { menuService } from "../services";
+// import { loadDynamicRoutes } from "../router/dynamicRoutes";
 
-export const useMenuStore = defineStore('menu', () => {
+export const useMenuStore = defineStore("menu", () => {
   // State
   const menuCategories = ref([]);
   const loading = ref(false);
@@ -19,14 +19,14 @@ export const useMenuStore = defineStore('menu', () => {
       error.value = null;
       const response = await menuService.getMenusForCurrentUser();
       menuCategories.value = response.data || [];
-      
+
       // Setelah mendapatkan menu, muat rute dinamis
-      await loadDynamicRoutes();
-      
+      // await loadDynamicRoutes();
+
       return response;
     } catch (err) {
       error.value = err.response?.data?.message || err.message;
-      console.error('Error fetching menus:', err);
+      console.error("Error fetching menus:", err);
       throw err;
     } finally {
       loading.value = false;

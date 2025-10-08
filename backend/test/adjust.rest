@@ -1,0 +1,131 @@
+# Test REST API for Adjust Module
+@baseUrl = http://localhost:3000/api/adjust
+@authToken = your_jwt_token_here
+
+### Test 1: Upload CSV file successfully
+POST {{baseUrl}}/upload
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+Authorization: Bearer {{authToken}}
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="file"; filename="valid_adjust.csv"
+Content-Type: text/csv
+
+KDTK,PRDCD,QTY_ADJ
+T001,12345,10
+T002,12345,5
+T003,12345,-3
+------WebKitFormBoundary--
+
+### Test 2: Upload invalid file type
+POST {{baseUrl}}/upload
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+Authorization: Bearer {{authToken}}
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="file"; filename="invalid.txt"
+Content-Type: text/plain
+
+This is not a CSV file
+------WebKitFormBoundary--
+
+### Test 3: Upload CSV with invalid format
+POST {{baseUrl}}/upload
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+Authorization: Bearer {{authToken}}
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="file"; filename="invalid_format.csv"
+Content-Type: text/csv
+
+InvalidColumn1,InvalidColumn2
+data1,data2
+------WebKitFormBoundary--
+
+### Test 4: Upload CSV with invalid store codes
+POST {{baseUrl}}/upload
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+Authorization: Bearer {{authToken}}
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="file"; filename="invalid_stores.csv"
+Content-Type: text/csv
+
+KDTK,PRDCD,QTY_ADJ
+INVALID1,12345,10
+INVALID2,12345,5
+------WebKitFormBoundary--
+
+### Test 5: Upload CSV with invalid PLU codes
+POST {{baseUrl}}/upload
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+Authorization: Bearer {{authToken}}
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="file"; filename="invalid_plus.csv"
+Content-Type: text/csv
+
+KDTK,PRDCD,QTY_ADJ
+T001,INVALID_PLU,10
+T002,NOT_A_PLU,5
+------WebKitFormBoundary--
+
+### Test 6: Upload empty CSV file
+POST {{baseUrl}}/upload
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+Authorization: Bearer {{authToken}}
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="file"; filename="empty.csv"
+Content-Type: text/csv
+
+KDTK,PRDCD,QTY_ADJ
+------WebKitFormBoundary--
+
+### Test 7: Upload without authentication
+POST {{baseUrl}}/upload
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="file"; filename="valid_adjust.csv"
+Content-Type: text/csv
+
+KDTK,PRDCD,QTY_ADJ
+T001,12345,10
+------WebKitFormBoundary--
+
+### Test 8: Upload large CSV file
+POST {{baseUrl}}/upload
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+Authorization: Bearer {{authToken}}
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="file"; filename="large.csv"
+Content-Type: text/csv
+
+KDTK,PRDCD,QTY_ADJ
+# Large file with many entries
+T001,12345,10
+T001,12346,5
+T002,12345,3
+T002,12346,-2
+T003,12345,7
+T003,12346,-4
+# ... many more entries
+------WebKitFormBoundary--
+
+### Test 9: Upload CSV with mixed valid and invalid data
+POST {{baseUrl}}/upload
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+Authorization: Bearer {{authToken}}
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="file"; filename="mixed_data.csv"
+Content-Type: text/csv
+
+KDTK,PRDCD,QTY_ADJ
+T001,12345,10
+INVALID_STORE,12345,5
+T002,INVALID_PLU,3
+T003,12345,invalid_qty
+------WebKitFormBoundary--

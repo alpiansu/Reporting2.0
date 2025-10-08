@@ -25,7 +25,7 @@
 
 <script setup>
 import { ref, computed } from 'vue';
-import PageHeader from '../../components/rekonWtHarian/PageHeader.vue';
+import PageHeader from '../../components/PageHeader.vue';
 import RekonWtHarianForm from '../../components/rekonWtHarian/RekonWtHarianForm.vue';
 import RekonWtHarianResults from '../../components/rekonWtHarian/RekonWtHarianResults.vue';
 

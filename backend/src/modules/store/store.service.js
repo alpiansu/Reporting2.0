@@ -1,10 +1,10 @@
 /**
  * Service for handling store operations using JSON file storage
  */
-import fs from 'fs/promises';
-import path from 'path';
-import logger from '../../config/logger.js';
-import syncConfig from '../../config/sync.config.js';
+import fs from "fs/promises";
+import path from "path";
+import logger from "../../config/logger.js";
+import syncConfig from "../../config/sync.config.js";
 
 class StoreService {
   constructor() {
@@ -162,7 +162,7 @@ class StoreService {
     try {
       await this.ensureInitialized();
 
-      return this.stores.find(s => s.storeCode === storeCode) || null;
+      return this.stores.find(s => s.storeCode === storeCode && s.notes === "INDUK") || null;
     } catch (error) {
       logger.error(`Failed to get store by code: ${error.message}`);
       throw error;
@@ -220,7 +220,7 @@ class StoreService {
       await this.ensureInitialized();
 
       // Create filter conditions
-      let storeFilter = (s) => s.storeCode === storeCode && s.notes === "INDUK";
+      let storeFilter = s => s.storeCode === storeCode && s.notes === "INDUK";
 
       // Find the store
       const store = this.stores.find(storeFilter);
@@ -265,8 +265,7 @@ class StoreService {
         const searchLower = search.toLowerCase();
         filteredStores = filteredStores.filter(
           store =>
-            store.storeCode.toLowerCase().includes(searchLower) || 
-            store.storeName.toLowerCase().includes(searchLower)
+            store.storeCode.toLowerCase().includes(searchLower) || store.storeName.toLowerCase().includes(searchLower)
         );
       }
 
@@ -288,7 +287,7 @@ class StoreService {
         totalItems: filteredStores.length,
         totalPages: Math.ceil(filteredStores.length / limit),
         currentPage: page,
-        branchCode: branchCode
+        branchCode: branchCode,
       };
     } catch (error) {
       logger.error(`Failed to get stores by branch with pagination: ${error.message}`);
@@ -318,7 +317,7 @@ class StoreService {
         notes: storeData.notes,
         storeName: storeData.storeName,
         // Ensure branch is set from storeCode first character or from provided branch
-        branch: storeData.branch || (storeData.storeCode ? storeData.storeCode.substring(0, 1) : ''),
+        branch: storeData.branch || (storeData.storeCode ? storeData.storeCode.substring(0, 1) : ""),
         updtime: storeData.updtime || now,
         createdAt: now,
         updatedAt: now,

@@ -25,7 +25,7 @@ export default {
 
     // Store query template
     store: {
-      init: [`DROP TABLE IF EXISTS mstadj`, `CREATE TABLE mstadj LIKE mstran`],
+      init: [`DROP TABLE IF EXISTS mstadj`, `CREATE TABLE mstadj LIKE mstran`, `DROP TABLE IF EXISTS adjcek`],
       insertPlu: `
         INSERT INTO mstadj(lokasi,rtype,bukti_no,bukti_tgl,supco,inv_date,prdcd,plu_nas,istype,bkp,sub_bkp,price,gross,qty,jam,keter,price_jual,gross_jual)
         SELECT 
@@ -50,7 +50,19 @@ export default {
         WHERE pm.prdcd = ?  -- prdcd from file
         AND pm.flagprod RLIKE 'bjd=y'
       `,
-      finalize: [`UPDATE const SET docno=docno+2 WHERE rkey='nkl'`, `INSERT INTO mstran SELECT * FROM mstadj`],
+      safetyCek: `create table adjcek 
+          select a.prdcd, a.qty, b.qty_ms, b.qty_mt, b.begbal, b.saldo, b.saldo + a.qty as sisa from mstadj a inner join (
+          select pr.prdcd, qty_ms, qty_mt, begbal, (begbal + qty_ms + qty_mt) as saldo from prodmast pr left join 
+            (select prdcd, sum(IF(RTYPE IN ('O','K'), QTY*-1, QTY)) as qty_ms from mstran where MONTH(bukti_tgl) = MONTH(CURRENT_DATE()) group by prdcd ) ms using(prdcd) left join
+            (select plu as prdcd, sum(if(rtype='J', qty*-1, qty)) as qty_mt from mtran where MONTH(tanggal) = MONTH(CURRENT_DATE()) group by prdcd) mt using(prdcd) left join
+            (select prdcd, saldo_akh as begbal from ? ) flt using(prdcd) where prdcd in (select prdcd from mstadj)
+          ) b using(prdcd)`,
+      finalize: [
+        `UPDATE const SET docno=docno+2 WHERE rkey='nkl'`,
+        `INSERT IGNORE INTO mstran SELECT * FROM mstadj a INNER JOIN adjcek b USING(prdcd) WHERE b.sisa >= 0;`,
+        `DROP TABLE IF EXISTS adjcek`,
+        `DROP TABLE IF EXISTS mstadj`,
+      ],
     },
   },
 
@@ -59,15 +71,6 @@ export default {
     maxRetries: 3,
     retryDelay: 2000, // milliseconds
   },
-
-  // Pagination defaults
-  pagination: {
-    defaultLimit: 10,
-    maxLimit: 100,
-  },
-
-  // Threshold for considering values as different (to handle floating point precision issues)
-  differenceThreshold: 100.01,
 
   // Parallel processing configuration
   parallelProcessing: {

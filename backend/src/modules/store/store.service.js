@@ -453,6 +453,25 @@ class StoreService {
       throw error;
     }
   }
+
+  /**
+   * Get stores by array of store codes
+   * @param {string[]} storeCodes - Array of store codes
+   * @param {boolean} onlyInduk - If true, only return stores with notes='INDUK'
+   * @returns {Array} Array of store data
+   */
+  async getStoresByCodes(storeCodes) {
+    try {
+      await this.ensureInitialized();
+
+      let filteredStores = this.stores.filter(store => storeCodes.includes(store.storeCode) && store.notes === "INDUK");
+
+      return filteredStores;
+    } catch (error) {
+      logger.error(`Failed to get stores by codes: ${error.message}`);
+      throw error;
+    }
+  }
 }
 
 // Export the class

@@ -166,7 +166,8 @@
           
           <div v-if="!selectedFile" class="upload-hint">
             <i class="pi pi-info-circle"></i>
-            <span>Pastikan file CSV sesuai dengan format template yang telah didownload</span>
+            <span v-if="!processResults">Pastikan file CSV sesuai dengan format template yang telah didownload</span>
+            <span v-else class="ready-for-next">✓ Siap untuk upload file adjustment berikutnya</span>
           </div>
         </div>
       </div>
@@ -176,7 +177,7 @@
         <div class="card-header">
           <h3 class="card-title">
             <i class="pi pi-list mr-2"></i>
-            Hasil Proses
+            Hasil Proses Adjustment
           </h3>
         </div>
         <div class="card-body">
@@ -216,37 +217,68 @@
                   </div>
                 </div>
               </div>
+              <div class="col-md-3">
+                <div class="info-box">
+                  <span class="info-box-icon bg-warning">
+                    <i class="pi pi-database"></i>
+                  </span>
+                  <div class="info-box-content">
+                    <span class="info-box-text">Total Records</span>
+                    <span class="info-box-number">{{ processResults?.historyRecords?.length || 0 }}</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <!-- Results Table -->
-          <div class="table-responsive">
-            <table class="table table-bordered table-hover">
-              <thead>
-                <tr>
-                  <th>Store</th>
-                  <th>Status</th>
-                  <th>Items Processed</th>
-                  <th>Message</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="result in processResults?.storeResults" :key="result.storeCode">
-                  <td>{{ result.storeCode }}</td>
-                  <td>
-                    <span class="badge" :class="result.success ? 'badge-success' : 'badge-danger'">
-                      {{ result.success ? "Success" : "Failed" }}
-                    </span>
-                  </td>
-                  <td>{{ result.processed }}</td>
-                  <td>
-                    <span :class="result.error ? 'text-danger' : 'text-success'">
-                      {{ result.error || "Processed successfully" }}
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <!-- History Records Table -->
+          <div class="history-section">
+            <h4 class="section-title">
+              <i class="pi pi-history"></i>
+              Detail History Adjustment
+            </h4>
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover history-table">
+                <thead>
+                  <tr>
+                    <th>Toko</th>
+                    <th>Produk</th>
+                    <th>Qty Adj</th>
+                    <th>Keterangan</th>
+                    <th>Status</th>
+                    <th>Note</th>
+                    <th>Waktu</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(record, index) in processResults?.historyRecords" :key="index">
+                    <td class="store-code">{{ record.kdtk }}</td>
+                    <td class="product-code">{{ record.prdcd }}</td>
+                    <td class="qty-adj" :class="{ 'positive': record.qty_adj > 0, 'negative': record.qty_adj < 0 }">
+                      {{ record.qty_adj > 0 ? '+' : '' }}{{ record.qty_adj }}
+                    </td>
+                    <td class="description">{{ record.keter || '-' }}</td>
+                    <td class="status">
+                      <span class="status-badge" :class="record.status.toLowerCase()">
+                        <i class="pi" :class="record.status === 'SUCCESS' ? 'pi-check' : 'pi-times'"></i>
+                        {{ record.status === 'SUCCESS' ? 'Berhasil' : 'Gagal' }}
+                      </span>
+                    </td>
+                    <td class="note" :class="record.status.toLowerCase()">
+                      {{ record.note }}
+                    </td>
+                    <td class="timestamp">
+                      {{ formatDateTime(record.updtime) }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            
+            <div v-if="!processResults?.historyRecords?.length" class="no-records">
+              <i class="pi pi-info-circle"></i>
+              <span>Tidak ada data history untuk ditampilkan</span>
+            </div>
           </div>
         </div>
       </div>
@@ -338,6 +370,9 @@ const handleUpload = async () => {
     const resultData = response.data.data.data;
     processResults.value = resultData;
 
+    // Reset upload form after successful processing
+    resetForm();
+
     toast.add({
       severity: resultData.failedStores.length > 0 ? "warn" : "success",
       summary: resultData.failedStores.length > 0 ? "Completed with Issues" : "Success",
@@ -360,8 +395,18 @@ const handleUpload = async () => {
 const resetForm = () => {
   selectedFile.value = null;
   selectedFileName.value = "";
+  isDragOver.value = false;
+  
+  // Clear the file input properly
+  if (fileInput.value) {
+    fileInput.value.value = "";
+  }
+  
+  // Also clear by ID as fallback
   const fileInputElement = document.getElementById("csvFile");
-  if (fileInputElement) fileInputElement.value = "";
+  if (fileInputElement) {
+    fileInputElement.value = "";
+  }
 };
 
 // Enhanced file handling methods
@@ -403,6 +448,19 @@ const getFileSize = (file) => {
   if (size < 1024) return size + ' B';
   if (size < 1024 * 1024) return Math.round(size / 1024) + ' KB';
   return Math.round(size / (1024 * 1024)) + ' MB';
+};
+
+const formatDateTime = (dateTime) => {
+  if (!dateTime) return '-';
+  const date = new Date(dateTime);
+  return date.toLocaleString('id-ID', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
 };
 
 // Template download handler

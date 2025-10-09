@@ -966,12 +966,43 @@
   color: #92400e;
   font-size: 0.875rem;
   line-height: 1.5;
+  transition: all 0.3s ease;
+}
+
+/* Ready state styling */
+.upload-hint:has(.ready-for-next) {
+  background: #f0fdf4;
+  color: #059669;
+  border-top-color: #bbf7d0;
 }
 
 .upload-hint i {
   color: #f59e0b;
   font-size: 1rem;
   flex-shrink: 0;
+}
+
+/* Ready for next upload state */
+.upload-hint .ready-for-next {
+  color: #059669;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.upload-hint .ready-for-next::before {
+  content: '✓';
+  background: #10b981;
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: bold;
 }
 
 /* Responsive Design for Upload Card */
@@ -1030,6 +1061,181 @@
   
   .drop-primary {
     font-size: 1rem;
+  }
+}
+
+/* History Table Styles */
+.history-section {
+  margin-top: 2rem;
+}
+
+.section-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.section-title i {
+  color: var(--primary-color, #0ea5e9);
+  font-size: 1.25rem;
+}
+
+.history-table {
+  font-size: 0.875rem;
+}
+
+.history-table th {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  color: #475569;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #cbd5e0;
+  padding: 0.875rem 0.75rem;
+}
+
+.history-table td {
+  padding: 0.75rem;
+  vertical-align: middle;
+  border-color: #e2e8f0;
+}
+
+.store-code {
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+  color: #1e293b;
+}
+
+.product-code {
+  font-family: 'Courier New', monospace;
+  color: #475569;
+}
+
+.qty-adj {
+  font-weight: 600;
+  text-align: center;
+  font-family: 'Courier New', monospace;
+}
+
+.qty-adj.positive {
+  color: #059669;
+}
+
+.qty-adj.negative {
+  color: #dc2626;
+}
+
+.description {
+  max-width: 200px;
+  word-wrap: break-word;
+  color: #64748b;
+}
+
+.status {
+  text-align: center;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-badge.success {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.status-badge.failed {
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.note {
+  max-width: 250px;
+  word-wrap: break-word;
+  font-size: 0.8rem;
+}
+
+.note.success {
+  color: #166534;
+}
+
+.note.failed {
+  color: #dc2626;
+}
+
+.timestamp {
+  font-family: 'Courier New', monospace;
+  font-size: 0.8rem;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.no-records {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2rem;
+  color: #64748b;
+  font-style: italic;
+}
+
+.no-records i {
+  color: #94a3b8;
+  font-size: 1.25rem;
+}
+
+/* Enhanced info-box for warning color */
+.bg-warning {
+  background-color: #f59e0b !important;
+}
+
+/* Responsive adjustments for history table */
+@media (max-width: 1200px) {
+  .history-table {
+    font-size: 0.8rem;
+  }
+  
+  .description,
+  .note {
+    max-width: 150px;
+  }
+}
+
+@media (max-width: 768px) {
+  .history-table {
+    font-size: 0.75rem;
+  }
+  
+  .history-table th,
+  .history-table td {
+    padding: 0.5rem 0.375rem;
+  }
+  
+  .description,
+  .note {
+    max-width: 100px;
+  }
+  
+  .timestamp {
+    font-size: 0.7rem;
   }
 }
 

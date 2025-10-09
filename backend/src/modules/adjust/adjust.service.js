@@ -192,6 +192,33 @@ class AdjustService {
       }
     }
   }
+
+  /**
+   * Generate CSV template for adjust upload
+   * @returns {string} CSV template content with headers and example data
+   */
+  generateCsvTemplate() {
+    try {
+      // Define CSV headers
+      const headers = ["KDTK", "PRDCD", "QTY_ADJ", "KETER"];
+
+      // Define example rows
+      const exampleRows = [
+        // ["001", "1234567890123", "10", "Adjustment for stock correction"],
+        // ["001", "9876543210987", "-5", "Adjustment for damaged goods"],
+        // ["002", "1111222233334", "15", "Adjustment for promotion stock"],
+      ];
+
+      // Combine headers and example rows
+      const csvContent = [headers, ...exampleRows].map(row => row.map(field => `"${field}"`).join(",")).join("\n");
+
+      // Add BOM for proper UTF-8 encoding in Excel
+      return "\uFEFF" + csvContent;
+    } catch (error) {
+      logger.error(`Error generating CSV template: ${error.message}`);
+      throw new Error("Failed to generate CSV template");
+    }
+  }
 }
 
 export default new AdjustService();

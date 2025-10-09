@@ -5,5 +5,6 @@ import { uploadCsv, handleMulterError } from "./adjust.middleware.js";
 const router = Router();
 
 router.post("/upload", uploadCsv, handleMulterError, adjustController.uploadAdjustCsv);
+router.get("/template", adjustController.downloadCsvTemplate);
 
 export default router;

@@ -1,95 +1,104 @@
 <template>
-  <div class="summary-card" v-if="summary">
-    <div class="summary-header">
-      <h3 class="summary-title">Ringkasan Rekonsiliasi</h3>
-      <div class="summary-info">
-        <div class="info-item" v-if="cabangName">
-          <span class="info-label">Cabang:</span>
-          <span class="info-value">{{ cabangName }}</span>
+  <div class="summary-card-modern" v-if="summary">
+    <div class="summary-header-modern">
+      <div class="summary-title-section">
+        <i class="pi pi-chart-line summary-icon-modern"></i>
+        <div class="summary-title-content">
+          <h3 class="summary-title-modern">Reconciliation Summary</h3>
+          <p class="summary-subtitle-modern">
+            {{ cabangName ? `${cabangName} - ` : '' }}{{ formatPeriode(periode) }}
+          </p>
         </div>
-        <div class="info-item">
-          <span class="info-label">Periode:</span>
-          <span class="info-value">{{ formatPeriode(periode) }}</span>
-        </div>
+      </div>
+      <div class="summary-badge-modern">
+        <span class="status-indicator" :class="getOverallStatusClass()">
+          <i class="pi" :class="getOverallStatusIcon()"></i>
+          {{ getOverallStatusText() }}
+        </span>
       </div>
     </div>
-    
-    <div class="summary-stats">
-      <!-- Jumlah Toko -->
-      <div class="stat-item">
-        <div class="stat-icon total-icon">
-          <i class="pi pi-shopping-bag"></i>
+
+    <!-- Compact Summary Grid -->
+    <div class="summary-grid-modern">
+      <!-- Total Stores -->
+      <div class="summary-item-modern stores">
+        <div class="summary-item-icon">
+          <i class="pi pi-building"></i>
         </div>
-        <div class="stat-content">
-          <span class="stat-label">Jumlah Toko</span>
-          <span class="stat-value">{{ summary.jml_toko || 0 }}</span>
+        <div class="summary-item-content">
+          <span class="summary-item-value">{{ summary.jml_toko || 0 }}</span>
+          <span class="summary-item-label">Stores</span>
         </div>
       </div>
       
-      <!-- Selisih Gross -->
-      <div class="stat-item">
-        <div class="stat-icon" :class="[summary.sel_gross !== 0 ? 'warning-icon' : 'success-icon']">
+      <!-- Gross Difference -->
+      <div class="summary-item-modern gross">
+        <div class="summary-item-icon">
           <i class="pi pi-dollar"></i>
         </div>
-        <div class="stat-content">
-          <span class="stat-label">Selisih Gross</span>
-          <span class="stat-value" :class="getAmountClass(summary.sel_gross)">
-            {{ formatCurrency(summary.sel_gross || 0) }}
+        <div class="summary-item-content">
+          <span class="summary-item-value" :class="getAmountClass(summary.sel_gross)">
+            {{ formatCurrencyCompact(summary.sel_gross || 0) }}
           </span>
-          <div class="stat-minmax">
-            <span class="stat-min">Min: {{ formatCurrency(summary.min_gross || 0) }}</span>
-            <span class="stat-max">Max: {{ formatCurrency(summary.max_gross || 0) }}</span>
+          <span class="summary-item-label">Gross Diff</span>
+          <div class="summary-item-range" v-if="summary.min_gross !== undefined && summary.max_gross !== undefined">
+            <span class="range-min">{{ formatCurrencyCompact(summary.min_gross) }}</span>
+            <span class="range-separator">~</span>
+            <span class="range-max">{{ formatCurrencyCompact(summary.max_gross) }}</span>
           </div>
         </div>
       </div>
       
-      <!-- Selisih PPN -->
-      <div class="stat-item">
-        <div class="stat-icon" :class="[summary.sel_ppn !== 0 ? 'warning-icon' : 'success-icon']">
+      <!-- PPN Difference -->
+      <div class="summary-item-modern ppn">
+        <div class="summary-item-icon">
           <i class="pi pi-percentage"></i>
         </div>
-        <div class="stat-content">
-          <span class="stat-label">Selisih PPN</span>
-          <span class="stat-value" :class="getAmountClass(summary.sel_ppn)">
-            {{ formatCurrency(summary.sel_ppn || 0) }}
+        <div class="summary-item-content">
+          <span class="summary-item-value" :class="getAmountClass(summary.sel_ppn)">
+            {{ formatCurrencyCompact(summary.sel_ppn || 0) }}
           </span>
-          <div class="stat-minmax">
-            <span class="stat-min">Min: {{ formatCurrency(summary.min_ppn || 0) }}</span>
-            <span class="stat-max">Max: {{ formatCurrency(summary.max_ppn || 0) }}</span>
+          <span class="summary-item-label">PPN Diff</span>
+          <div class="summary-item-range" v-if="summary.min_ppn !== undefined && summary.max_ppn !== undefined">
+            <span class="range-min">{{ formatCurrencyCompact(summary.min_ppn) }}</span>
+            <span class="range-separator">~</span>
+            <span class="range-max">{{ formatCurrencyCompact(summary.max_ppn) }}</span>
           </div>
         </div>
       </div>
       
-      <!-- Selisih Gross IDM -->
-      <div class="stat-item">
-        <div class="stat-icon" :class="[summary.sel_gross_idm !== 0 ? 'warning-icon' : 'success-icon']">
-          <i class="pi pi-dollar"></i>
+      <!-- IDM Gross Difference -->
+      <div class="summary-item-modern idm-gross">
+        <div class="summary-item-icon">
+          <i class="pi pi-credit-card"></i>
         </div>
-        <div class="stat-content">
-          <span class="stat-label">Selisih Gross IDM</span>
-          <span class="stat-value" :class="getAmountClass(summary.sel_gross_idm)">
-            {{ formatCurrency(summary.sel_gross_idm || 0) }}
+        <div class="summary-item-content">
+          <span class="summary-item-value" :class="getAmountClass(summary.sel_gross_idm)">
+            {{ formatCurrencyCompact(summary.sel_gross_idm || 0) }}
           </span>
-          <div class="stat-minmax">
-            <span class="stat-min">Min: {{ formatCurrency(summary.min_gross_idm || 0) }}</span>
-            <span class="stat-max">Max: {{ formatCurrency(summary.max_gross_idm || 0) }}</span>
+          <span class="summary-item-label">IDM Gross</span>
+          <div class="summary-item-range" v-if="summary.min_gross_idm !== undefined && summary.max_gross_idm !== undefined">
+            <span class="range-min">{{ formatCurrencyCompact(summary.min_gross_idm) }}</span>
+            <span class="range-separator">~</span>
+            <span class="range-max">{{ formatCurrencyCompact(summary.max_gross_idm) }}</span>
           </div>
         </div>
       </div>
       
-      <!-- Selisih PPN IDM -->
-      <div class="stat-item">
-        <div class="stat-icon" :class="[summary.sel_ppn_idm !== 0 ? 'warning-icon' : 'success-icon']">
-          <i class="pi pi-percentage"></i>
+      <!-- IDM PPN Difference -->
+      <div class="summary-item-modern idm-ppn">
+        <div class="summary-item-icon">
+          <i class="pi pi-calculator"></i>
         </div>
-        <div class="stat-content">
-          <span class="stat-label">Selisih PPN IDM</span>
-          <span class="stat-value" :class="getAmountClass(summary.sel_ppn_idm)">
-            {{ formatCurrency(summary.sel_ppn_idm || 0) }}
+        <div class="summary-item-content">
+          <span class="summary-item-value" :class="getAmountClass(summary.sel_ppn_idm)">
+            {{ formatCurrencyCompact(summary.sel_ppn_idm || 0) }}
           </span>
-          <div class="stat-minmax">
-            <span class="stat-min">Min: {{ formatCurrency(summary.min_ppn_idm || 0) }}</span>
-            <span class="stat-max">Max: {{ formatCurrency(summary.max_ppn_idm || 0) }}</span>
+          <span class="summary-item-label">IDM PPN</span>
+          <div class="summary-item-range" v-if="summary.min_ppn_idm !== undefined && summary.max_ppn_idm !== undefined">
+            <span class="range-min">{{ formatCurrencyCompact(summary.min_ppn_idm) }}</span>
+            <span class="range-separator">~</span>
+            <span class="range-max">{{ formatCurrencyCompact(summary.max_ppn_idm) }}</span>
           </div>
         </div>
       </div>
@@ -134,6 +143,20 @@ const formatCurrency = (value) => {
   }).format(value || 0);
 };
 
+const formatCurrencyCompact = (value) => {
+  const absValue = Math.abs(value || 0);
+  
+  if (absValue >= 1000000000) {
+    return (value / 1000000000).toFixed(1) + 'B';
+  } else if (absValue >= 1000000) {
+    return (value / 1000000).toFixed(1) + 'M';
+  } else if (absValue >= 1000) {
+    return (value / 1000).toFixed(1) + 'K';
+  }
+  
+  return new Intl.NumberFormat('id-ID').format(value || 0);
+};
+
 const formatPeriode = (periode) => {
   if (!periode || periode.length !== 4) return periode;
   
@@ -141,8 +164,8 @@ const formatPeriode = (periode) => {
   const month = parseInt(periode.substring(2, 4));
   
   const monthNames = [
-    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
   ];
   
   return `${monthNames[month - 1]} ${year}`;
@@ -152,235 +175,321 @@ const getAmountClass = (amount) => {
   if (!amount) return '';
   return amount < 0 ? 'negative-amount' : amount > 0 ? 'positive-amount' : '';
 };
+
+const getOverallStatusClass = () => {
+  const hasIssues = (props.summary.sel_gross !== 0) || 
+                   (props.summary.sel_ppn !== 0) || 
+                   (props.summary.sel_gross_idm !== 0) || 
+                   (props.summary.sel_ppn_idm !== 0);
+  
+  return hasIssues ? 'status-warning' : 'status-success';
+};
+
+const getOverallStatusIcon = () => {
+  const hasIssues = (props.summary.sel_gross !== 0) || 
+                   (props.summary.sel_ppn !== 0) || 
+                   (props.summary.sel_gross_idm !== 0) || 
+                   (props.summary.sel_ppn_idm !== 0);
+  
+  return hasIssues ? 'pi-exclamation-triangle' : 'pi-check-circle';
+};
+
+const getOverallStatusText = () => {
+  const hasIssues = (props.summary.sel_gross !== 0) || 
+                   (props.summary.sel_ppn !== 0) || 
+                   (props.summary.sel_gross_idm !== 0) || 
+                   (props.summary.sel_ppn_idm !== 0);
+  
+  return hasIssues ? 'Has Differences' : 'All Clear';
+};
 </script>
 
 <style scoped>
-.summary-card {
-  background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
-  margin-bottom: 1.5rem;
+/* Modern Minimalist Summary Card */
+.summary-card-modern {
+  background: linear-gradient(135deg, #fefffe 0%, #f8fafc 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
   overflow: hidden;
-  transition: box-shadow 0.3s ease;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  margin-bottom: 1.5rem;
+  transition: all 0.3s ease;
 }
 
-.summary-card:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+.summary-card-modern:hover {
+  box-shadow: 0 8px 12px -1px rgba(0, 0, 0, 0.1), 0 4px 8px -1px rgba(0, 0, 0, 0.06);
 }
 
-.summary-header {
+/* Header Section */
+.summary-header-modern {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: center;
-  padding: 1rem 1.5rem;
-  background-color: #f8f9fa;
-  border-bottom: 1px solid #eee;
+  padding: 1.25rem 1.5rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #e2e8f0;
 }
 
-.summary-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #333;
-  margin: 0;
-  position: relative;
-  padding-left: 1.5rem;
-  transition: color 0.3s ease;
-}
-
-.summary-title::before {
-  content: '\f0ae'; /* pi-chart-bar icon */
-  font-family: 'primeicons';
-  font-size: 1.125rem;
-  color: var(--primary-color);
-  opacity: 0.8;
-  position: absolute;
-  left: 0;
-}
-
-.summary-card:hover .summary-title {
-  color: var(--primary-color);
-}
-
-.summary-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.info-item {
+.summary-title-section {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-}
-
-.info-label {
-  color: #666;
-}
-
-.info-value {
-  font-weight: 600;
-  color: #333;
-  background-color: #f5f5f5;
-  padding: 0.375rem 0.75rem;
-  border-radius: 4px;
-  border: 1px solid #eee;
-  transition: background-color 0.3s ease, color 0.3s ease;
-}
-
-.summary-card:hover .info-value {
-  background-color: #f0f7ff;
-  color: var(--primary-color);
-}
-
-.summary-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1.5rem;
-  padding: 1.5rem;
-}
-
-.stat-item {
-  display: flex;
-  align-items: flex-start;
   gap: 1rem;
-  padding: 1rem;
-  border-radius: 8px;
-  background-color: white;
-  transition: box-shadow 0.3s ease, border-left 0.3s ease;
-  border-left: 3px solid transparent;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-.stat-item:hover {
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-  border-left: 3px solid var(--primary-color);
-}
-
-.stat-icon {
+.summary-icon-modern {
+  width: 48px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background-color: #e3f2fd;
-  color: #2196f3;
-  box-shadow: 0 1px 3px rgba(33, 150, 243, 0.15);
-  transition: box-shadow 0.3s ease;
+  background: linear-gradient(135deg, var(--primary-color, #0ea5e9), #38bdf8);
+  color: white;
+  border-radius: 12px;
+  font-size: 1.5rem;
+  box-shadow: 0 4px 8px rgba(14, 165, 233, 0.25);
 }
 
-.stat-item:hover .stat-icon {
-  box-shadow: 0 2px 6px rgba(33, 150, 243, 0.2);
+.summary-title-content h3 {
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 0.25rem 0;
+  line-height: 1.2;
 }
 
-.total-icon {
-  background-color: #e8f5e9;
-  color: #4caf50;
-  box-shadow: 0 1px 3px rgba(76, 175, 80, 0.15);
+.summary-title-content p {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.4;
 }
 
-.stat-item:hover .total-icon {
-  box-shadow: 0 2px 6px rgba(76, 175, 80, 0.2);
-}
-
-.warning-icon {
-  background-color: #fff3e0;
-  color: #ff9800;
-  box-shadow: 0 1px 3px rgba(255, 152, 0, 0.15);
-}
-
-.stat-item:hover .warning-icon {
-  box-shadow: 0 2px 6px rgba(255, 152, 0, 0.2);
-}
-
-.success-icon {
-  background-color: #e8f5e9;
-  color: #4caf50;
-  box-shadow: 0 1px 3px rgba(76, 175, 80, 0.15);
-}
-
-.stat-item:hover .success-icon {
-  box-shadow: 0 2px 6px rgba(76, 175, 80, 0.2);
-}
-
-.stat-content {
+.summary-badge-modern {
   display: flex;
-  flex-direction: column;
-  flex: 1;
+  align-items: center;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.status-indicator.status-success {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.status-indicator.status-warning {
+  background: #fef3c7;
+  color: #d97706;
+  border: 1px solid #fde68a;
+}
+
+/* Compact Summary Grid */
+.summary-grid-modern {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  padding: 1.5rem;
+  background: white;
+}
+
+.summary-item-modern {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: #fafbfc;
+  border: 1px solid #f1f5f9;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+  position: relative;
   overflow: hidden;
 }
 
-.stat-label {
-  font-size: 0.875rem;
-  color: #666;
-  margin-bottom: 0.25rem;
+.summary-item-modern::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  transition: all 0.2s ease;
 }
 
-.stat-value {
+.summary-item-modern.stores::before {
+  background: linear-gradient(90deg, #0ea5e9, #38bdf8);
+}
+
+.summary-item-modern.gross::before {
+  background: linear-gradient(90deg, #10b981, #34d399);
+}
+
+.summary-item-modern.ppn::before {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.summary-item-modern.idm-gross::before {
+  background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+}
+
+.summary-item-modern.idm-ppn::before {
+  background: linear-gradient(90deg, #ef4444, #f87171);
+}
+
+.summary-item-modern:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-color: #e2e8f0;
+}
+
+.summary-item-icon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
   font-size: 1.25rem;
-  font-weight: 600;
-  line-height: 1.2;
-  transition: color 0.3s ease;
+  flex-shrink: 0;
+}
+
+.summary-item-modern.stores .summary-item-icon {
+  background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+  color: #1e40af;
+}
+
+.summary-item-modern.gross .summary-item-icon {
+  background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+  color: #166534;
+}
+
+.summary-item-modern.ppn .summary-item-icon {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  color: #d97706;
+}
+
+.summary-item-modern.idm-gross .summary-item-icon {
+  background: linear-gradient(135deg, #ede9fe, #ddd6fe);
+  color: #7c3aed;
+}
+
+.summary-item-modern.idm-ppn .summary-item-icon {
+  background: linear-gradient(135deg, #fee2e2, #fecaca);
+  color: #dc2626;
+}
+
+.summary-item-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.summary-item-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1;
+  margin-bottom: 0.25rem;
   word-break: break-word;
 }
 
-.stat-minmax {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.75rem;
-  color: #666;
-  margin-top: 0.25rem;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+.summary-item-label {
+  font-size: 0.8rem;
+  color: #64748b;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  margin-bottom: 0.5rem;
 }
 
-.stat-min, .stat-max {
-  display: inline-block;
+.summary-item-range {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.range-min, .range-max {
   padding: 0.125rem 0.375rem;
   border-radius: 4px;
-  background-color: #f5f5f5;
-  font-weight: 500;
+  background: #f1f5f9;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
 }
 
-.stat-min {
-  color: #2ecc71;
+.range-min {
+  color: #059669;
 }
 
-.stat-max {
-  color: #e74c3c;
+.range-max {
+  color: #dc2626;
 }
 
-.stat-item:hover .stat-value {
-  color: var(--primary-color);
+.range-separator {
+  color: #94a3b8;
+  font-weight: 400;
 }
 
 .positive-amount {
-  color: #2ecc71;
+  color: #059669;
 }
 
 .negative-amount {
-  color: #e74c3c;
+  color: #dc2626;
 }
 
-/* Responsive adjustments */
+/* Responsive Design */
 @media (max-width: 768px) {
-  .summary-header {
+  .summary-header-modern {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 0.75rem;
+    align-items: stretch;
+    gap: 1rem;
+    text-align: center;
   }
   
-  .summary-stats {
+  .summary-grid-modern {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+    padding: 1rem;
+  }
+  
+  .summary-item-modern {
+    padding: 0.875rem;
+  }
+  
+  .summary-item-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 1.125rem;
+  }
+  
+  .summary-item-value {
+    font-size: 1.25rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .summary-grid-modern {
     grid-template-columns: 1fr;
   }
   
-  .stat-value {
-    font-size: 1.125rem;
+  .summary-header-modern {
+    padding: 1rem;
+  }
+  
+  .summary-title-content h3 {
+    font-size: 1.25rem;
   }
 }
 </style>

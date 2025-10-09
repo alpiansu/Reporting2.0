@@ -165,7 +165,7 @@ const handleSortChange = (data) => {
 };
 
 // Handle shop updated event - update specific shop data reactively
-const handleShopUpdated = (data) => {
+const handleShopUpdated = async (data) => {
   const { cab, shop, updatedData } = data;
   
   // Find the shop in current results and update it
@@ -185,10 +185,21 @@ const handleShopUpdated = (data) => {
   } else {
     // Shop not found in current results, may need to refresh
   }
+  
+  // Refresh summary after shop update to reflect changes in totals
+  try {
+    const summaryResponse = await rekonWtHarianService.getSummary(
+      props.cab, 
+      props.periode
+    );
+    summary.value = summaryResponse.data.data;
+  } catch (error) {
+    console.error('Error refreshing summary after shop update:', error);
+  }
 };
 
 // Handle shop removed event - remove shop data when refresh results are clean
-const handleShopRemoved = (data) => {
+const handleShopRemoved = async (data) => {
   const { cab, shop } = data;
   
   // Find the shop in current results and remove it
@@ -207,6 +218,17 @@ const handleShopRemoved = (data) => {
     // Shop removed from results - data is now clean
   } else {
     // Shop not found in current results for removal
+  }
+  
+  // Refresh summary after shop removal to reflect changes in totals
+  try {
+    const summaryResponse = await rekonWtHarianService.getSummary(
+      props.cab, 
+      props.periode
+    );
+    summary.value = summaryResponse.data.data;
+  } catch (error) {
+    console.error('Error refreshing summary after shop removal:', error);
   }
 };
 

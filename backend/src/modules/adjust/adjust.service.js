@@ -137,42 +137,38 @@ class AdjustService {
         }
       })();
 
+      // Extract YY and MM
+      const lastMonth = moment().tz("Asia/Jakarta").subtract(1, "months");
+      const yy = lastMonth.format("YY");
+      const mm = lastMonth.format("MM");
+
+      // Combine store code with YYMM
+      const FILET = store.storeCode + yy + mm;
       // Process each record
       await Promise.all(
         records.map(async record => {
-          // Extract YY and MM
-          const lastMonth = moment().tz("Asia/Jakarta").subtract(1, "months");
-          const yy = lastMonth.format("YY");
-          const mm = lastMonth.format("MM");
-
-          // Combine store code with YYMM
-          record.FILET = record.KDTK + yy + mm;
-          console.log(currentPeriod);
-          console.log(record.FILET);
-
           // Prepare parameters for insert query
           const params = [
             record.PRDCD, // prdcd
             record.PRDCD, // plu_nas
             record.QTY_ADJ, // qty for gross
             record.QTY_ADJ, // qty
+            record.KETER, // Keterangan
             record.QTY_ADJ, // qty for gross_jual
             record.PRDCD, // prdcd for WHERE clause
-            currentPeriod,
-            currentPeriod,
-            record.FILET,
           ];
+
+          // const formatted = storeConnection.format(config.queries.store.insertPlu, params);
+          // logger.info(`Executing insert for store ${store.storeCode}: ${formatted}`);
 
           await storeConnection.query(config.queries.store.insertPlu, params);
           result.processed++;
         })
       );
 
-      await Promise.all(
-        records.map(async record => {
-          await storeConnection.query(config.queries.store.safetyCek, [record.FILET]);
-        })
-      );
+      // const formattedCek = storeConnection.format(config.queries.store.safetyCek, [FILET]);
+      // logger.info(`Executing safety check for store ${store.storeCode}: ${formattedCek}`);
+      await storeConnection.query(config.queries.store.safetyCek, [FILET]);
 
       // Execute finalize queries
       await (async () => {

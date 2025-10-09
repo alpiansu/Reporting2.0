@@ -1,9 +1,11 @@
-import app from './app.js';
-import http from 'http';
-import config from './config/index.js';
+import app from "./app.js";
+import expressApp from "./app.js";
+import http from "http";
+import config from "./config/index.js";
 const { resilientDb } = config;
-import logger from './config/logger.js';
-import User from './models/user.model.js';
+import logger from "./config/logger.js";
+import User from "./models/user.model.js";
+import { initializeModels } from "./models/index.js";
 // Modules are now initialized in app.js
 
 // Set port
@@ -17,7 +19,7 @@ async function createDummyUser() {
     password: "admin123", // jangan di-hash manual
     email: "admin@example.com",
     fullName: "Administrator",
-    role: "admin"
+    role: "admin",
   };
 
   // Check if user already exists and is active
@@ -46,32 +48,41 @@ async function startServer() {
       if (sequelize) {
         logger.info("Database connection established successfully");
 
-        // Sync database models (in development only)
+        // Initialize all registered models (replaces manual sync)
         if (config.nodeEnv === "development") {
-          // Cek dan buat tabel jika belum ada, alter hanya jika field belum ada atau tidak sesuai
-          await sequelize.sync({ alter: false }); // Hanya create table jika belum ada
-          // Untuk alter, lakukan manual jika ada perubahan model
-          // Contoh: await sequelize.getQueryInterface().addColumn('users', 'fieldBaru', { type: Sequelize.STRING });
-          logger.info("Database models checked/created (no global alter)");
+          logger.info("Initializing database models...");
+          const initResult = await initializeModels();
+
+          if (initResult.success.length > 0) {
+            logger.info(`Successfully initialized models: ${initResult.success.join(", ")}`);
+          }
+
+          if (initResult.failed.length > 0) {
+            logger.warn(`Failed to initialize models: ${initResult.failed.map(f => f.name).join(", ")}`);
+          }
+
+          // Also run sequelize sync for any models not in registry
+          await sequelize.sync({ alter: false });
+          logger.info("Database models initialization completed");
         }
 
         // Create dummy user
         await createDummyUser();
       } else {
-        logger.warn('Database connection not available');
-        logger.info('Server will start in offline mode with limited functionality');
+        logger.warn("Database connection not available");
+        logger.info("Server will start in offline mode with limited functionality");
       }
     } catch (dbError) {
       logger.warn(`Database connection failed: ${dbError.message}`);
-      logger.info('Server will start in offline mode with limited functionality');
+      logger.info("Server will start in offline mode with limited functionality");
     }
 
     // Store service and scheduler are now initialized in app.js through modules
     logger.info("Services initialized through module system");
 
     // Create HTTP server
-    const server = http.createServer(app);
-    
+    const server = http.createServer(expressApp);
+
     // Start listening for requests
     server.listen(PORT, () => {
       logger.info(`Server running in ${config.nodeEnv} mode on port ${PORT}`);

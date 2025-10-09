@@ -1,13 +1,13 @@
-import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import routes from './routes/index.js';
-import modules from './modules/index.js';
-import { requestLogger, errorHandler, notFound, databaseErrorHandler, addDatabaseStatus } from './middlewares/index.js';
-import config from './config/index.js';
-import resilientDb from './config/resilient-database.js';
+import express from "express";
+import cors from "cors";
+import helmet from "helmet";
+import path from "path";
+import { fileURLToPath } from "url";
+import routes from "./routes/index.js";
+import modules from "./modules/index.js";
+import { requestLogger, errorHandler, notFound, databaseErrorHandler, addDatabaseStatus } from "./middlewares/index.js";
+import config from "./config/index.js";
+import resilientDb from "./config/resilient-database.js";
 
 // Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);

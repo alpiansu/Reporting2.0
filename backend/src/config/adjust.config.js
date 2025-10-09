@@ -43,23 +43,22 @@ export default {
           pm.acost*(?*-1),  -- qty from file
           ?*-1,             -- qty from file
           CURTIME(),
-          'ADJUST ITEM BJD',
+          ?,              -- Keterangan from file
           pm.price,
           pm.price*(?*-1)   -- qty from file
         FROM prodmast pm
         WHERE pm.prdcd = ?  -- prdcd from file
-        AND pm.flagprod RLIKE 'bjd=y'
       `,
       safetyCek: `create table adjcek 
           select a.prdcd, a.qty, b.qty_ms, b.qty_mt, b.begbal, b.saldo, b.saldo + a.qty as sisa from mstadj a inner join (
           select pr.prdcd, qty_ms, qty_mt, begbal, (begbal + qty_ms + qty_mt) as saldo from prodmast pr left join 
             (select prdcd, sum(IF(RTYPE IN ('O','K'), QTY*-1, QTY)) as qty_ms from mstran where MONTH(bukti_tgl) = MONTH(CURRENT_DATE()) group by prdcd ) ms using(prdcd) left join
             (select plu as prdcd, sum(if(rtype='J', qty*-1, qty)) as qty_mt from mtran where MONTH(tanggal) = MONTH(CURRENT_DATE()) group by prdcd) mt using(prdcd) left join
-            (select prdcd, saldo_akh as begbal from ? ) flt using(prdcd) where prdcd in (select prdcd from mstadj)
+            (select prdcd, saldo_akh as begbal from ?? ) flt using(prdcd) where prdcd in (select prdcd from mstadj)
           ) b using(prdcd)`,
       finalize: [
         `UPDATE const SET docno=docno+2 WHERE rkey='nkl'`,
-        `INSERT IGNORE INTO mstran SELECT * FROM mstadj a INNER JOIN adjcek b USING(prdcd) WHERE b.sisa >= 0;`,
+        `INSERT IGNORE INTO mstran SELECT * FROM mstadj where prdcd in (SELECT prdcd from adjcek a inner join mstadj b using(prdcd) WHERE a.sisa >= 0 )`,
         `DROP TABLE IF EXISTS adjcek`,
         `DROP TABLE IF EXISTS mstadj`,
       ],

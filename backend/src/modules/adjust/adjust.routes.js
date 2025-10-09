@@ -1,10 +1,14 @@
 import { Router } from "express";
 import * as adjustController from "./adjust.controller.js";
 import { uploadCsv, handleMulterError } from "./adjust.middleware.js";
+import { authenticateJWT } from "../../middlewares/index.js";
 
 const router = Router();
 
-router.post("/upload", uploadCsv, handleMulterError, adjustController.uploadAdjustCsv);
-router.get("/template", adjustController.downloadCsvTemplate);
+// Protected routes - require authentication
+router.post("/upload", authenticateJWT, uploadCsv, handleMulterError, adjustController.uploadAdjustCsv);
+router.get("/template", authenticateJWT, adjustController.downloadCsvTemplate);
+router.get("/history", authenticateJWT, adjustController.getAdjustHistory);
+router.get("/statistics", authenticateJWT, adjustController.getAdjustStatistics);
 
 export default router;

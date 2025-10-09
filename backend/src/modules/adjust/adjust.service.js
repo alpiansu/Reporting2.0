@@ -1,19 +1,28 @@
 import csvParser from "csv-parser";
 import { Readable } from "stream";
+import fs from "fs/promises";
+import path from "path";
 import logger from "../../config/logger.js";
 import config from "../../config/adjust.config.js";
 import storeService from "../store/storeService.js";
 import dbStore from "../../config/db_store.js";
 import moment from "moment-timezone";
+import histAdjustStagingService from "./hist_adjust_staging.service.js";
 
 class AdjustService {
   /**
-   * Process CSV file for item adjustment
+   * Process CSV file for item adjustment with history logging
    * @param {Buffer} fileBuffer - CSV file buffer
-   * @returns {Promise<Object>} Processing results
+   * @param {string} username - Username of the user performing adjustment
+   * @returns {Promise<Object>} Processing results with history
    */
-  async processCsvAdjust(fileBuffer) {
+  async processCsvAdjust(fileBuffer, username) {
+    const tempFilePath = path.join(process.cwd(), "temp", `adjust_history_${Date.now()}.json`);
+
     try {
+      // Ensure temp directory exists
+      await fs.mkdir(path.dirname(tempFilePath), { recursive: true });
+
       // Parse CSV to array of objects
       const records = await this.parseCsvBuffer(fileBuffer);
       logger.info(`Parsed ${records.length} records from CSV`);
@@ -26,6 +35,9 @@ class AdjustService {
       const selectedStores = await storeService.getStoresByCodes(storeCodes);
       logger.info(`Found ${selectedStores.length} valid INDUK stores`);
 
+      // Initialize temporary history array
+      const tempHistoryRecords = [];
+
       // Initialize results
       const results = {
         totalStores: selectedStores.length,
@@ -33,6 +45,7 @@ class AdjustService {
         successStores: 0,
         failedStores: [],
         storeResults: [],
+        historyRecords: [], // Will contain the actual history data
       };
 
       // Process each store
@@ -43,8 +56,8 @@ class AdjustService {
           // Get records for this store
           const storeRecords = records.filter(record => record.KDTK === store.storeCode);
 
-          // Process store
-          const storeResult = await this.processStore(store, storeRecords);
+          // Process store and get detailed results
+          const storeResult = await this.processStoreWithHistory(store, storeRecords, username);
           results.processedStores++;
 
           if (storeResult.success) {
@@ -61,9 +74,29 @@ class AdjustService {
             processed: storeResult.processed,
             success: storeResult.success,
             error: storeResult.error,
+            executedAt: storeResult.executedAt,
           });
+
+          // Add history records to temporary storage
+          tempHistoryRecords.push(...storeResult.historyRecords);
         } catch (error) {
           logger.error(`Error processing store ${store.storeCode}: ${error.message}`);
+
+          // Create failed history records for this store
+          const storeRecords = records.filter(record => record.KDTK === store.storeCode);
+          const failedHistoryRecords = storeRecords.map(record => ({
+            kdtk: record.KDTK,
+            prdcd: record.PRDCD,
+            qty_adj: parseInt(record.QTY_ADJ) || 0,
+            keter: record.KETER || "",
+            note: error.message,
+            pic: username,
+            updtime: new Date(),
+            status: "FAILED",
+          }));
+
+          tempHistoryRecords.push(...failedHistoryRecords);
+
           results.failedStores.push({
             storeCode: store.storeCode,
             error: error.message,
@@ -71,9 +104,42 @@ class AdjustService {
         }
       }
 
+      // Write temporary history to file
+      await fs.writeFile(tempFilePath, JSON.stringify(tempHistoryRecords, null, 2));
+      logger.info(`Wrote ${tempHistoryRecords.length} history records to temporary file`);
+
+      // Bulk insert history records to database
+      try {
+        const bulkResult = await histAdjustStagingService.bulkInsert(tempHistoryRecords);
+        logger.info(`Successfully bulk inserted ${bulkResult.insertedCount} history records`);
+
+        // Add history records to results for frontend response
+        results.historyRecords = bulkResult.records || tempHistoryRecords;
+      } catch (historyError) {
+        logger.error(`Failed to save history records: ${historyError.message}`);
+        // Don't fail the main process if history saving fails
+        results.historyRecords = tempHistoryRecords;
+      }
+
+      // Clean up temporary file
+      try {
+        await fs.unlink(tempFilePath);
+        logger.info("Cleaned up temporary history file");
+      } catch (cleanupError) {
+        logger.warn(`Failed to cleanup temporary file: ${cleanupError.message}`);
+      }
+
       return results;
     } catch (error) {
       logger.error(`Failed to process CSV adjust: ${error.message}`);
+
+      // Clean up temporary file in case of error
+      try {
+        await fs.unlink(tempFilePath);
+      } catch (cleanupError) {
+        // Ignore cleanup errors
+      }
+
       throw error;
     }
   }
@@ -106,13 +172,17 @@ class AdjustService {
   }
 
   /**
-   * Process single store
+   * Process single store with detailed history logging
    * @param {Object} store - Store object
    * @param {Array} records - CSV records for this store
-   * @returns {Promise<Object>} Processing result
+   * @param {string} username - Username performing the adjustment
+   * @returns {Promise<Object>} Processing result with history records
    */
-  async processStore(store, records) {
+  async processStoreWithHistory(store, records, username) {
     let storeConnection;
+    const executedAt = new Date();
+    const historyRecords = [];
+
     try {
       // Get store info first
       const storeInfo = await storeService.getStoreIPHost(store.storeCode);
@@ -128,6 +198,8 @@ class AdjustService {
         processed: 0,
         success: false,
         error: null,
+        executedAt,
+        historyRecords: [],
       };
 
       // Execute init queries
@@ -144,9 +216,10 @@ class AdjustService {
 
       // Combine store code with YYMM
       const FILET = store.storeCode + yy + mm;
-      // Process each record
-      await Promise.all(
-        records.map(async record => {
+
+      // Process each record individually to track success/failure per product
+      for (const record of records) {
+        try {
           // Prepare parameters for insert query
           const params = [
             record.PRDCD, // prdcd
@@ -158,16 +231,38 @@ class AdjustService {
             record.PRDCD, // prdcd for WHERE clause
           ];
 
-          // const formatted = storeConnection.format(config.queries.store.insertPlu, params);
-          // logger.info(`Executing insert for store ${store.storeCode}: ${formatted}`);
-
           await storeConnection.query(config.queries.store.insertPlu, params);
           result.processed++;
-        })
-      );
 
-      // const formattedCek = storeConnection.format(config.queries.store.safetyCek, [FILET]);
-      // logger.info(`Executing safety check for store ${store.storeCode}: ${formattedCek}`);
+          // Create success history record
+          historyRecords.push({
+            kdtk: record.KDTK,
+            prdcd: record.PRDCD,
+            qty_adj: parseInt(record.QTY_ADJ) || 0,
+            keter: record.KETER || "",
+            note: "Successfully processed adjustment",
+            pic: username,
+            updtime: executedAt,
+            status: "SUCCESS",
+          });
+        } catch (recordError) {
+          logger.error(`Error processing record ${record.PRDCD} for store ${store.storeCode}: ${recordError.message}`);
+
+          // Create failed history record for this specific product
+          historyRecords.push({
+            kdtk: record.KDTK,
+            prdcd: record.PRDCD,
+            qty_adj: parseInt(record.QTY_ADJ) || 0,
+            keter: record.KETER || "",
+            note: `Failed to process: ${recordError.message}`,
+            pic: username,
+            updtime: executedAt,
+            status: "FAILED",
+          });
+        }
+      }
+
+      // Execute safety check
       await storeConnection.query(config.queries.store.safetyCek, [FILET]);
 
       // Execute finalize queries
@@ -178,13 +273,29 @@ class AdjustService {
       })();
 
       result.success = true;
+      result.historyRecords = historyRecords;
       return result;
     } catch (error) {
       logger.error(`Error processing store ${store.storeCode}: ${error.message}`);
+
+      // If store processing failed completely, mark all records as failed
+      const failedRecords = records.map(record => ({
+        kdtk: record.KDTK,
+        prdcd: record.PRDCD,
+        qty_adj: parseInt(record.QTY_ADJ) || 0,
+        keter: record.KETER || "",
+        note: `Store processing failed: ${error.message}`,
+        pic: username,
+        updtime: executedAt,
+        status: "FAILED",
+      }));
+
       return {
         processed: 0,
         success: false,
         error: error.message,
+        executedAt,
+        historyRecords: failedRecords,
       };
     } finally {
       if (storeConnection) {

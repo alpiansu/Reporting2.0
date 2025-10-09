@@ -1,8 +1,8 @@
-import { DataTypes } from 'sequelize';
-import config from '../config/index.js';
+import { DataTypes } from "sequelize";
+import config from "../config/index.js";
 const { resilientDb } = config;
-import { BaseService } from '../services/base.service.js';
-import salesPerDeptStagingService from '../modules/sales_per_dept/sales_per_dept_staging.service.js';
+import { BaseService } from "../services/base.service.js";
+import salesPerDeptStagingService from "../modules/sales_per_dept/sales_per_dept_staging.service.js";
 
 // Lazy model definition
 let SalesPerDept = null;
@@ -11,82 +11,82 @@ const getSalesPerDeptModel = async () => {
   if (!SalesPerDept) {
     const sequelize = await resilientDb.getDatabase();
     if (!sequelize) {
-      throw new Error('Database connection not available');
+      throw new Error("Database connection not available");
     }
     SalesPerDept = sequelize.define(
-  "SalesPerDept",
-  {
-    cab: {
-      type: DataTypes.CHAR(4),
-      allowNull: false,
-      primaryKey: true,
-    },
-    periode: {
-      type: DataTypes.CHAR(4),
-      allowNull: false,
-      primaryKey: true,
-    },
-    tipestore: {
-      type: DataTypes.CHAR(3),
-      allowNull: false,
-      primaryKey: true,
-    },
-    dep_kd: {
-      type: DataTypes.STRING(10),
-      allowNull: false,
-      primaryKey: true,
-    },
-    dep_name: {
-      type: DataTypes.STRING(255),
-      allowNull: false,
-    },
-    qty_sales: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-    },
-    total_sales: {
-      type: DataTypes.DECIMAL(15, 2),
-      allowNull: false,
-    },
-    total_hpp: {
-      type: DataTypes.DECIMAL(15, 2),
-      allowNull: false,
-    },
-    margin_rp: {
-      type: DataTypes.DECIMAL(15, 2),
-      allowNull: false,
-    },
-    margin_percent: {
-      type: DataTypes.DECIMAL(5, 2),
-      allowNull: false,
-    },
-    harga_jual_per_pcs: {
-      type: DataTypes.DECIMAL(10, 2),
-      allowNull: false,
-    },
-    hpp_per_pcs: {
-      type: DataTypes.DECIMAL(10, 2),
-      allowNull: false,
-    },
-    created_at: {
-      type: DataTypes.DATE,
-      allowNull: true,
-      defaultValue: DataTypes.NOW,
-    },
-    updated_at: {
-      type: DataTypes.DATE,
-      allowNull: true,
-      defaultValue: DataTypes.NOW,
-    },
-  },
-  {
-    tableName: "sales_per_dept",
-    timestamps: true,
-    createdAt: "created_at",
-    updatedAt: "updated_at",
-    underscored: true,
-  }
-);
+      "SalesPerDept",
+      {
+        cab: {
+          type: DataTypes.CHAR(4),
+          allowNull: false,
+          primaryKey: true,
+        },
+        periode: {
+          type: DataTypes.CHAR(4),
+          allowNull: false,
+          primaryKey: true,
+        },
+        tipestore: {
+          type: DataTypes.CHAR(3),
+          allowNull: false,
+          primaryKey: true,
+        },
+        dep_kd: {
+          type: DataTypes.STRING(10),
+          allowNull: false,
+          primaryKey: true,
+        },
+        dep_name: {
+          type: DataTypes.STRING(255),
+          allowNull: false,
+        },
+        qty_sales: {
+          type: DataTypes.INTEGER,
+          allowNull: false,
+        },
+        total_sales: {
+          type: DataTypes.DECIMAL(15, 2),
+          allowNull: false,
+        },
+        total_hpp: {
+          type: DataTypes.DECIMAL(15, 2),
+          allowNull: false,
+        },
+        margin_rp: {
+          type: DataTypes.DECIMAL(15, 2),
+          allowNull: false,
+        },
+        margin_percent: {
+          type: DataTypes.DECIMAL(5, 2),
+          allowNull: false,
+        },
+        harga_jual_per_pcs: {
+          type: DataTypes.DECIMAL(10, 2),
+          allowNull: false,
+        },
+        hpp_per_pcs: {
+          type: DataTypes.DECIMAL(10, 2),
+          allowNull: false,
+        },
+        created_at: {
+          type: DataTypes.DATE,
+          allowNull: true,
+          defaultValue: DataTypes.NOW,
+        },
+        updated_at: {
+          type: DataTypes.DATE,
+          allowNull: true,
+          defaultValue: DataTypes.NOW,
+        },
+      },
+      {
+        tableName: "sales_per_dept",
+        timestamps: true,
+        createdAt: "created_at",
+        updatedAt: "updated_at",
+        underscored: true,
+      }
+    );
   }
   return SalesPerDept;
 };
@@ -100,7 +100,7 @@ class SalesPerDeptWrapper extends BaseService {
         return await model.findAll(options);
       },
       null,
-      'sales_per_dept_findall'
+      "sales_per_dept_findall"
     ).catch(async () => {
       // Fallback to staging service
       const filters = this.extractFilters(options);
@@ -116,7 +116,7 @@ class SalesPerDeptWrapper extends BaseService {
         return await model.findOne(options);
       },
       null,
-      'sales_per_dept_findone'
+      "sales_per_dept_findone"
     ).catch(async () => {
       // Fallback to staging service
       const filters = this.extractFilters(options);
@@ -144,14 +144,14 @@ class SalesPerDeptWrapper extends BaseService {
       const model = await getSalesPerDeptModel();
       return await model.create(data);
     });
-    
+
     // Sync to JSON file after database operation
     try {
       await salesPerDeptStagingService.syncToJsonFile();
     } catch (syncError) {
-      console.warn('Failed to sync to JSON after create:', syncError.message);
+      console.warn("Failed to sync to JSON after create:", syncError.message);
     }
-    
+
     return result;
   }
 
@@ -160,14 +160,14 @@ class SalesPerDeptWrapper extends BaseService {
       const model = await getSalesPerDeptModel();
       return await model.update(data, options);
     });
-    
+
     // Sync to JSON file after database operation
     try {
       await salesPerDeptStagingService.syncToJsonFile();
     } catch (syncError) {
-      console.warn('Failed to sync to JSON after update:', syncError.message);
+      console.warn("Failed to sync to JSON after update:", syncError.message);
     }
-    
+
     return result;
   }
 
@@ -176,14 +176,14 @@ class SalesPerDeptWrapper extends BaseService {
       const model = await getSalesPerDeptModel();
       return await model.destroy(options);
     });
-    
+
     // Sync to JSON file after database operation
     try {
       await salesPerDeptStagingService.syncToJsonFile();
     } catch (syncError) {
-      console.warn('Failed to sync to JSON after destroy:', syncError.message);
+      console.warn("Failed to sync to JSON after destroy:", syncError.message);
     }
-    
+
     return result;
   }
 
@@ -194,7 +194,7 @@ class SalesPerDeptWrapper extends BaseService {
         return await model.count(options);
       },
       0,
-      'sales_per_dept_count'
+      "sales_per_dept_count"
     ).catch(async () => {
       // Fallback to staging service
       const filters = this.extractFilters(options);
@@ -207,14 +207,14 @@ class SalesPerDeptWrapper extends BaseService {
       const model = await getSalesPerDeptModel();
       return await model.bulkCreate(data, options);
     });
-    
+
     // Sync to JSON file after database operation
     try {
       await salesPerDeptStagingService.syncToJsonFile();
     } catch (syncError) {
-      console.warn('Failed to sync to JSON after bulkCreate:', syncError.message);
+      console.warn("Failed to sync to JSON after bulkCreate:", syncError.message);
     }
-    
+
     return result;
   }
 
@@ -223,14 +223,14 @@ class SalesPerDeptWrapper extends BaseService {
       const model = await getSalesPerDeptModel();
       return await model.upsert(data, options);
     });
-    
+
     // Sync to JSON file after database operation
     try {
       await salesPerDeptStagingService.syncToJsonFile();
     } catch (syncError) {
-      console.warn('Failed to sync to JSON after upsert:', syncError.message);
+      console.warn("Failed to sync to JSON after upsert:", syncError.message);
     }
-    
+
     return result;
   }
 
@@ -244,6 +244,11 @@ class SalesPerDeptWrapper extends BaseService {
       if (options.where.dep_kd) filters.dep_kd = options.where.dep_kd;
     }
     return filters;
+  }
+
+  // Add getModel method for registry compatibility
+  getModel() {
+    return getSalesPerDeptModel();
   }
 }
 

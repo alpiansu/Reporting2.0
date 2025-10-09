@@ -321,6 +321,10 @@ const RekonWtHarianWrapper = {
     const model = await getRekonWtHarianModel();
     return model.findOrCreate(options);
   },
+  // Add getModel method for registry compatibility
+  getModel() {
+    return getRekonWtHarianModel();
+  },
 };
 
 export default RekonWtHarianWrapper;

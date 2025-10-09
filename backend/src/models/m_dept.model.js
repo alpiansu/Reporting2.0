@@ -6,7 +6,7 @@
  *
  * The actual data operations are handled by the MDeptService.
  */
-import MDeptService from '../modules/m_dept/m_dept.service.js';
+import MDeptService from "../modules/m_dept/m_dept.service.js";
 
 // Create a singleton instance of the service
 const mDeptService = new MDeptService();
@@ -51,7 +51,7 @@ const MDept = {
    * @param {string} dep_kd - Department code
    * @returns {Promise<Object|null>} Department object or null if not found
    */
-  findByPk: async (dep_kd) => {
+  findByPk: async dep_kd => {
     await mDeptService.init();
     return mDeptService.getDepartmentByCode(dep_kd);
   },
@@ -61,7 +61,7 @@ const MDept = {
    * @param {Object} deptData - Department data
    * @returns {Promise<Object>} Created department
    */
-  create: async (deptData) => {
+  create: async deptData => {
     return mDeptService.createDepartment(deptData);
   },
 
@@ -72,16 +72,16 @@ const MDept = {
    */
   findOrCreate: async ({ where, defaults }) => {
     const existingDept = await mDeptService.getDepartmentByCode(where.dep_kd);
-    
+
     if (existingDept) {
       return [existingDept, false];
     }
-    
+
     const newDept = await mDeptService.createDepartment({
       ...where,
       ...defaults,
     });
-    
+
     return [newDept, true];
   },
 
@@ -96,9 +96,24 @@ const MDept = {
       const dept = await mDeptService.updateDepartment(where.dep_kd, values);
       return dept ? [1] : [0];
     }
-    
+
     // For compatibility with Sequelize, return count of updated records
     return [0];
+  },
+
+  /**
+   * Get model method for registry compatibility
+   * Note: MDept is JSON-based, but this maintains interface consistency
+   */
+  getModel: async () => {
+    // Return a mock Sequelize-like object for JSON-based model
+    return {
+      sync: async () => {
+        await mDeptService.init();
+        return true;
+      },
+      // Add other mock methods as needed
+    };
   },
 };
 

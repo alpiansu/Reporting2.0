@@ -32,12 +32,12 @@
  *           description: Last update timestamp
  */
 
-import { DataTypes, Sequelize } from 'sequelize';
-import moment from 'moment-timezone';
-import config from '../config/index.js';
+import { DataTypes, Sequelize } from "sequelize";
+import moment from "moment-timezone";
+import config from "../config/index.js";
 const { resilientDb } = config;
-import { BaseService } from '../services/base.service.js';
-import rekapRemoteStagingService from '../modules/rekap_remote/rekap_remote_staging.service.js';
+import { BaseService } from "../services/base.service.js";
+import rekapRemoteStagingService from "../modules/rekap_remote/rekap_remote_staging.service.js";
 
 // Lazy model definition
 let RekapRemote = null;
@@ -46,61 +46,61 @@ const getRekapRemoteModel = async () => {
   if (!RekapRemote) {
     const sequelize = await resilientDb.getDatabase();
     if (!sequelize) {
-      throw new Error('Database connection not available');
+      throw new Error("Database connection not available");
     }
     RekapRemote = sequelize.define(
-  "rekap_remote",
-  {
-    cab: {
-      type: DataTypes.CHAR(4),
-      primaryKey: true,
-      allowNull: false,
-      comment: "Kode cabang (4 karakter)",
-    },
-    kdtk: {
-      type: DataTypes.CHAR(4),
-      primaryKey: true,
-      allowNull: false,
-      comment: "Kode toko (4 karakter)",
-    },
-    module_name: {
-      type: DataTypes.STRING(50),
-      primaryKey: true,
-      allowNull: false,
-      comment: "Nama module yang melakukan koneksi remote",
-    },
-    status: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-      comment: "Status koneksi (success, timeout, error, dll)",
-    },
-    updtime: {
-      type: "TIMESTAMP",
-      allowNull: false,
-      defaultValue: Sequelize.literal("CURRENT_TIMESTAMP"),
-      onUpdate: Sequelize.literal("CURRENT_TIMESTAMP"), // untuk dialect mysql >= 8
-      comment: "Waktu update terakhir",
-    },
-  },
-  {
-    tableName: "rekap_remote",
-    timestamps: false, // We handle timestamps manually with updtime
-    indexes: [
+      "rekap_remote",
       {
-        name: "idx_rekap_remote_kdtk",
-        fields: ["kdtk"],
+        cab: {
+          type: DataTypes.CHAR(4),
+          primaryKey: true,
+          allowNull: false,
+          comment: "Kode cabang (4 karakter)",
+        },
+        kdtk: {
+          type: DataTypes.CHAR(4),
+          primaryKey: true,
+          allowNull: false,
+          comment: "Kode toko (4 karakter)",
+        },
+        module_name: {
+          type: DataTypes.STRING(50),
+          primaryKey: true,
+          allowNull: false,
+          comment: "Nama module yang melakukan koneksi remote",
+        },
+        status: {
+          type: DataTypes.TEXT,
+          allowNull: true,
+          comment: "Status koneksi (success, timeout, error, dll)",
+        },
+        updtime: {
+          type: "TIMESTAMP",
+          allowNull: false,
+          defaultValue: Sequelize.literal("CURRENT_TIMESTAMP"),
+          onUpdate: Sequelize.literal("CURRENT_TIMESTAMP"), // untuk dialect mysql >= 8
+          comment: "Waktu update terakhir",
+        },
       },
       {
-        name: "idx_rekap_remote_module",
-        fields: ["module_name"],
-      },
-      {
-        name: "idx_rekap_remote_updtime",
-        fields: ["updtime"],
-      },
-    ],
-  }
-);
+        tableName: "rekap_remote",
+        timestamps: false, // We handle timestamps manually with updtime
+        indexes: [
+          {
+            name: "idx_rekap_remote_kdtk",
+            fields: ["kdtk"],
+          },
+          {
+            name: "idx_rekap_remote_module",
+            fields: ["module_name"],
+          },
+          {
+            name: "idx_rekap_remote_updtime",
+            fields: ["updtime"],
+          },
+        ],
+      }
+    );
   }
   return RekapRemote;
 };
@@ -114,7 +114,7 @@ class RekapRemoteWrapper extends BaseService {
         return await model.findAll(options);
       },
       null,
-      'rekap_remote_findall'
+      "rekap_remote_findall"
     ).catch(async () => {
       // Fallback to staging service
       const filters = this.extractFilters(options);
@@ -130,7 +130,7 @@ class RekapRemoteWrapper extends BaseService {
         return await model.findOne(options);
       },
       null,
-      'rekap_remote_findone'
+      "rekap_remote_findone"
     ).catch(async () => {
       // Fallback to staging service
       const filters = this.extractFilters(options);
@@ -158,14 +158,14 @@ class RekapRemoteWrapper extends BaseService {
       const model = await getRekapRemoteModel();
       return await model.create(data);
     });
-    
+
     // Sync to JSON file after database operation
     try {
       await rekapRemoteStagingService.syncToJsonFile();
     } catch (syncError) {
-      console.warn('Failed to sync to JSON after create:', syncError.message);
+      console.warn("Failed to sync to JSON after create:", syncError.message);
     }
-    
+
     return result;
   }
 
@@ -174,14 +174,14 @@ class RekapRemoteWrapper extends BaseService {
       const model = await getRekapRemoteModel();
       return await model.update(data, options);
     });
-    
+
     // Sync to JSON file after database operation
     try {
       await rekapRemoteStagingService.syncToJsonFile();
     } catch (syncError) {
-      console.warn('Failed to sync to JSON after update:', syncError.message);
+      console.warn("Failed to sync to JSON after update:", syncError.message);
     }
-    
+
     return result;
   }
 
@@ -190,14 +190,14 @@ class RekapRemoteWrapper extends BaseService {
       const model = await getRekapRemoteModel();
       return await model.destroy(options);
     });
-    
+
     // Sync to JSON file after database operation
     try {
       await rekapRemoteStagingService.syncToJsonFile();
     } catch (syncError) {
-      console.warn('Failed to sync to JSON after destroy:', syncError.message);
+      console.warn("Failed to sync to JSON after destroy:", syncError.message);
     }
-    
+
     return result;
   }
 
@@ -208,7 +208,7 @@ class RekapRemoteWrapper extends BaseService {
         return await model.count(options);
       },
       0,
-      'rekap_remote_count'
+      "rekap_remote_count"
     ).catch(async () => {
       // Fallback to staging service
       const filters = this.extractFilters(options);
@@ -221,14 +221,14 @@ class RekapRemoteWrapper extends BaseService {
       const model = await getRekapRemoteModel();
       return await model.upsert(data, options);
     });
-    
+
     // Sync to JSON file after database operation
     try {
       await rekapRemoteStagingService.syncToJsonFile();
     } catch (syncError) {
-      console.warn('Failed to sync to JSON after upsert:', syncError.message);
+      console.warn("Failed to sync to JSON after upsert:", syncError.message);
     }
-    
+
     return result;
   }
 
@@ -237,14 +237,14 @@ class RekapRemoteWrapper extends BaseService {
       const model = await getRekapRemoteModel();
       return await model.findOrCreate(options);
     });
-    
+
     // Sync to JSON file after database operation
     try {
       await rekapRemoteStagingService.syncToJsonFile();
     } catch (syncError) {
-      console.warn('Failed to sync to JSON after findOrCreate:', syncError.message);
+      console.warn("Failed to sync to JSON after findOrCreate:", syncError.message);
     }
-    
+
     return result;
   }
 
@@ -253,14 +253,14 @@ class RekapRemoteWrapper extends BaseService {
       const model = await getRekapRemoteModel();
       return await model.bulkCreate(data, options);
     });
-    
+
     // Sync to JSON file after database operation
     try {
       await rekapRemoteStagingService.syncToJsonFile();
     } catch (syncError) {
-      console.warn('Failed to sync to JSON after bulkCreate:', syncError.message);
+      console.warn("Failed to sync to JSON after bulkCreate:", syncError.message);
     }
-    
+
     return result;
   }
 
@@ -273,6 +273,11 @@ class RekapRemoteWrapper extends BaseService {
       if (options.where.module_name) filters.moduleName = options.where.module_name;
     }
     return filters;
+  }
+
+  // Add getModel method for registry compatibility
+  getModel() {
+    return getRekapRemoteModel();
   }
 }
 

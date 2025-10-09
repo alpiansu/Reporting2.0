@@ -2,8 +2,8 @@
   <div class="adjust-view">
     <PageHeader
       title="Upload Adjustment CSV"
-      subtitle="Proses penyesuaian item BJD melalui file CSV"
-      description="Upload file CSV dengan format KDTK, PRDCD, dan QTY_ADJ untuk memproses penyesuaian item BJD di toko-toko yang ditentukan."
+      subtitle="Proses adjustment dengan menggunakan file csv"
+      description="Upload file CSV dengan format KDTK, PRDCD, QTY_ADJ dan KETER untuk memproses penyesuaian item BJD di toko-toko yang ditentukan."
     />
 
     <div class="content-container">
@@ -172,6 +172,20 @@
         </div>
       </div>
 
+      <!-- Processing Loading State -->
+      <div class="card mt-4" v-if="isProcessing">
+        <div class="card-body text-center py-5">
+          <div class="loading-container">
+            <i class="pi pi-spin pi-spinner" style="font-size: 2rem; color: #007bff;"></i>
+            <h4 class="mt-3 mb-2">Processing Adjustment...</h4>
+            <p class="text-muted">Connecting to stores and processing adjustments. Please wait...</p>
+            <div class="progress-text mt-3">
+              <small class="text-info">This may take several minutes depending on the number of stores and products.</small>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Results Card -->
       <div class="card mt-4" v-if="processResults">
         <div class="card-header">
@@ -233,51 +247,147 @@
 
           <!-- History Records Table -->
           <div class="history-section">
-            <h4 class="section-title">
-              <i class="pi pi-history"></i>
-              Detail History Adjustment
-            </h4>
-            <div class="table-responsive">
-              <table class="table table-bordered table-hover history-table">
-                <thead>
-                  <tr>
-                    <th>Toko</th>
-                    <th>Produk</th>
-                    <th>Qty Adj</th>
-                    <th>Keterangan</th>
-                    <th>Status</th>
-                    <th>Note</th>
-                    <th>Waktu</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(record, index) in processResults?.historyRecords" :key="index">
-                    <td class="store-code">{{ record.kdtk }}</td>
-                    <td class="product-code">{{ record.prdcd }}</td>
-                    <td class="qty-adj" :class="{ 'positive': record.qty_adj > 0, 'negative': record.qty_adj < 0 }">
-                      {{ record.qty_adj > 0 ? '+' : '' }}{{ record.qty_adj }}
-                    </td>
-                    <td class="description">{{ record.keter || '-' }}</td>
-                    <td class="status">
-                      <span class="status-badge" :class="record.status.toLowerCase()">
-                        <i class="pi" :class="record.status === 'SUCCESS' ? 'pi-check' : 'pi-times'"></i>
-                        {{ record.status === 'SUCCESS' ? 'Berhasil' : 'Gagal' }}
-                      </span>
-                    </td>
-                    <td class="note" :class="record.status.toLowerCase()">
-                      {{ record.note }}
-                    </td>
-                    <td class="timestamp">
-                      {{ formatDateTime(record.updtime) }}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+            <div class="section-header">
+              <h4 class="section-title">
+                <i class="pi pi-history"></i>
+                Detail History Adjustment
+              </h4>
+              <div class="table-controls" v-if="processResults?.historyRecords?.length">
+                <div class="entries-info">
+                  <span class="total-entries">Total: {{ totalRecords }} records</span>
+                </div>
+                <div class="pagination-controls">
+                  <label class="rows-per-page-label">
+                    Rows per page:
+                    <select v-model="rowsPerPage" @change="currentPage = 1" class="rows-select">
+                      <option value="10">10</option>
+                      <option value="25">25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
             </div>
             
-            <div v-if="!processResults?.historyRecords?.length" class="no-records">
-              <i class="pi pi-info-circle"></i>
-              <span>Tidak ada data history untuk ditampilkan</span>
+            <!-- Modern Table with Auto Pagination -->
+            <div class="modern-table-container" v-if="processResults?.historyRecords?.length">
+              <div class="table-wrapper">
+                <table class="modern-table">
+                  <thead>
+                    <tr>
+                      <th class="col-no">#</th>
+                      <th class="col-store">Store</th>
+                      <th class="col-product">Product</th>
+                      <th class="col-qty">Qty Adj</th>
+                      <th class="col-description">Description</th>
+                      <th class="col-status">Status</th>
+                      <th class="col-note">Note</th>
+                      <th class="col-time">Time</th>
+                      <th class="col-pic">PIC</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(record, index) in paginatedRecords" :key="record.id" class="table-row">
+                      <td class="col-no">{{ getRecordNumber(index) }}</td>
+                      <td class="col-store">
+                        <div class="store-info">
+                          <span class="store-code">{{ record.kdtk }}</span>
+                        </div>
+                      </td>
+                      <td class="col-product">
+                        <div class="product-info">
+                          <span class="product-code">{{ record.prdcd }}</span>
+                        </div>
+                      </td>
+                      <td class="col-qty">
+                        <div class="qty-container">
+                          <span class="qty-badge" :class="getQtyClass(record.qty_adj)">
+                            <i class="pi" :class="getQtyIcon(record.qty_adj)"></i>
+                            {{ formatQuantity(record.qty_adj) }}
+                          </span>
+                        </div>
+                      </td>
+                      <td class="col-description">
+                        <div class="description-text" :title="record.keter">
+                          {{ truncateText(record.keter, 40) }}
+                        </div>
+                      </td>
+                      <td class="col-status">
+                        <div class="status-container">
+                          <span class="status-badge" :class="getStatusClass(record.status)">
+                            <i class="pi" :class="getStatusIcon(record.status)"></i>
+                            <span class="status-text">{{ getStatusText(record.status) }}</span>
+                          </span>
+                        </div>
+                      </td>
+                      <td class="col-note">
+                        <div class="note-container" :title="record.note">
+                          <span class="note-text">{{ truncateText(record.note, 30) }}</span>
+                        </div>
+                      </td>
+                      <td class="col-time">
+                        <div class="time-info">
+                          <span class="date-text">{{ formatDate(record.updtime) }}</span>
+                          <span class="time-text">{{ formatTime(record.updtime) }}</span>
+                        </div>
+                      </td>
+                      <td class="col-pic">
+                        <div class="pic-info">
+                          <span class="pic-code">{{ record.pic || '-' }}</span>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              
+              <!-- Modern Pagination -->
+              <div class="pagination-wrapper" v-if="totalPages > 1">
+                <div class="pagination-info">
+                  <span>Showing {{ startRecord }} to {{ endRecord }} of {{ totalRecords }} entries</span>
+                </div>
+                <div class="pagination-controls-bottom">
+                  <button 
+                    class="pagination-btn pagination-btn-prev" 
+                    @click="goToPage(currentPage - 1)"
+                    :disabled="currentPage === 1"
+                  >
+                    <i class="pi pi-chevron-left"></i>
+                    Previous
+                  </button>
+                  
+                  <div class="pagination-numbers">
+                    <button 
+                      v-for="page in visiblePages" 
+                      :key="page"
+                      class="pagination-btn pagination-btn-number" 
+                      :class="{ 'active': page === currentPage }"
+                      @click="goToPage(page)"
+                    >
+                      {{ page }}
+                    </button>
+                  </div>
+                  
+                  <button 
+                    class="pagination-btn pagination-btn-next" 
+                    @click="goToPage(currentPage + 1)"
+                    :disabled="currentPage === totalPages"
+                  >
+                    Next
+                    <i class="pi pi-chevron-right"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <!-- No Records State -->
+            <div v-else class="no-records-modern">
+              <div class="no-records-content">
+                <i class="pi pi-inbox no-records-icon"></i>
+                <h4 class="no-records-title">No Records Found</h4>
+                <p class="no-records-text">No adjustment history records to display.</p>
+              </div>
             </div>
           </div>
         </div>
@@ -287,7 +397,7 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import { useToast } from "primevue/usetoast";
 import api from "../../services/api.js";
 import adjustService from "../../services/adjust.service.js";
@@ -305,6 +415,77 @@ const processResults = ref(null);
 const showFormatDetails = ref(false);
 const isDragOver = ref(false);
 const fileInput = ref(null);
+
+// Pagination state
+const currentPage = ref(1);
+const rowsPerPage = ref(25);
+
+// Computed properties for pagination
+const totalRecords = computed(() => {
+  return processResults.value?.historyRecords?.length || 0;
+});
+
+const totalPages = computed(() => {
+  return Math.ceil(totalRecords.value / rowsPerPage.value);
+});
+
+const startRecord = computed(() => {
+  return (currentPage.value - 1) * rowsPerPage.value + 1;
+});
+
+const endRecord = computed(() => {
+  const end = currentPage.value * rowsPerPage.value;
+  return end > totalRecords.value ? totalRecords.value : end;
+});
+
+const paginatedRecords = computed(() => {
+  if (!processResults.value?.historyRecords) return [];
+  
+  const start = (currentPage.value - 1) * rowsPerPage.value;
+  const end = start + rowsPerPage.value;
+  return processResults.value.historyRecords.slice(start, end);
+});
+
+const visiblePages = computed(() => {
+  const pages = [];
+  const total = totalPages.value;
+  const current = currentPage.value;
+  
+  if (total <= 7) {
+    // Show all pages if total is 7 or less
+    for (let i = 1; i <= total; i++) {
+      pages.push(i);
+    }
+  } else {
+    // Show smart pagination with ellipsis logic
+    if (current <= 4) {
+      // Show first 5 pages
+      for (let i = 1; i <= 5; i++) {
+        pages.push(i);
+      }
+      pages.push('...');
+      pages.push(total);
+    } else if (current >= total - 3) {
+      // Show last 5 pages
+      pages.push(1);
+      pages.push('...');
+      for (let i = total - 4; i <= total; i++) {
+        pages.push(i);
+      }
+    } else {
+      // Show pages around current
+      pages.push(1);
+      pages.push('...');
+      for (let i = current - 1; i <= current + 1; i++) {
+        pages.push(i);
+      }
+      pages.push('...');
+      pages.push(total);
+    }
+  }
+  
+  return pages;
+});
 
 // CSV field definitions for the info card
 const csvFields = [
@@ -343,6 +524,73 @@ const csvNotes = [
   'Gunakan encoding UTF-8 untuk karakter khusus'
 ];
 
+// Pagination methods
+const goToPage = (page) => {
+  if (page >= 1 && page <= totalPages.value && page !== '...') {
+    currentPage.value = page;
+  }
+};
+
+const getRecordNumber = (index) => {
+  return (currentPage.value - 1) * rowsPerPage.value + index + 1;
+};
+
+// Formatting methods for modern table
+const getQtyClass = (qty) => {
+  if (qty > 0) return 'qty-positive';
+  if (qty < 0) return 'qty-negative';
+  return 'qty-neutral';
+};
+
+const getQtyIcon = (qty) => {
+  if (qty > 0) return 'pi-plus-circle';
+  if (qty < 0) return 'pi-minus-circle';
+  return 'pi-circle';
+};
+
+const formatQuantity = (qty) => {
+  if (qty > 0) return `+${qty}`;
+  return qty.toString();
+};
+
+const getStatusClass = (status) => {
+  return status === 'SUCCESS' ? 'status-success' : 'status-error';
+};
+
+const getStatusIcon = (status) => {
+  return status === 'SUCCESS' ? 'pi-check-circle' : 'pi-times-circle';
+};
+
+const getStatusText = (status) => {
+  return status === 'SUCCESS' ? 'Success' : 'Failed';
+};
+
+const truncateText = (text, maxLength) => {
+  if (!text) return '-';
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + '...';
+};
+
+const formatDate = (dateTime) => {
+  if (!dateTime) return '-';
+  const date = new Date(dateTime);
+  return date.toLocaleDateString('id-ID', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+};
+
+const formatTime = (dateTime) => {
+  if (!dateTime) return '-';
+  const date = new Date(dateTime);
+  return date.toLocaleTimeString('id-ID', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+};
+
 // Methods
 const handleFileSelect = event => {
   const file = event.target.files[0];
@@ -366,18 +614,35 @@ const handleUpload = async () => {
       },
     });
 
-    // Extract the nested data structure
+    // Extract the data structure correctly - response.data.data.data contains the actual results
     const resultData = response.data.data.data;
     processResults.value = resultData;
+
+    // Reset pagination to first page for new results
+    currentPage.value = 1;
 
     // Reset upload form after successful processing
     resetForm();
 
+    // Safely check for failedStores
+    const failedCount = resultData?.failedStores?.length || 0;
+    const successCount = resultData?.successStores || 0;
+    const totalStores = resultData?.totalStores || 0;
+    
     toast.add({
-      severity: resultData.failedStores.length > 0 ? "warn" : "success",
-      summary: resultData.failedStores.length > 0 ? "Completed with Issues" : "Success",
-      detail: response.data.data.message, // Use the message from the correct level
-      life: 5000,
+      severity: failedCount > 0 ? "warn" : "success",
+      summary: failedCount > 0 ? "Completed with Issues" : "Success", 
+      detail: `Processing completed. ${successCount}/${totalStores} stores processed successfully.`,
+      life: 8000,
+    });
+    
+    // Log results for debugging
+    console.log('Full response:', response.data);
+    console.log('Processing results:', {
+      total: totalStores,
+      success: successCount,
+      failed: failedCount,
+      historyRecords: resultData?.historyRecords?.length || 0
     });
   } catch (error) {
     console.error("Upload error:", error);

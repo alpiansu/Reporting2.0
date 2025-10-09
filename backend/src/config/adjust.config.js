@@ -6,22 +6,7 @@ export default {
   // Query templates
   queries: {
     // WRC query template
-    wrc: `SELECT 
-      CASE 
-        WHEN rtype = 'X' AND ( Istype IN ('BM', 'KO', 'SG', 'SO', 'BS', 'BABKL') OR Istype = '' ) THEN 'NKL' 
-        WHEN rtype = 'X' AND  Istype IN ('BA', 'BAIV')   THEN 'BRK' 
-        WHEN rtype = 'X' AND Istype IN ('BAKLB','BATLJ','BASMP','BARD','BARSK','BACSP') THEN 'PCAFE' 
-        WHEN rtype = 'X' AND Istype = 'BA SPL' THEN 'BASPL' 
-        WHEN rtype = 'B' THEN 'BPB' 
-        WHEN rtype = 'K' THEN 'NRB' 
-        ELSE rtype 
-      END AS TIPE, 
-      TOKO, shop, date(TGL1) as TGL1, 
-      ABS(SUM(CAST(GROSS AS DECIMAL(25,0)))) AS GROSS, 
-      ABS(SUM(CAST(PPn AS DECIMAL(25,7)))) AS PPN, 
-      ABS(SUM(CAST(Price_Idm AS DECIMAL(25,3)) * QTY)) AS GROSS_IDM, 
-      ABS(SUM(CAST(PPnRp_Idm AS DECIMAL(25,3)))) AS PPN_IDM FROM wt_{date} 
-      GROUP BY tipe,toko,shop,date(tgl1)`,
+    wrc: ``,
 
     // Store query template
     store: {
@@ -40,18 +25,18 @@ export default {
           pm.bkp,
           pm.sub_bkp,
           pm.acost,
-          pm.acost*(?*-1),  -- qty from file
-          ?*-1,             -- qty from file
+          pm.acost*(?),  -- qty from file
+          ?,             -- qty from file
           CURTIME(),
           ?,              -- Keterangan from file
           pm.price,
-          pm.price*(?*-1)   -- qty from file
+          pm.price*(?)   -- qty from file
         FROM prodmast pm
         WHERE pm.prdcd = ?  -- prdcd from file
       `,
       safetyCek: `create table adjcek 
           select a.prdcd, a.qty, b.qty_ms, b.qty_mt, b.begbal, b.saldo, b.saldo + a.qty as sisa from mstadj a inner join (
-          select pr.prdcd, qty_ms, qty_mt, begbal, (begbal + qty_ms + qty_mt) as saldo from prodmast pr left join 
+          select pr.prdcd, IFNULL(qty_ms,0) AS qty_ms, ifnull(qty_mt,0) as qty_mt, begbal, (begbal + ifnull(qty_ms,0) + ifnull(qty_mt,0)) as saldo from prodmast pr left join 
             (select prdcd, sum(IF(RTYPE IN ('O','K'), QTY*-1, QTY)) as qty_ms from mstran where MONTH(bukti_tgl) = MONTH(CURRENT_DATE()) group by prdcd ) ms using(prdcd) left join
             (select plu as prdcd, sum(if(rtype='J', qty*-1, qty)) as qty_mt from mtran where MONTH(tanggal) = MONTH(CURRENT_DATE()) group by prdcd) mt using(prdcd) left join
             (select prdcd, saldo_akh as begbal from ?? ) flt using(prdcd) where prdcd in (select prdcd from mstadj)

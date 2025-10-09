@@ -4,7 +4,7 @@ import histAdjustStagingService from "./hist_adjust_staging.service.js";
 import { apiResponse } from "../../utils/index.js";
 
 /**
- * Upload and process CSV file for item adjustment with history logging
+ * Upload and process CSV file for item adjustment with progress tracking
  * @param {Request} req - Express request object
  * @param {Response} res - Express response object
  */
@@ -20,8 +20,7 @@ export const uploadAdjustCsv = async (req, res) => {
     // Log the adjustment attempt
     logger.info(`User ${username} initiated adjustment process with file: ${req.file.originalname}`);
 
-    // File validation already handled by multer middleware
-    // Process the file using the buffer from multer with username for history
+    // Process the file synchronously and wait for completion
     const results = await adjustService.processCsvAdjust(req.file.buffer, username);
 
     // Log completion
@@ -46,7 +45,7 @@ export const uploadAdjustCsv = async (req, res) => {
       data: results,
     });
   } catch (error) {
-    logger.error(`Error processing adjust CSV: ${error.message}`);
+    logger.error(`Error starting adjust process: ${error.message}`);
     return apiResponse.error(res, error.message, 500);
   }
 };

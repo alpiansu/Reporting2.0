@@ -34,18 +34,65 @@ export default {
         FROM prodmast pm
         WHERE pm.prdcd = ?  -- prdcd from file
       `,
-      safetyCek: `create table adjcek 
-          select a.prdcd, a.qty, b.qty_ms, b.qty_mt, b.begbal, b.saldo, b.saldo + a.qty as sisa from mstadj a inner join (
-          select pr.prdcd, IFNULL(qty_ms,0) AS qty_ms, ifnull(qty_mt,0) as qty_mt, begbal, (begbal + ifnull(qty_ms,0) + ifnull(qty_mt,0)) as saldo from prodmast pr left join 
-            (select prdcd, sum(IF(RTYPE IN ('O','K'), QTY*-1, QTY)) as qty_ms from mstran where MONTH(bukti_tgl) = MONTH(CURRENT_DATE()) group by prdcd ) ms using(prdcd) left join
-            (select plu as prdcd, sum(if(rtype='J', qty*-1, qty)) as qty_mt from mtran where MONTH(tanggal) = MONTH(CURRENT_DATE()) group by prdcd) mt using(prdcd) left join
-            (select prdcd, saldo_akh as begbal from ?? ) flt using(prdcd) where prdcd in (select prdcd from mstadj)
-          ) b using(prdcd)`,
+      safetyCek: `CREATE TABLE adjcek 
+        SELECT 
+            a.prdcd, 
+            a.qty, 
+            b.qty_ms, 
+            b.qty_mt, 
+            b.begbal, 
+            b.saldo, 
+            b.saldo + a.qty AS sisa
+        FROM mstadj a 
+        INNER JOIN (
+            SELECT 
+                pr.prdcd, 
+                IFNULL(qty_ms, 0) AS qty_ms, 
+                IFNULL(qty_mt, 0) AS qty_mt, 
+                begbal, 
+                (begbal + IFNULL(qty_ms, 0) + IFNULL(qty_mt, 0)) AS saldo
+            FROM prodmast pr 
+            LEFT JOIN (
+                SELECT 
+                    prdcd, 
+                    SUM(IF(RTYPE IN ('O','K'), QTY * -1, QTY)) AS qty_ms 
+                FROM mstran 
+                WHERE (
+                    (MONTH(bukti_tgl) = MONTH(CURRENT_DATE()) AND DATE(bukti_tgl) < CURRENT_DATE)
+                    OR (DAY(CURRENT_DATE()) = 1 AND MONTH(bukti_tgl) = MONTH(CURRENT_DATE() - INTERVAL 1 MONTH))
+                )
+                GROUP BY prdcd
+            ) ms USING (prdcd)
+            LEFT JOIN (
+                SELECT 
+                    plu AS prdcd, 
+                    SUM(IF(rtype = 'J', qty * -1, qty)) AS qty_mt 
+                FROM mtran 
+                WHERE (
+                    (MONTH(tanggal) = MONTH(CURRENT_DATE()) AND DATE(tanggal) < CURRENT_DATE)
+                    OR (DAY(CURRENT_DATE()) = 1 AND MONTH(tanggal) = MONTH(CURRENT_DATE() - INTERVAL 1 MONTH))
+                )
+                GROUP BY prdcd
+            ) mt USING (prdcd)
+            LEFT JOIN (
+                SELECT prdcd, saldo_akh AS begbal FROM ?? 
+            ) flt USING (prdcd)
+            WHERE pr.prdcd IN (SELECT prdcd FROM mstadj)
+        ) b USING (prdcd);
+`,
       finalize: [
         `UPDATE const SET docno=docno+2 WHERE rkey='nkl'`,
+        `UPDATE mstadj m JOIN adjcek a USING(prdcd) SET m.qty = m.qty - a.sisa WHERE a.sisa < 0 AND a.saldo * m.qty < 0;`,
+        `UPDATE mstadj a
+          JOIN adjcek b ON a.prdcd = b.prdcd
+          SET a.qty = CASE WHEN b.sisa < 0 THEN a.qty - b.sisa ELSE a.qty END,
+              a.gross = (CASE WHEN b.sisa < 0 THEN a.qty - b.sisa ELSE a.qty END) * a.price,
+              a.gross_jual = (CASE WHEN b.sisa < 0 THEN a.qty - b.sisa ELSE a.qty END) * a.price_jual,
+              b.sisa = b.saldo + (CASE WHEN b.sisa < 0 THEN a.qty - b.sisa ELSE a.qty END)
+            WHERE a.qty * b.saldo < 0`,
         `INSERT IGNORE INTO mstran SELECT * FROM mstadj where prdcd in (SELECT prdcd from adjcek a inner join mstadj b using(prdcd) WHERE a.sisa >= 0 )`,
-        `DROP TABLE IF EXISTS adjcek`,
-        `DROP TABLE IF EXISTS mstadj`,
+        // `DROP TABLE IF EXISTS adjcek`,
+        // `DROP TABLE IF EXISTS mstadj`,
       ],
     },
   },

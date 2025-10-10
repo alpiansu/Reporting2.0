@@ -7,11 +7,12 @@ import MDept from "./m_dept.model.js";
 import RekonWtHarian from "./rekon_wt_harian.model.js";
 import RekapRemote from "./rekap_remote.model.js";
 import HistAdjust from "./hist_adjust.model.js";
+import SaldoVirtual from "./saldovirtual.model.js";
 import modelRegistry from "./registry.js";
-import logger from "../config/logger.js";
 
 // Register all Sequelize models with the registry
 // Priority: higher numbers are initialized first
+modelRegistry.register("SaldoVirtual", () => SaldoVirtual.getModel(), { priority: 11 });
 modelRegistry.register("RekonWtHarian", () => RekonWtHarian.getModel(), { priority: 10 });
 modelRegistry.register("RekapRemote", () => RekapRemote.getModel(), { priority: 9 });
 modelRegistry.register("SalesPerDept", () => SalesPerDept.getModel(), { priority: 8 });
@@ -43,11 +44,12 @@ export default {
   RekonWtHarian,
   RekapRemote,
   HistAdjust,
+  SaldoVirtual,
   modelRegistry,
 };
 
 // Named exports for backward compatibility
-export { User, Store, SalesPerDept, MDept, RekonWtHarian, RekapRemote, HistAdjust, modelRegistry };
+export { User, Store, SalesPerDept, MDept, RekonWtHarian, RekapRemote, HistAdjust, SaldoVirtual, modelRegistry };
 
 // Database connection functions
 export const getDatabase = () => resilientDb.getDatabase();

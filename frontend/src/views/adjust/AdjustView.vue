@@ -398,7 +398,7 @@ const csvFields = [
   },
   {
     name: 'PRDCD',
-    description: 'Kode produk (13 digit barcode)',
+    description: 'Kode produk (8 digit) yang akan di adjust',
     example: '20000459',
     required: true
   },

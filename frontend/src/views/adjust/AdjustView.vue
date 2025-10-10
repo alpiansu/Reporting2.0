@@ -366,7 +366,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from "vue";
+import { ref } from "vue";
 import { useToast } from "primevue/usetoast";
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
@@ -414,15 +414,6 @@ const csvFields = [
     example: 'Stock correction, Damaged goods',
     required: true
   }
-];
-
-// CSV notes for the info card
-const csvNotes = [
-  'File harus dalam format CSV dengan delimiter koma (,)',
-  'Pastikan tidak ada header tambahan selain yang telah ditentukan',
-  'QTY_ADJ merupakan nilai adjustment yang diberikan terhadap PRDCD',
-  'KETER Sebaiknya di isi sesuai event yang sedang berlangsung',
-  'Gunakan encoding UTF-8 untuk karakter khusus'
 ];
 
 // Formatting methods for PrimeVue components
@@ -590,23 +581,10 @@ const getFileSize = (file) => {
   return Math.round(size / (1024 * 1024)) + ' MB';
 };
 
-const formatDateTime = (dateTime) => {
-  if (!dateTime) return '-';
-  const date = new Date(dateTime);
-  return date.toLocaleString('id-ID', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  });
-};
-
 // Template download handler
 const handleDownloadTemplate = async () => {
   try {
-    const result = await adjustService.downloadTemplate();
+    await adjustService.downloadTemplate();
     
     toast.add({
       severity: "success",

@@ -14,7 +14,6 @@ import storeService from "../../modules/store/storeService.js";
 import wrcUtils from "../../utils/wrc.utils.js";
 import RekapRemoteService from "../rekap_remote/rekap_remote.service.js";
 import RekapRemoteStagingService from "../rekap_remote/rekap_remote_staging.service.js";
-import { exit } from "process";
 
 // Path untuk file JSON rekon_wt_harian
 const REKON_WT_HARIAN_JSON_PATH = path.join(process.cwd(), "data/rekon_wt_harian.json");
@@ -2470,15 +2469,22 @@ class RekonWtHarianService {
       const statusMap = new Map();
       rekapRemoteData.forEach(item => {
         if (item.kdtk) {
-          statusMap.set(item.kdtk, item.status || "unknown");
+          statusMap.set(item.kdtk, {
+            status: item.status || "unknown",
+            updtime: item.updtime, // Include updtime in the map value
+          });
         }
       });
 
-      // Add status column to summary data by matching kdtk with shop
-      summaryData = summaryData.map(item => ({
-        ...item,
-        status: statusMap.get(item.shop) || "no_data",
-      }));
+      // Add status and updtime from rekap_remote to summary data by matching kdtk with shop
+      summaryData = summaryData.map(item => {
+        const rekapInfo = statusMap.get(item.shop) || { status: "no_data", updtime: null };
+        return {
+          ...item,
+          status: rekapInfo.status,
+          updtime: rekapInfo.updtime || item.updtime, // Use rekap_remote updtime if available, otherwise keep original
+        };
+      });
 
       // Apply pagination
       const paginatedData = summaryData.slice(offset, offset + validLimit);

@@ -1,0 +1,31 @@
+import express from "express";
+import * as rekonVirtualController from "./rekon_virtual_mrg.controller.js";
+import { authenticateJWT } from "../../middlewares/index.js";
+
+const router = express.Router();
+
+// Apply auth middleware to all routes
+router.use(authenticateJWT);
+
+// Initialize routes for screening to stores by cabang (fixed cabang or all cabang)
+router.get("/screening", rekonVirtualController.screeningByCabang);
+
+// Get all records with pagination and filters
+router.get("/", rekonVirtualController.getAllRecords);
+
+// Get single record
+router.get("/:cabang/:shop/:tanggal/:prdcd", rekonVirtualController.getRecord);
+
+// Create new record
+router.post("/", rekonVirtualController.createRecord);
+
+// Update record
+router.put("/:cabang/:shop/:tanggal/:prdcd", rekonVirtualController.updateRecord);
+
+// Delete record
+router.delete("/:cabang/:shop/:tanggal/:prdcd", rekonVirtualController.deleteRecord);
+
+// Insert records from store
+router.post("/insert-from-store", rekonVirtualController.insertFromStore);
+
+export default router;

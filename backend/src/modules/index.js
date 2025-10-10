@@ -16,6 +16,7 @@ import menuManagerModule from "./menu-manager/index.js";
 import rekapRemoteModule from "./rekap_remote/index.js";
 import prepClosingModule from "./prep-closing/index.js";
 import adjustModule from "./adjust/index.js";
+import rekonVirtualMrgModule from "./rekon_virtual_mrg/index.js";
 
 export default {
   // Export all modules
@@ -32,6 +33,7 @@ export default {
   rekapRemoteModule,
   prepClosingModule,
   adjustModule,
+  rekonVirtualMrgModule,
 
   // Initialize all modules
   initialize: app => {
@@ -48,6 +50,7 @@ export default {
     const rekapRemote = rekapRemoteModule.initialize(app);
     const prepClosing = prepClosingModule.initialize(app);
     const adjust = adjustModule.initialize(app);
+    const rekonVirtualMrg = rekonVirtualMrgModule.initialize(app);
 
     // Initialize menu manager module
     app.use("/api/menu-manager", menuManagerModule.routes);
@@ -65,6 +68,7 @@ export default {
       rekapRemote,
       prepClosing,
       adjust,
+      rekonVirtualMrg,
       menuManager: true,
     };
   },

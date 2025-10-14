@@ -192,7 +192,7 @@ class StoreService {
    * @param {boolean} onlyInduk - If true, only return stores with notes='INDUK'
    * @returns {Array} Array of store data
    */
-  async getStoresByBranch(branchCode, onlyInduk = true) {
+  async getStoresByBranch(branchCode, onlyInduk = true, options = {}) {
     try {
       await this.ensureInitialized();
 
@@ -200,6 +200,11 @@ class StoreService {
 
       if (onlyInduk) {
         filteredStores = filteredStores.filter(store => store.notes === "INDUK");
+      }
+
+      // Jika options.limit dikirim, batasi jumlah hasil
+      if (options.limit && Number.isInteger(options.limit) && options.limit > 0) {
+        filteredStores = filteredStores.slice(0, options.limit);
       }
 
       return filteredStores;

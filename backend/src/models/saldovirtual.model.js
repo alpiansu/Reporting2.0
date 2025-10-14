@@ -57,11 +57,6 @@ const getSaldoVirtualModel = async () => {
             type: DataTypes.DATE,
             allowNull: true,
           },
-          UPDTIME: {
-            type: DataTypes.DATE,
-            allowNull: true,
-            defaultValue: DataTypes.NOW,
-          },
         },
         {
           tableName: "saldo_virtual",

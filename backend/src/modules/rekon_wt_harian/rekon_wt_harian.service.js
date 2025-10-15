@@ -810,11 +810,6 @@ class RekonWtHarianService {
             }
             logger.info(`Store ${store.storeCode} processed with differences result:`, result.length);
 
-            // Log detailed progress information
-            logger.debug(
-              `Store ${store.storeCode} processed. Progress: ${processedStores}/${totalStores} (${percentage}%)`
-            );
-
             return result;
           };
 

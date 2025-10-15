@@ -41,6 +41,14 @@ const getSaldoVirtualModel = async () => {
             type: DataTypes.STRING(75),
             allowNull: true,
           },
+          ACOST: {
+            type: DataTypes.DECIMAL(15, 6),
+            allowNull: true,
+          },
+          PRICE: {
+            type: DataTypes.DECIMAL(15, 6),
+            allowNull: true,
+          },
           QTY_MSTRAN: {
             type: DataTypes.DECIMAL(9, 0),
             allowNull: true,

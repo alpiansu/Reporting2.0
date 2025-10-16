@@ -170,41 +170,53 @@ const addDynamicRoutes = async () => {
   }
 };
 
-// Helper function untuk convert path ke component path
-// Static component imports untuk menghindari dynamic import error
-const componentMap = {
-  "stores/StoreList": () => import("../views/stores/StoreList.vue"),
-  "screenings/ScreeningList": () => import("../views/screenings/ScreeningList.vue"),
-  "rekonWtHarian/RekonWtHarianView": () => import("../views/rekonWtHarian/RekonWtHarianView.vue"),
-  "prepClosing/PrepClosingView": () => import("../views/PrepClosingView.vue"),
-  "reports/SalesReport": () => import("../views/reports/SalesReport.vue"),
-  "reports/InventoryReport": () => import("../views/reports/InventoryReport.vue"),
-  "admin/UserManager": () => import("../views/admin/UserManager.vue"),
-  "settings/Settings": () => import("../views/settings/Settings.vue"),
-  "admin/MenuManager": () => import("../views/admin/MenuManager.vue"),
-  "adjust/AdjustView": () => import("../views/adjust/AdjustView.vue"),
-};
-
+/**
+ * Helper function to dynamically load components based on path
+ * Convention: /path-name -> views/pathName/index.vue
+ * Falls back to views/pathName/PathNameView.vue if index.vue doesn't exist
+ *
+ * Examples:
+ * - /stores -> views/stores/index.vue
+ * - /adjust -> views/adjust/index.vue
+ * - /prep-closing -> views/prepClosing/index.vue
+ * - /admin/menu-manager -> views/admin/menuManager/index.vue
+ */
 const getComponent = path => {
   // Remove leading slash
   const cleanPath = path.startsWith("/") ? path.substring(1) : path;
 
-  // Handle special cases
-  const pathMappings = {
-    stores: "stores/StoreList",
-    screenings: "screenings/ScreeningList",
-    "rekon-wt-harian": "rekonWtHarian/RekonWtHarianView",
-    "prep-closing": "prepClosing/PrepClosingView",
-    "sales-report": "reports/SalesReport",
-    "inventory-report": "reports/InventoryReport",
-    users: "admin/UserManager",
-    settings: "settings/Settings",
-    "admin/menu-manager": "admin/MenuManager",
-    adjust: "adjust/AdjustView",
+  // Split path into segments (e.g., "admin/menu-manager" -> ["admin", "menu-manager"])
+  const segments = cleanPath.split("/");
+
+  // Convert kebab-case to camelCase for folder names
+  // e.g., "menu-manager" -> "menuManager", "prep-closing" -> "prepClosing"
+  const convertToCamelCase = str => {
+    return str.replace(/-([a-z])/g, (match, letter) => letter.toUpperCase());
   };
 
-  const componentPath = pathMappings[cleanPath] || cleanPath;
-  return componentMap[componentPath] || (() => import("../views/NotFound.vue"));
+  // Build the folder path
+  const folderPath = segments.map(convertToCamelCase).join("/");
+
+  // Try to import index.vue first
+  return () =>
+    import(`../views/${folderPath}/index.vue`).catch(() => {
+      // If index.vue doesn't exist, try with the last segment as filename
+      const fileName =
+        segments[segments.length - 1]
+          .split("-")
+          .map((word, index) =>
+            index === 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word.charAt(0).toUpperCase() + word.slice(1)
+          )
+          .join("") + "View";
+
+      return import(`../views/${folderPath}/${fileName}.vue`).catch(() => {
+        // Final fallback: NotFound
+        console.error(`Component not found for path: ${path}. Tried:
+              - ../views/${folderPath}/index.vue
+              - ../views/${folderPath}/${fileName}.vue`);
+        return import("../views/NotFound.vue");
+      });
+    });
 };
 
 router.beforeEach(async (to, from, next) => {

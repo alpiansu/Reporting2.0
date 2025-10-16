@@ -10,6 +10,9 @@ router.use(authenticateJWT);
 // Initialize routes for screening to stores by cabang (fixed cabang or all cabang)
 router.get("/screening", rekonVirtualController.screeningByCabang);
 
+// Get summary statistics
+router.get("/summary", rekonVirtualController.getSummary);
+
 // Get all records with pagination and filters
 router.get("/", rekonVirtualController.getAllRecords);
 

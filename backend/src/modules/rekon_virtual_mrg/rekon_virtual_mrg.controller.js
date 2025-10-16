@@ -1,21 +1,32 @@
+/**
+ * Controller for Rekon Virtual Margin Based
+ */
 import logger from "../../config/logger.js";
 import { apiResponse } from "../../utils/index.js";
 import rekonVirtualService from "./rekon_virtual_mrg.service.js";
 
-//Controller screening by cabang
+/**
+ * Start screening/reconciliation process
+ * GET /api/rekon-virtual-mrg/screening
+ */
 export const screeningByCabang = async (req, res) => {
   try {
-    const options = {
-      cabang: req.query.cabang,
-      periode: req.query.periode,
-    };
+    const { cabang, periode } = req.query;
 
-    //validation options
-    if (!options.cabang || !options.periode) {
-      return apiResponse.badRequest(res, "Cabang and periode are required");
+    if (!periode) {
+      return apiResponse.badRequest(res, "Periode is required");
     }
 
-    const result = await rekonVirtualService.screening(options);
+    // Validate periode format (YYMM)
+    if (!/^\d{4}$/.test(periode)) {
+      return apiResponse.badRequest(res, "Format periode tidak valid. Gunakan format YYMM (contoh: 2507)");
+    }
+
+    const cabParam = !cabang || cabang === "All" ? "All" : cabang;
+
+    logger.info(`Starting screening for cabang: ${cabParam}, periode: ${periode}`);
+
+    const result = await rekonVirtualService.screening({ cabang: cabParam, periode });
 
     return apiResponse.success(res, result);
   } catch (error) {
@@ -25,20 +36,55 @@ export const screeningByCabang = async (req, res) => {
 };
 
 /**
- * Get all records
+ * Get summary statistics
+ * GET /api/rekon-virtual-mrg/summary
+ */
+export const getSummary = async (req, res) => {
+  try {
+    const { cabang, periode } = req.query;
+
+    if (!periode) {
+      return apiResponse.badRequest(res, "Periode is required");
+    }
+
+    const cabParam = !cabang || cabang === "All" ? "All" : cabang;
+
+    logger.info(`Getting summary for cabang: ${cabParam}, periode: ${periode}`);
+
+    const result = await rekonVirtualService.getSummary({ cabang: cabParam, periode });
+
+    return apiResponse.success(res, result);
+  } catch (error) {
+    logger.error(`Error getting summary: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+/**
+ * Get all records with pagination and filtering
+ * GET /api/rekon-virtual-mrg
  */
 export const getAllRecords = async (req, res) => {
   try {
+    const { page = 1, limit = 10, cabang, periode, shop, searchQuery, sortColumn, sortOrder } = req.query;
+
     const options = {
-      page: parseInt(req.query.page) || 1,
-      limit: parseInt(req.query.limit) || 10,
-      shop: req.query.shop,
-      cabang: req.query.cabang,
-      startDate: req.query.startDate,
-      endDate: req.query.endDate,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      cabang: !cabang || cabang === "All" ? null : cabang,
+      periode,
+      shop,
+      searchQuery,
+      sortColumn,
+      sortOrder,
     };
 
+    logger.info(
+      `Getting records: page=${page}, limit=${limit}, cabang=${cabang || "All"}, periode=${periode || "All"}`
+    );
+
     const result = await rekonVirtualService.getAllRecords(options);
+
     return apiResponse.success(res, result);
   } catch (error) {
     logger.error(`Error getting records: ${error.message}`);

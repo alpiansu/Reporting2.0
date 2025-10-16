@@ -1,3 +1,8 @@
+/**
+ * Service for Rekon Virtual Margin Based
+ */
+import fs from "fs/promises";
+import path from "path";
 import logger from "../../config/logger.js";
 import SaldoVirtual from "../../models/saldovirtual.model.js";
 import dbStore from "../../config/db_store.js";
@@ -5,122 +10,468 @@ import config from "./rekon_virtual_mrg.config.js";
 import storeService from "../store/storeService.js";
 import pLimit from "p-limit";
 import moment from "moment-timezone";
-import apiResponse from "../../utils/apiResponse.js";
+import RekapRemoteService from "../rekap_remote/rekap_remote.service.js";
+
+// Path untuk file JSON rekon_virtual_mrg
+const REKON_VIRTUAL_MRG_JSON_PATH = path.join(process.cwd(), "data/rekon_virtual_mrg.json");
 
 class RekonVirtualService {
-  // Screening stores to rekon virtual margin based on store query
+  constructor() {
+    this.virtualData = [];
+    this.initialized = false;
+
+    // TTL Cache Management
+    this.lastLoadTime = null;
+    this.TTL = 60 * 60 * 1000; // 1 hour in milliseconds
+    this.isLoading = false; // Prevent concurrent loading
+  }
+
+  /**
+   * Initialize the service by loading data from JSON file
+   * Creates the file and directory if they don't exist
+   */
+  async initialize() {
+    try {
+      // Create directory if it doesn't exist
+      const dir = path.dirname(REKON_VIRTUAL_MRG_JSON_PATH);
+      await fs.mkdir(dir, { recursive: true });
+
+      try {
+        // Try to read the file
+        const data = await fs.readFile(REKON_VIRTUAL_MRG_JSON_PATH, "utf8");
+        const rawData = JSON.parse(data);
+
+        // Ensure numeric fields are numbers when loading from JSON
+        this.virtualData = rawData.map(item => ({
+          ...item,
+          ACOST: Number(item.ACOST) || 0,
+          PRICE: Number(item.PRICE) || 0,
+          QTY_MSTRAN: Number(item.QTY_MSTRAN) || 0,
+          QTY_MTRAN: Number(item.QTY_MTRAN) || 0,
+          SEL: Number(item.SEL) || 0,
+        }));
+
+        logger.info(`Loaded ${this.virtualData.length} rekon_virtual_mrg records from JSON file`);
+      } catch (error) {
+        // If file doesn't exist or is invalid, create an empty file
+        if (error.code === "ENOENT" || error instanceof SyntaxError) {
+          this.virtualData = [];
+          await this.saveToFile();
+          logger.info("Created new rekon_virtual_mrg.json file");
+        } else {
+          throw error;
+        }
+      }
+
+      this.initialized = true;
+    } catch (error) {
+      logger.error(`Failed to initialize rekon_virtual_mrg service: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Save rekon_virtual_mrg data to JSON file
+   */
+  async saveToFile() {
+    try {
+      await fs.writeFile(REKON_VIRTUAL_MRG_JSON_PATH, JSON.stringify(this.virtualData, null, 2));
+      logger.debug(`Saved ${this.virtualData.length} rekon_virtual_mrg records to JSON file`);
+    } catch (error) {
+      logger.error(`Failed to save rekon_virtual_mrg to file: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if cached data is still valid based on TTL
+   * @returns {boolean} True if cache is valid, false if expired
+   */
+  isCacheValid() {
+    if (!this.initialized || !this.lastLoadTime) {
+      return false;
+    }
+
+    const now = Date.now();
+    const isExpired = now - this.lastLoadTime > this.TTL;
+    return !isExpired;
+  }
+
+  /**
+   * Invalidate cache manually
+   */
+  invalidateCache() {
+    this.virtualData = [];
+    this.initialized = false;
+    this.lastLoadTime = null;
+    this.isLoading = false;
+    logger.info("Rekon Virtual MRG cache invalidated manually");
+  }
+
+  /**
+   * Ensure data is loaded with TTL-based lazy loading
+   * Only loads data when needed and cache is expired
+   */
+  /**
+   * Ensure data is loaded with TTL-based lazy loading
+   * Only loads data when needed and cache is expired
+   */
+  async ensureDataLoaded() {
+    // If cache is still valid, no need to reload
+    if (this.isCacheValid()) {
+      return;
+    }
+
+    // Prevent concurrent loading
+    if (this.isLoading) {
+      // Wait for ongoing loading to complete
+      while (this.isLoading) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      return;
+    }
+
+    try {
+      this.isLoading = true;
+      logger.info("Loading rekon_virtual_mrg data from JSON file (cache expired or empty)");
+
+      await this.initialize();
+      this.lastLoadTime = Date.now();
+
+      logger.info(`Data loaded successfully. TTL expires at: ${new Date(this.lastLoadTime + this.TTL).toISOString()}`);
+    } finally {
+      this.isLoading = false;
+    }
+  }
+
+  /**
+   * Synchronize data from database to JSON file
+   * Call this after any write operation to keep JSON in sync
+   */
+  async syncToJsonFile() {
+    try {
+      // Get all data from database
+      const dbData = await SaldoVirtual.findAll();
+
+      // Convert to plain objects and ensure numeric fields are numbers
+      this.virtualData = dbData.map(item => {
+        const plainItem = item.get({ plain: true });
+
+        return {
+          ...plainItem,
+          ACOST: Number(plainItem.ACOST) || 0,
+          PRICE: Number(plainItem.PRICE) || 0,
+          QTY_MSTRAN: Number(plainItem.QTY_MSTRAN) || 0,
+          QTY_MTRAN: Number(plainItem.QTY_MTRAN) || 0,
+          SEL: Number(plainItem.SEL) || 0,
+        };
+      });
+
+      // Save to file
+      await this.saveToFile();
+
+      // Update cache timestamp since we just loaded fresh data
+      this.lastLoadTime = Date.now();
+      this.initialized = true;
+
+      logger.info(`Synchronized ${this.virtualData.length} rekon_virtual_mrg records to JSON file`);
+      logger.info(`Cache refreshed. TTL expires at: ${new Date(this.lastLoadTime + this.TTL).toISOString()}`);
+
+      return this.virtualData.length;
+    } catch (error) {
+      logger.error(`Failed to synchronize rekon_virtual_mrg data: ${error.message}`);
+      throw error;
+    }
+  }
+  /**
+   * Screening stores to rekon virtual margin based on store query
+   */
   async screening(options) {
-    //ensure storeService is initialized
+    // Ensure storeService is initialized
     await storeService.ensureInitialized();
 
     let branches = [];
-    if (options.cabang == "ALL") {
+    if (options.cabang === "All" || options.cabang === "ALL") {
       const allStores = storeService.stores;
       branches = [...new Set(allStores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))];
     } else {
       branches = [options.cabang];
     }
 
-    //convert from string periode (YYMM)
+    logger.info(`[rekon_virtual_mrg.service] Starting screening for branches: ${branches.join(", ")}`);
+
+    // Convert from string periode (YYMM)
     const strYear = moment(options.periode, "YYMM").format("YYYY");
     const strMonth = moment(options.periode, "YYMM").format("MM");
 
-    //loop each branch event if branch only has one branch
+    // Temporary array to collect new records
+    const newRecords = [];
+
+    // Loop each branch even if branch only has one branch
     const limitBranches = pLimit(config.parallelProcessing.branchConcurrencyLimit);
     const limitStores = pLimit(config.parallelProcessing.concurrencyLimit);
-    async () => {
-      // Process branches asynchronously
-      await Promise.all(
-        branches.map(async cab =>
-          limitBranches(async () => {
-            const stores = await storeService.getStoresByBranch(cab, true);
 
-            // loop each store asynchronously
-            await Promise.all(
-              stores.map(async store =>
-                limitStores(async () => {
-                  // Get store info
-                  const storeInfo = await storeService.getStoreIPHost(store.SHOP);
+    // Process branches asynchronously
+    await Promise.all(
+      branches.map(async cab =>
+        limitBranches(async () => {
+          // const stores = await storeService.getStoresByBranch(cab, true, { limit: 10 });
+          const stores = await storeService.getStoresByBranch(cab, true);
 
-                  if (!storeInfo) {
-                    logger.error(`[rekon_virtual_mrg.service] Store information not found for ${store.SHOP}`);
-                    return;
-                  }
+          logger.info(`[rekon_virtual_mrg.service] Found ${stores.length} stores for branch ${cab}`);
 
-                  // Create database connection
-                  const storeConnection = await dbStore.createDbStore(
-                    storeInfo.dbHost,
-                    config.connectionRetry.maxRetries
-                  );
-                  try {
-                    logger.info(`[rekon_virtual_mrg.service] Processing store ${store.SHOP} (${cab})`);
-                    const result = await storeConnection.query(config.queries.store, [strMonth, strYear]);
+          // Loop each store asynchronously
+          await Promise.all(
+            stores.map(async store =>
+              limitStores(async () => {
+                // Get store info
+                const storeInfo = await storeService.getStoreIPHost(store.storeCode);
+                if (!storeInfo) {
+                  logger.error(`[rekon_virtual_mrg.service] Store information not found for ${store.storeCode}`);
+                  return;
+                }
 
-                    //result if exists insert into database
+                // Create database connection
+                const storeConnection = await dbStore.createDbStore(
+                  storeInfo.dbHost,
+                  config.connectionRetry.maxRetries
+                );
+
+                if (!storeConnection) {
+                  const msg = `[${store.storeCode}] failed to connect after ${config.connectionRetry.maxRetries} attempts`;
+                  logger.error(`[rekon_virtual_mrg.service] ${msg}`);
+                  await RekapRemoteService.addToTemp(cab, store.storeCode, "rekon_virtual_mrg", msg);
+                  return;
+                }
+
+                try {
+                  logger.info(`[rekon_virtual_mrg.service] Processing store ${store.storeCode} (${cab})`);
+                  const [result] = await storeConnection.query(config.queries.store, [strMonth, strYear]);
+
+                  // Insert ke rekap remote
+                  const msg = `[${store.storeCode}] query completed, got ${result.length} records`;
+                  await RekapRemoteService.addToTemp(cab, store.storeCode, "rekon_virtual_mrg", msg);
+
+                  // Save results to database if exists
+                  if (result.length > 0) {
+                    logger.info(`Found ${result.length} records for ${store.storeCode} (${cab})`);
+
                     try {
-                      if (result.length > 0) {
-                        logger.info(
-                          `[rekon_virtual_mrg.service] found ${result.length} records for ${store.SHOP} (${cab})`
-                        );
-                        await SaldoVirtual.bulkCreate(result);
-                        logger.info(
-                          `[rekon_virtual_mrg.service] Successfully inserted ${result.length} records for ${store.SHOP} (${cab})`
-                        );
-                      } else {
-                        logger.info(`[rekon_virtual_mrg.service] No data found for ${store.SHOP} (${cab})`);
-                      }
-                    } catch (err) {
-                      logger.error(
-                        `[rekon_virtual_mrg.service] Error inserting ${store.SHOP} (${cab}) into database: ${err.message}`
-                      );
-                    }
+                      // Insert to database using SaldoVirtual model
+                      await SaldoVirtual.bulkCreate(result, {
+                        updateOnDuplicate: ["QTY_MSTRAN", "QTY_MTRAN", "SEL", "LASTCATCH"],
+                      });
 
-                    return apiResponse.success(`Successfully processed store ${store.SHOP} (${cab})`);
-                  } catch (err) {
-                    logger.error(`[rekon_virtual_mrg.service] Error processing ${store.SHOP}: ${err.message}`);
-                    return apiResponse.error(`Error processing ${store.SHOP} (${cab})`);
-                  } finally {
-                    await storeConnection.end(); // pastikan ditutup
+                      logger.info(
+                        `[rekon_virtual_mrg.service] Successfully inserted ${result.length} records for ${store.storeCode} (${cab})`
+                      );
+                      newRecords.push(...result);
+                    } catch (insertErr) {
+                      logger.error(
+                        `[rekon_virtual_mrg.service] Error inserting ${store.storeCode} (${cab}) into database: ${insertErr.message}`
+                      );
+                      const errMsg = `[${store.storeCode}] connected, but error on inserting data: ${insertErr.message}`;
+                      await RekapRemoteService.addToTemp(cab, store.storeCode, "rekon_virtual_mrg", errMsg);
+                    }
+                  } else {
+                    logger.info(`[rekon_virtual_mrg.service] No data found for ${store.storeCode} (${cab})`);
                   }
-                })
-              )
-            );
-          })
-        )
-      );
+                } catch (err) {
+                  logger.error(`[rekon_virtual_mrg.service] Error processing ${store.storeCode}: ${err.message}`);
+                  const msg = `error on processing store: ${err.message}`;
+                  await RekapRemoteService.addToTemp(cab, store.storeCode, "rekon_virtual_mrg", msg);
+                } finally {
+                  if (storeConnection) {
+                    await storeConnection.end();
+                  }
+                }
+              })
+            )
+          );
+        })
+      )
+    );
+
+    logger.info(`[rekon_virtual_mrg.service] Screening process completed for periode ${options.periode}`);
+
+    // Save logs to database
+    await RekapRemoteService.saveLogsToDatabase();
+
+    // Sync database to JSON file after write operations
+    if (newRecords.length > 0) {
+      await this.syncToJsonFile();
+      logger.info(`Synchronized ${newRecords.length} new records from database to JSON file`);
+    }
+
+    return {
+      success: true,
+      message: "Screening process completed",
+      processedRecords: newRecords.length,
     };
   }
 
   /**
-   * Get all records with pagination
+   * Build filter function for data filtering (DRY principle)
+   * @param {Object} params - Filter parameters
+   * @returns {Function} Filter function
+   */
+  buildFilterFunction(params = {}) {
+    const { cabang, periode, shop } = params;
+
+    return item => {
+      // Filter by cabang
+      if (cabang && cabang !== "All" && item.CABANG !== cabang) {
+        return false;
+      }
+
+      // Filter by shop
+      if (shop && item.SHOP !== shop) {
+        return false;
+      }
+
+      // Filter by periode
+      if (periode) {
+        const year = "20" + periode.substring(0, 2);
+        const month = periode.substring(2, 4);
+        const startDate = `${year}-${month}-01`;
+        const endDate = moment(`${year}-${month}`, "YYYY-MM").endOf("month").format("YYYY-MM-DD");
+
+        const itemDate = moment(item.TANGGAL).format("YYYY-MM-DD");
+        if (itemDate < startDate || itemDate > endDate) {
+          return false;
+        }
+      }
+
+      return true;
+    };
+  }
+
+  /**
+   * Get summary statistics from JSON file
+   * @param {Object} options - Query options (cabang, periode)
+   * @returns {Promise<Object>} Summary statistics
+   */
+  async getSummary(options = {}) {
+    const { cabang, periode } = options;
+
+    try {
+      // Ensure data is loaded from JSON file
+      await this.ensureDataLoaded();
+
+      // Build filter function
+      const filterFn = this.buildFilterFunction({ cabang, periode });
+
+      // Filter data
+      const filteredData = this.virtualData.filter(filterFn);
+
+      // Calculate summary
+      const uniqueShops = new Set(filteredData.map(item => item.SHOP));
+      const totalSel = filteredData.reduce((sum, item) => sum + (Number(item.SEL) || 0), 0);
+
+      return {
+        data: {
+          jml_toko: uniqueShops.size,
+          total_sel: totalSel,
+          total_records: filteredData.length,
+        },
+      };
+    } catch (error) {
+      logger.error(`[rekon_virtual_mrg.service] Error getting summary: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all records with pagination and filtering from JSON file
    * @param {Object} options - Query options
    * @returns {Promise<Object>} Paginated results
    */
   async getAllRecords(options = {}) {
-    const { page = 1, limit = 10, shop, cabang, startDate, endDate } = options;
+    const {
+      page = 1,
+      limit = 10,
+      shop,
+      cabang,
+      periode,
+      searchQuery,
+      sortColumn = "LASTCATCH",
+      sortOrder = "DESC",
+    } = options;
 
     try {
-      const whereClause = {};
-      if (shop) whereClause.SHOP = shop;
-      if (cabang) whereClause.CABANG = cabang;
-      if (startDate && endDate) {
-        whereClause.TANGGAL = {
-          [Op.between]: [startDate, endDate],
-        };
+      // Ensure data is loaded from JSON file
+      await this.ensureDataLoaded();
+
+      // Build filter function
+      const filterFn = this.buildFilterFunction({ cabang, periode, shop });
+
+      // Filter data
+      let filteredData = this.virtualData.filter(filterFn);
+
+      // Apply search query if provided
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        filteredData = filteredData.filter(item => {
+          return (
+            (item.SHOP && item.SHOP.toLowerCase().includes(query)) ||
+            (item.CABANG && item.CABANG.toLowerCase().includes(query)) ||
+            (item.PRDCD && item.PRDCD.toLowerCase().includes(query)) ||
+            (item.SINGKATAN && item.SINGKATAN.toLowerCase().includes(query))
+          );
+        });
       }
 
-      const { count, rows } = await SaldoVirtual.findAndCountAll({
-        where: whereClause,
-        limit: limit,
-        offset: (page - 1) * limit,
-        order: [["UPDTIME", "DESC"]],
+      // Sort data
+      const allowedSortColumns = [
+        "CABANG",
+        "SHOP",
+        "TANGGAL",
+        "PRDCD",
+        "ACOST",
+        "PRICE",
+        "QTY_MSTRAN",
+        "QTY_MTRAN",
+        "SEL",
+        "LASTCATCH",
+      ];
+      const sanitizedSortColumn = allowedSortColumns.includes(sortColumn) ? sortColumn : "LASTCATCH";
+      const sanitizedSortOrder = sortOrder && sortOrder.toUpperCase() === "ASC" ? "ASC" : "DESC";
+
+      filteredData.sort((a, b) => {
+        let aVal = a[sanitizedSortColumn];
+        let bVal = b[sanitizedSortColumn];
+
+        // Handle dates
+        if (sanitizedSortColumn === "TANGGAL" || sanitizedSortColumn === "LASTCATCH") {
+          aVal = aVal ? new Date(aVal).getTime() : 0;
+          bVal = bVal ? new Date(bVal).getTime() : 0;
+        }
+
+        // Handle numbers
+        if (typeof aVal === "number" || !isNaN(Number(aVal))) {
+          aVal = Number(aVal) || 0;
+          bVal = Number(bVal) || 0;
+        }
+
+        if (sanitizedSortOrder === "ASC") {
+          return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+        } else {
+          return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+        }
       });
 
+      // Pagination
+      const totalRecords = filteredData.length;
+      const startIndex = (parseInt(page) - 1) * parseInt(limit);
+      const endIndex = startIndex + parseInt(limit);
+      const paginatedData = filteredData.slice(startIndex, endIndex);
+
       return {
-        data: rows,
-        total: count,
-        page: page,
-        totalPages: Math.ceil(count / limit),
+        data: paginatedData,
+        total: totalRecords,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(totalRecords / parseInt(limit)),
       };
     } catch (error) {
       logger.error(`[rekon_virtual_mrg.service] Error getting records: ${error.message}`);
@@ -150,7 +501,7 @@ class RekonVirtualService {
   }
 
   /**
-   * Create new record
+   * Create new record in database and sync to JSON
    */
   async createRecord(data) {
     try {
@@ -158,6 +509,10 @@ class RekonVirtualService {
         ...data,
         LASTCATCH: new Date(),
       });
+
+      // Sync to JSON file after write operation
+      await this.syncToJsonFile();
+
       return record;
     } catch (error) {
       logger.error(`[rekon_virtual_mrg.service] Error creating record: ${error.message}`);
@@ -166,7 +521,7 @@ class RekonVirtualService {
   }
 
   /**
-   * Update existing record
+   * Update existing record in database and sync to JSON
    */
   async updateRecord(cabang, shop, tanggal, prdcd, data) {
     try {
@@ -183,6 +538,9 @@ class RekonVirtualService {
         throw new Error("Record not found");
       }
 
+      // Sync to JSON file after write operation
+      await this.syncToJsonFile();
+
       return this.getRecord(cabang, shop, tanggal, prdcd);
     } catch (error) {
       logger.error(`[rekon_virtual_mrg.service] Error updating record: ${error.message}`);
@@ -191,7 +549,7 @@ class RekonVirtualService {
   }
 
   /**
-   * Delete record
+   * Delete record from database and sync to JSON
    */
   async deleteRecord(cabang, shop, tanggal, prdcd) {
     try {
@@ -208,6 +566,9 @@ class RekonVirtualService {
         throw new Error("Record not found");
       }
 
+      // Sync to JSON file after write operation
+      await this.syncToJsonFile();
+
       return true;
     } catch (error) {
       logger.error(`[rekon_virtual_mrg.service] Error deleting record: ${error.message}`);
@@ -216,7 +577,7 @@ class RekonVirtualService {
   }
 
   /**
-   * Bulk insert records from store query
+   * Bulk insert records from store query to database and sync to JSON
    */
   async insertFromStore(shop, year, month) {
     let storeConnection;
@@ -233,11 +594,14 @@ class RekonVirtualService {
       // Execute store query
       const [results] = await storeConnection.query(config.queries.store, [month, year]);
 
-      // Bulk create records
+      // Bulk create records to database
       if (results.length > 0) {
         await SaldoVirtual.bulkCreate(results, {
           updateOnDuplicate: ["QTY_MSTRAN", "QTY_MTRAN", "SEL", "LASTCATCH"],
         });
+
+        // Sync to JSON file after write operation
+        await this.syncToJsonFile();
       }
 
       return {

@@ -29,7 +29,7 @@ export default {
   RekonVirtualMrgService,
   initialize: app => {
     // Register routes
-    app.use("/api/rekon-virtual", rekonVirtualMrgRoutes);
+    app.use("/api/rekon-virtual-mrg", rekonVirtualMrgRoutes);
 
     return {
       rekonVirtualMrgService: RekonVirtualMrgService,

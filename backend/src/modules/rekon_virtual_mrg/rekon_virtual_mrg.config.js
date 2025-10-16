@@ -8,7 +8,7 @@ export default {
     wrc: ``,
 
     // Store query template
-    store: `SELECT (SELECT KIRIM FROM toko) AS CABANG, (SELECT KDTK FROM toko) AS SHOP, TANGGAL, PRDCD, SINGKATAN, ACOST, PRICE, QTY_MSTRAN, QTY_MTRAN, QTY_MSTRAN - QTY_MTRAN AS SEL, NOW() AS LAST_CATCH FROM (
+    store: `SELECT (SELECT KIRIM FROM toko) AS CABANG, (SELECT KDTK FROM toko) AS SHOP, TANGGAL, PRDCD, SINGKATAN, ACOST, PRICE, QTY_MSTRAN, QTY_MTRAN, QTY_MSTRAN - QTY_MTRAN AS SEL, NOW() AS LASTCATCH FROM (
 				SELECT i.tanggal, p.prdcd, p.singkatan, p.acost, p.price, IFNULL(ms.qty_mstran,0) AS qty_mstran, IFNULL(m.qty_mtran,0) AS qty_mtran FROM 
 					(SELECT DISTINCT tanggal FROM initial) i 
 					INNER JOIN prodmast p

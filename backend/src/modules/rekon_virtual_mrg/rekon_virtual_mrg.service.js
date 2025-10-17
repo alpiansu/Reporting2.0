@@ -423,6 +423,7 @@ class RekonVirtualService {
 
       // Sort data
       const allowedSortColumns = [
+        "RECID",
         "CABANG",
         "SHOP",
         "TANGGAL",

@@ -531,15 +531,19 @@ watch(() => props.filteredData, (newData) => {
   cursor: pointer;
   position: relative;
   user-select: none;
+  transition: all 0.3s ease;
 }
 
 .sortable:hover {
-  background-color: rgba(0, 0, 0, 0.05);
+  background: linear-gradient(to bottom, #e9ecef, #dee2e6) !important;
 }
 
 .sort-icon {
-  margin-left: 5px;
+  margin-left: 8px;
+  font-size: 0.7rem;
+  color: #0056b3;
   transition: transform 0.2s ease;
+  display: inline-block;
 }
 
 .sort-asc .sort-icon {
@@ -548,6 +552,64 @@ watch(() => props.filteredData, (newData) => {
 
 .sort-desc .sort-icon {
   transform: rotate(180deg);
+}
+
+/* Dynamic width expansion for sorted columns */
+.sortable.sort-asc,
+.sortable.sort-desc {
+  background: linear-gradient(to bottom, #d3e5ff, #b8d7ff) !important;
+  color: #0056b3;
+}
+
+/* Add extra space for sort icon */
+.results-table th.sortable.sort-asc:nth-child(2),
+.results-table th.sortable.sort-desc:nth-child(2) {
+  width: 128px; /* Cabang sorted */
+}
+
+.results-table th.sortable.sort-asc:nth-child(3),
+.results-table th.sortable.sort-desc:nth-child(3) {
+  width: 148px; /* Shop sorted */
+}
+
+.results-table th.sortable.sort-asc:nth-child(4),
+.results-table th.sortable.sort-desc:nth-child(4) {
+  width: 138px; /* Tanggal sorted */
+}
+
+.results-table th.sortable.sort-asc:nth-child(5),
+.results-table th.sortable.sort-desc:nth-child(5) {
+  width: 158px; /* Kode Produk sorted */
+}
+
+.results-table th.sortable.sort-asc:nth-child(7),
+.results-table th.sortable.sort-desc:nth-child(7) {
+  width: 138px; /* Cost sorted */
+}
+
+.results-table th.sortable.sort-asc:nth-child(8),
+.results-table th.sortable.sort-desc:nth-child(8) {
+  width: 138px; /* Price sorted */
+}
+
+.results-table th.sortable.sort-asc:nth-child(9),
+.results-table th.sortable.sort-desc:nth-child(9) {
+  width: 148px; /* Qty MSTRAN sorted */
+}
+
+.results-table th.sortable.sort-asc:nth-child(10),
+.results-table th.sortable.sort-desc:nth-child(10) {
+  width: 148px; /* Qty MTRAN sorted */
+}
+
+.results-table th.sortable.sort-asc:nth-child(11),
+.results-table th.sortable.sort-desc:nth-child(11) {
+  width: 158px; /* Selisih sorted */
+}
+
+.results-table th.sortable.sort-asc:nth-child(12),
+.results-table th.sortable.sort-desc:nth-child(12) {
+  width: 208px; /* Last Catch sorted */
 }
 
 .filters-header {
@@ -619,7 +681,27 @@ watch(() => props.filteredData, (newData) => {
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-  -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Scrollbar styling */
+.table-responsive::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+
+.table-responsive::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 /* Definisi sudah ada di atas */
@@ -641,7 +723,8 @@ watch(() => props.filteredData, (newData) => {
   overflow: hidden;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
   margin-bottom: 0;
-  table-layout: fixed;
+  table-layout: auto;
+  min-width: 1400px;
 }
 
 .header-table, .body-table {
@@ -675,6 +758,79 @@ watch(() => props.filteredData, (newData) => {
   text-overflow: ellipsis;
 }
 
+/* Column-specific minimum widths */
+.results-table th:nth-child(1),
+.results-table td:nth-child(1) {
+  min-width: 60px; /* No */
+  width: 60px;
+}
+
+.results-table th:nth-child(2),
+.results-table td:nth-child(2) {
+  min-width: 100px; /* Cabang */
+  width: 100px;
+}
+
+.results-table th:nth-child(3),
+.results-table td:nth-child(3) {
+  min-width: 120px; /* Shop */
+  width: 120px;
+}
+
+.results-table th:nth-child(4),
+.results-table td:nth-child(4) {
+  min-width: 110px; /* Tanggal */
+  width: 110px;
+}
+
+.results-table th:nth-child(5),
+.results-table td:nth-child(5) {
+  min-width: 130px; /* Kode Produk */
+  width: 130px;
+}
+
+.results-table th:nth-child(6),
+.results-table td:nth-child(6) {
+  min-width: 200px; /* Nama Produk */
+  width: 200px;
+}
+
+.results-table th:nth-child(7),
+.results-table td:nth-child(7) {
+  min-width: 110px; /* Cost */
+  width: 110px;
+}
+
+.results-table th:nth-child(8),
+.results-table td:nth-child(8) {
+  min-width: 110px; /* Price */
+  width: 110px;
+}
+
+.results-table th:nth-child(9),
+.results-table td:nth-child(9) {
+  min-width: 120px; /* Qty MSTRAN */
+  width: 120px;
+}
+
+.results-table th:nth-child(10),
+.results-table td:nth-child(10) {
+  min-width: 120px; /* Qty MTRAN */
+  width: 120px;
+}
+
+.results-table th:nth-child(11),
+.results-table td:nth-child(11) {
+  min-width: 130px; /* Selisih */
+  width: 130px;
+}
+
+.results-table th:nth-child(12),
+.results-table td:nth-child(12) {
+  min-width: 180px; /* Last Catch */
+  width: 180px;
+}
+
 .results-table th {
   background: linear-gradient(to bottom, #f8f9fa, #f1f3f5);
   color: #37474f;
@@ -690,8 +846,8 @@ watch(() => props.filteredData, (newData) => {
   z-index: 10;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   box-sizing: border-box;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
+  transition: width 0.3s ease, padding 0.3s ease;
 }
 
 .results-table tr {
@@ -982,6 +1138,14 @@ watch(() => props.filteredData, (newData) => {
   
   .results-table th {
     font-size: 0.7rem;
+  }
+  
+  .table-responsive {
+    max-height: 60vh;
+  }
+  
+  .results-table {
+    min-width: 1200px;
   }
 }
 </style>

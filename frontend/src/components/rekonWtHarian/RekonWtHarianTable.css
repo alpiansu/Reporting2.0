@@ -114,6 +114,8 @@
   border-spacing: 0;
   background: #ffffff;
   position: relative;
+  /* Use auto layout for better flexibility with sort icons */
+  table-layout: auto;
 }
 
 /* Clean Professional Header */
@@ -153,11 +155,17 @@
   color: #1f2937;
 }
 
-/* Sortable Header Styling */
+/* Sortable Header Styling - Fixed column width adjustment for sort icons */
 .results-table th.sortable {
   cursor: pointer;
   user-select: none;
   position: relative;
+  /* Reserve space for sort icon by adding padding */
+  padding-right: 2rem;
+  box-sizing: border-box;
+  /* Ensure content doesn't overlap with icon */
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .results-table th.sortable:hover {
@@ -166,9 +174,15 @@
 }
 
 .results-table th.sortable .sort-icon {
-  margin-left: 0.5rem;
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
   opacity: 0.6;
   transition: all 0.2s ease;
+  font-size: 0.8rem;
+  /* Ensure icon doesn't interfere with text */
+  pointer-events: none;
 }
 
 .results-table th.sort-asc,
@@ -181,6 +195,20 @@
 .results-table th.sort-desc .sort-icon {
   opacity: 1;
   color: #2563eb;
+}
+
+/* Ensure all sortable columns have consistent width handling */
+.results-table th.sortable:not(.sort-asc):not(.sort-desc) {
+  /* When not sorted, still reserve space for potential icon */
+  padding-right: 2rem;
+}
+
+/* Dynamic width expansion for sorted columns in WT Harian table */
+.results-table th.sortable.sort-asc,
+.results-table th.sortable.sort-desc {
+  /* Add extra width when sorted to accommodate the icon */
+  width: calc(100% + 20px) !important;
+  min-width: calc(100% + 20px) !important;
 }
 
 /* Clean Table Body with Good Readability */
@@ -352,7 +380,7 @@
   }
 }
 
-/* Optimized Column Widths for Better Readability */
+/* Optimized Column Widths for Better Readability - Adjusted for sort icons */
 .results-table th:nth-child(1), /* NO */
 .results-table td:nth-child(1) {
   width: 60px;
@@ -364,69 +392,69 @@
 
 .results-table th:nth-child(2), /* Cab */
 .results-table td:nth-child(2) {
-  width: 70px;
-  min-width: 70px;
+  min-width: 80px;
+  width: auto;
   font-weight: 500;
 }
 
 .results-table th:nth-child(3), /* Shop */
 .results-table td:nth-child(3) {
-  width: 80px;
-  min-width: 80px;
+  min-width: 90px;
+  width: auto;
   font-weight: 500;
 }
 
 .results-table th:nth-child(4), /* Total Selisih Gross */
 .results-table td:nth-child(4) {
-  width: 140px;
-  min-width: 140px;
+  min-width: 150px;
+  width: auto;
   font-family: 'Segoe UI', system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
 }
 
 .results-table th:nth-child(5), /* Total Selisih PPN */
 .results-table td:nth-child(5) {
-  width: 140px;
-  min-width: 140px;
+  min-width: 150px;
+  width: auto;
   font-family: 'Segoe UI', system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
 }
 
 .results-table th:nth-child(6), /* Total Selisih Gross IDM */
 .results-table td:nth-child(6) {
-  width: 150px;
-  min-width: 150px;
+  min-width: 160px;
+  width: auto;
   font-family: 'Segoe UI', system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
 }
 
 .results-table th:nth-child(7), /* Total Selisih PPN IDM */
 .results-table td:nth-child(7) {
-  width: 150px;
-  min-width: 150px;
+  min-width: 160px;
+  width: auto;
   font-family: 'Segoe UI', system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
 }
 
 .results-table th:nth-child(8), /* Jumlah Record */
 .results-table td:nth-child(8) {
-  width: 110px;
-  min-width: 110px;
+  min-width: 120px;
+  width: auto;
   text-align: center;
 }
 
 .results-table th:nth-child(9), /* Update Time */
 .results-table td:nth-child(9) {
-  width: 140px;
-  min-width: 140px;
+  min-width: 150px;
+  width: auto;
   font-family: 'Segoe UI', system-ui, sans-serif;
   font-size: 0.8rem;
 }
 
 .results-table th:nth-child(10), /* Status */
 .results-table td:nth-child(10) {
-  width: 140px;
   min-width: 140px;
+  width: auto;
   max-width: 140px;
   word-wrap: break-word;
   word-break: break-word;
@@ -443,6 +471,61 @@
   min-width: 180px;
   max-width: 180px;
   padding: 0.875rem 0.75rem;
+}
+
+/* Specific adjustments for sorted columns to ensure proper display */
+.results-table th.sortable.sort-asc:nth-child(2),
+.results-table th.sortable.sort-desc:nth-child(2) {
+  width: 90px;
+  min-width: 90px;
+}
+
+.results-table th.sortable.sort-asc:nth-child(3),
+.results-table th.sortable.sort-desc:nth-child(3) {
+  width: 100px;
+  min-width: 100px;
+}
+
+.results-table th.sortable.sort-asc:nth-child(4),
+.results-table th.sortable.sort-desc:nth-child(4) {
+  width: 160px;
+  min-width: 160px;
+}
+
+.results-table th.sortable.sort-asc:nth-child(5),
+.results-table th.sortable.sort-desc:nth-child(5) {
+  width: 160px;
+  min-width: 160px;
+}
+
+.results-table th.sortable.sort-asc:nth-child(6),
+.results-table th.sortable.sort-desc:nth-child(6) {
+  width: 170px;
+  min-width: 170px;
+}
+
+.results-table th.sortable.sort-asc:nth-child(7),
+.results-table th.sortable.sort-desc:nth-child(7) {
+  width: 170px;
+  min-width: 170px;
+}
+
+.results-table th.sortable.sort-asc:nth-child(8),
+.results-table th.sortable.sort-desc:nth-child(8) {
+  width: 130px;
+  min-width: 130px;
+}
+
+.results-table th.sortable.sort-asc:nth-child(9),
+.results-table th.sortable.sort-desc:nth-child(9) {
+  width: 160px;
+  min-width: 160px;
+}
+
+.results-table th.sortable.sort-asc:nth-child(10),
+.results-table th.sortable.sort-desc:nth-child(10) {
+  width: 150px;
+  min-width: 150px;
 }
 
 /* Clean Scrollbar Design */

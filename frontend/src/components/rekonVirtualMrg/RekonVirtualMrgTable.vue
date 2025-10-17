@@ -61,7 +61,7 @@
       </th>
       <th>Nama Produk</th>
       <th class="text-right sortable" :class="getSortClass('ACOST', sortColumn, sortOrder)" @click="handleSort('ACOST')">
-        Cost
+        Hpp
         <i v-if="sortColumn === 'ACOST'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
       <th class="text-right sortable" :class="getSortClass('PRICE', sortColumn, sortOrder)" @click="handleSort('PRICE')">
@@ -88,10 +88,10 @@
 
     <!-- Table Row -->
     <template #table-row="{ item }">
-      <td>{{ item.CABANG }}</td>
-      <td>{{ item.SHOP }}</td>
-      <td>{{ formatDate(item.TANGGAL) }}</td>
-      <td>{{ item.PRDCD }}</td>
+      <td class="text-center">{{ item.CABANG }}</td>
+      <td class="text-center">{{ item.SHOP }}</td>
+      <td class="text-center">{{ formatDate(item.TANGGAL) }}</td>
+      <td class="text-center">{{ item.PRDCD }}</td>
       <td>{{ item.SINGKATAN || '-' }}</td>
       <td class="text-right">{{ formatCurrency(item.ACOST) }}</td>
       <td class="text-right">{{ formatCurrency(item.PRICE) }}</td>
@@ -100,7 +100,7 @@
       <td class="text-right" :class="getAmountClass(item.SEL)">
         {{ formatNumber(item.SEL) }}
       </td>
-      <td>{{ formatDateTime(item.LASTCATCH) }}</td>
+      <td class="text-center">{{ formatDateTime(item.LASTCATCH) }}</td>
     </template>
   </DataTable>
 </template>

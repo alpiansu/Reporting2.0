@@ -80,6 +80,10 @@
         Selisih
         <i v-if="sortColumn === 'SEL'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
+      <th class="text-center sortable" :class="getSortClass('RECID', sortColumn, sortOrder)" @click="handleSort('RECID')">
+        Adjust
+        <i v-if="sortColumn === 'RECID'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
+      </th>
       <th class="sortable" :class="getSortClass('LASTCATCH', sortColumn, sortOrder)" @click="handleSort('LASTCATCH')">
         Last Catch
         <i v-if="sortColumn === 'LASTCATCH'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
@@ -100,6 +104,14 @@
       <td class="text-right" :class="getAmountClass(item.SEL)">
         {{ formatNumber(item.SEL) }}
       </td>
+      <td class="text-center">
+        <input 
+          type="checkbox" 
+          :checked="item.RECID === '1'" 
+          @change="updateAdjustStatus(item, $event)"
+          class="adjust-checkbox"
+        />
+      </td>
       <td class="text-center">{{ formatDateTime(item.LASTCATCH) }}</td>
     </template>
   </DataTable>
@@ -110,6 +122,7 @@ import { ref, computed } from 'vue';
 import { useToastService } from '../../utils/toast';
 import DataTable from '../common/DataTable.vue';
 import * as XLSX from 'xlsx';
+import rekonVirtualMrgService from '../../services/rekonVirtualMrg.service';
 
 const props = defineProps({
   data: {
@@ -249,6 +262,32 @@ const handleSortChange = (data) => {
   emit('sort-change', data);
 };
 
+// Update adjust status
+const updateAdjustStatus = async (item, event) => {
+  try {
+    const newRecid = event.target.checked ? '1' : '*';
+    
+    await rekonVirtualMrgService.updateRecid(
+      item.CABANG,
+      item.SHOP,
+      item.TANGGAL,
+      item.PRDCD,
+      newRecid
+    );
+    
+    toast.showSuccess('Sukses', `Status adjust untuk ${item.SHOP} ${item.PRDCD} berhasil diperbarui`);
+    
+    // Refresh the table to show updated data
+    // emit('refresh');
+  } catch (error) {
+    console.error('Error updating adjust status:', error);
+    toast.showError('Error', 'Gagal memperbarui status adjust');
+    
+    // Revert the checkbox state if update failed
+    event.target.checked = !event.target.checked;
+  }
+};
+
 // Export to Excel
 const exportToExcel = () => {
   if (!props.data || props.data.length === 0) {
@@ -269,6 +308,7 @@ const exportToExcel = () => {
       'Qty MSTRAN': item.QTY_MSTRAN,
       'Qty MTRAN': item.QTY_MTRAN,
       'Selisih': item.SEL,
+      'Adjust': item.RECID === '1' ? 'Sudah' : 'Belum',
       'Last Catch': formatDateTime(item.LASTCATCH)
     }));
 
@@ -743,5 +783,13 @@ const printResults = () => {
     font-weight: bold !important;
     text-decoration: underline !important;
   }
+}
+
+/* Adjust checkbox styling */
+.adjust-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #3b82f6;
 }
 </style>

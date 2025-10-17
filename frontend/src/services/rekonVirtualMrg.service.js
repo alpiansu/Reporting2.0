@@ -94,6 +94,20 @@ const rekonVirtualMrgService = {
   },
 
   /**
+   * Update RECID field specifically
+   * @param {string} cabang - Branch code
+   * @param {string} shop - Shop code
+   * @param {string} tanggal - Date
+   * @param {string} prdcd - Product code
+   * @param {string} recid - RECID value ('1' for adjusted, '*' for not adjusted)
+   * @returns {Promise} - Response with update result
+   */
+  updateRecid: async (cabang, shop, tanggal, prdcd, recid) => {
+    const response = await api.put(`/${fixedPattern}/recid`, { recid, cabang, shop, tanggal, prdcd });
+    return response.data;
+  },
+
+  /**
    * Delete record
    * @param {string} cabang - Branch code
    * @param {string} shop - Shop code

@@ -17,6 +17,12 @@ const getSaldoVirtualModel = async () => {
       SaldoVirtual = sequelize.define(
         "saldovirtual",
         {
+          RECID: {
+            type: DataTypes.STRING(1),
+            primaryKey: false,
+            allowNull: false,
+            defaultValue: "*",
+          },
           CABANG: {
             type: DataTypes.STRING(4),
             primaryKey: true,

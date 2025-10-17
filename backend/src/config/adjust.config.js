@@ -79,7 +79,7 @@ export default {
             ) flt USING (prdcd)
             WHERE pr.prdcd IN (SELECT prdcd FROM mstadj)
         ) b USING (prdcd);
-`,
+      `,
       finalize: [
         `UPDATE const SET docno=docno+2 WHERE rkey='nkl'`,
         `UPDATE mstadj m JOIN adjcek a USING(prdcd) SET m.qty = m.qty - a.sisa WHERE a.sisa < 0 AND a.saldo * m.qty < 0;`,
@@ -90,10 +90,8 @@ export default {
               a.gross_jual = (CASE WHEN b.sisa < 0 THEN a.qty - b.sisa ELSE a.qty END) * a.price_jual,
               b.sisa = b.saldo + (CASE WHEN b.sisa < 0 THEN a.qty - b.sisa ELSE a.qty END)
             WHERE a.qty * b.saldo < 0`,
-        `INSERT IGNORE INTO mstran SELECT * FROM mstadj where prdcd in (SELECT prdcd from adjcek a inner join mstadj b using(prdcd) WHERE a.sisa >= 0 )`,
-        // `DROP TABLE IF EXISTS adjcek`,
-        // `DROP TABLE IF EXISTS mstadj`,
       ],
+      insertTran: `INSERT IGNORE INTO mstran SELECT * FROM mstadj where prdcd in (SELECT prdcd from adjcek a inner join mstadj b using(prdcd) WHERE a.sisa >= 0 ) AND PRDCD = ?`,
     },
   },
 

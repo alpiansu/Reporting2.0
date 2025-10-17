@@ -8,262 +8,8 @@ import storeService from "../store/storeService.js";
 import dbStore from "../../config/db_store.js";
 import moment from "moment-timezone";
 import histAdjustStagingService from "./hist_adjust_staging.service.js";
-import { ProgressHelper } from "../../services/progress/index.js";
 
 class AdjustService {
-  /**
-   * Start adjustment process asynchronously and return progress ID immediately (like rekon_wt_harian)
-   * @param {Buffer} fileBuffer - CSV file buffer
-   * @param {string} username - Username of the user performing adjustment
-   * @param {string} fileName - Original filename (optional)
-   * @returns {Promise<string>} Progress ID
-   */
-  async startAdjustmentProcess(fileBuffer, username, fileName = "adjustment.csv") {
-    try {
-      // Parse CSV to array of objects
-      const records = await this.parseCsvBuffer(fileBuffer);
-      logger.info(`Parsed ${records.length} records from CSV`);
-
-      // Get unique store codes
-      const storeCodes = [...new Set(records.map(record => record.KDTK))];
-      logger.info(`Found ${storeCodes.length} unique stores in CSV`);
-
-      // Get valid INDUK stores
-      const selectedStores = await storeService.getStoresByCodes(storeCodes);
-      logger.info(`Found ${selectedStores.length} valid INDUK stores`);
-
-      // Start progress tracking and get progress ID using ProgressHelper
-      const progressId = ProgressHelper.start({
-        cab: "ADJUST", // Use 'ADJUST' as identifier
-        period: `${username}_${Date.now()}`, // Use username and timestamp as period
-        message: `Memulai proses adjustment untuk ${selectedStores.length} toko...`,
-        details: {
-          totalStores: selectedStores.length,
-          username,
-          fileName,
-          processType: "store_adjustment",
-          operation: "adjust_stores",
-        },
-      });
-
-      // Start the actual processing asynchronously (non-blocking)
-      this.processCsvAdjustWithProgress(fileBuffer, username, fileName, progressId).catch(error => {
-        logger.error(`Async adjustment process failed: ${error.message}`);
-        ProgressHelper.fail(progressId, {
-          message: `Proses adjustment gagal: ${error.message}`,
-          details: {
-            error: error.message,
-            processType: "store_adjustment",
-          },
-        });
-      });
-
-      // Return progress ID immediately
-      return progressId;
-    } catch (error) {
-      logger.error(`Failed to start adjustment process: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Process CSV file for item adjustment with progress tracking (async version)
-   * @param {Buffer} fileBuffer - CSV file buffer
-   * @param {string} username - Username of the user performing adjustment
-   * @param {string} fileName - Original filename (optional)
-   * @param {string} progressId - Progress ID for tracking
-   * @returns {Promise<Object>} Processing results with history and progress ID
-   */
-  async processCsvAdjustWithProgress(fileBuffer, username, fileName = "adjustment.csv", progressId) {
-    const tempFilePath = path.join(process.cwd(), "temp", `adjust_history_${Date.now()}.json`);
-
-    try {
-      // Ensure temp directory exists
-      await fs.mkdir(path.dirname(tempFilePath), { recursive: true });
-
-      // Parse CSV to array of objects
-      const records = await this.parseCsvBuffer(fileBuffer);
-      logger.info(`Parsed ${records.length} records from CSV`);
-
-      // Get unique store codes
-      const storeCodes = [...new Set(records.map(record => record.KDTK))];
-      logger.info(`Found ${storeCodes.length} unique stores in CSV`);
-
-      // Get valid INDUK stores
-      const selectedStores = await storeService.getStoresByCodes(storeCodes);
-      logger.info(`Found ${selectedStores.length} valid INDUK stores`);
-
-      // Initialize temporary history array
-      const tempHistoryRecords = [];
-
-      // Initialize results
-      const results = {
-        totalStores: selectedStores.length,
-        processedStores: 0,
-        successStores: 0,
-        failedStores: [],
-        storeResults: [],
-        historyRecords: [], // Will contain the actual history data
-        progressId, // Include progress ID in response
-      };
-
-      // Process each store with progress updates
-      for (let i = 0; i < selectedStores.length; i++) {
-        const store = selectedStores[i];
-
-        try {
-          logger.info(`Processing store ${i + 1}/${selectedStores.length}: ${store.storeCode}`);
-
-          // Update progress - attempting store
-          ProgressHelper.updateStep(progressId, {
-            currentStep: i,
-            message: `Menghubungi toko: ${store.storeCode}...`,
-            details: {
-              currentStore: store.storeCode,
-              totalStores: selectedStores.length,
-              successfulStores: results.successStores,
-              failedStores: results.failedStores.length,
-              processType: "store_adjustment",
-            },
-          });
-
-          // Get records for this store
-          const storeRecords = records.filter(record => record.KDTK === store.storeCode);
-
-          // Process store and get detailed results
-          const storeResult = await this.processStoreWithHistory(store, storeRecords, username);
-          results.processedStores++;
-
-          if (storeResult.success) {
-            results.successStores++;
-
-            // Update progress - success
-            ProgressHelper.updateStep(progressId, {
-              currentStep: results.successStores,
-              message: `Toko ${store.storeCode} berhasil diproses (${results.successStores}/${selectedStores.length})`,
-              details: {
-                currentStore: store.storeCode,
-                totalStores: selectedStores.length,
-                successfulStores: results.successStores,
-                failedStores: results.failedStores.length,
-                processType: "store_adjustment",
-              },
-            });
-          } else {
-            results.failedStores.push({
-              storeCode: store.storeCode,
-              error: storeResult.error,
-            });
-          }
-
-          results.storeResults.push({
-            storeCode: store.storeCode,
-            processed: storeResult.processed,
-            success: storeResult.success,
-            error: storeResult.error,
-            executedAt: storeResult.executedAt,
-          });
-
-          // Add history records to temporary storage
-          tempHistoryRecords.push(...storeResult.historyRecords);
-        } catch (error) {
-          logger.error(`Error processing store ${store.storeCode}: ${error.message}`);
-
-          // Create failed history records for this store
-          const storeRecords = records.filter(record => record.KDTK === store.storeCode);
-          const failedHistoryRecords = storeRecords.map(record => ({
-            kdtk: record.KDTK,
-            prdcd: record.PRDCD,
-            qty_adj: parseInt(record.QTY_ADJ) || 0,
-            keter: record.KETER || "",
-            note: error.message,
-            pic: username,
-            updtime: new Date(),
-            status: "FAILED",
-          }));
-
-          tempHistoryRecords.push(...failedHistoryRecords);
-
-          results.failedStores.push({
-            storeCode: store.storeCode,
-            error: error.message,
-          });
-        }
-      }
-
-      // Write temporary history to file
-      await fs.writeFile(tempFilePath, JSON.stringify(tempHistoryRecords, null, 2));
-      logger.info(`Wrote ${tempHistoryRecords.length} history records to temporary file`);
-
-      // Bulk insert history records to database
-      try {
-        const bulkResult = await histAdjustStagingService.bulkInsert(tempHistoryRecords);
-        logger.info(`Successfully bulk inserted ${bulkResult.insertedCount} history records`);
-
-        // Add history records to results for frontend response
-        results.historyRecords = bulkResult.records || tempHistoryRecords;
-      } catch (historyError) {
-        logger.error(`Failed to save history records: ${historyError.message}`);
-        // Don't fail the main process if history saving fails
-        results.historyRecords = tempHistoryRecords;
-      }
-
-      // Complete progress tracking
-      const finalMessage =
-        results.failedStores.length > 0
-          ? `Proses selesai: ${results.successStores}/${results.totalStores} toko berhasil, ${results.failedStores.length} toko gagal`
-          : `Proses selesai: Semua ${results.successStores} toko berhasil diproses`;
-
-      ProgressHelper.complete(progressId, {
-        message: finalMessage,
-        details: {
-          totalStores: results.totalStores,
-          successfulStores: results.successStores,
-          failedStores: results.failedStores.length,
-          historyRecords: results.historyRecords.length,
-          completedAt: new Date().toISOString(),
-          processType: "store_adjustment",
-          summary: {
-            total: results.totalStores,
-            success: results.successStores,
-            failed: results.failedStores.length,
-            successRate: results.totalStores > 0 ? Math.round((results.successStores / results.totalStores) * 100) : 0,
-          },
-        },
-      });
-
-      // Clean up temporary file
-      try {
-        await fs.unlink(tempFilePath);
-        logger.info("Cleaned up temporary history file");
-      } catch (cleanupError) {
-        logger.warn(`Failed to cleanup temporary file: ${cleanupError.message}`);
-      }
-
-      return results;
-    } catch (error) {
-      logger.error(`Failed to process CSV adjust: ${error.message}`);
-
-      // Mark progress as failed
-      ProgressHelper.fail(progressId, {
-        message: `Proses adjustment gagal: ${error.message}`,
-        details: {
-          error: error.message,
-          processType: "store_adjustment",
-        },
-      });
-
-      // Clean up temporary file in case of error
-      try {
-        await fs.unlink(tempFilePath);
-      } catch (cleanupError) {
-        // Ignore cleanup errors
-      }
-
-      throw error;
-    }
-  }
-
   /**
    * Process CSV file for item adjustment with history logging (simple version without progress tracking)
    * @param {Buffer} fileBuffer - CSV file buffer
@@ -497,49 +243,30 @@ class AdjustService {
       const FILET = store.storeCode + yy + mm;
 
       // Process each record individually to track success/failure per product
-      for (const record of records) {
-        try {
-          // Prepare parameters for insert query
-          const params = [
-            record.PRDCD, // prdcd
-            record.PRDCD, // plu_nas
-            record.QTY_ADJ, // qty for gross
-            record.QTY_ADJ, // qty
-            record.KETER, // Keterangan
-            record.QTY_ADJ, // qty for gross_jual
-            record.PRDCD, // prdcd for WHERE clause
-          ];
 
-          await storeConnection.query(config.queries.store.insertPlu, params);
-          result.processed++;
+      // Process all records sequentially and wait for completion
+      await (async () => {
+        for (const record of records) {
+          try {
+            // Prepare parameters for insert query
+            const params = [
+              record.PRDCD, // prdcd
+              record.PRDCD, // plu_nas
+              record.QTY_ADJ, // qty for gross
+              record.QTY_ADJ, // qty
+              record.KETER, // Keterangan
+              record.QTY_ADJ, // qty for gross_jual
+              record.PRDCD, // prdcd for WHERE clause
+            ];
 
-          // Create success history record
-          historyRecords.push({
-            kdtk: record.KDTK,
-            prdcd: record.PRDCD,
-            qty_adj: parseInt(record.QTY_ADJ) || 0,
-            keter: record.KETER || "",
-            note: "Successfully processed adjustment",
-            pic: username,
-            updtime: executedAt,
-            status: "SUCCESS",
-          });
-        } catch (recordError) {
-          logger.error(`Error processing record ${record.PRDCD} for store ${store.storeCode}: ${recordError.message}`);
-
-          // Create failed history record for this specific product
-          historyRecords.push({
-            kdtk: record.KDTK,
-            prdcd: record.PRDCD,
-            qty_adj: parseInt(record.QTY_ADJ) || 0,
-            keter: record.KETER || "",
-            note: `Failed to process: ${recordError.message}`,
-            pic: username,
-            updtime: executedAt,
-            status: "FAILED",
-          });
+            await storeConnection.query(config.queries.store.insertPlu, params);
+          } catch (recordError) {
+            logger.error(
+              `Error processing record ${record.PRDCD} for store ${store.storeCode}: ${recordError.message}`
+            );
+          }
         }
-      }
+      })();
 
       // Execute safety check
       await storeConnection.query(config.queries.store.safetyCek, [FILET]);
@@ -548,6 +275,64 @@ class AdjustService {
       await (async () => {
         for (const query of config.queries.store.finalize) {
           await storeConnection.query(query);
+        }
+      })();
+
+      // Execute insert to mstran
+      await (async () => {
+        for (const record of records) {
+          try {
+            // Prepare parameters for insert query
+            const params = [
+              record.PRDCD, // prdcd
+            ];
+
+            const [result] = await storeConnection.query(config.queries.store.insertTran, params);
+
+            if (result.affectedRows > 0) {
+              result.processed++;
+
+              // Create success history record
+              historyRecords.push({
+                kdtk: record.KDTK,
+                prdcd: record.PRDCD,
+                qty_adj: parseInt(record.QTY_ADJ) || 0,
+                keter: record.KETER || "",
+                note: `Successfully processed adjustment - ${result.affectedRows} rows affected`,
+                pic: username,
+                updtime: executedAt,
+                status: "SUCCESS",
+              });
+            } else {
+              // Insert gagal - tidak ada rows yang terpengaruh
+              historyRecords.push({
+                kdtk: record.KDTK,
+                prdcd: record.PRDCD,
+                qty_adj: parseInt(record.QTY_ADJ) || 0,
+                keter: record.KETER || "",
+                note: "Insert failed - no rows affected (terkena jagaan saldo < 0 jika di adjust / tidak ada di prodmast)",
+                pic: username,
+                updtime: executedAt,
+                status: "FAILED",
+              });
+            }
+          } catch (recordError) {
+            logger.error(
+              `Error processing record ${record.PRDCD} for store ${store.storeCode}: ${recordError.message}`
+            );
+
+            // Create failed history record for this specific product
+            historyRecords.push({
+              kdtk: record.KDTK,
+              prdcd: record.PRDCD,
+              qty_adj: parseInt(record.QTY_ADJ) || 0,
+              keter: record.KETER || "",
+              note: `Failed to process insert to mstran: ${recordError.message}`,
+              pic: username,
+              updtime: executedAt,
+              status: "FAILED",
+            });
+          }
         }
       })();
 

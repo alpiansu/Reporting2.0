@@ -25,6 +25,9 @@ router.post("/", rekonVirtualController.createRecord);
 // Update record
 router.put("/:cabang/:shop/:tanggal/:prdcd", rekonVirtualController.updateRecord);
 
+// Update RECID field specifically
+router.put("/recid", rekonVirtualController.updateRecid);
+
 // Delete record
 router.delete("/:cabang/:shop/:tanggal/:prdcd", rekonVirtualController.deleteRecord);
 

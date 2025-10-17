@@ -142,6 +142,31 @@ export const updateRecord = async (req, res) => {
 };
 
 /**
+ * Update RECID field specifically
+ */
+export const updateRecid = async (req, res) => {
+  try {
+    const { recid, cabang, shop, tanggal, prdcd } = req.body;
+
+    // Validate RECID value
+    if (recid !== "1" && recid !== "*") {
+      return apiResponse.badRequest(res, "RECID must be either '1' (adjusted) or '*' (not adjusted)");
+    }
+
+    //validate all params are provided
+    if (!recid || !cabang || !shop || !tanggal || !prdcd) {
+      return apiResponse.badRequest(res, "All parameters (recid, cabang, shop, tanggal, prdcd) are required");
+    }
+
+    const result = await rekonVirtualService.updateRecord(cabang, shop, tanggal, prdcd, { RECID: recid });
+    return apiResponse.success(res, result);
+  } catch (error) {
+    logger.error(`Error updating RECID: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+/**
  * Delete record
  */
 export const deleteRecord = async (req, res) => {

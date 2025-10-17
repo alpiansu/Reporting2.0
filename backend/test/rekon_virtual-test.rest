@@ -9,6 +9,20 @@ Content-Type: application/json
 
 ### Get all rekon_virtual
 //coba screening rekon_virtual
-GET http://localhost:3000/api/rekon-virtual/screening?cabang=G033&periode=2510
+GET http://localhost:3000/api/rekon-virtual-mrg/screening?cabang=G033&periode=2510
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc2MDA4ODkwNCwiZXhwIjoxNzYwMTc1MzA0fQ.OdO4YkDKvaxftv8bt_xgH7AFOzvgQFq-GdxdTysMJ_c
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc2MDY5MTg0MiwiZXhwIjoxNzYwNzc4MjQyfQ.jQyktVF9TtyTJ1BreKpUIXv7dj0_2qIw6akbJPlDnss
+
+### trial update recid
+PUT http://localhost:3000/api/rekon-virtual-mrg/recid
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc2MDY5MTg0MiwiZXhwIjoxNzYwNzc4MjQyfQ.jQyktVF9TtyTJ1BreKpUIXv7dj0_2qIw6akbJPlDnss
+
+{
+  "recid": "1",
+  "cabang": "G033",
+  "periode": "2510",
+  "prdcd": "20103597",
+  "shop": "TVHV",
+  "tanggal": "2025-10-01"
+}

@@ -23,14 +23,14 @@ export default {
 
   // Connection retry settings
   connectionRetry: {
-    maxRetries: 3,
+    maxRetries: 2,
     retryDelay: 5000, // milliseconds
   },
 
   // Parallel processing configuration
   parallelProcessing: {
     // Maximum number of stores to process concurrently
-    concurrencyLimit: 5,
+    concurrencyLimit: 10,
     // Maximum number of branches to process concurrently (for reconcileAllBranches)
     branchConcurrencyLimit: 3,
     // Timeout for individual store processing (milliseconds)

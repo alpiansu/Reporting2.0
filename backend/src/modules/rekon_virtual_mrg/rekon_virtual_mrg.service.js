@@ -213,7 +213,7 @@ class RekonVirtualService {
 
     // Process branches asynchronously
     await Promise.all(
-      branches.map(async cab =>
+      branches.map(cab =>
         limitBranches(async () => {
           // const stores = await storeService.getStoresByBranch(cab, true, { limit: 10 });
           const stores = await storeService.getStoresByBranch(cab, true);
@@ -222,7 +222,7 @@ class RekonVirtualService {
 
           // Loop each store asynchronously
           await Promise.all(
-            stores.map(async store =>
+            stores.map(store =>
               limitStores(async () => {
                 // Get store info
                 const storeInfo = await storeService.getStoreIPHost(store.storeCode);

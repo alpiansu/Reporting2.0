@@ -82,14 +82,14 @@ export default {
       `,
       finalize: [
         `UPDATE const SET docno=docno+2 WHERE rkey='nkl'`,
-        `UPDATE mstadj m JOIN adjcek a USING(prdcd) SET m.qty = m.qty - a.sisa WHERE a.sisa < 0 AND a.saldo * m.qty < 0;`,
-        `UPDATE mstadj a
-          JOIN adjcek b ON a.prdcd = b.prdcd
-          SET a.qty = CASE WHEN b.sisa < 0 THEN a.qty - b.sisa ELSE a.qty END,
-              a.gross = (CASE WHEN b.sisa < 0 THEN a.qty - b.sisa ELSE a.qty END) * a.price,
-              a.gross_jual = (CASE WHEN b.sisa < 0 THEN a.qty - b.sisa ELSE a.qty END) * a.price_jual,
-              b.sisa = b.saldo + (CASE WHEN b.sisa < 0 THEN a.qty - b.sisa ELSE a.qty END)
-            WHERE a.qty * b.saldo < 0`,
+        // `UPDATE mstadj m JOIN adjcek a USING(prdcd) SET m.qty = m.qty - a.sisa WHERE a.sisa < 0 AND a.saldo * m.qty < 0;`,
+        // `UPDATE mstadj a
+        //   JOIN adjcek b ON a.prdcd = b.prdcd
+        //   SET a.qty = CASE WHEN b.sisa < 0 THEN a.qty - b.sisa ELSE a.qty END,
+        //       a.gross = (CASE WHEN b.sisa < 0 THEN a.qty - b.sisa ELSE a.qty END) * a.price,
+        //       a.gross_jual = (CASE WHEN b.sisa < 0 THEN a.qty - b.sisa ELSE a.qty END) * a.price_jual,
+        //       b.sisa = b.saldo + (CASE WHEN b.sisa < 0 THEN a.qty - b.sisa ELSE a.qty END)
+        //     WHERE a.qty * b.saldo < 0`,
       ],
       insertTran: `INSERT IGNORE INTO mstran SELECT * FROM mstadj where prdcd in (SELECT prdcd from adjcek a inner join mstadj b using(prdcd) WHERE a.sisa >= 0 ) AND PRDCD = ?`,
     },

@@ -8,6 +8,8 @@ import storeService from "../store/storeService.js";
 import dbStore from "../../config/db_store.js";
 import moment from "moment-timezone";
 import histAdjustStagingService from "./hist_adjust_staging.service.js";
+import os from "os";
+import pLimit from "p-limit";
 
 class AdjustService {
   /**
@@ -17,7 +19,7 @@ class AdjustService {
    * @returns {Promise<Object>} Processing results with history
    */
   async processCsvAdjust(fileBuffer, username) {
-    const tempFilePath = path.join(process.cwd(), "temp", `adjust_history_${Date.now()}.json`);
+    const tempFilePath = path.join(os.tmpdir(), `adjust_history_${Date.now()}.json`);
 
     try {
       // Ensure temp directory exists
@@ -49,48 +51,50 @@ class AdjustService {
       };
 
       // Process each store
-
+      const limit = pLimit(config.parallelProcessing.concurrencyLimit);
       // Process all stores asynchronously using Promise.all
-      const storePromises = selectedStores.map(async store => {
-        try {
-          logger.info(`Processing store: ${store.storeCode}`);
+      const storePromises = selectedStores.map(store =>
+        limit(async () => {
+          try {
+            logger.info(`Processing store: ${store.storeCode}`);
 
-          // Get records for this store
-          const storeRecords = records.filter(record => record.KDTK === store.storeCode);
+            // Filter records khusus untuk toko ini
+            const storeRecords = records.filter(record => record.KDTK === store.storeCode);
 
-          // Process store and get detailed results
-          const storeResult = await this.processStoreWithHistory(store, storeRecords, username);
+            // Jalankan proses untuk toko (asynchronous)
+            const storeResult = await this.processStoreWithHistory(store, storeRecords, username);
 
-          return {
-            type: "success",
-            storeCode: store.storeCode,
-            storeResult,
-            historyRecords: storeResult.historyRecords,
-          };
-        } catch (error) {
-          logger.error(`Error processing store ${store.storeCode}: ${error.message}`);
+            return {
+              type: "success",
+              storeCode: store.storeCode,
+              storeResult,
+              historyRecords: storeResult.historyRecords,
+            };
+          } catch (error) {
+            logger.error(`Error processing store ${store.storeCode}: ${error.message}`);
 
-          // Create failed history records for this store
-          const storeRecords = records.filter(record => record.KDTK === store.storeCode);
-          const failedHistoryRecords = storeRecords.map(record => ({
-            kdtk: record.KDTK,
-            prdcd: record.PRDCD,
-            qty_adj: parseInt(record.QTY_ADJ) || 0,
-            keter: record.KETER || "",
-            note: error.message,
-            pic: username,
-            updtime: new Date(),
-            status: "FAILED",
-          }));
+            // Siapkan record gagal untuk histori
+            const storeRecords = records.filter(record => record.KDTK === store.storeCode);
+            const failedHistoryRecords = storeRecords.map(record => ({
+              kdtk: record.KDTK,
+              prdcd: record.PRDCD,
+              qty_adj: parseInt(record.QTY_ADJ) || 0,
+              keter: record.KETER || "",
+              note: error.message,
+              pic: username,
+              updtime: new Date(),
+              status: "FAILED",
+            }));
 
-          return {
-            type: "error",
-            storeCode: store.storeCode,
-            error: error.message,
-            historyRecords: failedHistoryRecords,
-          };
-        }
-      });
+            return {
+              type: "error",
+              storeCode: store.storeCode,
+              error: error.message,
+              historyRecords: failedHistoryRecords,
+            };
+          }
+        })
+      );
 
       // Wait for all store processing to complete
       const storeResultsArray = await Promise.all(storePromises);
@@ -243,7 +247,6 @@ class AdjustService {
       const FILET = store.storeCode + yy + mm;
 
       // Process each record individually to track success/failure per product
-
       // Process all records sequentially and wait for completion
       await (async () => {
         for (const record of records) {

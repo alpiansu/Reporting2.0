@@ -10,7 +10,12 @@ export default {
 
     // Store query template
     store: {
-      init: [`DROP TABLE IF EXISTS mstadj`, `CREATE TABLE mstadj LIKE mstran`, `DROP TABLE IF EXISTS adjcek`],
+      init: [
+        `DROP TABLE IF EXISTS mstadj`,
+        `CREATE TABLE mstadj LIKE mstran`,
+        `DROP TABLE IF EXISTS adjcek`,
+        // `delete from pos.mstran where date(bukti_tgl) = curdate() and rtype = 'X' and istype = 'so' and addid like '%133.10%';`,
+      ],
       insertPlu: `
         INSERT INTO mstadj(lokasi,rtype,bukti_no,bukti_tgl,supco,inv_date,prdcd,plu_nas,istype,bkp,sub_bkp,price,gross,qty,jam,keter,price_jual,gross_jual)
         SELECT 
@@ -91,7 +96,7 @@ export default {
         //       b.sisa = b.saldo + (CASE WHEN b.sisa < 0 THEN a.qty - b.sisa ELSE a.qty END)
         //     WHERE a.qty * b.saldo < 0`,
       ],
-      insertTran: `INSERT IGNORE INTO mstran SELECT * FROM mstadj where prdcd in (SELECT prdcd from adjcek a inner join mstadj b using(prdcd) WHERE a.sisa >= 0 ) AND PRDCD = ?`,
+      insertTran: `INSERT IGNORE INTO mstran SELECT * FROM mstadj where prdcd in (SELECT prdcd from adjcek a inner join mstadj b using(prdcd) WHERE abs(a.saldo) >= abs(a.sisa) ) AND PRDCD = ?`,
     },
   },
 

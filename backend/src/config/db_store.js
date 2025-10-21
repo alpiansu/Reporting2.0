@@ -98,11 +98,11 @@ class DbStoreService {
       const dbConfigurations = [
         {
           user: "root",
-          password: "vdhoTZNDyeEcyiAV/5vlUcd6srNsylsVE=U0o+YPeZ/L",
+          password: "phha8KKaFMraZOx7X4WYkJRJE6nlIrREM=XeAb9A5JTq",
         },
         {
           user: "root",
-          password: "phha8KKaFMraZOx7X4WYkJRJE6nlIrREM=XeAb9A5JTq",
+          password: "vdhoTZNDyeEcyiAV/5vlUcd6srNsylsVE=U0o+YPeZ/L",
         },
         // Add more configurations as needed
       ];
@@ -124,7 +124,7 @@ class DbStoreService {
               dateStrings: true,
               multipleStatements: true,
               waitForConnections: true,
-              connectTimeout: 15000,
+              connectTimeout: 8000,
               connectionLimit: 3,
               maxIdle: 2,
               enableKeepAlive: true,

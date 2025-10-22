@@ -86,7 +86,6 @@ async function startServer() {
     // Start listening for requests
     server.listen(PORT, () => {
       logger.info(`Server running in ${config.nodeEnv} mode on port ${PORT}`);
-      logger.info(`SSE endpoints initialized for progress updates`);
     });
   } catch (error) {
     logger.error(`Server startup error: ${error.message}`);

@@ -1,10 +1,7 @@
 <template>
   <div class="adjust-view">
-    <PageHeader
-      title="Upload Adjustment CSV"
-      subtitle="Proses adjustment dengan menggunakan file csv"
-      description="Upload file CSV dengan format KDTK, PRDCD, QTY_ADJ dan KETER untuk memproses penyesuaian item BJD di toko-toko yang ditentukan."
-    />
+    <PageHeader title="Upload Adjustment CSV" subtitle="Proses adjustment dengan menggunakan file csv"
+      description="Upload file CSV dengan format KDTK, PRDCD, QTY_ADJ dan KETER untuk memproses penyesuaian item BJD di toko-toko yang ditentukan." />
 
     <div class="content-container">
       <!-- Template Download Card -->
@@ -19,41 +16,27 @@
                   <p class="template-subtitle">Download master format untuk adjustment</p>
                 </div>
               </div>
-              <DownloadButton
-                variant="primary"
-                size="medium"
-                text="Download"
-                loading-text="Downloading..."
-                icon="pi-download"
-                tooltip="Download master CSV template"
-                @download="handleDownloadTemplate"
-              />
+              <DownloadButton variant="primary" size="medium" text="Download" loading-text="Downloading..."
+                icon="pi-download" tooltip="Download master CSV template" @download="handleDownloadTemplate" />
             </div>
           </div>
-          
+
           <div class="format-preview">
             <div class="format-badge">
               <i class="pi pi-table"></i>
               <span>Format: KDTK, PRDCD, QTY_ADJ, KETER</span>
             </div>
-            <button 
-              class="format-details-toggle" 
-              @click="showFormatDetails = !showFormatDetails"
-              :class="{ 'active': showFormatDetails }"
-            >
+            <button class="format-details-toggle" @click="showFormatDetails = !showFormatDetails"
+              :class="{ 'active': showFormatDetails }">
               <span>{{ showFormatDetails ? 'Sembunyikan' : 'Lihat' }} detail format</span>
               <i class="pi" :class="showFormatDetails ? 'pi-chevron-up' : 'pi-chevron-down'"></i>
             </button>
           </div>
-          
+
           <transition name="slide-fade">
             <div v-if="showFormatDetails" class="format-details-expanded">
               <div class="format-grid-compact">
-                <div 
-                  v-for="(field, index) in csvFields" 
-                  :key="index"
-                  class="format-item-compact"
-                >
+                <div v-for="(field, index) in csvFields" :key="index" class="format-item-compact">
                   <div class="field-header-compact">
                     <span class="field-name-compact">{{ field.name }}</span>
                     <span v-if="field.required" class="field-required">*</span>
@@ -93,25 +76,15 @@
               </div>
             </div>
           </div>
-          
-          <div class="file-input-section">
-            <div class="drag-drop-area" 
-                 :class="{ 'drag-over': isDragOver, 'has-file': selectedFile, 'disabled': isProcessing }"
-                 @dragover.prevent="isDragOver = true"
-                 @dragleave.prevent="isDragOver = false"
-                 @drop.prevent="handleFileDrop"
-                 @click="triggerFileInput"
-            >
-              <input
-                ref="fileInput"
-                type="file"
-                class="hidden-file-input"
-                id="csvFile"
-                accept=".csv"
-                @change="handleFileSelect"
-                :disabled="isProcessing"
-              />
-              
+
+          <div class="file-input-section" v-if="!isProcessing">
+            <div class="drag-drop-area"
+              :class="{ 'drag-over': isDragOver, 'has-file': selectedFile, 'disabled': isProcessing }"
+              @dragover.prevent="isDragOver = true" @dragleave.prevent="isDragOver = false"
+              @drop.prevent="handleFileDrop" @click="triggerFileInput">
+              <input ref="fileInput" type="file" class="hidden-file-input" id="csvFile" accept=".csv"
+                @change="handleFileSelect" :disabled="isProcessing" />
+
               <div class="drop-content">
                 <div v-if="!selectedFile" class="drop-placeholder">
                   <i class="pi pi-cloud-upload drop-icon"></i>
@@ -120,7 +93,7 @@
                     <p class="drop-secondary">Format: CSV (KDTK, PRDCD, QTY_ADJ, KETER)</p>
                   </div>
                 </div>
-                
+
                 <div v-else class="file-selected">
                   <div class="file-info">
                     <i class="pi pi-file file-icon"></i>
@@ -129,11 +102,7 @@
                       <p class="file-size">{{ getFileSize(selectedFile) }}</p>
                     </div>
                   </div>
-                  <button 
-                    class="change-file-btn"
-                    @click.stop="resetForm"
-                    :disabled="isProcessing"
-                  >
+                  <button class="change-file-btn" @click.stop="resetForm" :disabled="isProcessing">
                     <i class="pi pi-times"></i>
                     <span>Ganti</span>
                   </button>
@@ -141,29 +110,21 @@
               </div>
             </div>
           </div>
-          
+
           <div class="upload-actions" v-if="selectedFile">
             <div class="action-buttons">
-              <button 
-                class="process-btn"
-                @click="handleUpload" 
-                :disabled="!selectedFile || isProcessing"
-                :class="{ 'processing': isProcessing }"
-              >
+              <button class="process-btn" @click="handleUpload" :disabled="!selectedFile || isProcessing"
+                :class="{ 'processing': isProcessing }">
                 <i class="pi" :class="isProcessing ? 'pi-spin pi-spinner' : 'pi-cog'"></i>
                 <span>{{ isProcessing ? 'Processing...' : 'Process File' }}</span>
               </button>
-              <button 
-                class="reset-btn"
-                @click="resetForm" 
-                :disabled="isProcessing"
-              >
+              <button class="reset-btn" @click="resetForm" :disabled="isProcessing">
                 <i class="pi pi-refresh"></i>
                 <span>Reset</span>
               </button>
             </div>
           </div>
-          
+
           <div v-if="!selectedFile" class="upload-hint">
             <i class="pi pi-info-circle"></i>
             <span v-if="!processResults">Pastikan file CSV sesuai dengan format template yang telah didownload</span>
@@ -175,19 +136,28 @@
       <!-- Processing Loading State -->
       <div class="card mt-4" v-if="isProcessing">
         <div class="card-body text-center py-5">
+
           <div class="loading-container">
-            <i class="pi pi-spin pi-spinner" style="font-size: 2rem; color: #007bff;"></i>
             <h4 class="mt-3 mb-2">Processing Adjustment...</h4>
             <p class="text-muted">Connecting to stores and processing adjustments. Please wait...</p>
-            <div class="progress-text mt-3">
-              <small class="text-info">This may take several minutes depending on the number of stores and products.</small>
+
+            <!-- Progress bar -->
+            <div class="progress-wrapper mt-4" v-if="progress.percentage !== null">
+              <div class="progress-bar">
+                <div class="progress-bar-fill" :style="{ width: progress.percentage + '%' }"></div>
+              </div>
+              <div class="progress-details mt-2">
+                <small>{{ progress.percentage }}% - {{ progress.info }}</small>
+              </div>
             </div>
           </div>
+
+
         </div>
       </div>
 
       <!-- Results Card -->
-      <div class="card results-card" v-if="processResults">
+      <div class="card results-card" v-if="processResults && !isProcessing">
         <div class="results-header">
           <div class="results-title-section">
             <i class="pi pi-check-circle results-icon"></i>
@@ -252,27 +222,18 @@
               Adjustment History
             </h4>
           </div>
-          
-          <DataTable 
-            :value="processResults?.historyRecords || []" 
-            :paginator="true" 
-            :rows="10" 
+
+          <DataTable :value="processResults?.historyRecords || []" :paginator="true" :rows="10"
             :rowsPerPageOptions="[10, 25, 50, 100]"
             paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
-            currentPageReportTemplate="Showing {first} to {last} of {totalRecords} entries"
-            class="modern-datatable"
-            :scrollable="true"
-            scrollHeight="400px"
-            stripedRows
-            :loading="isProcessing"
-            responsiveLayout="scroll"
-          >
+            currentPageReportTemplate="Showing {first} to {last} of {totalRecords} entries" class="modern-datatable"
+            :scrollable="true" scrollHeight="400px" stripedRows :loading="isProcessing" responsiveLayout="scroll">
             <Column field="" header="#" class="col-index">
               <template #body="{ index }">
                 <span class="row-number">{{ index + 1 }}</span>
               </template>
             </Column>
-            
+
             <Column field="kdtk" header="Store" class="col-store">
               <template #body="{ data }">
                 <div class="store-cell">
@@ -280,7 +241,7 @@
                 </div>
               </template>
             </Column>
-            
+
             <Column field="prdcd" header="Product" class="col-product">
               <template #body="{ data }">
                 <div class="product-cell">
@@ -288,21 +249,17 @@
                 </div>
               </template>
             </Column>
-            
+
             <Column field="qty_adj" header="Qty" class="col-qty">
               <template #body="{ data }">
                 <div class="qty-cell">
-                  <Tag 
-                    :severity="getQtySeverity(data.qty_adj)" 
-                    :icon="getQtyIcon(data.qty_adj)"
-                    class="qty-tag"
-                  >
+                  <Tag :severity="getQtySeverity(data.qty_adj)" :icon="getQtyIcon(data.qty_adj)" class="qty-tag">
                     {{ formatQuantity(data.qty_adj) }}
                   </Tag>
                 </div>
               </template>
             </Column>
-            
+
             <Column field="keter" header="Description" class="col-description">
               <template #body="{ data }">
                 <div class="description-cell" :title="data.keter">
@@ -310,21 +267,18 @@
                 </div>
               </template>
             </Column>
-            
+
             <Column field="status" header="Status" class="col-status">
               <template #body="{ data }">
                 <div class="status-cell">
-                  <Tag 
-                    :severity="data.status === 'SUCCESS' ? 'success' : 'danger'" 
-                    :icon="data.status === 'SUCCESS' ? 'pi pi-check' : 'pi pi-times'"
-                    class="status-tag"
-                  >
+                  <Tag :severity="data.status === 'SUCCESS' ? 'success' : 'danger'"
+                    :icon="data.status === 'SUCCESS' ? 'pi pi-check' : 'pi pi-times'" class="status-tag">
                     {{ data.status === 'SUCCESS' ? 'Success' : 'Failed' }}
                   </Tag>
                 </div>
               </template>
             </Column>
-            
+
             <Column field="note" header="Note" class="col-note">
               <template #body="{ data }">
                 <div class="note-cell" :title="data.note">
@@ -332,7 +286,7 @@
                 </div>
               </template>
             </Column>
-            
+
             <Column field="updtime" header="Time" class="col-time">
               <template #body="{ data }">
                 <div class="time-cell">
@@ -343,7 +297,7 @@
                 </div>
               </template>
             </Column>
-            
+
             <Column field="pic" header="PIC" class="col-pic">
               <template #body="{ data }">
                 <div class="pic-cell">
@@ -351,7 +305,7 @@
                 </div>
               </template>
             </Column>
-            
+
             <template #empty>
               <div class="empty-state">
                 <i class="pi pi-inbox empty-icon"></i>
@@ -366,13 +320,14 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { ref, onBeforeUnmount, watch } from "vue";
 import { useToast } from "primevue/usetoast";
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Tag from 'primevue/tag';
 import api from "../../services/api.js";
 import adjustService from "../../services/adjust.service.js";
+import progressService from "../../services/progress.service.js";
 import PageHeader from "../../components/PageHeader.vue";
 import DownloadButton from "../../components/common/DownloadButton.vue";
 import "./AdjustView.style.css";
@@ -387,6 +342,12 @@ const processResults = ref(null);
 const showFormatDetails = ref(false);
 const isDragOver = ref(false);
 const fileInput = ref(null);
+const progress = ref({
+  percentage: 0,
+  info: "",
+  status: "idle",
+});
+let eventSource = null;
 
 // CSV field definitions for the info card
 const csvFields = [
@@ -460,7 +421,111 @@ const formatTime = (dateTime) => {
   });
 };
 
+// Watch untuk isProcessing - mulai/hentikan progress tracking
+watch(isProcessing, (newVal) => {
+  if (newVal) {
+    // Mulai progress tracking ketika processing dimulai
+    startProgressTracking();
+  } else {
+    // Hentikan progress tracking ketika processing selesai
+    stopProgressTracking();
+  }
+});
+
 // Methods
+// Methods
+const startProgressTracking = async () => {
+  const taskId = 'adjustmentTask'; // Sesuai dengan config.taskProgressName di backend
+
+  // Hentikan tracking sebelumnya jika ada
+  stopProgressTracking();
+
+  try {
+    const progressResponse = await api.get('/progress');
+    const allTasks = progressResponse.data.data;
+    // Cari task dengan ID yang sesuai
+    const existingTask = allTasks[taskId];
+
+    if (existingTask) {
+      console.log('✅ Matching task found:');
+
+      // 2. Jika task ditemukan, mulai monitor progress
+      startDirectProgressMonitoring(taskId);
+    } else {
+      console.log('⚠️ No existing task found, waiting for task to be created...');
+
+      // 3. Jika task belum ada, coba lagi setelah delay
+      setTimeout(() => {
+        if (isProcessing.value) {
+          console.log('🔄 Retrying progress tracking...');
+          startProgressTracking();
+        }
+      }, 1000); // Coba lagi setelah 1 detik
+    }
+  } catch (error) {
+    console.error('❌ Error checking progress tasks:', error);
+
+    // Fallback: langsung coba monitor progress meskipun cek gagal
+    console.log('🔄 Fallback: Starting progress monitoring directly...');
+    startDirectProgressMonitoring(taskId);
+  }
+};
+
+// Method untuk langsung monitor progress tanpa pengecekan awal
+const startDirectProgressMonitoring = (taskId) => {
+  eventSource = progressService.monitorProgress(
+    taskId,
+    // onUpdate callback
+    (progressData) => {
+      progress.value = {
+        percentage: progressData?.percentage,
+        info: progressData?.info.description || progressData?.status,
+        status: progressData?.status
+      };
+    },
+    // onComplete callback
+    (progressData) => {
+      progress.value = {
+        percentage: 100,
+        info: "Processing completed",
+        status: "completed"
+      };
+    },
+    // onError callback
+    (errorData) => {
+      progress.value = {
+        percentage: 0,
+        info: errorData.description || "Processing failed",
+        status: "failed"
+      };
+
+      console.error('❌ Progress error:', errorData);
+
+      toast.add({
+        severity: "error",
+        summary: "Progress Error",
+        detail: errorData.description || "Progress monitoring failed",
+        life: 5000,
+      });
+    }
+  );
+};
+
+const stopProgressTracking = () => {
+  if (eventSource) {
+    console.log('🛑 Stopping progress tracking...');
+    eventSource.close();
+    eventSource = null;
+  }
+
+  // Reset progress state
+  progress.value = {
+    percentage: 0,
+    info: "",
+    status: "idle"
+  };
+};
+
 const handleFileSelect = event => {
   const file = event.target.files[0];
   if (file) {
@@ -474,42 +539,48 @@ const handleUpload = async () => {
   try {
     isProcessing.value = true;
 
-    const formData = new FormData();
-    formData.append("file", selectedFile.value);
-
-    const response = await api.post("/adjust/upload", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
+    progress.value = {
+      percentage: 0,
+      info: "Starting upload...",
+      status: "starting"
+    };
 
     // Extract the data structure correctly - response.data.data.data contains the actual results
-    const resultData = response.data.data.data;
-    processResults.value = resultData;
+    const resultData = await adjustService.uploadCsv(selectedFile.value);
+    processResults.value = resultData.data.data;
 
-    // Reset upload form after successful processing
-    resetForm();
+    if (resultData.success === true) {
+      // Reset upload form after successful processing
+      resetForm();
 
-    // Safely check for failedStores
-    const failedCount = resultData?.failedStores?.length || 0;
-    const successCount = resultData?.successStores || 0;
-    const totalStores = resultData?.totalStores || 0;
-    
-    toast.add({
-      severity: failedCount > 0 ? "warn" : "success",
-      summary: failedCount > 0 ? "Completed with Issues" : "Success", 
-      detail: `Processing completed. ${successCount}/${totalStores} stores processed successfully.`,
-      life: 8000,
-    });
-    
-    // Log results for debugging
-    console.log('Full response:', response.data);
-    console.log('Processing results:', {
-      total: totalStores,
-      success: successCount,
-      failed: failedCount,
-      historyRecords: resultData?.historyRecords?.length || 0
-    });
+      // Safely check for failedStores
+      const failedCount = processResults.value?.failedStores?.length || 0;
+      const successCount = processResults.value?.successStores || 0;
+      const totalStores = processResults.value?.totalStores || 0;
+
+      toast.add({
+        severity: failedCount > 0 ? "warn" : "success",
+        summary: failedCount > 0 ? "Completed with Issues" : "Success",
+        detail: `Processing completed. ${successCount}/${totalStores} stores processed successfully.`,
+        life: 5000,
+      });
+
+      // Log results for debugging
+      console.log('Processing results:', {
+        total: totalStores,
+        success: successCount,
+        failed: failedCount,
+        historyRecords: processResults.value?.historyRecords?.length || 0
+      });
+    } else {
+      toast.add({
+        severity: "error",
+        summary: "Error",
+        detail: resultData.message || "Failed to process file",
+        life: 5000,
+      });
+    }
+
   } catch (error) {
     console.error("Upload error:", error);
     toast.add({
@@ -527,6 +598,11 @@ const resetForm = () => {
   selectedFile.value = null;
   selectedFileName.value = "";
   isDragOver.value = false;
+  progress.value = {
+    percentage: 0,
+    info: "",
+    status: "idle"
+  };
   
   // Clear the file input properly
   if (fileInput.value) {
@@ -602,4 +678,8 @@ const handleDownloadTemplate = async () => {
     });
   }
 };
+
+onBeforeUnmount(() => {
+  if (eventSource) eventSource.close();
+});
 </script>

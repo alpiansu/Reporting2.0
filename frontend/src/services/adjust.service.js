@@ -1,7 +1,7 @@
 import api from "./api.js";
 
 /**
- * Adjust Service - Handles all adjust module API calls
+ * Adjust Service - Handles all adjust module specific API calls
  */
 class AdjustService {
   /**
@@ -18,7 +18,6 @@ class AdjustService {
         "Content-Type": "multipart/form-data",
       },
     });
-
     return response.data;
   }
 
@@ -55,14 +54,23 @@ class AdjustService {
   }
 
   /**
-   * Get adjust processing history/logs (if needed in future)
+   * Get adjust processing history/logs
    * @param {Object} params - Query parameters
    * @returns {Promise<Object>} Processing history
    */
   async getProcessingHistory(params = {}) {
-    // Placeholder for future implementation
     const response = await api.get("/adjust/history", { params });
     return response.data;
+  }
+
+  /**
+   * Get adjustment tasks (convenience method using progress service)
+   * @returns {Promise<Array>} Adjustment-related tasks
+   */
+  async getAdjustmentTasks() {
+    // Import progress service
+    const progressService = await import("./progress.service.js");
+    return progressService.default.getTasksByModule("adjust-module");
   }
 }
 

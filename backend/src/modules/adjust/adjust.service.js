@@ -10,6 +10,8 @@ import moment from "moment-timezone";
 import histAdjustStagingService from "./hist_adjust_staging.service.js";
 import os from "os";
 import pLimit from "p-limit";
+import progressService from "../progress/progress.service.js";
+import apiResponse from "../../utils/apiResponse.js";
 
 class AdjustService {
   /**
@@ -19,6 +21,7 @@ class AdjustService {
    * @returns {Promise<Object>} Processing results with history
    */
   async processCsvAdjust(fileBuffer, username) {
+    const taskId = config.taskProgressName;
     const tempFilePath = path.join(os.tmpdir(), `adjust_history_${Date.now()}.json`);
 
     try {
@@ -37,6 +40,41 @@ class AdjustService {
       const selectedStores = await storeService.getStoresByCodes(storeCodes);
       logger.info(`Found ${selectedStores.length} valid INDUK stores`);
 
+      // Register progress task
+      try {
+        const timeStart = moment().format("YYYY-MM-DD HH:mm:ss");
+        await progressService.startProgress(taskId, selectedStores.length, {
+          description: "registering task & file csv adjust being uploaded",
+          startedBy: username,
+          status: "registering",
+          createdAt: timeStart,
+        });
+
+        logger.info(`Progress task registered for user ${username}, taskId: ${taskId}`);
+      } catch (error) {
+        logger.error(`Error registering progress task: ${error.message}`);
+
+        if (error.message.includes("Maximum concurrent")) {
+          return apiResponse.error(
+            {
+              message: "System is busy processing other tasks",
+              canProceed: false,
+              suggestion: "Please try again in a few minutes",
+            },
+            429
+          );
+        }
+
+        return apiResponse.error(
+          {
+            message: "Failed to register progress task",
+            canProceed: false,
+            error: error.message,
+          },
+          500
+        );
+      }
+
       // Initialize temporary history array
       const tempHistoryRecords = [];
 
@@ -52,12 +90,19 @@ class AdjustService {
 
       // Process each store
       const limit = pLimit(config.parallelProcessing.concurrencyLimit);
+      let processedCount = 0;
       // Process all stores asynchronously using Promise.all
       const storePromises = selectedStores.map(store =>
         limit(async () => {
+          const currentCount = ++processedCount;
+          //update progress
+          await progressService.updateProgress(taskId, currentCount, {
+            description: `Processing store ${store.storeCode} (${currentCount} of ${selectedStores.length})`,
+            status: "Screening to Stores",
+          });
+
           try {
             logger.info(`Processing store: ${store.storeCode}`);
-
             // Filter records khusus untuk toko ini
             const storeRecords = records.filter(record => record.KDTK === store.storeCode);
 
@@ -141,12 +186,21 @@ class AdjustService {
 
       // Write temporary history to file
       await fs.writeFile(tempFilePath, JSON.stringify(tempHistoryRecords, null, 2));
+      await progressService.updateProgress(taskId, processedCount, {
+        description: "Writing temporary history file",
+        status: "finalizing",
+      });
       logger.info(`Wrote ${tempHistoryRecords.length} history records to temporary file`);
 
       // Bulk insert history records to database
       try {
         const bulkResult = await histAdjustStagingService.bulkInsert(tempHistoryRecords);
         logger.info(`Successfully bulk inserted ${bulkResult.insertedCount} history records`);
+
+        await progressService.updateProgress(taskId, processedCount, {
+          description: "Inserting history records to database",
+          status: "finalizing",
+        });
 
         // Add history records to results for frontend response
         results.historyRecords = bulkResult.records || tempHistoryRecords;
@@ -160,9 +214,21 @@ class AdjustService {
       try {
         await fs.unlink(tempFilePath);
         logger.info("Cleaned up temporary history file");
+        //update progressbar status
+        await progressService.updateProgress(taskId, processedCount, {
+          description: "Temporary history file cleaned up",
+          status: "finalizing",
+        });
       } catch (cleanupError) {
         logger.warn(`Failed to cleanup temporary file: ${cleanupError.message}`);
       }
+
+      const timeCompleted = moment().format("YYYY-MM-DD HH:mm:ss");
+      await progressService.completeProgress(taskId, {
+        description: "All stores processed",
+        status: "completed",
+        completedAt: timeCompleted,
+      });
 
       return results;
     } catch (error) {
@@ -174,6 +240,11 @@ class AdjustService {
       } catch (cleanupError) {
         // Ignore cleanup errors
       }
+
+      await progressService.failProgress(taskId, {
+        description: `Task failed: ${error.message}`,
+        status: "failed",
+      });
 
       throw error;
     }

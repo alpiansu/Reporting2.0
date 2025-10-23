@@ -9,10 +9,12 @@ import RekapRemote from "./rekap_remote.model.js";
 import HistAdjust from "./hist_adjust.model.js";
 import SaldoVirtual from "./saldovirtual.model.js";
 import NotesEdp from "./notes.model.js";
+import NoteCategories from "../modules/note_categories/note_categories.model.js";
 import modelRegistry from "./registry.js";
 
 // Register all Sequelize models with the registry
 // Priority: higher numbers are initialized first
+modelRegistry.register("NoteCategories", () => NoteCategories.getModel(), { priority: 13 });
 modelRegistry.register("NotesEdp", () => NotesEdp.getModel(), { priority: 12 });
 modelRegistry.register("SaldoVirtual", () => SaldoVirtual.getModel(), { priority: 11 });
 modelRegistry.register("RekonWtHarian", () => RekonWtHarian.getModel(), { priority: 10 });
@@ -48,6 +50,7 @@ export default {
   HistAdjust,
   SaldoVirtual,
   NotesEdp,
+  NoteCategories,
   modelRegistry,
 };
 
@@ -62,6 +65,7 @@ export {
   HistAdjust,
   SaldoVirtual,
   NotesEdp,
+  NoteCategories,
   modelRegistry,
 };
 

@@ -17,6 +17,8 @@ import rekapRemoteModule from "./rekap_remote/index.js";
 import prepClosingModule from "./prep-closing/index.js";
 import adjustModule from "./adjust/index.js";
 import rekonVirtualMrgModule from "./rekon_virtual_mrg/index.js";
+import progressModule from "./progress/index.js";
+import progress from "./progress/index.js";
 
 export default {
   // Export all modules
@@ -34,6 +36,7 @@ export default {
   prepClosingModule,
   adjustModule,
   rekonVirtualMrgModule,
+  progressModule,
 
   // Initialize all modules
   initialize: app => {
@@ -51,6 +54,7 @@ export default {
     const prepClosing = prepClosingModule.initialize(app);
     const adjust = adjustModule.initialize(app);
     const rekonVirtualMrg = rekonVirtualMrgModule.initialize(app);
+    const progress = progressModule.initialize(app);
 
     // Initialize menu manager module
     app.use("/api/menu-manager", menuManagerModule.routes);
@@ -69,6 +73,7 @@ export default {
       prepClosing,
       adjust,
       rekonVirtualMrg,
+      progress,
       menuManager: true,
     };
   },

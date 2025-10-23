@@ -12,7 +12,9 @@ export default {
     store: {
       init: [
         `DROP TABLE IF EXISTS mstadj`,
-        `CREATE TABLE mstadj LIKE mstran`,
+        `CREATE TABLE IF NOT EXISTS mstadj LIKE mstran`,
+        `DROP TABLE IF EXISTS simul_mst`,
+        // `CREATE TABLE IF NOT EXISTS simul_mst LIKE mstran`,
         `DROP TABLE IF EXISTS adjcek`,
         // `delete from pos.mstran where date(bukti_tgl) = curdate() and rtype = 'X' and istype = 'so' and addid like '%133.10%';`,
       ],
@@ -96,7 +98,9 @@ export default {
         //       b.sisa = b.saldo + (CASE WHEN b.sisa < 0 THEN a.qty - b.sisa ELSE a.qty END)
         //     WHERE a.qty * b.saldo < 0`,
       ],
-      insertTran: `INSERT IGNORE INTO mstran SELECT * FROM mstadj where prdcd in (SELECT prdcd from adjcek a inner join mstadj b using(prdcd) WHERE abs(a.saldo) >= abs(a.sisa) ) AND PRDCD = ?`,
+      // insertTran: `INSERT IGNORE INTO mstran SELECT * FROM mstadj where prdcd in (SELECT prdcd from adjcek a inner join mstadj b using(prdcd) WHERE abs(a.saldo) >= abs(a.sisa) ) AND PRDCD = ?`,
+      insertTran: `INSERT IGNORE INTO mstran SELECT * FROM mstadj where PRDCD = ?`,
+      // insertTran: `INSERT IGNORE INTO simul_mst SELECT * FROM mstadj where prdcd in (SELECT prdcd from adjcek a inner join mstadj b using(prdcd) WHERE abs(a.saldo) >= abs(a.sisa) ) AND PRDCD = ?`,
     },
   },
 
@@ -118,12 +122,5 @@ export default {
     queryTimeoutMs: 8000, // 8 seconds - reduced for better timeout testing
   },
 
-  // Testing configuration
-  testing: {
-    // Stores that will be artificially timed out for wave system testing
-    // Add store codes here to simulate timeouts in first 2 waves
-    simulateTimeoutStores: [],
-    // Example: simulateTimeoutStores: ['0001', '0002'],
-    // These stores will timeout in wave 1 & 2, then succeed in wave 3
-  },
+  taskProgressName: "adjustmentTask",
 };

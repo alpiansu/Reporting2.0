@@ -112,6 +112,16 @@ class StoreService {
         filteredStores = filteredStores.filter(store => store.isActive === isActive);
       }
 
+      // Hapus duplikat berdasarkan storeCode (ambil yang terbaru berdasarkan updatedAt)
+      const uniqueStoresMap = new Map();
+      for (const store of filteredStores) {
+        const existing = uniqueStoresMap.get(store.storeCode);
+        if (!existing || new Date(store.updatedAt) > new Date(existing.updatedAt)) {
+          uniqueStoresMap.set(store.storeCode, store);
+        }
+      }
+      filteredStores = Array.from(uniqueStoresMap.values());
+
       // Sort by updatedAt in descending order
       filteredStores.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 

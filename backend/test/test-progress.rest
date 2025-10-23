@@ -1,0 +1,93 @@
+// Test Progress Module REST API
+// Requires: Install REST Client extension in VS Code
+
+### ==================== AUTHENTICATION ====================
+
+### Login to get token
+# @name login
+POST http://localhost:3000/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin123"
+}
+
+### Extract token from login response
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc2MTE4NDYzNCwiZXhwIjoxNzYxMjcxMDM0fQ.nv2KyJl8f9_ORAkjJcNrl6i-T_VJNNsQO4cHllskngI
+
+### ==================== PROGRESS ENDPOINTS ====================
+
+### 1. Get All Tasks - Endpoint yang ingin Anda test
+GET http://localhost:3000/api/progress
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+### 2. Get Active Tasks Only
+GET http://localhost:3000/api/progress/active
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+### 3. Get Queue Status
+GET http://localhost:3000/api/progress/queue
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+### 4. Get Specific Task
+GET http://localhost:3000/api/progress/task-123
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+### 5. Get Tasks by Module
+GET http://localhost:3000/api/progress/module/rekon-wt-harian
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+### 6. Manual Cleanup (Admin)
+POST http://localhost:3000/api/progress/cleanup
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "maxAgeHours": 6
+}
+
+### ==================== CREATE TEST DATA ====================
+
+### Create Test Task 1
+POST http://localhost:3000/api/your-module-endpoint
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "taskId": "test-task-1",
+  "action": "process-data"
+}
+
+### Create Test Task 2  
+POST http://localhost:3000/api/your-module-endpoint
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "taskId": "test-task-2",
+  "action": "export-data",
+  "module": "rekon-wt-harian"
+}
+
+### ==================== SSE STREAM TESTS ====================
+
+### SSE Stream - All Tasks (Global Monitor)
+GET http://localhost:3000/api/progress/stream
+Accept: text/event-stream
+Authorization: Bearer {{token}}
+
+### SSE Stream - Specific Task
+GET http://localhost:3000/api/progress/stream/task/test-task-1
+Accept: text/event-stream
+Authorization: Bearer {{token}}
+
+### SSE Stream - Module Specific  
+GET http://localhost:3000/api/progress/stream/module/rekon-wt-harian
+Accept: text/event-stream
+Authorization: Bearer {{token}}

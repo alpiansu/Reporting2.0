@@ -42,6 +42,11 @@ const getNotesEdpModel = async () => {
             type: DataTypes.STRING(50),
             allowNull: false,
           },
+          categoryId: {
+            type: DataTypes.INTEGER,
+            allowNull: true,
+            field: "category_id",
+          },
         },
         {
           tableName: "notes_edp",

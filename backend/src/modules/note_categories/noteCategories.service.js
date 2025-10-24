@@ -3,7 +3,7 @@
  */
 import fs from "fs";
 import path from "path";
-import NoteCategories from "./NoteCategories.model.js";
+import NoteCategories from "../../models/index.js";
 import config from "./noteCategories.config.js";
 import logger from "../../config/logger.js";
 

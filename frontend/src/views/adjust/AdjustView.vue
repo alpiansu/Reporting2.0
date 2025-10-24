@@ -221,6 +221,17 @@
               <i class="pi pi-history"></i>
               Adjustment History
             </h4>
+            <div class="datatable-actions">
+              <button 
+                class="export-btn" 
+                @click="exportToExcel" 
+                :disabled="!processResults?.historyRecords || processResults.historyRecords.length === 0"
+                title="Export to Excel"
+              >
+                <i class="pi pi-file-excel"></i>
+                <span>Export</span>
+              </button>
+            </div>
           </div>
 
           <DataTable :value="processResults?.historyRecords || []" :paginator="true" :rows="10"
@@ -330,6 +341,7 @@ import adjustService from "../../services/adjust.service.js";
 import progressService from "../../services/progress.service.js";
 import PageHeader from "../../components/PageHeader.vue";
 import DownloadButton from "../../components/common/DownloadButton.vue";
+import { exportAdjustmentHistory } from "./exportExcel.js";
 import "./AdjustView.style.css";
 
 const toast = useToast();
@@ -432,7 +444,6 @@ watch(isProcessing, (newVal) => {
   }
 });
 
-// Methods
 // Methods
 const startProgressTracking = async () => {
   const taskId = 'adjustmentTask'; // Sesuai dengan config.taskProgressName di backend
@@ -679,7 +690,44 @@ const handleDownloadTemplate = async () => {
   }
 };
 
+// Export to Excel
+const exportToExcel = () => {
+  if (!processResults.value?.historyRecords || processResults.value.historyRecords.length === 0) {
+    toast.add({
+      severity: "warn",
+      summary: "Perhatian",
+      detail: "Tidak ada data untuk diekspor",
+      life: 3000,
+    });
+    return;
+  }
+
+  try {
+    const result = exportAdjustmentHistory(processResults.value.historyRecords);
+    
+    if (result.success) {
+      toast.add({
+        severity: "success",
+        summary: "Sukses",
+        detail: `Data berhasil diekspor ke ${result.filename}`,
+        life: 3000,
+      });
+    } else {
+      throw new Error(result.error);
+    }
+  } catch (error) {
+    console.error('Error exporting to Excel:', error);
+    toast.add({
+      severity: "error",
+      summary: "Error",
+      detail: "Gagal mengekspor data ke Excel",
+      life: 5000,
+    });
+  }
+};
+
 onBeforeUnmount(() => {
   if (eventSource) eventSource.close();
 });
 </script>
+./exportUtils.js./exportExcel.js

@@ -19,6 +19,7 @@ import adjustModule from "./adjust/index.js";
 import rekonVirtualMrgModule from "./rekon_virtual_mrg/index.js";
 import progressModule from "./progress/index.js";
 import notesCategoriesModule from "./note_categories/index.js";
+import notesModule from "./notes/index.js";
 
 export default {
   // Export all modules
@@ -38,6 +39,7 @@ export default {
   rekonVirtualMrgModule,
   progressModule,
   notesCategoriesModule,
+  notesModule,
 
   // Initialize all modules
   initialize: app => {
@@ -57,6 +59,7 @@ export default {
     const rekonVirtualMrg = rekonVirtualMrgModule.initialize(app);
     const progress = progressModule.initialize(app);
     const notesCategories = notesCategoriesModule.initialize(app);
+    const notes = notesModule.initialize(app);
 
     // Initialize menu manager module
     app.use("/api/menu-manager", menuManagerModule.routes);
@@ -77,6 +80,7 @@ export default {
       rekonVirtualMrg,
       progress,
       notesCategories,
+      notes,
       menuManager: true,
     };
   },

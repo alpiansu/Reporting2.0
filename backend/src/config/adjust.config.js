@@ -98,8 +98,8 @@ export default {
         //       b.sisa = b.saldo + (CASE WHEN b.sisa < 0 THEN a.qty - b.sisa ELSE a.qty END)
         //     WHERE a.qty * b.saldo < 0`,
       ],
-      // insertTran: `INSERT IGNORE INTO mstran SELECT * FROM mstadj where prdcd in (SELECT prdcd from adjcek a inner join mstadj b using(prdcd) WHERE abs(a.saldo) >= abs(a.sisa) ) AND PRDCD = ?`,
-      insertTran: `INSERT IGNORE INTO mstran SELECT * FROM mstadj where PRDCD = ?`,
+      insertTran: `INSERT IGNORE INTO mstran SELECT * FROM mstadj where prdcd in (SELECT prdcd from adjcek a inner join mstadj b using(prdcd) WHERE a.saldo != 0) AND PRDCD = ?`,
+      // insertTran: `INSERT IGNORE INTO mstran SELECT * FROM mstadj where PRDCD = ?`,
       // insertTran: `INSERT IGNORE INTO simul_mst SELECT * FROM mstadj where prdcd in (SELECT prdcd from adjcek a inner join mstadj b using(prdcd) WHERE abs(a.saldo) >= abs(a.sisa) ) AND PRDCD = ?`,
     },
   },

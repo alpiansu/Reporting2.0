@@ -6,6 +6,8 @@ import mCabangService from "./m_cabang.service";
 import storeService from "./store.service";
 import menuService from "./menu.service";
 import adjustService from "./adjust.service";
+import noteCategoriesService from "./noteCategories.service";
+import progressService from "./progress.service";
 
 export {
   authService,
@@ -16,4 +18,6 @@ export {
   storeService,
   menuService,
   adjustService,
+  noteCategoriesService,
+  progressService,
 };

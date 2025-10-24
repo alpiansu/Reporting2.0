@@ -9,7 +9,7 @@ import RekapRemote from "./rekap_remote.model.js";
 import HistAdjust from "./hist_adjust.model.js";
 import SaldoVirtual from "./saldovirtual.model.js";
 import NotesEdp from "./notes.model.js";
-import NoteCategories from "../modules/note_categories/note_categories.model.js";
+import NoteCategories from "../modules/note_categories/noteCategories.model.js";
 import modelRegistry from "./registry.js";
 
 // Register all Sequelize models with the registry

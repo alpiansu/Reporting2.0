@@ -21,17 +21,17 @@ export const login = async (req, res, next) => {
 
     // Get IP and user agent from request for activity logging
     const ipAddress = req.ip || req.connection.remoteAddress;
-    const userAgent = req.headers['user-agent'];
-    
+    const userAgent = req.headers["user-agent"];
+
     // Log login activity with request details
     await userActivityService.logActivity({
       userId: result.user.id,
-      type: 'login',
-      description: 'User logged in',
+      type: "login",
+      description: `User ${result.user.fullName} logged in`,
       ipAddress,
       userAgent,
     });
-    
+
     res.status(200).json(result);
   } catch (error) {
     if (error.message === "User not found") {
@@ -68,17 +68,17 @@ export const register = async (req, res, next) => {
 
     // Get IP and user agent from request for activity logging
     const ipAddress = req.ip || req.connection.remoteAddress;
-    const userAgent = req.headers['user-agent'];
-    
+    const userAgent = req.headers["user-agent"];
+
     // Log registration activity with request details
     await userActivityService.logActivity({
       userId: result.user.id,
-      type: 'register',
-      description: 'User registered',
+      type: "register",
+      description: "User registered",
       ipAddress,
       userAgent,
     });
-    
+
     res.status(201).json(result);
   } catch (error) {
     // Handle duplicate username/email
@@ -129,17 +129,17 @@ export const changePassword = async (req, res, next) => {
 
     // Get IP and user agent from request for activity logging
     const ipAddress = req.ip || req.connection.remoteAddress;
-    const userAgent = req.headers['user-agent'];
-    
+    const userAgent = req.headers["user-agent"];
+
     // Log password change activity with request details
     await userActivityService.logActivity({
       userId: userId,
-      type: 'password',
-      description: 'User changed password',
+      type: "password",
+      description: "User changed password",
       ipAddress,
       userAgent,
     });
-    
+
     res.status(200).json({ message: "Password changed successfully" });
   } catch (error) {
     if (error.message === "Current password is incorrect") {
@@ -156,41 +156,41 @@ export const updateProfile = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const { fullName, email } = req.body;
-    
+
     // Create profile data object with only allowed fields
     const profileData = {};
-    
+
     if (fullName !== undefined) profileData.fullName = fullName;
     if (email !== undefined) profileData.email = email;
-    
+
     // If profile image was uploaded and saved, it will be in req.body.profileImage
     if (req.body.profileImage !== undefined) {
       profileData.profileImage = req.body.profileImage;
     }
-    
+
     const updatedUser = await authService.updateProfile(userId, profileData);
-    
+
     // Get IP and user agent from request for activity logging
     const ipAddress = req.ip || req.connection.remoteAddress;
-    const userAgent = req.headers['user-agent'];
-    
+    const userAgent = req.headers["user-agent"];
+
     // Log profile update activity with request details
     await userActivityService.logActivity({
       userId: userId,
-      type: 'profile',
-      description: 'User updated profile',
+      type: "profile",
+      description: "User updated profile",
       ipAddress,
       userAgent,
     });
-    
+
     res.status(200).json(updatedUser);
   } catch (error) {
     logger.error(`Update profile error: ${error.message}`);
-    
+
     if (error.name === "SequelizeUniqueConstraintError") {
       return res.status(409).json({ message: "Email already in use" });
     }
-    
+
     next(error);
   }
 };
@@ -214,16 +214,16 @@ export const refreshToken = async (req, res, next) => {
 export const logout = async (req, res, next) => {
   try {
     const userId = req.user?.id;
-    
+
     // Get IP and user agent from request for activity logging
     const ipAddress = req.ip || req.connection.remoteAddress;
-    const userAgent = req.headers['user-agent'];
-    
+    const userAgent = req.headers["user-agent"];
+
     // Log logout activity
     if (userId) {
       await authService.logout(userId, { ipAddress, userAgent });
     }
-    
+
     // In a stateless JWT auth system, logout is handled client-side
     // by removing the token from storage
     res.status(200).json({ message: "Logged out successfully" });

@@ -88,6 +88,7 @@
         Last Catch
         <i v-if="sortColumn === 'LASTCATCH'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
+      <th class="text-center">Notes</th>
     </template>
 
     <!-- Table Row -->
@@ -113,16 +114,57 @@
         />
       </td>
       <td class="text-center">{{ formatDateTime(item.LASTCATCH) }}</td>
+      <td class="text-center note-cell">
+        <div class="note-display" v-if="!item.editingNote" @click="startEditingNote(item)">
+          <div class="note-category" v-if="item.note && item.note.category">
+            {{ item.note.category.name }}
+          </div>
+          <div class="note-text" v-if="item.note">
+            {{ item.note.noteText }}
+          </div>
+          <div class="note-placeholder" v-else>
+            Add note...
+          </div>
+        </div>
+        <div class="note-editor" v-else>
+          <select 
+            v-model="item.editingNote.categoryId" 
+            class="note-category-select"
+            @change="updateNoteCategory(item)"
+          >
+            <option value="">Select Category</option>
+            <option 
+              v-for="category in noteCategories" 
+              :key="category.id" 
+              :value="category.id"
+            >
+              {{ category.name }}
+            </option>
+          </select>
+          <textarea 
+            v-model="item.editingNote.noteText" 
+            class="note-textarea"
+            placeholder="Enter note..."
+            @blur="saveNote(item)"
+            @keydown.enter.prevent="saveNote(item)"
+          ></textarea>
+          <div class="note-actions">
+            <button class="btn btn-sm btn-success" @click="saveNote(item)">Save</button>
+            <button class="btn btn-sm btn-secondary" @click="cancelEditing(item)">Cancel</button>
+          </div>
+        </div>
+      </td>
     </template>
   </DataTable>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useToastService } from '../../utils/toast';
 import DataTable from '../common/DataTable.vue';
 import * as XLSX from 'xlsx';
 import rekonVirtualMrgService from '../../services/rekonVirtualMrg.service';
+import noteCategoriesService from '../../services/noteCategories.service';
 
 const props = defineProps({
   data: {
@@ -162,6 +204,9 @@ const toast = useToastService();
 // Search functionality
 const searchQuery = ref('');
 const searchTimeout = ref(null);
+
+// Note categories
+const noteCategories = ref([]);
 
 // Computed properties
 const filteredData = computed(() => {
@@ -336,6 +381,65 @@ const exportToExcel = () => {
 const printResults = () => {
   window.print();
 };
+
+// Load note categories
+const loadNoteCategories = async () => {
+  try {
+    const response = await noteCategoriesService.getAll();
+    noteCategories.value = response.data || [];
+  } catch (error) {
+    console.error('Error loading note categories:', error);
+    toast.showError('Error', 'Failed to load note categories');
+  }
+};
+
+// Note editing functionality
+const startEditingNote = (item) => {
+  // Create a copy of the note for editing
+  item.editingNote = {
+    noteText: item.note ? item.note.noteText : '',
+    categoryId: item.note && item.note.categoryId ? item.note.categoryId : ''
+  };
+};
+
+const updateNoteCategory = (item) => {
+  // This function is called when category is changed
+  // We could update the category name display here if needed
+};
+
+const saveNote = async (item) => {
+  try {
+    // Update note through the service
+    const response = await rekonVirtualMrgService.updateNote(
+      item.CABANG,
+      item.SHOP,
+      item.TANGGAL,
+      item.PRDCD,
+      {
+        noteText: item.editingNote.noteText,
+        categoryId: item.editingNote.categoryId || null
+      }
+    );
+
+    // Update the item with the new note data
+    item.note = response.data;
+    item.editingNote = null;
+    
+    toast.showSuccess('Success', 'Note saved successfully');
+  } catch (error) {
+    console.error('Error saving note:', error);
+    toast.showError('Error', 'Failed to save note');
+  }
+};
+
+const cancelEditing = (item) => {
+  item.editingNote = null;
+};
+
+// Lifecycle
+onMounted(() => {
+  loadNoteCategories();
+});
 </script>
 
 <style scoped>
@@ -791,5 +895,156 @@ const printResults = () => {
   height: 18px;
   cursor: pointer;
   accent-color: #3b82f6;
+}
+
+/* Note cell styling */
+.note-cell {
+  min-width: 200px;
+  max-width: 250px;
+  cursor: pointer;
+  padding: 0.5rem !important;
+}
+
+.note-display {
+  text-align: left;
+  min-height: 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.note-category {
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: #2563eb;
+  margin-bottom: 0.25rem;
+}
+
+.note-text {
+  font-size: 0.85rem;
+  color: #374151;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.3;
+}
+
+.note-placeholder {
+  font-size: 0.85rem;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.note-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.note-category-select {
+  padding: 0.375rem 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  background-color: #fff;
+  cursor: pointer;
+}
+
+.note-category-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.note-textarea {
+  min-height: 60px;
+  padding: 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  resize: vertical;
+  transition: border-color 0.2s;
+}
+
+.note-textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.note-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  gap: 0.25rem;
+}
+
+.btn-sm {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+.btn-success {
+  background-color: #10b981;
+  color: white;
+}
+
+.btn-success:hover {
+  background-color: #059669;
+}
+
+.btn-secondary {
+  background-color: #6b7280;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background-color: #4b5563;
+}
+
+/* Responsive adjustments for notes column */
+@media (max-width: 768px) {
+  .note-cell {
+    min-width: 150px;
+    max-width: 200px;
+  }
+  
+  .note-text {
+    font-size: 0.8rem;
+  }
+  
+  .note-category {
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .note-cell {
+    min-width: 120px;
+    max-width: 150px;
+    padding: 0.25rem !important;
+  }
+  
+  .note-textarea {
+    font-size: 0.8rem;
+  }
+  
+  .btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.7rem;
+  }
 }
 </style>

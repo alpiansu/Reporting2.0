@@ -5,8 +5,34 @@ import service from "./noteCategories.service.js";
 
 export const getAll = async (req, res) => {
   try {
-    const data = await service.getAll();
-    res.json({ success: true, data, count: data.length });
+    // Extract query parameters for pagination and filtering
+    const { page, limit, sortColumn, sortOrder, searchQuery } = req.query;
+
+    // Prepare options object
+    const options = {};
+    if (page) options.page = page;
+    if (limit) options.limit = limit;
+    if (sortColumn) options.sortColumn = sortColumn;
+    if (sortOrder) options.sortOrder = sortOrder;
+    if (searchQuery) options.searchQuery = searchQuery;
+
+    const result = await service.getAll(options);
+
+    // Format response to match what the frontend DataTable expects
+    if (options.page && options.limit) {
+      // Return paginated response
+      res.json({
+        success: true,
+        data: result.data,
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+        totalPages: result.totalPages,
+      });
+    } else {
+      // Return simple array response (backward compatibility)
+      res.json({ success: true, data: result.data, count: result.data.length });
+    }
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

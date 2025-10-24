@@ -3,7 +3,7 @@
  */
 import fs from "fs";
 import path from "path";
-import NoteCategories from "../../models/NoteCategories.model.js"; // model kamu
+import NoteCategories from "./NoteCategories.model.js";
 import config from "./noteCategories.config.js";
 import logger from "../../config/logger.js";
 
@@ -55,8 +55,54 @@ class NoteCategoriesService {
   // CRUD Operations
   // -----------------------
 
-  async getAll() {
-    return this.readJson();
+  async getAll(options = {}) {
+    const data = await this.readJson();
+
+    // Apply search filter if provided
+    let filteredData = data;
+    if (options.searchQuery) {
+      const query = options.searchQuery.toLowerCase();
+      filteredData = data.filter(
+        item =>
+          item.name.toLowerCase().includes(query) ||
+          (item.description && item.description.toLowerCase().includes(query)) ||
+          item.moduleName.toLowerCase().includes(query)
+      );
+    }
+
+    // Apply sorting if provided
+    if (options.sortColumn) {
+      filteredData = [...filteredData].sort((a, b) => {
+        const aVal = a[options.sortColumn];
+        const bVal = b[options.sortColumn];
+
+        if (aVal < bVal) return options.sortOrder === "desc" ? 1 : -1;
+        if (aVal > bVal) return options.sortOrder === "desc" ? -1 : 1;
+        return 0;
+      });
+    }
+
+    // Apply pagination if provided
+    let paginatedData = filteredData;
+    const total = filteredData.length;
+    let totalPages = 1;
+
+    if (options.page && options.limit) {
+      const page = parseInt(options.page);
+      const limit = parseInt(options.limit);
+      const startIndex = (page - 1) * limit;
+      paginatedData = filteredData.slice(startIndex, startIndex + limit);
+      totalPages = Math.ceil(total / limit);
+    }
+
+    // Return consistent format
+    return {
+      data: paginatedData,
+      total,
+      page: options.page ? parseInt(options.page) : 1,
+      limit: options.limit ? parseInt(options.limit) : total,
+      totalPages,
+    };
   }
 
   async getById(id) {

@@ -4,6 +4,8 @@
 import logger from "../../config/logger.js";
 import { apiResponse } from "../../utils/index.js";
 import rekonVirtualService from "./rekon_virtual_mrg.service.js";
+import notesService from "../notes/notes.service.js";
+import noteCategoriesService from "../note_categories/noteCategories.service.js";
 
 /**
  * Start screening/reconciliation process
@@ -198,6 +200,53 @@ export const insertFromStore = async (req, res) => {
     return apiResponse.success(res, result);
   } catch (error) {
     logger.error(`Error inserting from store: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+/**
+ * Update or create note for a specific record
+ * PUT /api/rekon-virtual-mrg/:cabang/:shop/:tanggal/:prdcd/note
+ */
+export const updateNote = async (req, res) => {
+  try {
+    const { cabang, shop, tanggal, prdcd } = req.params;
+    const { noteText, categoryId } = req.body;
+    const pic = req.user?.username || "system"; // Get username from authenticated user
+
+    // Validate required fields
+    if (!noteText && categoryId === undefined) {
+      return apiResponse.badRequest(res, "Either noteText or categoryId must be provided");
+    }
+
+    // Construct unixKey
+    const unixKey = `${shop}${tanggal}${prdcd}`;
+
+    // Prepare note data
+    const noteData = {
+      unixKey,
+      noteText: noteText || "", // Default to empty string if not provided
+      pic,
+      categoryId: categoryId || null, // Allow null for categoryId
+    };
+
+    // Create or update note
+    const note = await notesService.upsert(noteData);
+
+    // Get category info if categoryId is provided
+    let category = null;
+    if (categoryId) {
+      const categoryResult = await noteCategoriesService.getAll();
+      const categories = categoryResult.data || [];
+      category = categories.find(c => c.id === categoryId) || null;
+    }
+
+    return apiResponse.success(res, {
+      ...note.toJSON(),
+      category,
+    });
+  } catch (error) {
+    logger.error(`Error updating note: ${error.message}`);
     return apiResponse.error(res, error.message);
   }
 };

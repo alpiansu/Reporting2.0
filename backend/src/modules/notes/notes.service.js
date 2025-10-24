@@ -62,6 +62,38 @@ class NotesService {
     return this.readJson();
   }
 
+  /** Create or update a note */
+  async upsert(payload) {
+    // Validate required fields
+    if (!payload.unixKey || !payload.noteText || !payload.pic) {
+      throw new Error("unixKey, noteText, and pic are required");
+    }
+
+    // Check if note already exists
+    let existing = await NotesModel.findByPk(payload.unixKey);
+
+    if (existing) {
+      // Update existing note
+      await existing.update({
+        noteText: payload.noteText,
+        pic: payload.pic,
+        categoryId: payload.categoryId || null,
+      });
+    } else {
+      // Create new note
+      existing = await NotesModel.create({
+        ...payload,
+        tableName: "saldovirtual", // Default table name for saldo virtual notes
+      });
+    }
+
+    // Sync JSON with DB
+    const all = await NotesModel.findAll();
+    await this.writeJson(all.map(n => n.toJSON()));
+
+    return existing;
+  }
+
   /** Delete note by unixKey */
   async remove(unixKey) {
     const existing = await NotesModel.findByPk(unixKey);

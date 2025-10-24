@@ -1,10 +1,10 @@
 /**
  * Service for user data using JSON file storage
  */
-import fs from 'fs/promises';
-import path from 'path';
-import logger from '../../config/logger.js';
-import bcrypt from 'bcrypt';
+import fs from "fs/promises";
+import path from "path";
+import logger from "../../config/logger.js";
+import bcrypt from "bcrypt";
 
 class UserService {
   constructor() {
@@ -12,6 +12,43 @@ class UserService {
     this.filePath = path.join(process.cwd(), "data/m_users.json");
     this.userList = [];
     this.initialized = false;
+
+    // TTL (15 minutes)
+    this.cacheTTL = 15 * 60 * 1000;
+    this.lastAccessTime = 0;
+    this.cacheTimer = null;
+  }
+
+  /** Ensure cache validity */
+  async ensureCache() {
+    const now = Date.now();
+
+    // Jika cache sudah expired, reload file
+    if (!this.initialized || now - this.lastAccessTime > this.cacheTTL) {
+      await this.initialize();
+    }
+
+    // Reset TTL countdown setiap kali diakses
+    this.lastAccessTime = now;
+    clearTimeout(this.cacheTimer);
+    this.cacheTimer = setTimeout(() => {
+      this.clearCache();
+    }, this.cacheTTL);
+  }
+
+  /** Clear cache to free memory */
+  clearCache() {
+    this.userList = [];
+    this.initialized = false;
+    this.lastAccessTime = 0;
+    this.cacheTimer = null;
+    logger.info("[UserService] Cache expired and cleared from memory");
+  }
+
+  async resetCache() {
+    this.clearCache();
+    await this.initialize();
+    logger.info("[UserService] Cache manually refreshed");
   }
 
   /**
@@ -48,7 +85,7 @@ class UserService {
               email: "admin@example.com",
               password: await this.hashPassword("admin123"),
               fullName: "Administrator",
-              role: "admin",
+              role: "superadmin",
               isActive: true,
               lastLogin: null,
               profileImage: null,
@@ -87,9 +124,7 @@ class UserService {
    * Ensure the service is initialized before performing operations
    */
   async ensureInitialized() {
-    if (!this.initialized) {
-      await this.initialize();
-    }
+    await this.ensureCache();
   }
 
   /**

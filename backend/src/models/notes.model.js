@@ -26,6 +26,7 @@ const getNotesEdpModel = async () => {
             type: DataTypes.STRING(50),
             allowNull: false,
             field: "table_name",
+            primaryKey: true,
           },
           unixKey: {
             type: DataTypes.STRING(125),

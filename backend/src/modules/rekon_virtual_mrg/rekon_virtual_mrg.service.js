@@ -11,6 +11,8 @@ import storeService from "../store/storeService.js";
 import pLimit from "p-limit";
 import moment from "moment-timezone";
 import RekapRemoteService from "../rekap_remote/rekap_remote.service.js";
+import noteCategoriesService from "../note_categories/noteCategories.service.js";
+import notesService from "../notes/notes.service.js";
 
 // Path untuk file JSON rekon_virtual_mrg
 const REKON_VIRTUAL_MRG_JSON_PATH = path.join(process.cwd(), "data/rekon_virtual_mrg.json");
@@ -467,8 +469,10 @@ class RekonVirtualService {
       const endIndex = startIndex + parseInt(limit);
       const paginatedData = filteredData.slice(startIndex, endIndex);
 
+      const enrichedData = await this.enrichWithNotes(paginatedData);
+
       return {
-        data: paginatedData,
+        data: enrichedData,
         total: totalRecords,
         page: parseInt(page),
         limit: parseInt(limit),
@@ -616,6 +620,52 @@ class RekonVirtualService {
       if (storeConnection) {
         await storeConnection.end();
       }
+    }
+  }
+
+  /**
+   * Merge notes and category info into virtualData
+   */
+  async enrichWithNotes(data) {
+    try {
+      // ambil semua notes & categories dari service (cached dengan TTL)
+      const [notes, categoryResult] = await Promise.all([
+        await notesService.getAll(),
+        await noteCategoriesService.getAll(),
+      ]);
+
+      const categories = categoryResult.data || [];
+
+      logger.info(
+        `[rekon_virtual_mrg.service] Notes & Categories loaded: ${notes.length} notes, ${categories.length} categories`
+      );
+
+      // buat lookup map untuk kategori agar cepat
+      const categoryMap = new Map(categories.map(c => [c.id, c]));
+
+      // proses penggabungan data
+      return data.map(item => {
+        // bentuk unixKey dari saldo_virtual
+        const unixKey = `${item.SHOP}${item.TANGGAL}${item.PRDCD}`;
+
+        // ambil semua note yang terkait dengan unixKey ini
+        const note = notes.find(n => n.unixKey === unixKey);
+        if (!note) return { ...item, note: null };
+
+        const category = categoryMap.get(note.categoryId) || null;
+
+        // kembalikan data virtual + notes
+        return {
+          ...item,
+          note: {
+            ...note,
+            category,
+          },
+        };
+      });
+    } catch (err) {
+      logger.error(`[rekon_virtual_mrg.service] Error enriching data with notes: ${err.message}`);
+      return data;
     }
   }
 }

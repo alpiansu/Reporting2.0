@@ -88,7 +88,7 @@ const addDynamicRoutes = async () => {
       }
     });
 
-    console.log("All menu items:", allMenuItems);
+    // console.log("All menu items:", allMenuItems);
 
     // Buat children routes untuk MainLayout
     const mainLayoutChildren = [
@@ -97,26 +97,24 @@ const addDynamicRoutes = async () => {
         path: "dashboard",
         name: "Dashboard",
         component: Dashboard,
-        meta: { requiresAuth: true, title: "Dashboard", layout: "main", roles: ["admin", "manager", "user"] },
+        meta: {
+          requiresAuth: true,
+          title: "Dashboard",
+          layout: "main",
+          roles: ["admin", "manager", "user", "superadmin"],
+        },
       },
       // Rute detail yang tidak ada di menus.json
-      {
-        path: "stores/:id",
-        name: "StoreDetails",
-        component: () => import("../views/stores/StoreDetails.vue"),
-        meta: { requiresAuth: true, title: "Store Details", layout: "main", roles: ["admin", "manager"] },
-      },
-      {
-        path: "screenings/:id",
-        name: "ScreeningDetails",
-        component: () => import("../views/screenings/ScreeningDetails.vue"),
-        meta: { requiresAuth: true, title: "Screening Details", layout: "main", roles: ["admin", "manager"] },
-      },
       {
         path: "profile",
         name: "Profile",
         component: () => import("../views/profile/Profile.vue"),
-        meta: { requiresAuth: true, title: "Profile", layout: "main", roles: ["admin", "manager", "user"] },
+        meta: {
+          requiresAuth: true,
+          title: "Profile",
+          layout: "main",
+          roles: ["admin", "manager", "user", "superadmin"],
+        },
       },
     ];
 
@@ -135,7 +133,7 @@ const addDynamicRoutes = async () => {
             requiresAuth: true,
             title: item.text,
             layout: "main",
-            roles: item.roles || ["admin", "manager", "user"],
+            roles: item.roles || ["admin", "user", "superadmin"],
           },
         };
 

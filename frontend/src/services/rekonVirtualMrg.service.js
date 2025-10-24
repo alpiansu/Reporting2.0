@@ -129,6 +129,20 @@ const rekonVirtualMrgService = {
     const response = await api.post(`/${fixedPattern}/insert-from-store`, data);
     return response.data;
   },
+
+  /**
+   * Update or create note for a specific record
+   * @param {string} cabang - Branch code
+   * @param {string} shop - Shop code
+   * @param {string} tanggal - Date
+   * @param {string} prdcd - Product code
+   * @param {object} data - Note data (noteText, categoryId)
+   * @returns {Promise} - Response with note update result
+   */
+  updateNote: async (cabang, shop, tanggal, prdcd, data) => {
+    const response = await api.put(`/${fixedPattern}/${cabang}/${shop}/${tanggal}/${prdcd}/note`, data);
+    return response.data;
+  },
 };
 
 export default rekonVirtualMrgService;

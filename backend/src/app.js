@@ -46,7 +46,7 @@ app.use(addDatabaseStatus);
 resilientDb.initialize();
 
 // Initialize modules
-const initializedModules = modules.initialize(app);
+modules.initialize(app);
 
 // API routes (for routes not handled by modules)
 app.use(routes);

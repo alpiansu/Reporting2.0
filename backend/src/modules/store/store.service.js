@@ -82,6 +82,11 @@ class StoreService {
    * @param {Object} options - Query options
    * @returns {Object} Paginated stores
    */
+  /**
+   * Get all stores with pagination
+   * @param {Object} options - Query options
+   * @returns {Object} Paginated stores
+   */
   async getAllStores(options = {}) {
     const { page = 1, limit = 10, search = "", region, city, status } = options;
 
@@ -125,15 +130,27 @@ class StoreService {
       // Sort by updatedAt in descending order
       filteredStores.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 
+      // Pastikan page & limit numerik
+      const currentPage = Number(page) || 1;
+      const itemsPerPage = Number(limit) || 10;
+      const totalItems = filteredStores.length;
+
       // Apply pagination
-      const offset = (page - 1) * limit;
-      const paginatedStores = filteredStores.slice(offset, offset + limit);
+      const offset = (currentPage - 1) * itemsPerPage;
+      const paginatedStores = filteredStores.slice(offset, offset + itemsPerPage);
+
+      // Hitung start & end item
+      const startItem = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+      const endItem = totalItems === 0 ? 0 : Math.min(currentPage * itemsPerPage, totalItems);
 
       return {
         stores: paginatedStores,
-        totalItems: filteredStores.length,
-        totalPages: Math.ceil(filteredStores.length / limit),
-        currentPage: page,
+        totalItems,
+        totalPages: Math.ceil(totalItems / itemsPerPage),
+        currentPage,
+        itemsPerPage,
+        startItem,
+        endItem,
       };
     } catch (error) {
       logger.error(`Failed to get stores: ${error.message}`);

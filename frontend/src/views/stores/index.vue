@@ -24,25 +24,20 @@
       <div class="search-controls">
         <div class="search-box-modern">
           <i class="pi pi-search search-icon"></i>
-          <input 
-            type="text" 
-            v-model="searchQuery" 
-            placeholder="Search stores, codes, regions..."
-            @input="handleSearch"
-            class="search-input"
-          />
+          <input type="text" v-model="searchQuery" placeholder="Search stores, codes, regions..." @input="handleSearch"
+            class="search-input" />
           <button v-if="searchQuery" class="clear-search-btn" @click="clearSearch">
             <i class="pi pi-times"></i>
           </button>
         </div>
-        
+
         <div class="filter-section">
           <button class="filter-button-modern" @click="toggleFilterMenu">
             <i class="pi pi-filter"></i>
             <span>Filters</span>
             <i class="pi pi-chevron-down" :class="{ 'rotated': showFilterMenu }"></i>
           </button>
-          
+
           <!-- Modern Filter Panel -->
           <div v-if="showFilterMenu" class="filter-panel-modern">
             <div class="filter-content">
@@ -50,50 +45,35 @@
                 <h4 class="filter-title-modern">Region</h4>
                 <div class="filter-options-modern">
                   <label v-for="region in regions" :key="region.id" class="filter-option-modern">
-                    <input 
-                      type="checkbox" 
-                      :value="region.id" 
-                      v-model="selectedRegions"
-                      @change="applyFilters"
-                    />
+                    <input type="checkbox" :value="region.id" v-model="selectedRegions" @change="applyFilters" />
                     <span class="checkmark"></span>
                     <span>{{ region.name }}</span>
                   </label>
                 </div>
               </div>
-              
+
               <div class="filter-group-modern">
                 <h4 class="filter-title-modern">City</h4>
                 <div class="filter-options-modern">
                   <label v-for="city in cities" :key="city.id" class="filter-option-modern">
-                    <input 
-                      type="checkbox" 
-                      :value="city.id" 
-                      v-model="selectedCities"
-                      @change="applyFilters"
-                    />
+                    <input type="checkbox" :value="city.id" v-model="selectedCities" @change="applyFilters" />
                     <span class="checkmark"></span>
                     <span>{{ city.name }}</span>
                   </label>
                 </div>
               </div>
-              
+
               <div class="filter-group-modern">
                 <h4 class="filter-title-modern">Status</h4>
                 <div class="filter-options-modern">
                   <label v-for="status in statuses" :key="status.id" class="filter-option-modern">
-                    <input 
-                      type="checkbox" 
-                      :value="status.id" 
-                      v-model="selectedStatuses"
-                      @change="applyFilters"
-                    />
+                    <input type="checkbox" :value="status.id" v-model="selectedStatuses" @change="applyFilters" />
                     <span class="checkmark"></span>
                     <span>{{ status.name }}</span>
                   </label>
                 </div>
               </div>
-              
+
               <div class="filter-actions-modern">
                 <button class="filter-clear-btn" @click="clearFilters">Clear All</button>
                 <button class="filter-apply-btn" @click="applyFilters">Apply Filters</button>
@@ -117,25 +97,20 @@
 
       <!-- Store Grid -->
       <div v-else-if="!loading && filteredStores.length > 0" class="store-grid-modern">
-        <div 
-          v-for="store in filteredStores" 
-          :key="store.id" 
-          class="store-card-modern"
-          @click="navigateToStoreDetails(store.id)"
-        >
+        <div v-for="store in filteredStores" :key="store.id" class="store-card-modern"
+          @click="navigateToStoreDetails(store.id)">
           <div class="store-card-header">
             <div class="store-identity">
               <h3 class="store-name">{{ store.storeName }}</h3>
               <span class="store-code">{{ store.storeCode }}</span>
             </div>
             <div class="store-status">
-              <span class="status-badge" :class="getStatusClass(store.isActive ? 'Active' : 'Inactive')">
-                <i class="pi" :class="store.isActive ? 'pi-check-circle' : 'pi-times-circle'"></i>
-                {{ store.isActive ? 'Active' : 'Inactive' }}
+              <span class="status-badge" :class="getStatusClass('Active')">
+                {{ store.dbHost }}
               </span>
             </div>
           </div>
-          
+
           <div class="store-details">
             <div class="detail-item" v-if="store.address">
               <i class="pi pi-map-marker detail-icon"></i>
@@ -150,7 +125,7 @@
               <span class="detail-text">{{ store.phone }}</span>
             </div>
           </div>
-          
+
           <div class="store-footer">
             <div class="update-info">
               <i class="pi pi-clock update-icon"></i>
@@ -184,29 +159,22 @@
     <!-- Modern Pagination -->
     <div v-if="stores.length > 0 && pagination" class="pagination-modern">
       <div class="pagination-info-modern">
-        <span>Showing {{ (pagination.currentPage - 1) * pagination.pageSize + 1 }} to 
-        {{ Math.min(pagination.currentPage * pagination.pageSize, pagination.totalItems) }} 
-        of {{ pagination.totalItems }} stores</span>
+        <span>Showing {{ startItem }} to {{ endItem }}
+          of {{ pagination.totalItems }} stores</span>
       </div>
       <div class="pagination-controls-modern">
-        <button 
-          class="pagination-btn pagination-btn-prev" 
-          :disabled="pagination.currentPage === 1" 
-          @click="handlePageChange(pagination.currentPage - 1)"
-        >
+        <button class="pagination-btn pagination-btn-prev" :disabled="pagination.currentPage === 1"
+          @click="handlePageChange(pagination.currentPage - 1)">
           <i class="pi pi-chevron-left"></i>
           <span>Previous</span>
         </button>
-        
+
         <div class="pagination-numbers">
           <span class="page-info">Page {{ pagination.currentPage }} of {{ pagination.totalPages }}</span>
         </div>
-        
-        <button 
-          class="pagination-btn pagination-btn-next" 
-          :disabled="pagination.currentPage === pagination.totalPages" 
-          @click="handlePageChange(pagination.currentPage + 1)"
-        >
+
+        <button class="pagination-btn pagination-btn-next" :disabled="pagination.currentPage === pagination.totalPages"
+          @click="handlePageChange(pagination.currentPage + 1)">
           <span>Next</span>
           <i class="pi pi-chevron-right"></i>
         </button>
@@ -225,22 +193,16 @@
             <i class="pi pi-times"></i>
           </button>
         </div>
-        
+
         <div class="dialog-body-modern">
           <form @submit.prevent="handleAddStore" class="store-form-modern">
             <div class="form-grid">
               <div class="form-group-modern">
                 <label for="storeName" class="form-label">Store Name</label>
-                <input 
-                  id="storeName" 
-                  v-model="newStore.storeName" 
-                  type="text" 
-                  placeholder="Enter store name" 
-                  required 
-                  class="form-input"
-                />
+                <input id="storeName" v-model="newStore.storeName" type="text" placeholder="Enter store name" required
+                  class="form-input" />
               </div>
-              
+
               <div class="form-group-modern">
                 <label for="storeRegion" class="form-label">Region</label>
                 <select id="storeRegion" v-model="newStore.region" required class="form-select">
@@ -248,32 +210,20 @@
                   <option v-for="region in regions" :key="region.id" :value="region.id">{{ region.name }}</option>
                 </select>
               </div>
-              
+
               <div class="form-group-modern full-width">
                 <label for="storeAddress" class="form-label">Address</label>
-                <input 
-                  id="storeAddress" 
-                  v-model="newStore.address" 
-                  type="text" 
-                  placeholder="Enter store address" 
-                  required 
-                  class="form-input"
-                />
+                <input id="storeAddress" v-model="newStore.address" type="text" placeholder="Enter store address"
+                  required class="form-input" />
               </div>
-              
+
               <div class="form-group-modern">
                 <label for="storePhone" class="form-label">Phone Number</label>
-                <input 
-                  id="storePhone" 
-                  v-model="newStore.phone" 
-                  type="tel" 
-                  placeholder="Enter phone number" 
-                  required 
-                  class="form-input"
-                />
+                <input id="storePhone" v-model="newStore.phone" type="tel" placeholder="Enter phone number" required
+                  class="form-input" />
               </div>
             </div>
-            
+
             <div class="form-actions-modern">
               <button type="button" class="btn-secondary" @click="closeAddStoreDialog">Cancel</button>
               <button type="submit" class="btn-primary" :disabled="addStoreLoading">
@@ -319,8 +269,10 @@ const newStore = ref({
 // Get data from store
 const stores = computed(() => storeStore.allStores);
 const loading = computed(() => storeStore.isLoading);
-const error = computed(() => storeStore.error);
 const pagination = computed(() => storeStore.getPagination);
+const startItem = computed(() => storeStore.getPagination.startItem);
+const endItem = computed(() => storeStore.getPagination.endItem);
+
 
 // Mock data for regions until we have a proper region service
 const regions = ref([
@@ -450,8 +402,15 @@ const getStatusClass = (status) => {
 
 const formatDate = (dateString) => {
   if (!dateString) return 'Never';
-  const options = { year: 'numeric', month: 'short', day: 'numeric' };
-  return new Date(dateString).toLocaleDateString(undefined, options);
+  const options = {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  };
+  return new Date(dateString).toLocaleString(undefined, options);
 };
 
 const navigateToStoreDetails = (storeId) => {

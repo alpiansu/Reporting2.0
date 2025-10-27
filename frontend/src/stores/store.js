@@ -1,8 +1,8 @@
-import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
-import { storeService } from '../services';
+import { defineStore } from "pinia";
+import { ref, computed } from "vue";
+import { storeService } from "../services";
 
-export const useStoreStore = defineStore('store', () => {
+export const useStoreStore = defineStore("store", () => {
   // State
   const stores = ref([]);
   const loading = ref(false);
@@ -11,7 +11,9 @@ export const useStoreStore = defineStore('store', () => {
     currentPage: 1,
     totalItems: 0,
     totalPages: 1,
-    itemsPerPage: 10
+    itemsPerPage: 10,
+    startItem: 0,
+    endItem: 0,
   });
   const initialized = ref(false);
 
@@ -30,7 +32,7 @@ export const useStoreStore = defineStore('store', () => {
   const fetchStores = async (options = {}) => {
     loading.value = true;
     error.value = null;
-    
+
     try {
       const response = await storeService.getAllStores(options);
       stores.value = response.data.stores;
@@ -38,12 +40,14 @@ export const useStoreStore = defineStore('store', () => {
         currentPage: response.data.currentPage,
         totalItems: response.data.totalItems,
         totalPages: response.data.totalPages,
-        itemsPerPage: options.limit || 10
+        itemsPerPage: options.limit || 10,
+        startItem: response.data.startItem,
+        endItem: response.data.endItem,
       };
       initialized.value = true;
     } catch (err) {
-      error.value = err.response?.data?.message || 'Failed to fetch stores';
-      console.error('Error fetching stores:', err);
+      error.value = err.response?.data?.message || "Failed to fetch stores";
+      console.error("Error fetching stores:", err);
     } finally {
       loading.value = false;
     }
@@ -57,7 +61,7 @@ export const useStoreStore = defineStore('store', () => {
   const fetchStoresByBranch = async (branchCode, options = {}) => {
     loading.value = true;
     error.value = null;
-    
+
     try {
       const response = await storeService.getStoresByBranch(branchCode, options);
       stores.value = response.data.stores;
@@ -65,7 +69,9 @@ export const useStoreStore = defineStore('store', () => {
         currentPage: response.data.currentPage,
         totalItems: response.data.totalItems,
         totalPages: response.data.totalPages,
-        itemsPerPage: options.limit || 10
+        itemsPerPage: options.limit || 10,
+        startItem: response.data.startItem,
+        endItem: response.data.endItem,
       };
       initialized.value = true;
     } catch (err) {
@@ -81,10 +87,10 @@ export const useStoreStore = defineStore('store', () => {
    * @param {number} id - Store ID
    * @returns {Promise<Object>} Store data
    */
-  const getStoreById = async (id) => {
+  const getStoreById = async id => {
     loading.value = true;
     error.value = null;
-    
+
     try {
       const response = await storeService.getStoreById(id);
       return response.data;
@@ -102,18 +108,18 @@ export const useStoreStore = defineStore('store', () => {
    * @param {Object} storeData - Store data
    * @returns {Promise<Object>} Created store data
    */
-  const createStore = async (storeData) => {
+  const createStore = async storeData => {
     loading.value = true;
     error.value = null;
-    
+
     try {
       const response = await storeService.createStore(storeData);
       // Refresh the store list after creating a new store
       await fetchStores({ page: 1 });
       return response.data;
     } catch (err) {
-      error.value = err.response?.data?.message || 'Failed to create store';
-      console.error('Error creating store:', err);
+      error.value = err.response?.data?.message || "Failed to create store";
+      console.error("Error creating store:", err);
       throw err;
     } finally {
       loading.value = false;
@@ -129,7 +135,7 @@ export const useStoreStore = defineStore('store', () => {
   const updateStore = async (id, storeData) => {
     loading.value = true;
     error.value = null;
-    
+
     try {
       const response = await storeService.updateStore(id, storeData);
       // Refresh the store list after updating a store
@@ -149,10 +155,10 @@ export const useStoreStore = defineStore('store', () => {
    * @param {number} id - Store ID
    * @returns {Promise<boolean>} Success status
    */
-  const deleteStore = async (id) => {
+  const deleteStore = async id => {
     loading.value = true;
     error.value = null;
-    
+
     try {
       await storeService.deleteStore(id);
       // Refresh the store list after deleting a store
@@ -174,20 +180,20 @@ export const useStoreStore = defineStore('store', () => {
     error,
     pagination,
     initialized,
-    
+
     // Getters
     allStores,
     isInitialized,
     isLoading,
     hasError,
     getPagination,
-    
+
     // Actions
     fetchStores,
     fetchStoresByBranch,
     getStoreById,
     createStore,
     updateStore,
-    deleteStore
+    deleteStore,
   };
 });

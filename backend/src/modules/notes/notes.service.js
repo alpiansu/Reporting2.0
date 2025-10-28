@@ -70,7 +70,9 @@ class NotesService {
     }
 
     // Check if note already exists
-    let existing = await NotesModel.findByPk(payload.unixKey);
+    let existing = await NotesModel.findOne({
+      where: { unixKey: payload.unixKey },
+    });
 
     if (existing) {
       // Update existing note

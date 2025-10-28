@@ -48,6 +48,16 @@ export const getById = async (req, res) => {
   }
 };
 
+export const getByModule = async (req, res) => {
+  try {
+    const data = await service.getByModule(req.body);
+    if (!data) return res.status(404).json({ success: false, message: "Not found" });
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 export const create = async (req, res) => {
   try {
     const data = await service.create(req.body);

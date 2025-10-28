@@ -3,7 +3,7 @@
  */
 import fs from "fs";
 import path from "path";
-import NoteCategories from "../../models/index.js";
+import NoteCategories from "./noteCategories.model.js";
 import config from "./noteCategories.config.js";
 import logger from "../../config/logger.js";
 
@@ -108,6 +108,12 @@ class NoteCategoriesService {
   async getById(id) {
     const data = await this.readJson();
     return data.find(c => c.id === Number(id)) || null;
+  }
+
+  async getByModule(body) {
+    const { moduleName } = body;
+    const data = await this.readJson();
+    return data.filter(c => c.moduleName === moduleName);
   }
 
   async create(payload) {

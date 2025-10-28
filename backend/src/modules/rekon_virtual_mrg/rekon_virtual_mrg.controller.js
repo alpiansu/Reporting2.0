@@ -224,6 +224,7 @@ export const updateNote = async (req, res) => {
 
     // Prepare note data
     const noteData = {
+      Cabang: cabang,
       unixKey,
       noteText: noteText || "", // Default to empty string if not provided
       pic,

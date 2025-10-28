@@ -14,6 +14,21 @@ class NoteCategoriesService {
   }
 
   /**
+   * Get all note categories by module
+   * @param {Object} params - Query parameters for pagination and filtering
+   * @returns {Promise} Promise object with note categories data
+   */
+  getAllByModule(params = {}) {
+    const body = { moduleName: params.module || "" };
+
+    return api.post("/note-categories/getModule", body, {
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+  }
+
+  /**
    * Get note category by ID
    * @param {string|number} id - Note category ID
    * @returns {Promise} Promise object with note category data

@@ -46,6 +46,10 @@
                   </button>
                 </div>
               </form>
+              <button class="btn btn-primary create-button" @click="openCreateModal">
+                <i class="pi pi-plus"></i>
+                Create New
+              </button>
             </div>
           </div>
         </template>
@@ -104,7 +108,9 @@
           <td class="text-center">{{ item.id }}</td>
           <td>{{ item.name }}</td>
           <td>{{ item.description || '-' }}</td>
-          <td>{{ item.moduleName }}</td>
+          <td>
+            <span class="module-tag">{{ getModuleName(item.moduleName) }}</span>
+          </td>
           <td class="text-center">
             <div class="action-buttons">
               <button class="btn btn-icon btn-secondary" @click="openEditModal(item)" title="Edit">
@@ -153,13 +159,21 @@
             
             <div class="form-group">
               <label for="moduleName">Module Name *</label>
-              <input 
-                type="text" 
+              <select 
                 id="moduleName" 
                 v-model="form.moduleName" 
                 :class="{ 'invalid': errors.moduleName }"
                 required
               >
+                <option value="">Select a module</option>
+                <option 
+                  v-for="module in availableModules" 
+                  :key="module" 
+                  :value="module"
+                >
+                  {{ getModuleName(module) }}
+                </option>
+              </select>
               <div v-if="errors.moduleName" class="error-text">{{ errors.moduleName }}</div>
             </div>
             
@@ -233,6 +247,42 @@ const errors = ref({});
 
 // Toast for notifications
 const toast = useToast();
+
+// Add module-related state and functions
+import modulesService from '../../services/modules.service.js';
+
+// Add to the state section:
+const availableModules = ref([]);
+const moduleNames = ref({});
+
+// Add helper function:
+const getModuleName = (moduleKey) => {
+  return moduleNames.value[moduleKey] || moduleKey;
+};
+
+// Add to the methods section:
+const loadModules = async () => {
+  try {
+    const response = await modulesService.getAll();
+    const data = response.data;
+    availableModules.value = data.modules || [];
+    
+    // Create mapping of module keys to display names
+    const names = {};
+    data.modules?.forEach((module, index) => {
+      names[module] = data.module_names?.[index] || module;
+    });
+    moduleNames.value = names;
+  } catch (err) {
+    console.error('Error loading modules:', err);
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to load modules',
+      life: 3000
+    });
+  }
+};
 
 // Computed properties
 const pagination = computed(() => ({
@@ -449,6 +499,7 @@ const deleteCategory = async () => {
 // Lifecycle
 onMounted(() => {
   loadCategories();
+  loadModules();
 });
 </script>
 

@@ -56,13 +56,13 @@ export default {
                 pr.prdcd, 
                 IFNULL(qty_ms, 0) AS qty_ms, 
                 IFNULL(qty_mt, 0) AS qty_mt, 
-                begbal, 
-                (begbal + IFNULL(qty_ms, 0) + IFNULL(qty_mt, 0)) AS saldo
+                IFNULL(begbal,0) as begbal, 
+                (IFNULL(begbal,0) + IFNULL(qty_ms, 0) + IFNULL(qty_mt, 0)) AS saldo
             FROM prodmast pr 
             LEFT JOIN (
                 SELECT 
                     prdcd, 
-                    SUM(IF(RTYPE IN ('O','K'), QTY * -1, QTY)) AS qty_ms 
+                    ifnull(SUM(IF(RTYPE IN ('O','K'), QTY * -1, QTY)),0) AS qty_ms 
                 FROM mstran 
                 WHERE (
                     (MONTH(bukti_tgl) = MONTH(CURRENT_DATE()) AND DATE(bukti_tgl) < CURRENT_DATE)
@@ -73,7 +73,7 @@ export default {
             LEFT JOIN (
                 SELECT 
                     plu AS prdcd, 
-                    SUM(IF(rtype = 'J', qty * -1, qty)) AS qty_mt 
+                    ifnull(SUM(IF(rtype = 'J', qty * -1, qty)),0) AS qty_mt 
                 FROM mtran 
                 WHERE (
                     (MONTH(tanggal) = MONTH(CURRENT_DATE()) AND DATE(tanggal) < CURRENT_DATE)
@@ -82,7 +82,7 @@ export default {
                 GROUP BY prdcd
             ) mt USING (prdcd)
             LEFT JOIN (
-                SELECT prdcd, saldo_akh AS begbal FROM ?? 
+                SELECT prdcd, ifnull(saldo_akh,0) AS begbal FROM ?? 
             ) flt USING (prdcd)
             WHERE pr.prdcd IN (SELECT prdcd FROM mstadj)
         ) b USING (prdcd);

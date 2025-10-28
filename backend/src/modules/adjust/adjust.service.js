@@ -384,7 +384,7 @@ class AdjustService {
                 prdcd: record.PRDCD,
                 qty_adj: parseInt(record.QTY_ADJ) || 0,
                 keter: record.KETER || "",
-                note: "Insert failed - no rows affected (terkena jagaan saldo < 0 jika di adjust / tidak ada di prodmast)",
+                note: "Insert failed - no rows affected (terkena jagaan saldo sudah 0 sebelum di adjust / tidak ada di prodmast)",
                 pic: username,
                 updtime: executedAt,
                 status: "FAILED",

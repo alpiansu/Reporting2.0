@@ -63,6 +63,30 @@ export const getSummary = async (req, res) => {
 };
 
 /**
+ * Get all records without pagination and filtering
+ * GET /api/rekon-virtual-mrg
+ */
+export const getAll = async (req, res) => {
+  try {
+    const { cabang, periode } = req.query;
+
+    const options = {
+      cabang: !cabang || cabang === "All" ? null : cabang,
+      periode,
+    };
+
+    logger.info(`Getting all records: cabang=${cabang || "All"}, periode=${periode || "All"}`);
+
+    const result = await rekonVirtualService.getAll(options);
+
+    return apiResponse.success(res, result);
+  } catch (error) {
+    logger.error(`[rekon_virtual_mrg]Error getting all records without pagination and filtering: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+/**
  * Get all records with pagination and filtering
  * GET /api/rekon-virtual-mrg
  */

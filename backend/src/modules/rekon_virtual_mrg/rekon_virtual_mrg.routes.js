@@ -16,6 +16,9 @@ router.get("/summary", rekonVirtualController.getSummary);
 // Get all records with pagination and filters
 router.get("/", rekonVirtualController.getAllRecords);
 
+// Get all records without pagination and filters
+router.get("/getData", rekonVirtualController.getAll);
+
 // Get single record
 router.get("/:cabang/:shop/:tanggal/:prdcd", rekonVirtualController.getRecord);
 

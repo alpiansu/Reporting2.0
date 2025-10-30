@@ -384,6 +384,35 @@ class RekonVirtualService {
   }
 
   /**
+   * Get all records without pagination and filtering from JSON file
+   * @param {Object} options - Query options
+   * @returns {Promise<Object>} Paginated results
+   */
+  async getAll(options = {}) {
+    const { cabang, periode } = options;
+
+    try {
+      // Ensure data is loaded from JSON file
+      await this.ensureDataLoaded();
+
+      // Build filter function
+      const filterFn = this.buildFilterFunction({ cabang, periode });
+
+      // Filter data
+      let filteredData = this.virtualData.filter(filterFn);
+
+      const enrichedData = await this.enrichWithNotes(filteredData);
+
+      return {
+        data: enrichedData,
+      };
+    } catch (error) {
+      logger.error(`[rekon_virtual_mrg.service] Error getting all records: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * Get all records with pagination and filtering from JSON file
    * @param {Object} options - Query options
    * @returns {Promise<Object>} Paginated results

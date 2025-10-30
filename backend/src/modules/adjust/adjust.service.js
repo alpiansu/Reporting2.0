@@ -3,7 +3,7 @@ import { Readable } from "stream";
 import fs from "fs/promises";
 import path from "path";
 import logger from "../../config/logger.js";
-import config from "../../config/adjust.config.js";
+import config from "./adjust.config.js";
 import storeService from "../store/storeService.js";
 import dbStore from "../../config/db_store.js";
 import moment from "moment-timezone";
@@ -21,7 +21,7 @@ class AdjustService {
    * @returns {Promise<Object>} Processing results with history
    */
   async processCsvAdjust(fileBuffer, username) {
-    const taskId = config.taskProgressName;
+    const taskId = `${config.taskProgressName}_${username}`;
     const tempFilePath = path.join(os.tmpdir(), `adjust_history_${Date.now()}.json`);
 
     try {

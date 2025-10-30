@@ -5,7 +5,7 @@
     :emptyHelpText="'Tidak ditemukan data rekonsiliasi untuk cabang dan periode yang dipilih.'"
     :pagination="pagination"
     :tableTitle="'Detail Transaksi'" :rowClass="getRowClass" @refresh="$emit('refresh')" @reset-filters="resetFilters"
-    @export="exportToExcel" @print="printResults" @page-change="handlePageChange"
+    @export="exportToExcel" @page-change="handlePageChange"
     @items-per-page-change="handleItemsPerPageChange" @sort-change="handleSortChange">
     <!-- Search Component -->
     <template #filters>
@@ -579,134 +579,6 @@ const exportToExcel = async () => {
     toast.showError(
       'Ekspor Gagal',
       'Terjadi kesalahan saat mengekspor data',
-      3000
-    );
-  }
-};
-
-// Print results
-const printResults = () => {
-  try {
-    // Create a new window for printing
-    const printWindow = window.open('', '_blank');
-    
-    // Generate print content
-    let printContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Rekonsiliasi WT Harian - ${props.cab === 'SEMUA' ? 'SEMUA CABANG' : props.cab} - ${formatPeriode(props.periode)}</title>
-        <style>
-          body { font-family: Arial, sans-serif; margin: 20px; }
-          h1 { font-size: 18px; text-align: center; margin-bottom: 10px; }
-          h2 { font-size: 16px; margin-bottom: 10px; }
-          .summary { margin-bottom: 20px; padding: 10px; background-color: #f5f5f5; border-radius: 5px; }
-          .summary-item { margin-bottom: 5px; }
-          table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-          th { background-color: #f2f2f2; }
-          .text-right { text-align: right; }
-          .text-center { text-align: center; }
-          .different-amount { color: #e74c3c; }
-          .footer { margin-top: 20px; font-size: 12px; text-align: center; }
-          .badge { display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 12px; font-weight: bold; }
-          .badge-cash { background-color: #e8f5e9; color: #4caf50; }
-          .badge-non-cash { background-color: #e3f2fd; color: #2196f3; }
-          .badge-success { background-color: #d4edda; color: #155724; }
-          .badge-danger { background-color: #f8d7da; color: #721c24; }
-          .badge-warning { background-color: #fff3cd; color: #856404; }
-          .badge-secondary { background-color: #e2e3e5; color: #383d41; }
-          .badge-light { background-color: #f8f9fa; color: #6c757d; }
-          .has-diff { background-color: #fff8e1; }
-        </style>
-      </head>
-      <body>
-        <h1>Hasil Rekonsiliasi WT Harian</h1>
-        <div>
-          <p><strong>Cabang:</strong> ${props.cab === 'SEMUA' ? 'SEMUA CABANG' : props.cab}</p>
-          <p><strong>Periode:</strong> ${formatPeriode(props.periode)}</p>
-        </div>
-        
-        <table>
-          <thead>
-            <tr>
-              <th>No</th>
-              <th>Cab</th>
-              <th>Shop</th>
-              <th>Tipe</th>
-              <th class="text-right">Gross WRC</th>
-              <th class="text-right">Gross Toko</th>
-              <th class="text-right">Selisih Gross</th>
-              <th class="text-right">PPN WRC</th>
-              <th class="text-right">PPN Toko</th>
-              <th class="text-right">Selisih PPN</th>
-              <th class="text-right">Total Selisih</th>
-              <th class="text-center">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-    `;
-    
-    // Add data rows
-    filteredData.value.forEach((item, index) => {
-      const diffGrossClass = item.selisih_gross !== 0 ? 'different-amount' : '';
-      const diffPpnClass = item.selisih_ppn !== 0 ? 'different-amount' : '';
-      const totalDiffClass = (item.selisih_gross + item.selisih_ppn) !== 0 ? 'different-amount' : '';
-      const rowClass = hasDifference(item) ? 'has-diff' : '';
-      
-      printContent += `
-        <tr class="${rowClass}">
-          <td class="text-center">${index + 1}</td>
-          <td>${item.cab}</td>
-          <td>${item.shop}</td>
-          <td>
-            <span class="badge badge-${item.tipe === 'CASH' ? 'cash' : 'non-cash'}">
-              ${item.tipe}
-            </span>
-          </td>
-          <td class="text-right">${formatCurrency(item.gross_wrc)}</td>
-          <td class="text-right">${formatCurrency(item.gross_store)}</td>
-          <td class="text-right ${diffGrossClass}">${formatCurrency(item.selisih_gross)}</td>
-          <td class="text-right">${formatCurrency(item.ppn_wrc)}</td>
-          <td class="text-right">${formatCurrency(item.ppn_store)}</td>
-          <td class="text-right ${diffPpnClass}">${formatCurrency(item.selisih_ppn)}</td>
-          <td class="text-right ${totalDiffClass}">${formatCurrency(item.selisih_gross + item.selisih_ppn)}</td>
-          <td class="text-center">
-            <span class="badge badge-${getStatusBadgeClass(item.status).replace('badge-', '')}">
-              ${getStatusText(item.status)}
-            </span>
-          </td>
-        </tr>
-      `;
-    });
-    
-    // Close the HTML structure
-    printContent += `
-          </tbody>
-        </table>
-        
-        <div class="footer">
-          <p>Dicetak pada: ${new Date().toLocaleString('id-ID')}</p>
-        </div>
-      </body>
-      </html>
-    `;
-    
-    // Write to the new window and print
-    printWindow.document.open();
-    printWindow.document.write(printContent);
-    printWindow.document.close();
-    
-    // Wait for content to load before printing
-    printWindow.onload = function() {
-      printWindow.print();
-      // printWindow.close();
-    };
-  } catch (err) {
-    toast.showError(
-      'Cetak Gagal',
-      'Terjadi kesalahan saat mencetak data',
       3000
     );
   }

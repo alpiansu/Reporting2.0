@@ -57,9 +57,6 @@
               <button v-if="showExportButton" class="btn btn-export" @click.prevent="$emit('export')" title="Ekspor ke Excel">
                 <i class="pi pi-file-excel"></i> Ekspor Data
               </button>
-              <button v-if="showPrintButton" class="btn btn-print" @click.prevent="$emit('print')" title="Cetak hasil">
-                <i class="pi pi-print"></i> Cetak
-              </button>
             </slot>
           </div>
         </div>

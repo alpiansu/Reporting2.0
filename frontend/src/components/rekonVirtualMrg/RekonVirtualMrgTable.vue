@@ -4,7 +4,7 @@
     :emptyMessage="'Tidak ada data rekonsiliasi untuk ditampilkan.'"
     :emptyHelpText="'Tidak ditemukan data rekonsiliasi untuk cabang dan periode yang dipilih.'" :pagination="pagination"
     :tableTitle="'Saldo Virtual Margin Based'" @refresh="$emit('refresh')" @reset-filters="resetFilters"
-    @export="exportToExcel" @print="printResults" @page-change="handlePageChange"
+    @export="exportToExcel" @page-change="handlePageChange"
     @items-per-page-change="handleItemsPerPageChange" @sort-change="handleSortChange">
     <!-- Search Component -->
     <template #filters>
@@ -76,10 +76,7 @@
         Last Catch
         <i v-if="sortColumn === 'LASTCATCH'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
-      <th class="text-center sortable" :class="getSortClass('note.noteText', sortColumn, sortOrder)"
-        @click="handleSort('note.noteText')">Notes
-        <i v-if="sortColumn === 'note.noteText'" class="pi sort-icon" :class="getSortIcon(sortOrder) "></i>
-      </th>
+      <th>Notes</th>
     </template>
 
     <!-- Table Row -->
@@ -356,11 +353,6 @@ const exportToExcel = async () => {
     console.error('Error exporting to Excel:', error);
     toast.showError('Error', 'Gagal mengekspor data ke Excel');
   }
-};
-
-// Print functionality
-const printResults = () => {
-  window.print();
 };
 
 // Load note categories

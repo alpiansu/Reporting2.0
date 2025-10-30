@@ -14,7 +14,7 @@ export default {
         `DROP TABLE IF EXISTS mstadj`,
         `CREATE TABLE IF NOT EXISTS mstadj LIKE mstran`,
         `DROP TABLE IF EXISTS simul_mst`,
-        `CREATE TABLE IF NOT EXISTS simul_mst LIKE mstran`,
+        // `CREATE TABLE IF NOT EXISTS simul_mst LIKE mstran`,
         `DROP TABLE IF EXISTS adjcek`,
         // `delete from pos.mstran where date(bukti_tgl) = curdate() and rtype = 'X' and istype = 'so' and addid like '%133.10%';`,
       ],
@@ -88,7 +88,7 @@ export default {
         ) b USING (prdcd);
       `,
       finalize: [
-        // `UPDATE const SET docno=docno+2 WHERE rkey='nkl'`,
+        `UPDATE const SET docno=docno+2 WHERE rkey='nkl'`,
         // `UPDATE mstadj m JOIN adjcek a USING(prdcd) SET m.qty = m.qty - a.sisa WHERE a.sisa < 0 AND a.saldo * m.qty < 0;`,
         // `UPDATE mstadj a
         //   JOIN adjcek b ON a.prdcd = b.prdcd
@@ -98,9 +98,9 @@ export default {
         //       b.sisa = b.saldo + (CASE WHEN b.sisa < 0 THEN a.qty - b.sisa ELSE a.qty END)
         //     WHERE a.qty * b.saldo < 0`,
       ],
-      // insertTran: `INSERT IGNORE INTO mstran SELECT * FROM mstadj where prdcd in (SELECT prdcd from adjcek a inner join mstadj b using(prdcd) WHERE a.saldo != 0) AND PRDCD = ?`,
+      insertTran: `INSERT IGNORE INTO mstran SELECT * FROM mstadj where prdcd in (SELECT prdcd from adjcek a inner join mstadj b using(prdcd) WHERE a.saldo != 0) AND PRDCD = ?`,
       // insertTran: `INSERT IGNORE INTO mstran SELECT * FROM mstadj where PRDCD = ?`,
-      insertTran: `INSERT IGNORE INTO simul_mst SELECT * FROM mstadj where prdcd in (SELECT prdcd from adjcek a inner join mstadj b using(prdcd) WHERE abs(a.saldo) >= abs(a.sisa) ) AND PRDCD = ?`,
+      // insertTran: `INSERT IGNORE INTO simul_mst SELECT * FROM mstadj where prdcd in (SELECT prdcd from adjcek a inner join mstadj b using(prdcd) WHERE abs(a.saldo) >= abs(a.sisa) ) AND PRDCD = ?`,
     },
   },
 

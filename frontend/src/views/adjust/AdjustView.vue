@@ -323,7 +323,7 @@
 </template>
 
 <script setup>
-import { ref, onBeforeUnmount, watch, computed } from "vue";
+import { ref, onBeforeUnmount, watch } from "vue";
 import { useToast } from "primevue/usetoast";
 import { useAuthStore } from '../../stores';
 import DataTable from 'primevue/datatable';

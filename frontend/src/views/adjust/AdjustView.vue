@@ -134,27 +134,22 @@
       </div>
 
       <!-- Processing Loading State -->
-      <div class="card mt-4" v-if="isProcessing">
-        <div class="card-body text-center py-5">
+      <ProgressBar v-if="isProcessing" :visible="isProcessing" :percentage="progress.percentage" :info="progress.info">
+        <template #title>
+          Processing Adjustment...
+        </template>
 
-          <div class="loading-container">
-            <h4 class="mt-3 mb-2">Processing Adjustment...</h4>
-            <p class="text-muted">Connecting to stores and processing adjustments. Please wait...</p>
+        <template #subtitle>
+          Connecting to stores and processing adjustments.<br />
+          Please wait patiently...
+        </template>
 
-            <!-- Progress bar -->
-            <div class="progress-wrapper mt-4" v-if="progress.percentage !== null">
-              <div class="progress-bar">
-                <div class="progress-bar-fill" :style="{ width: progress.percentage + '%' }"></div>
-              </div>
-              <div class="progress-details mt-2">
-                <small>{{ progress.percentage }}% - {{ progress.info }}</small>
-              </div>
-            </div>
-          </div>
-
-
-        </div>
-      </div>
+        <template #details>
+          <small>
+            <strong>{{ progress.info }}</strong>
+          </small>
+        </template>
+      </ProgressBar>
 
       <!-- Results Card -->
       <div class="card results-card" v-if="processResults && !isProcessing">
@@ -222,12 +217,9 @@
               Adjustment History
             </h4>
             <div class="datatable-actions">
-              <button 
-                class="export-btn" 
-                @click="exportToExcel" 
+              <button class="export-btn" @click="exportToExcel"
                 :disabled="!processResults?.historyRecords || processResults.historyRecords.length === 0"
-                title="Export to Excel"
-              >
+                title="Export to Excel">
                 <i class="pi pi-file-excel"></i>
                 <span>Export</span>
               </button>
@@ -343,6 +335,7 @@ import PageHeader from "../../components/PageHeader.vue";
 import DownloadButton from "../../components/common/DownloadButton.vue";
 import { exportAdjustmentHistory } from "./exportExcel.js";
 import "./AdjustView.style.css";
+import ProgressBar from "../../components/common/ProgressBar.vue";
 
 const toast = useToast();
 

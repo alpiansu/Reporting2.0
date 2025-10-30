@@ -47,7 +47,7 @@
       <p class="help-text">{{ emptyHelpText }}</p>
     </div>
 
-    <div v-else class="table-content">
+    <div v-else>
       <!-- Table -->
       <div class="table-container">
         <div class="table-header">
@@ -714,6 +714,7 @@ watch(() => props.filteredData, (newData) => {
 }
 
 .results-table {
+  overflow: auto !important;
   width: 100%;
   border-collapse: collapse;
   border-spacing: 0;
@@ -756,79 +757,6 @@ watch(() => props.filteredData, (newData) => {
   position: relative;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-/* Column-specific minimum widths */
-.results-table th:nth-child(1),
-.results-table td:nth-child(1) {
-  min-width: 60px; /* No */
-  width: 60px;
-}
-
-.results-table th:nth-child(2),
-.results-table td:nth-child(2) {
-  min-width: 100px; /* Cabang */
-  width: 100px;
-}
-
-.results-table th:nth-child(3),
-.results-table td:nth-child(3) {
-  min-width: 120px; /* Shop */
-  width: 120px;
-}
-
-.results-table th:nth-child(4),
-.results-table td:nth-child(4) {
-  min-width: 110px; /* Tanggal */
-  width: 110px;
-}
-
-.results-table th:nth-child(5),
-.results-table td:nth-child(5) {
-  min-width: 130px; /* Kode Produk */
-  width: 130px;
-}
-
-.results-table th:nth-child(6),
-.results-table td:nth-child(6) {
-  min-width: 200px; /* Nama Produk */
-  width: 200px;
-}
-
-.results-table th:nth-child(7),
-.results-table td:nth-child(7) {
-  min-width: 110px; /* Cost */
-  width: 110px;
-}
-
-.results-table th:nth-child(8),
-.results-table td:nth-child(8) {
-  min-width: 110px; /* Price */
-  width: 110px;
-}
-
-.results-table th:nth-child(9),
-.results-table td:nth-child(9) {
-  min-width: 120px; /* Qty MSTRAN */
-  width: 120px;
-}
-
-.results-table th:nth-child(10),
-.results-table td:nth-child(10) {
-  min-width: 120px; /* Qty MTRAN */
-  width: 120px;
-}
-
-.results-table th:nth-child(11),
-.results-table td:nth-child(11) {
-  min-width: 130px; /* Selisih */
-  width: 130px;
-}
-
-.results-table th:nth-child(12),
-.results-table td:nth-child(12) {
-  min-width: 180px; /* Last Catch */
-  width: 180px;
 }
 
 .results-table th {

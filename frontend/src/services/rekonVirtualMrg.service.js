@@ -7,6 +7,15 @@ const fixedPattern = "rekon-virtual-mrg";
  * Service for Rekon Virtual Margin Based operations
  */
 const rekonVirtualMrgService = {
+  getData: async (cabang, periode) => {
+    const params = {
+      cabang: cabang || "All",
+      periode,
+    };
+
+    const response = await api.get(`/${fixedPattern}/getData`, { params });
+    return response.data.data;
+  },
   /**
    * Get daily shop summary with pagination
    * @param {string} cabang - Branch code (can be empty for all branches)

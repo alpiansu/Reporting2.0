@@ -308,15 +308,20 @@ const updateAdjustStatus = async (item, event) => {
 };
 
 // Export to Excel
-const exportToExcel = () => {
-  if (!props.data || props.data.length === 0) {
-    toast.showWarning('Perhatian', 'Tidak ada data untuk diekspor');
-    return;
-  }
-
+const exportToExcel = async () => {
   try {
+    toast.showInfo('Proses', 'Sedang mengambil data lengkap untuk ekspor...');
+    
+    // Menggunakan service untuk mendapatkan semua data
+    const response = await rekonVirtualMrgService.getData(props.cab, props.periode);
+    
+    if (!response.data || response.data.length === 0) {
+      toast.showWarning('Perhatian', 'Tidak ada data untuk diekspor');
+      return;
+    }
+    
     // Prepare data for export
-    const exportData = props.data.map(item => ({
+    const exportData = response.data.map(item => ({
       'Cabang': item.CABANG,
       'Shop': item.SHOP,
       'Tanggal': formatDate(item.TANGGAL),
@@ -328,7 +333,9 @@ const exportToExcel = () => {
       'Qty MTRAN': item.QTY_MTRAN,
       'Selisih': item.SEL,
       'Adjust': item.RECID === '1' ? 'Sudah' : 'Belum',
-      'Last Catch': formatDateTime(item.LASTCATCH)
+      'Last Catch': formatDateTime(item.LASTCATCH),
+      'Note Category': item.note && item.note.category ? item.note.category.name : '',
+      'Note Text': item.note ? item.note.noteText : ''
     }));
 
     // Create workbook and worksheet
@@ -344,7 +351,7 @@ const exportToExcel = () => {
     // Write file
     XLSX.writeFile(wb, filename);
 
-    toast.showSuccess('Sukses', 'Data berhasil diekspor ke Excel');
+    toast.showSuccess('Sukses', `Data lengkap berhasil diekspor ke Excel (${exportData.length} baris)`);
   } catch (error) {
     console.error('Error exporting to Excel:', error);
     toast.showError('Error', 'Gagal mengekspor data ke Excel');

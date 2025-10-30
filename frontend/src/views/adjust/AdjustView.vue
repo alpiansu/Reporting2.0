@@ -323,8 +323,9 @@
 </template>
 
 <script setup>
-import { ref, onBeforeUnmount, watch } from "vue";
+import { ref, onBeforeUnmount, watch, computed } from "vue";
 import { useToast } from "primevue/usetoast";
+import { useAuthStore } from '../../stores';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Tag from 'primevue/tag';
@@ -338,6 +339,10 @@ import "./AdjustView.style.css";
 import ProgressBar from "../../components/common/ProgressBar.vue";
 
 const toast = useToast();
+const authStore = useAuthStore();
+const strUsername = authStore.user.username;
+
+// console.log(`user dari store auth: ${authStore.user.username}`);
 
 // State
 const selectedFile = ref(null);
@@ -439,7 +444,8 @@ watch(isProcessing, (newVal) => {
 
 // Methods
 const startProgressTracking = async () => {
-  const taskId = 'adjustmentTask'; // Sesuai dengan config.taskProgressName di backend
+
+  const taskId = `adjustmentTask_${strUsername}`; // Sesuai dengan config.taskProgressName di backend
 
   // Hentikan tracking sebelumnya jika ada
   stopProgressTracking();

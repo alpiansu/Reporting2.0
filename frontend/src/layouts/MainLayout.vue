@@ -103,7 +103,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
+import { useRouter } from 'vue-router';
 import { useAuthStore, useMenuStore } from '../stores';
 import { useToastService } from '../utils/toast';
 import ConfirmDialog from '../components/common/ConfirmDialog.vue';
@@ -116,7 +116,7 @@ import api from '../services/api';
 const toast = useToastService();
 
 const router = useRouter();
-const route = useRoute();
+// const route = useRoute();
 const authStore = useAuthStore();
 
 const user = computed(() => authStore.user);
@@ -131,7 +131,7 @@ const isNavigating = ref(false);
 // Menu store
 const menuStore = useMenuStore();
 const menuCategories = computed(() => menuStore.menuCategories);
-const menuLoading = computed(() => menuStore.loading);
+// const menuLoading = computed(() => menuStore.loading);
 
 // Setup navigation loading indicator
 router.beforeEach((to, from, next) => {

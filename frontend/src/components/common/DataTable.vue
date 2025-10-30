@@ -307,7 +307,7 @@ const paginatedData = computed(() => {
 
 // Sync currentPage and itemsPerPage with backend pagination if available
 watch(() => props.data, (newData) => {
-  console.log('DataTable watch props.data:', newData);
+  // console.log('DataTable watch props.data:', newData);
   if (newData && newData.page !== undefined) {
     currentPage.value = newData.page;
   }
@@ -318,7 +318,7 @@ watch(() => props.data, (newData) => {
 
 // Sync with props.pagination when it changes
 watch(() => props.pagination, (newPagination) => {
-  console.log('DataTable watch props.pagination:', newPagination);
+  // console.log('DataTable watch props.pagination:', newPagination);
   if (newPagination) {
     if (newPagination.currentPage !== undefined) {
       currentPage.value = newPagination.currentPage;

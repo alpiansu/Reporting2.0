@@ -25,6 +25,7 @@
                     </slot>
                 </p>
             </div>
+            
             <div class="percentage-display" v-if="percentage !== null">
                 {{ percentage }}%
                 <div class="percentage-to-go" v-if="showPercentageToGo">
@@ -69,12 +70,12 @@
                         </span>
                     </slot>
                 </div>
-                <div class="progress-stats">
+                <!-- <div class="progress-stats">
                     <span class="stats-text">{{ percentage }}% Complete</span>
                     <span class="to-go-stats" v-if="showPercentageToGo">
                         ({{ percentageToGo }}% left)
                     </span>
-                </div>
+                </div> -->
             </div>
 
             <!-- Progress Steps (Optional) -->
@@ -91,18 +92,6 @@
                 <div class="dot"></div>
             </div>
             <p class="loading-text">Initializing...</p>
-        </div>
-
-        <!-- Percentage To Go Summary -->
-        <div class="to-go-summary" v-if="showPercentageToGo && percentage !== null && percentage < 100">
-            <div class="summary-item">
-                <span class="summary-label">Completed:</span>
-                <span class="summary-value completed">{{ percentage }}%</span>
-            </div>
-            <div class="summary-item">
-                <span class="summary-label">Remaining:</span>
-                <span class="summary-value remaining">{{ percentageToGo }}%</span>
-            </div>
         </div>
     </div>
 </template>
@@ -305,8 +294,8 @@ const percentageToGo = computed(() => {
     justify-content: space-between;
     position: absolute;
     top: -6px;
-    left: 0;
-    right: 0;
+    left: 25%;
+    right: 25%;
     pointer-events: none;
 }
 
@@ -443,43 +432,6 @@ const percentageToGo = computed(() => {
     margin-top: 1.5rem;
     padding-top: 1.5rem;
     border-top: 1px solid #f1f5f9;
-}
-
-/* Percentage To Go Summary */
-.to-go-summary {
-    display: flex;
-    justify-content: space-around;
-    margin-top: 1.5rem;
-    padding: 1rem;
-    background: rgba(241, 245, 249, 0.5);
-    border-radius: 8px;
-    border: 1px solid rgba(226, 232, 240, 0.5);
-}
-
-.summary-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.25rem;
-}
-
-.summary-label {
-    font-size: 0.75rem;
-    color: #64748b;
-    font-weight: 500;
-}
-
-.summary-value {
-    font-size: 1.125rem;
-    font-weight: 700;
-}
-
-.summary-value.completed {
-    color: #0ea5e9;
-}
-
-.summary-value.remaining {
-    color: #94a3b8;
 }
 
 /* Success State */

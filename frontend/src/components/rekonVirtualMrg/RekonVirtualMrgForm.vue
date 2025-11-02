@@ -1,69 +1,62 @@
 <template>
-  <div class="rekon-form-container">
-    <div class="card">
-      <h2 class="form-title">Hasil Rekonsiliasi Saldo Virtual Margin Based</h2>
-      <p class="form-description">
-        Lihat hasil rekonsiliasi saldo virtual berdasarkan margin per toko.
-      </p>
+  <RekonFormComponent :errors="errors" @submit="submitForm">
+    <template #title>
+      Hasil Rekonsiliasi Saldo Virtual Margin Based
+    </template>
+    
+    <template #description>
+      Lihat hasil rekonsiliasi saldo virtual margin based per toko
+    </template>
 
-      <form @submit.prevent="submitForm" class="rekon-form">
-        <div class="form-group">
-          <label for="cab">Cabang</label>
-          <Dropdown 
-            id="cab" 
-            v-model="formData.cab" 
-            :options="cabangOptions" 
-            optionLabel="namacab" 
-            optionValue="kdcab"
-            placeholder="Pilih Cabang" 
-            :disabled="loading"
-            class="w-full"
-            @change="handleCabChange"
-          />
-          <small v-if="errors.cab" class="error-text">{{ errors.cab }}</small>
-        </div>
+    <template #cab>
+      <Dropdown id="cab" v-model="formData.cab" :options="cabangOptions" optionLabel="namacab" optionValue="kdcab"
+        placeholder="Pilih Cabang" :disabled="isReconciling" class="w-full" @change="handleCabChange" />
+    </template>
 
-        <div class="form-group">
-          <label for="periode">Periode</label>
-          <Calendar 
-            id="periode" 
-            v-model="selectedDate" 
-            view="month" 
-            dateFormat="mm/yy" 
-            placeholder="Pilih Bulan/Tahun"
-            :disabled="loading"
-            :maxDate="today"
-            showIcon
-            class="w-full"
-            @date-select="updatePeriode"
-          />
-          <small v-if="errors.periode" class="error-text">{{ errors.periode }}</small>
-        </div>
+    <template #periode>
+      <Calendar id="periode" v-model="selectedDate" view="month" dateFormat="mm/yy" placeholder="Pilih Bulan/Tahun"
+        :disabled="isReconciling" :maxDate="today" showIcon class="w-full" @date-select="updatePeriode" />
+    </template>
 
-        <div class="form-actions">
-          <Button 
-            type="button" 
-            label="Mulai Rekonsiliasi" 
-            icon="pi pi-refresh" 
-            class="p-button-primary" 
-            @click="startReconciliation"
-            :loading="isReconciling"
-            :disabled="loading"
-          />
-        </div>
-      </form>
-    </div>
-  </div>
+    <template #actions>
+      <Button type="button" label="Mulai Rekonsiliasi" icon="pi pi-refresh" class="p-button-primary"
+        @click="startReconciliation" :loading="isReconciling" :disabled="isReconciling" />
+    </template>
+  </RekonFormComponent>
+
+
+  <!-- Processing Loading State -->
+  <ProgressBar v-if="isReconciling" :visible="isReconciling" :percentage="progress.percentage" :info="progress.info">
+    <template #title>
+      Processing Screening...
+    </template>
+
+    <template #subtitle>
+      Connecting to stores and processing screening query.<br />
+      Please wait patiently...
+    </template>
+
+    <template #details>
+      <small>
+        <strong>{{ progress.info }}</strong>
+      </small>
+    </template>
+  </ProgressBar>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, watch } from 'vue';
 import { useToastService } from '../../utils/toast';
 import { useCabangStore } from '../../stores';
 import Dropdown from 'primevue/dropdown';
 import Calendar from 'primevue/calendar';
 import Button from 'primevue/button';
 import rekonVirtualMrgService from '../../services/rekonVirtualMrg.service';
+import ProgressBar from "../../components/common/ProgressBar.vue";
+import RekonFormComponent from "../../components/common/RekonFormComponent.vue";
+import progressService from "../../services/progress.service.js";
+import { useAuthStore } from '../../stores';
+import api from "../../services/api.js";
 
 const toast = useToastService();
 const loading = ref(false);
@@ -72,6 +65,14 @@ const cabangOptions = ref([]);
 const selectedDate = ref(null);
 const today = ref(new Date());
 const isReconciling = ref(false);
+const progress = ref({
+  percentage: 0,
+  info: "",
+  status: "idle",
+});
+let eventSource = null;
+const authStore = useAuthStore();
+const strUsername = authStore.user.username;
 
 const formData = reactive({
   cab: '',
@@ -79,6 +80,111 @@ const formData = reactive({
 });
 
 const cabangStore = useCabangStore();
+
+// Watch untuk isReconciling - mulai/hentikan progress tracking
+watch(isReconciling, (newVal) => {
+  if (newVal) {
+    // Mulai progress tracking ketika processing dimulai
+    startProgressTracking();
+  } else {
+    // Hentikan progress tracking ketika processing selesai
+    stopProgressTracking();
+  }
+});
+
+//method to start progress tracking progress
+const startProgressTracking = async () => {
+
+  const taskId = `rekonVirtualMarginTask_${strUsername}`; // Sesuai dengan config.taskProgressName di backend
+
+  // Hentikan tracking sebelumnya jika ada
+  stopProgressTracking();
+
+  try {
+    const progressResponse = await api.get('/progress');
+    const allTasks = progressResponse.data.data;
+    // Cari task dengan ID yang sesuai
+    const existingTask = allTasks[taskId];
+
+    if (existingTask) {
+      console.log('✅ Matching task found:');
+
+      // 2. Jika task ditemukan, mulai monitor progress
+      startDirectProgressMonitoring(taskId);
+    } else {
+      console.log('⚠️ No existing task found, waiting for task to be created...');
+
+      // 3. Jika task belum ada, coba lagi setelah delay
+      setTimeout(() => {
+        if (isReconciling.value) {
+          console.log('🔄 Retrying progress tracking...');
+          startProgressTracking();
+        }
+      }, 1000); // Coba lagi setelah 1 detik
+    }
+  } catch (error) {
+    console.error('❌ Error checking progress tasks:', error);
+
+    // Fallback: langsung coba monitor progress meskipun cek gagal
+    console.log('🔄 Fallback: Starting progress monitoring directly...');
+    startDirectProgressMonitoring(taskId);
+  }
+};
+
+// Method untuk langsung monitor progress tanpa pengecekan awal
+const startDirectProgressMonitoring = (taskId) => {
+  eventSource = progressService.monitorProgress(
+    taskId,
+    // onUpdate callback
+    (progressData) => {
+      progress.value = {
+        percentage: progressData?.percentage,
+        info: progressData?.info.description || progressData?.status,
+        status: progressData?.status
+      };
+    },
+    // onComplete callback
+    (progressData) => {
+      progress.value = {
+        percentage: 100,
+        info: "Processing completed",
+        status: "completed"
+      };
+    },
+    // onError callback
+    (errorData) => {
+      progress.value = {
+        percentage: 0,
+        info: errorData.description || "Processing failed",
+        status: "failed"
+      };
+
+      console.error('❌ Progress error:', errorData);
+
+      toast.showError({
+        severity: "error",
+        summary: "Progress Error",
+        detail: errorData.description || "Progress monitoring failed",
+        life: 5000,
+      });
+    }
+  );
+};
+
+const stopProgressTracking = () => {
+  if (eventSource) {
+    console.log('🛑 Stopping progress tracking...');
+    eventSource.close();
+    eventSource = null;
+  }
+
+  // Reset progress state
+  progress.value = {
+    percentage: 0,
+    info: "",
+    status: "idle"
+  };
+};
 
 // Fetch cabang data on component mount
 onMounted(async () => {
@@ -221,10 +327,6 @@ const startReconciliation = async () => {
 </script>
 
 <style scoped>
-.rekon-form-container {
-  margin-bottom: 0;
-}
-
 .card {
   background-color: #fff;
   border-radius: 8px;
@@ -238,28 +340,10 @@ const startReconciliation = async () => {
   justify-content: flex-end;
 }
 
-.form-title {
-  font-size: 1.5rem;
-  margin-top: 0;
-  margin-bottom: 0.5rem;
-  color: var(--primary-color);
-}
-
-.form-description {
-  color: #666;
-  margin-bottom: 1.5rem;
-}
-
 .rekon-form {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 1rem;
 }
 
 label {
@@ -280,22 +364,10 @@ label {
   width: auto;
 }
 
-.error-text {
-  color: #e74c3c;
-  font-size: 0.875rem;
-  margin-top: 0.25rem;
-}
-
 .help-text {
   color: #666;
   font-size: 0.875rem;
   margin-top: 0.25rem;
-}
-
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 1rem;
 }
 
 .btn {

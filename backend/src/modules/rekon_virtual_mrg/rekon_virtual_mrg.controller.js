@@ -28,7 +28,9 @@ export const screeningByCabang = async (req, res) => {
 
     logger.info(`Starting screening for cabang: ${cabParam}, periode: ${periode}`);
 
-    const result = await rekonVirtualService.screening({ cabang: cabParam, periode });
+    const username = req.user?.username || "system";
+
+    const result = await rekonVirtualService.screening({ cabang: cabParam, periode, username });
 
     return apiResponse.success(res, result);
   } catch (error) {

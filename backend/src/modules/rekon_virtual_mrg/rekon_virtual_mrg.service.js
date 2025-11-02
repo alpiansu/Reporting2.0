@@ -13,6 +13,7 @@ import moment from "moment-timezone";
 import RekapRemoteService from "../rekap_remote/rekap_remote.service.js";
 import noteCategoriesService from "../note_categories/noteCategories.service.js";
 import notesService from "../notes/notes.service.js";
+import progressService from "../progress/progress.service.js";
 
 // Path untuk file JSON rekon_virtual_mrg
 const REKON_VIRTUAL_MRG_JSON_PATH = path.join(process.cwd(), "data/rekon_virtual_mrg.json");
@@ -192,124 +193,228 @@ class RekonVirtualService {
     // Ensure storeService is initialized
     await storeService.ensureInitialized();
 
-    let branches = [];
-    if (options.cabang === "All" || options.cabang === "ALL") {
-      const allStores = storeService.stores;
-      branches = [...new Set(allStores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))];
-    } else {
-      branches = [options.cabang];
-    }
+    //declare taskID on Top
+    const username = options.username;
+    const taskId = `${config.taskProgressName}_${username}`;
 
-    logger.info(`[rekon_virtual_mrg.service] Starting screening for branches: ${branches.join(", ")}`);
-
-    // Convert from string periode (YYMM)
-    const strYear = moment(options.periode, "YYMM").format("YYYY");
-    const strMonth = moment(options.periode, "YYMM").format("MM");
-
-    // Temporary array to collect new records
-    const newRecords = [];
-
-    // Loop each branch even if branch only has one branch
+    //set limit btranches and stores
     const limitBranches = pLimit(config.parallelProcessing.branchConcurrencyLimit);
     const limitStores = pLimit(config.parallelProcessing.concurrencyLimit);
 
-    // Process branches asynchronously
-    await Promise.all(
-      branches.map(cab =>
-        limitBranches(async () => {
-          // const stores = await storeService.getStoresByBranch(cab, true, { limit: 10 });
-          const stores = await storeService.getStoresByBranch(cab, true);
+    const withTimeout = (promise, ms, label) => {
+      return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout: ${label}`)), ms)),
+      ]);
+    };
 
-          logger.info(`[rekon_virtual_mrg.service] Found ${stores.length} stores for branch ${cab}`);
+    try {
+      // === STEP 1: Branches ===
+      let branches = [];
+      if (options.cabang === "All" || options.cabang === "ALL") {
+        const allStores = storeService.stores;
+        branches = [...new Set(allStores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))];
+      } else {
+        branches = [options.cabang];
+      }
 
-          // Loop each store asynchronously
-          await Promise.all(
-            stores.map(store =>
-              limitStores(async () => {
-                // Get store info
-                const storeInfo = await storeService.getStoreIPHost(store.storeCode);
-                if (!storeInfo) {
-                  logger.error(`[rekon_virtual_mrg.service] Store information not found for ${store.storeCode}`);
-                  return;
-                }
+      logger.info(`[rekon_virtual_mrg.service] Branches to process: ${branches.join(", ")}`);
 
-                // Create database connection
-                const storeConnection = await dbStore.createDbStore(
-                  storeInfo.dbHost,
-                  config.connectionRetry.maxRetries
+      // === STEP 2: Collect all stores ===
+      const storeGroups = await Promise.all(
+        branches.map(cab =>
+          limitBranches(async () => {
+            const stores = await storeService.getStoresByBranch(cab, true);
+            logger.info(`[rekon_virtual_mrg.service] Found ${stores.length} stores for branch ${cab}`);
+
+            // tambahkan info cabang ke tiap store
+            return stores.map(s => ({ ...s, cab }));
+          })
+        )
+      );
+
+      const storesToProcess = storeGroups.flat();
+
+      logger.info(`[rekon_virtual_mrg.service] Total stores to process: ${storesToProcess.length}`);
+
+      // Register progress task
+      try {
+        const timeStart = moment().format("YYYY-MM-DD HH:mm:ss");
+        await progressService.startProgress(taskId, storesToProcess.length, {
+          description: "registering task",
+          startedBy: options.username,
+          status: "registering",
+          createdAt: timeStart,
+        });
+
+        logger.info(`Progress task registered for user ${username}, taskId: ${taskId}`);
+      } catch (error) {
+        logger.error(`Error registering progress task: ${error.message}`);
+
+        if (error.message.includes("Maximum concurrent")) {
+          await progressService.failProgress(taskId, {
+            description: `Task failed: ${error.message}`,
+            status: "failed",
+          });
+          throw new Error("[service rekon_virtual_mrg] System is busy processing other tasks");
+        }
+
+        await progressService.failProgress(taskId, {
+          description: `Task failed: ${error.message}`,
+          status: "failed",
+        });
+        throw new Error("[service rekon_virtual_mrg] Failed to register progress task");
+      }
+
+      logger.info(`[rekon_virtual_mrg.service] Starting screening for branches: ${branches.join(", ")}`);
+
+      // === PREPARE PROCESSING ===
+      // Convert from string periode (YYMM)
+      const strYear = moment(options.periode, "YYMM").format("YYYY");
+      const strMonth = moment(options.periode, "YYMM").format("MM");
+
+      // Temporary array to collect new records
+      const newRecords = [];
+
+      let processedCount = 0;
+      const totalStores = storesToProcess.length;
+
+      const incrementProgress = async (storeCode, statusText) => {
+        processedCount++;
+
+        await progressService.updateProgress(taskId, processedCount, {
+          description: `Store ${storeCode} → ${statusText} (${processedCount}/${totalStores})`,
+          status: "Screening to Stores",
+        });
+      };
+
+      // step 3, loop each stores asycronously
+      await Promise.all(
+        storesToProcess.map(store =>
+          limitStores(async () => {
+            const { cab, storeCode } = store;
+
+            try {
+              // --- Store info --- //
+              const storeInfo = await withTimeout(
+                storeService.getStoreIPHost(storeCode),
+                10000, // ✅ ADDED timeout
+                `get store info ${storeCode}`
+              );
+
+              if (!storeInfo) {
+                await RekapRemoteService.addToTemp(
+                  cab,
+                  storeCode,
+                  "rekon_virtual_mrg",
+                  `[${storeCode}] store info not found`
+                );
+                await incrementProgress(storeCode, "Store info not found ❌");
+                return;
+              }
+
+              // --- Create DB connection --- //
+              const storeConnection = await withTimeout(
+                dbStore.createDbStore(storeInfo.dbHost, config.connectionRetry.maxRetries),
+                20000, // ✅ ADDED timeout
+                `connect ${storeCode}`
+              );
+
+              if (!storeConnection) {
+                await RekapRemoteService.addToTemp(
+                  cab,
+                  storeCode,
+                  "rekon_virtual_mrg",
+                  `[${storeCode}] failed to connect after ${config.connectionRetry.maxRetries} attempts`
+                );
+                await incrementProgress(storeCode, "DB connection failed ❌");
+                return;
+              }
+
+              try {
+                const params = `${strYear}-${strMonth}`;
+
+                const [result] = await withTimeout(
+                  storeConnection.query(config.queries.store, [params, params, params, params]),
+                  25000, // ✅ ADDED query timeout
+                  `query ${storeCode}`
                 );
 
-                if (!storeConnection) {
-                  const msg = `[${store.storeCode}] failed to connect after ${config.connectionRetry.maxRetries} attempts`;
-                  logger.error(`[rekon_virtual_mrg.service] ${msg}`);
-                  await RekapRemoteService.addToTemp(cab, store.storeCode, "rekon_virtual_mrg", msg);
-                  return;
+                await RekapRemoteService.addToTemp(
+                  cab,
+                  storeCode,
+                  "rekon_virtual_mrg",
+                  `[${storeCode}] query completed, got ${result.length} records`
+                );
+
+                if (result.length > 0) {
+                  await SaldoVirtual.bulkCreate(result, {
+                    updateOnDuplicate: ["QTY_MSTRAN", "QTY_MTRAN", "SEL", "LASTCATCH"],
+                  });
+
+                  newRecords.push(...result);
                 }
 
-                try {
-                  logger.info(`[rekon_virtual_mrg.service] Processing store ${store.storeCode} (${cab})`);
-                  const [result] = await storeConnection.query(config.queries.store, [strMonth, strYear]);
+                await incrementProgress(storeCode, `Success ✅ (${result.length} rows)`);
+              } finally {
+                await storeConnection.end();
+              }
+            } catch (err) {
+              await RekapRemoteService.addToTemp(
+                cab,
+                storeCode,
+                "rekon_virtual_mrg",
+                `[${storeCode}] ERROR: ${err.message}`
+              );
 
-                  // Insert ke rekap remote
-                  const msg = `[${store.storeCode}] query completed, got ${result.length} records`;
-                  await RekapRemoteService.addToTemp(cab, store.storeCode, "rekon_virtual_mrg", msg);
+              await incrementProgress(storeCode, "Error ❌");
+            }
+          })
+        )
+      );
 
-                  // Save results to database if exists
-                  if (result.length > 0) {
-                    logger.info(`Found ${result.length} records for ${store.storeCode} (${cab})`);
+      logger.info(`[rekon_virtual_mrg.service] Screening process completed for periode ${options.periode}`);
+      //update status to progress service
+      await progressService.updateProgress(taskId, processedCount, {
+        description: "Finalizing screening process, saving logs to database",
+        status: "finalizing",
+      });
+      // Save logs to database
+      await RekapRemoteService.saveLogsToDatabase();
 
-                    try {
-                      // Insert to database using SaldoVirtual model
-                      await SaldoVirtual.bulkCreate(result, {
-                        updateOnDuplicate: ["QTY_MSTRAN", "QTY_MTRAN", "SEL", "LASTCATCH"],
-                      });
+      //update status to progress service
+      await progressService.updateProgress(taskId, processedCount, {
+        description: "Syncing data to JSON file, please wait...",
+        status: "finalizing",
+      });
+      // Sync database to JSON file after write operations
+      if (newRecords.length > 0) {
+        await this.syncToJsonFile();
+        logger.info(`Synchronized ${newRecords.length} new records from database to JSON file`);
+      }
 
-                      logger.info(
-                        `[rekon_virtual_mrg.service] Successfully inserted ${result.length} records for ${store.storeCode} (${cab})`
-                      );
-                      newRecords.push(...result);
-                    } catch (insertErr) {
-                      logger.error(
-                        `[rekon_virtual_mrg.service] Error inserting ${store.storeCode} (${cab}) into database: ${insertErr.message}`
-                      );
-                      const errMsg = `[${store.storeCode}] connected, but error on inserting data: ${insertErr.message}`;
-                      await RekapRemoteService.addToTemp(cab, store.storeCode, "rekon_virtual_mrg", errMsg);
-                    }
-                  } else {
-                    logger.info(`[rekon_virtual_mrg.service] No data found for ${store.storeCode} (${cab})`);
-                  }
-                } catch (err) {
-                  logger.error(`[rekon_virtual_mrg.service] Error processing ${store.storeCode}: ${err.message}`);
-                  const msg = `error on processing store: ${err.message}`;
-                  await RekapRemoteService.addToTemp(cab, store.storeCode, "rekon_virtual_mrg", msg);
-                } finally {
-                  if (storeConnection) {
-                    await storeConnection.end();
-                  }
-                }
-              })
-            )
-          );
-        })
-      )
-    );
+      const timeCompleted = moment().format("YYYY-MM-DD HH:mm:ss");
+      await progressService.completeProgress(taskId, {
+        description: "All stores processed",
+        status: "completed",
+        completedAt: timeCompleted,
+      });
 
-    logger.info(`[rekon_virtual_mrg.service] Screening process completed for periode ${options.periode}`);
+      return {
+        success: true,
+        message: "Screening process completed",
+        processedRecords: newRecords.length,
+      };
+    } catch (error) {
+      logger.error(`[rekon_virtual_mrg.service] Error during screening: ${error.message}`);
 
-    // Save logs to database
-    await RekapRemoteService.saveLogsToDatabase();
+      await progressService.failProgress(taskId, {
+        description: `Task failed: ${error.message}`,
+        status: "failed",
+      });
 
-    // Sync database to JSON file after write operations
-    if (newRecords.length > 0) {
-      await this.syncToJsonFile();
-      logger.info(`Synchronized ${newRecords.length} new records from database to JSON file`);
+      throw error;
     }
-
-    return {
-      success: true,
-      message: "Screening process completed",
-      processedRecords: newRecords.length,
-    };
   }
 
   /**

@@ -4,8 +4,8 @@
     :emptyMessage="'Tidak ada data rekonsiliasi untuk ditampilkan.'"
     :emptyHelpText="'Tidak ditemukan data rekonsiliasi untuk cabang dan periode yang dipilih.'" :pagination="pagination"
     :tableTitle="'Saldo Virtual Margin Based'" @refresh="$emit('refresh')" @reset-filters="resetFilters"
-    @export="exportToExcel" @page-change="handlePageChange"
-    @items-per-page-change="handleItemsPerPageChange" @sort-change="handleSortChange">
+    @export="exportToExcel" @page-change="handlePageChange" @items-per-page-change="handleItemsPerPageChange"
+    @sort-change="handleSortChange">
     <!-- Search Component -->
     <template #filters>
       <div class="search-container">
@@ -42,7 +42,11 @@
         Kode Produk
         <i v-if="sortColumn === 'PRDCD'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
-      <th>Nama Produk</th>
+      <th class="sortable" :class="getSortClass('SINGKATAN', sortColumn, sortOrder)" @click="handleSort('SINGKATAN')">
+        Nama
+        Produk
+        <i v-if="sortColumn === 'SINGKATAN'" class="pi sort-icon" :class="getSortIcon(sortOrder) "></i>
+      </th>
       <th class="text-right sortable" :class="getSortClass('ACOST', sortColumn, sortOrder)"
         @click="handleSort('ACOST')">
         Hpp

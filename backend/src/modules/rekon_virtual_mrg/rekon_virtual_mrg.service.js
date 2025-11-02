@@ -564,6 +564,7 @@ class RekonVirtualService {
         "SHOP",
         "TANGGAL",
         "PRDCD",
+        "SINGKATAN",
         "ACOST",
         "PRICE",
         "QTY_MSTRAN",

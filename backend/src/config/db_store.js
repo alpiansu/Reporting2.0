@@ -8,10 +8,10 @@ class DbStoreService {
   /**
    * Create a connection pool to a store database
    * @param {string} host - Database host IP address
-   * @param {number} retries - Number of connection retries (default: 3)
+   * @param {number} retries - Number of connection retries (default: 2)
    * @returns {Promise<Object>} MySQL connection pool
    */
-  async createDbStore(host, retries = 3) {
+  async createDbStore(host, retries = 2) {
     try {
       let dbStore = null;
       let attempt = 0;
@@ -36,12 +36,12 @@ class DbStoreService {
               dateStrings: true,
               multipleStatements: true,
               waitForConnections: true,
-              connectTimeout: 15000,
+              connectTimeout: 5000,
               connectionLimit: 3,
               maxIdle: 2,
               enableKeepAlive: true,
               keepAliveInitialDelay: 0,
-              idleTimeout: 30000,
+              idleTimeout: 5000,
             });
 
             // Test the connection
@@ -80,6 +80,7 @@ class DbStoreService {
       if (!dbStore) {
         const errorMessage = `Could not establish connection to host ${host} with available configurations.`;
         logger.error(errorMessage);
+        throw new Error(errorMessage);
       }
 
       return dbStore;
@@ -124,7 +125,7 @@ class DbStoreService {
               dateStrings: true,
               multipleStatements: true,
               waitForConnections: true,
-              connectTimeout: 8000,
+              connectTimeout: 5000,
               connectionLimit: 3,
               maxIdle: 2,
               enableKeepAlive: true,

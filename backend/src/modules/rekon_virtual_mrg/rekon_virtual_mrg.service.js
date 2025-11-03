@@ -316,7 +316,7 @@ class RekonVirtualService {
               // --- Create DB connection --- //
               const storeConnection = await withTimeout(
                 dbStore.createDbStore(storeInfo.dbHost, config.connectionRetry.maxRetries),
-                20000, // ✅ ADDED timeout
+                10000, // ✅ ADDED timeout
                 `connect ${storeCode}`
               );
 
@@ -333,12 +333,7 @@ class RekonVirtualService {
 
               try {
                 const params = `${strYear}-${strMonth}`;
-
-                const [result] = await withTimeout(
-                  storeConnection.query(config.queries.store, [params, params, params, params]),
-                  25000, // ✅ ADDED query timeout
-                  `query ${storeCode}`
-                );
+                const [result] = await storeConnection.query(config.queries.store, [params, params, params, params]);
 
                 await RekapRemoteService.addToTemp(
                   cab,

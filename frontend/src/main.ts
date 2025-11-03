@@ -2,7 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 
 import App from './App.vue'
-import router from './router'
+import router from '@/router'
 
 // PrimeVue imports
 import PrimeVue from 'primevue/config'
@@ -12,9 +12,10 @@ import Lara from '@primeuix/themes/lara'
 import 'primeicons/primeicons.css'
 // Import PrimeVue ToastService
 import ToastService from 'primevue/toastservice'
+import Button from 'primevue/button'
 
 // Import transitions
-import TransitionComponents from './components/transitions'
+import TransitionComponents from '@/components/transitions'
 
 // Create app instance
 const app = createApp(App)
@@ -34,6 +35,9 @@ app.use(PrimeVue, {
 })
 // Use PrimeVue ToastService
 app.use(ToastService)
+
+// Register global components
+app.component('Button', Button)
 
 // Use transition components
 app.use(TransitionComponents)

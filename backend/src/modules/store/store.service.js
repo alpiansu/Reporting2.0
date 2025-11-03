@@ -346,7 +346,7 @@ class StoreService {
         storeCode: storeData.storeCode,
         station: storeData.station,
         dbHost: storeData.dbHost,
-        notes: storeData.notes,
+        notes: storeData.notes.toUpperCase(),
         storeName: storeData.storeName,
         // Ensure branch is set from storeCode first character or from provided branch
         branch: storeData.branch || (storeData.storeCode ? storeData.storeCode.substring(0, 1) : ""),
@@ -393,7 +393,7 @@ class StoreService {
         storeCode: storeData.storeCode || this.stores[index].storeCode,
         station: storeData.station || this.stores[index].station,
         dbHost: storeData.dbHost || this.stores[index].dbHost,
-        notes: storeData.notes || this.stores[index].notes,
+        notes: (storeData.notes || this.stores[index].notes)?.toUpperCase(),
         storeName: storeData.storeName || this.stores[index].storeName,
         // Ensure branch is updated from cab if provided
         branch: storeData.branch || this.stores[index].branch,

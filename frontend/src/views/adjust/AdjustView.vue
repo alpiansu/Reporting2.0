@@ -195,7 +195,7 @@
             </div>
             <div class="summary-content">
               <span class="summary-value">{{ processResults?.failedStores?.length || 0 }}</span>
-              <span class="summary-label">Failed</span>
+              <span class="summary-label">Disconnect</span>
             </div>
           </div>
           <div class="summary-card records">

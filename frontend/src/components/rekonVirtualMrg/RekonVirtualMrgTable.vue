@@ -1,11 +1,23 @@
 <template>
-  <DataTable :data="data" :filteredData="filteredData" :loading="loading" :error="error"
-    :loadingMessage="'Memuat data rekonsiliasi...'" :loadingHelpText="'Mohon tunggu sebentar...'"
+  <DataTable 
+    :data="data" 
+    :filteredData="filteredData" 
+    :loading="loading" 
+    :error="error" 
+    :rowClass="getRowClass"
+    :loadingMessage="'Memuat data rekonsiliasi...'" 
+    :loadingHelpText="'Mohon tunggu sebentar...'"
     :emptyMessage="'Tidak ada data rekonsiliasi untuk ditampilkan.'"
-    :emptyHelpText="'Tidak ditemukan data rekonsiliasi untuk cabang dan periode yang dipilih.'" :pagination="pagination"
-    :tableTitle="'Saldo Virtual Margin Based'" @refresh="$emit('refresh')" @reset-filters="resetFilters"
-    @export="exportToExcel" @page-change="handlePageChange" @items-per-page-change="handleItemsPerPageChange"
-    @sort-change="handleSortChange">
+    :emptyHelpText="'Tidak ditemukan data rekonsiliasi untuk cabang dan periode yang dipilih.'" 
+    :pagination="pagination"
+    :tableTitle="'Saldo Virtual Margin Based'" 
+    @refresh="$emit('refresh')" 
+    @reset-filters="resetFilters"
+    @export="exportToExcel" 
+    @page-change="handlePageChange" 
+    @items-per-page-change="handleItemsPerPageChange"
+    @sort-change="handleSortChange"
+  >
     <!-- Search Component -->
     <template #filters>
       <div class="search-container">
@@ -13,9 +25,19 @@
           <form @submit.prevent="handleSearch" class="search-form">
             <div class="search-box">
               <i class="pi pi-search search-icon"></i>
-              <input type="text" v-model="searchQuery" @input="handleSearch" placeholder="Cari Data ..."
-                class="search-input" />
-              <button type="button" v-if="searchQuery" @click="clearSearch" class="clear-button">
+              <input 
+                type="text" 
+                v-model="searchQuery" 
+                @input="handleSearch" 
+                placeholder="Cari Data ..."
+                class="search-input" 
+              />
+              <button 
+                type="button" 
+                v-if="searchQuery" 
+                @click="clearSearch" 
+                class="clear-button"
+              >
                 <i class="pi pi-times"></i>
               </button>
             </div>
@@ -43,27 +65,22 @@
         <i v-if="sortColumn === 'PRDCD'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
       <th class="sortable" :class="getSortClass('SINGKATAN', sortColumn, sortOrder)" @click="handleSort('SINGKATAN')">
-        Nama
-        Produk
-        <i v-if="sortColumn === 'SINGKATAN'" class="pi sort-icon" :class="getSortIcon(sortOrder) "></i>
+        Nama Produk
+        <i v-if="sortColumn === 'SINGKATAN'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
-      <th class="text-right sortable" :class="getSortClass('ACOST', sortColumn, sortOrder)"
-        @click="handleSort('ACOST')">
+      <th class="text-right sortable" :class="getSortClass('ACOST', sortColumn, sortOrder)" @click="handleSort('ACOST')">
         Hpp
         <i v-if="sortColumn === 'ACOST'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
-      <th class="text-right sortable" :class="getSortClass('PRICE', sortColumn, sortOrder)"
-        @click="handleSort('PRICE')">
+      <th class="text-right sortable" :class="getSortClass('PRICE', sortColumn, sortOrder)" @click="handleSort('PRICE')">
         Price
         <i v-if="sortColumn === 'PRICE'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
-      <th class="text-right sortable" :class="getSortClass('QTY_MSTRAN', sortColumn, sortOrder)"
-        @click="handleSort('QTY_MSTRAN')">
+      <th class="text-right sortable" :class="getSortClass('QTY_MSTRAN', sortColumn, sortOrder)" @click="handleSort('QTY_MSTRAN')">
         Qty MSTRAN
         <i v-if="sortColumn === 'QTY_MSTRAN'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
-      <th class="text-right sortable" :class="getSortClass('QTY_MTRAN', sortColumn, sortOrder)"
-        @click="handleSort('QTY_MTRAN')">
+      <th class="text-right sortable" :class="getSortClass('QTY_MTRAN', sortColumn, sortOrder)" @click="handleSort('QTY_MTRAN')">
         Qty MTRAN
         <i v-if="sortColumn === 'QTY_MTRAN'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
@@ -71,8 +88,7 @@
         Selisih
         <i v-if="sortColumn === 'SEL'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
-      <th class="text-center sortable" :class="getSortClass('RECID', sortColumn, sortOrder)"
-        @click="handleSort('RECID')">
+      <th class="text-center sortable" :class="getSortClass('RECID', sortColumn, sortOrder)" @click="handleSort('RECID')">
         Adjust
         <i v-if="sortColumn === 'RECID'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
@@ -81,6 +97,7 @@
         <i v-if="sortColumn === 'LASTCATCH'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
       <th>Notes</th>
+      <th>Actions</th>
     </template>
 
     <!-- Table Row -->
@@ -98,13 +115,25 @@
         {{ formatNumber(item.SEL) }}
       </td>
       <td class="text-center">
-        <input type="checkbox" :checked="item.RECID === '1'" @change="updateAdjustStatus(item, $event)"
-          class="adjust-checkbox" />
+        <input 
+          type="checkbox" 
+          :checked="item.RECID === '1'" 
+          @change="updateAdjustStatus(item, $event)"
+          class="adjust-checkbox" 
+        />
       </td>
       <td class="text-center">{{ formatDateTime(item.LASTCATCH) }}</td>
       <td class="text-center note-cell">
-        <div class="note-display" v-if="!item.editingNote" @click="startEditingNote(item)">
-          <div class="note-category" v-if="item.note && item.note.category">
+        <div 
+          class="note-display" 
+          v-if="!item.editingNote" 
+          @click="startEditingNote(item)"
+        >
+          <div 
+            class="note-category" 
+            v-if="item.note && item.note.category"
+            :class="getCategoryClass(item.note.category.name)"
+          >
             {{ item.note.category.name }}
           </div>
           <div class="note-text" v-if="item.note">
@@ -112,6 +141,16 @@
           </div>
           <div class="note-placeholder" v-else>
             Add note...
+          </div>
+          <div class="note-meta-icons" v-if="item.note">
+            <i 
+              class="pi pi-user note-icon note-icon-pic" 
+              v-tooltip.top="item.note.fullName || item.note.pic || 'Unknown'"
+            ></i>
+            <i 
+              class="pi pi-clock note-icon note-icon-time" 
+              v-tooltip.top="item.note.updated_at ? formatDateTime(item.note.updated_at) : 'No update time'"
+            ></i>
           </div>
         </div>
         <div class="note-editor" v-else>
@@ -121,12 +160,30 @@
               {{ category.name }}
             </option>
           </select>
-          <textarea v-model="item.editingNote.noteText" class="note-textarea" placeholder="Enter note..."
-            @keydown.enter.prevent="saveNote(item)"></textarea>
+          <textarea 
+            v-model="item.editingNote.noteText" 
+            class="note-textarea" 
+            placeholder="Enter note..."
+            @keydown.enter.prevent="saveNote(item)"
+          ></textarea>
           <div class="note-actions">
             <button class="btn btn-sm btn-secondary" @click="cancelEditing(item)">Cancel</button>
             <button class="btn btn-sm btn-success" @click="saveNote(item)">Save</button>
           </div>
+        </div>
+      </td>
+      <td>
+        <div class="action-buttons">
+          <Button 
+            label="Auto Note!" 
+            @click="autoUpdateNote(item)" 
+            :disabled="isItemAutoUpdating(item)"
+            :icon="isItemAutoUpdating(item) ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'"
+            :class="{ 'btn-processing': isItemAutoUpdating(item) }" 
+            severity="info" 
+            raised 
+            size="small" 
+          />
         </div>
       </td>
     </template>
@@ -139,6 +196,8 @@ import { useToastService } from '../../utils/toast';
 import DataTable from '../common/DataTable.vue';
 import * as XLSX from 'xlsx';
 import { noteCategoriesService, rekonVirtualMrgService } from '../../services/index.js';
+import Tooltip from 'primevue/tooltip';
+import Button from 'primevue/button';
 import './RekonVirtualMrgTable.css';
 
 const props = defineProps({
@@ -175,6 +234,8 @@ const props = defineProps({
 
 const emit = defineEmits(['refresh', 'page-change', 'items-per-page-change', 'sort-change']);
 const toast = useToastService();
+const autoUpdatingItems = ref(new Set());
+const highlightedItems = ref(new Set());
 
 // Search functionality
 const searchQuery = ref('');
@@ -186,10 +247,64 @@ const noteCategories = ref([]);
 // Computed properties
 const filteredData = computed(() => {
   if (Array.isArray(props.data)) {
-    return props.data;
+     return props.data;
   }
   return [];
 });
+
+//method for auto note
+const autoUpdateNote = async (item) => {
+  const itemKey = `${item.CABANG}_${item.SHOP}_${item.TANGGAL}_${item.PRDCD}`;
+  try {
+    // Add item to loading set
+    autoUpdatingItems.value.add(itemKey);
+
+    toast.showInfo('Proses', 'Sedang memperbarui notes secara otomatis...');
+    const hasilAutoNote = await rekonVirtualMrgService.autoUpdateNote(
+      item.CABANG,
+      item.SHOP,
+      item.TANGGAL,
+      item.PRDCD
+    );
+    
+    item.note = hasilAutoNote.data.data;
+
+    highlightedItems.value.add(itemKey);
+    // Remove highlight after animation (2 detik)
+    setTimeout(() => {
+      highlightedItems.value.delete(itemKey);
+    }, 2000);
+  } catch (error) {
+    console.error('Error auto updating notes:', error);
+    toast.showError('Error', `Gagal memperbarui notes kdtk ${item.SHOP} secara otomatis`);
+  }finally {
+    autoUpdatingItems.value.delete(itemKey);
+  }
+};
+
+// Helper function untuk cek apakah item sedang loading
+const isItemAutoUpdating = (item) => {
+  const itemKey = `${item.CABANG}_${item.SHOP}_${item.TANGGAL}_${item.PRDCD}`;
+  return autoUpdatingItems.value.has(itemKey);
+};
+
+//  TAMBAHKAN: Helper untuk check apakah item di-highlight
+const isItemHighlighted = (item) => {
+  const itemKey = `${item.CABANG}_${item.SHOP}_${item.TANGGAL}_${item.PRDCD}`;
+  return highlightedItems.value.has(itemKey);
+};
+
+// Fungsi untuk mendapatkan kelas CSS berdasarkan nama kategori
+const getCategoryClass = (categoryName) => {
+  if (!categoryName) return '';
+  // Normalisasi nama kategori untuk digunakan sebagai kelas CSS
+  return `category-${categoryName.toLowerCase().replace(/\s+/g, '-')}`;
+};
+
+//  TAMBAHKAN: Method untuk get row class
+const getRowClass = (item) => {
+  return isItemHighlighted(item) ? 'row-updated' : '';
+};
 
 // Formatting methods
 const formatCurrency = (value) => {

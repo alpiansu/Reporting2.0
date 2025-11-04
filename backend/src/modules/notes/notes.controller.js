@@ -28,6 +28,7 @@ export const remove = async (req, res) => {
 };
 
 export const autoNoteVirtMrg = async (req, res) => {
+  const pic = req.user?.username || "system";
   try {
     logger.info(`[autoNoteVirtMrg] Auto note process started, ensuring store service data is initialized first.`);
     await storeService.ensureInitialized();
@@ -60,7 +61,6 @@ export const autoNoteVirtMrg = async (req, res) => {
           const strKeterOri = result[0].keterangan;
           const splitKeter = strKeterOri.split("|");
           const [codeCategory, noteCategory] = splitKeter.map(s => s.trim());
-          const pic = req.user?.username || "system";
 
           logger.info(
             `[autoNoteVirtMrg] Preparing to save or update and autonote for kdtk ${kdtk} on prdcd ${prdcd} for date ${tanggal}`
@@ -81,8 +81,47 @@ export const autoNoteVirtMrg = async (req, res) => {
             data: resultupdNote,
           });
         } else {
-          logger.info(`[autoNoteVirtMrg] No data found for the given parameters.`);
-          return apiResponse.noContent(res, `Autonote: No data found for the given parameters.`);
+          logger.info(
+            `[autoNoteVirtMrg] DB connection established, querying for rekon virtual margin data using query dede sulaiman.`
+          );
+          const [result] = await storeConnection.query(config.autoNotes.rekonVirtualMrgDelon, [
+            tanggal,
+            prdcd,
+            tanggal,
+            prdcd,
+          ]);
+
+          if (result.length > 0) {
+            logger.info(
+              `[autoNoteVirtMrg] Data found from query dede sulaiman: , ${result.length} records. Proceeding to`
+            );
+            //processing auto note
+            const strKeterOri = result[0].keterangan;
+            const splitKeter = strKeterOri.split("|");
+            const [codeCategory, noteCategory] = splitKeter.map(s => s.trim());
+
+            logger.info(
+              `[autoNoteVirtMrg] Preparing to save or update and autonote for kdtk ${kdtk} on prdcd ${prdcd} for date ${tanggal}`
+            );
+            // call reuse logic
+            const resultupdNote = await service.saveOrUpdateNote({
+              cabang: cabang,
+              shop: kdtk,
+              tanggal,
+              prdcd,
+              noteText: noteCategory,
+              categoryId: codeCategory,
+              pic,
+            });
+
+            return apiResponse.success(res, {
+              message: `Auto note processed successfully for ${kdtk}`,
+              data: resultupdNote,
+            });
+          } else {
+            logger.info(`[autoNoteVirtMrg] No data found for the given parameters.`);
+            return apiResponse.noContent(res, `Autonote: No data found for the given parameters.`);
+          }
         }
       } else {
         logger.error(`[autoNoteVirtMrg] Failed to establish DB connection to store: ${storeInfo.storeCode}`);

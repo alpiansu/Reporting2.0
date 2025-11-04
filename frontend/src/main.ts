@@ -13,6 +13,7 @@ import 'primeicons/primeicons.css'
 // Import PrimeVue ToastService
 import ToastService from 'primevue/toastservice'
 import Button from 'primevue/button'
+import Tooltip from 'primevue/tooltip';
 
 // Import transitions
 import TransitionComponents from '@/components/transitions'
@@ -38,6 +39,7 @@ app.use(ToastService)
 
 // Register global components
 app.component('Button', Button)
+app.directive('tooltip', Tooltip);
 
 // Use transition components
 app.use(TransitionComponents)

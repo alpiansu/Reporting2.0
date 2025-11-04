@@ -149,7 +149,15 @@ const rekonVirtualMrgService = {
    * @returns {Promise} - Response with note update result
    */
   updateNote: async (cabang, shop, tanggal, prdcd, data) => {
-    const response = await api.put(`/${fixedPattern}/${cabang}/${shop}/${tanggal}/${prdcd}/note`, data);
+    const response = await api.put(`/${fixedPattern}/note/${cabang}/${shop}/${tanggal}/${prdcd}`, data);
+    return response.data;
+  },
+
+  autoUpdateNote: async (cabang, shop, tanggal, prdcd) => {
+    //biar kebaca di controller req.body shop, tanggal, prdcd
+    const kdtk = shop;
+    const parameters = { cabang, kdtk, tanggal, prdcd };
+    const response = await api.post(`/notes/autonoteVirtual`, parameters);
     return response.data;
   },
 };

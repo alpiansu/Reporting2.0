@@ -167,8 +167,8 @@
             @keydown.enter.prevent="saveNote(item)"
           ></textarea>
           <div class="note-actions">
-            <button class="btn btn-sm btn-secondary" @click="cancelEditing(item)">Cancel</button>
-            <button class="btn btn-sm btn-success" @click="saveNote(item)">Save</button>
+            <Button severity="secondary" raised size="small" label="Cancel" @click="cancelEditing(item)" />
+            <Button severity="success" raised size="small" label="Save" @click="saveNote(item)" />
           </div>
         </div>
       </td>
@@ -196,7 +196,6 @@ import { useToastService } from '../../utils/toast';
 import DataTable from '../common/DataTable.vue';
 import * as XLSX from 'xlsx';
 import { noteCategoriesService, rekonVirtualMrgService } from '../../services/index.js';
-import Tooltip from 'primevue/tooltip';
 import Button from 'primevue/button';
 import './RekonVirtualMrgTable.css';
 

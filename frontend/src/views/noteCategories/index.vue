@@ -46,10 +46,7 @@
                   </button>
                 </div>
               </form>
-              <button class="btn btn-primary create-button" @click="openCreateModal">
-                <i class="pi pi-plus"></i>
-                Create New
-              </button>
+              <Button severity="info"raised size="small" label="Create New" icon="pi pi-plus" class="create-button" @click="openCreateModal" />
             </div>
           </div>
         </template>
@@ -178,11 +175,8 @@
             </div>
             
             <div class="form-actions">
-              <button type="button" class="btn btn-secondary" @click="closeModal">Cancel</button>
-              <button type="submit" class="btn btn-primary" :disabled="saving">
-                <i v-if="saving" class="pi pi-spin pi-spinner"></i>
-                {{ editingCategory ? 'Update Category' : 'Create Category' }}
-              </button>
+              <Button severity="secondary" label="Cancel" size="small" raised @click="closeModal" />
+              <Button severity="info" raised type="submit" :icon="saving ? `pi pi-spin pi-spinner` : ``" :disabled="saving" :label="editingCategory ? `Update Category` : `Create Category`" size="small" />
             </div>
           </form>
         </div>

@@ -9,6 +9,9 @@ import NotesModel from "../../models/notes.model.js";
 import config from "./notes.config.js";
 import logger from "../../config/logger.js";
 import noteCategoriesService from "../note_categories/noteCategories.service.js";
+import UserService from "../user/user.service.js";
+
+const userService = new UserService();
 
 class NotesService {
   constructor() {
@@ -60,7 +63,18 @@ class NotesService {
 
   /** Get all notes (cached) */
   async getAll() {
-    return this.readJson();
+    const notes = await this.readJson();
+    // Ambil semua user dari user service
+    const users = await userService.getAllUsers();
+
+    // Bikin map username -> fullName biar akses cepat
+    const userMap = new Map(users.map(u => [u.username, u.fullName]));
+
+    // Enrich each note
+    return notes.map(note => ({
+      ...note,
+      fullName: userMap.get(note.pic) || null, // jika user tidak ditemukan -> null
+    }));
   }
 
   /** Create or update a note */
@@ -117,6 +131,9 @@ class NotesService {
       throw new Error("Either noteText or categoryId must be provided");
     }
 
+    // get user full name
+    const user = await userService.findByCredentials(pic);
+
     //convert categoryId to integer
     categoryId = categoryId ? parseInt(categoryId) : null;
 
@@ -140,7 +157,7 @@ class NotesService {
       category = categories.find(c => c.id === categoryId) || null;
     }
 
-    return { ...note.toJSON(), category };
+    return { ...note.toJSON(), category, fullName: user?.fullName || null };
   }
 }
 

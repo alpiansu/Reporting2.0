@@ -28,6 +28,14 @@ const created = (res, data = {}) => {
 };
 
 /**
+ * Send no content response (HTTP 204)
+ * @param {object} res - Express response object
+ */
+const noContent = (res, msg) => {
+  return res.status(204).json(msg);
+};
+
+/**
  * Send error response
  * @param {object} res - Express response object
  * @param {string} message - Error message
@@ -79,6 +87,7 @@ const notFound = (res, message = "Not Found") => {
 export default {
   success,
   created,
+  noContent,
   error,
   badRequest,
   notFound,

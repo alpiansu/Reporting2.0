@@ -8,6 +8,7 @@ import path from "path";
 import NotesModel from "../../models/notes.model.js";
 import config from "./notes.config.js";
 import logger from "../../config/logger.js";
+import noteCategoriesService from "../note_categories/noteCategories.service.js";
 
 class NotesService {
   constructor() {
@@ -65,8 +66,8 @@ class NotesService {
   /** Create or update a note */
   async upsert(payload) {
     // Validate required fields
-    if (!payload.unixKey || !payload.noteText || !payload.pic) {
-      throw new Error("unixKey, noteText, and pic are required");
+    if (!payload.unixKey || !payload.pic) {
+      throw new Error("unixKey, and pic are required");
     }
 
     // Check if note already exists
@@ -108,6 +109,38 @@ class NotesService {
     await this.writeJson(all.map(n => n.toJSON()));
 
     return true;
+  }
+
+  // core logic implementation for saving or updating note
+  async saveOrUpdateNote({ cabang, shop, tanggal, prdcd, noteText, categoryId, pic }) {
+    if (!noteText && categoryId === undefined) {
+      throw new Error("Either noteText or categoryId must be provided");
+    }
+
+    //convert categoryId to integer
+    categoryId = categoryId ? parseInt(categoryId) : null;
+
+    const unixKey = `${shop}${tanggal}${prdcd}`;
+    const noteData = {
+      Cabang: cabang,
+      unixKey,
+      noteText: noteText || "",
+      pic: pic || "system",
+      categoryId: categoryId || null,
+    };
+
+    // Upsert
+    const note = await this.upsert(noteData);
+
+    // Get category
+    let category = null;
+    if (categoryId) {
+      const categoryResult = await noteCategoriesService.getAll();
+      const categories = categoryResult.data || [];
+      category = categories.find(c => c.id === categoryId) || null;
+    }
+
+    return { ...note.toJSON(), category };
   }
 }
 

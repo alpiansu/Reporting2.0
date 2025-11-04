@@ -38,6 +38,6 @@ router.delete("/:cabang/:shop/:tanggal/:prdcd", rekonVirtualController.deleteRec
 router.post("/insert-from-store", rekonVirtualController.insertFromStore);
 
 // Update or create note for a specific record
-router.put("/:cabang/:shop/:tanggal/:prdcd/note", rekonVirtualController.updateNote);
+router.put("/note/:cabang/:shop/:tanggal/:prdcd", rekonVirtualController.updateNote);
 
 export default router;

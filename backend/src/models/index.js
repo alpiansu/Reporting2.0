@@ -10,10 +10,12 @@ import HistAdjust from "./hist_adjust.model.js";
 import SaldoVirtual from "./saldovirtual.model.js";
 import NotesEdp from "./notes.model.js";
 import NoteCategories from "../modules/note_categories/noteCategories.model.js";
+import Penyesuaian from "../modules/penyesuaian/penyesuaian.model.js";
 import modelRegistry from "./registry.js";
 
 // Register all Sequelize models with the registry
 // Priority: higher numbers are initialized first
+modelRegistry.register("Penyesuaian", () => Penyesuaian.getModel(), { priority: 14 });
 modelRegistry.register("NoteCategories", () => NoteCategories.getModel(), { priority: 13 });
 modelRegistry.register("NotesEdp", () => NotesEdp.getModel(), { priority: 12 });
 modelRegistry.register("SaldoVirtual", () => SaldoVirtual.getModel(), { priority: 11 });
@@ -52,6 +54,7 @@ export default {
   NotesEdp,
   NoteCategories,
   modelRegistry,
+  Penyesuaian,
 };
 
 // Named exports for backward compatibility
@@ -67,6 +70,7 @@ export {
   NotesEdp,
   NoteCategories,
   modelRegistry,
+  Penyesuaian,
 };
 
 // Database connection functions

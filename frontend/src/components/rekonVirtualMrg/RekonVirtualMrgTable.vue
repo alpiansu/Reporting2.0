@@ -1,23 +1,11 @@
 <template>
-  <DataTable 
-    :data="data" 
-    :filteredData="filteredData" 
-    :loading="loading" 
-    :error="error" 
-    :rowClass="getRowClass"
-    :loadingMessage="'Memuat data rekonsiliasi...'" 
-    :loadingHelpText="'Mohon tunggu sebentar...'"
+  <DataTable :data="data" :filteredData="filteredData" :loading="loading" :error="error" :rowClass="getRowClass"
+    :loadingMessage="'Memuat data rekonsiliasi...'" :loadingHelpText="'Mohon tunggu sebentar...'"
     :emptyMessage="'Tidak ada data rekonsiliasi untuk ditampilkan.'"
-    :emptyHelpText="'Tidak ditemukan data rekonsiliasi untuk cabang dan periode yang dipilih.'" 
-    :pagination="pagination"
-    :tableTitle="'Saldo Virtual Margin Based'" 
-    @refresh="$emit('refresh')" 
-    @reset-filters="resetFilters"
-    @export="exportToExcel" 
-    @page-change="handlePageChange" 
-    @items-per-page-change="handleItemsPerPageChange"
-    @sort-change="handleSortChange"
-  >
+    :emptyHelpText="'Tidak ditemukan data rekonsiliasi untuk cabang dan periode yang dipilih.'" :pagination="pagination"
+    :tableTitle="'Saldo Virtual Margin Based'" @refresh="$emit('refresh')" @reset-filters="resetFilters"
+    @export="exportToExcel" @page-change="handlePageChange" @items-per-page-change="handleItemsPerPageChange"
+    @sort-change="handleSortChange">
     <!-- Search Component -->
     <template #filters>
       <div class="search-container">
@@ -25,19 +13,9 @@
           <form @submit.prevent="handleSearch" class="search-form">
             <div class="search-box">
               <i class="pi pi-search search-icon"></i>
-              <input 
-                type="text" 
-                v-model="searchQuery" 
-                @input="handleSearch" 
-                placeholder="Cari Data ..."
-                class="search-input" 
-              />
-              <button 
-                type="button" 
-                v-if="searchQuery" 
-                @click="clearSearch" 
-                class="clear-button"
-              >
+              <input type="text" v-model="searchQuery" @input="handleSearch" placeholder="Cari Data ..."
+                class="search-input" />
+              <button type="button" v-if="searchQuery" @click="clearSearch" class="clear-button">
                 <i class="pi pi-times"></i>
               </button>
             </div>
@@ -68,19 +46,23 @@
         Nama Produk
         <i v-if="sortColumn === 'SINGKATAN'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
-      <th class="text-right sortable" :class="getSortClass('ACOST', sortColumn, sortOrder)" @click="handleSort('ACOST')">
+      <th class="text-right sortable" :class="getSortClass('ACOST', sortColumn, sortOrder)"
+        @click="handleSort('ACOST')">
         Hpp
         <i v-if="sortColumn === 'ACOST'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
-      <th class="text-right sortable" :class="getSortClass('PRICE', sortColumn, sortOrder)" @click="handleSort('PRICE')">
+      <th class="text-right sortable" :class="getSortClass('PRICE', sortColumn, sortOrder)"
+        @click="handleSort('PRICE')">
         Price
         <i v-if="sortColumn === 'PRICE'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
-      <th class="text-right sortable" :class="getSortClass('QTY_MSTRAN', sortColumn, sortOrder)" @click="handleSort('QTY_MSTRAN')">
+      <th class="text-right sortable" :class="getSortClass('QTY_MSTRAN', sortColumn, sortOrder)"
+        @click="handleSort('QTY_MSTRAN')">
         Qty MSTRAN
         <i v-if="sortColumn === 'QTY_MSTRAN'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
-      <th class="text-right sortable" :class="getSortClass('QTY_MTRAN', sortColumn, sortOrder)" @click="handleSort('QTY_MTRAN')">
+      <th class="text-right sortable" :class="getSortClass('QTY_MTRAN', sortColumn, sortOrder)"
+        @click="handleSort('QTY_MTRAN')">
         Qty MTRAN
         <i v-if="sortColumn === 'QTY_MTRAN'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
@@ -88,7 +70,8 @@
         Selisih
         <i v-if="sortColumn === 'SEL'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
-      <th class="text-center sortable" :class="getSortClass('RECID', sortColumn, sortOrder)" @click="handleSort('RECID')">
+      <th class="text-center sortable" :class="getSortClass('RECID', sortColumn, sortOrder)"
+        @click="handleSort('RECID')">
         Adjust
         <i v-if="sortColumn === 'RECID'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
@@ -97,7 +80,7 @@
         <i v-if="sortColumn === 'LASTCATCH'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
       <th>Notes</th>
-      <th>Actions</th>
+      <th v-if="user.role == `admin` || user.role == `superadmin`">Actions</th>
     </template>
 
     <!-- Table Row -->
@@ -115,25 +98,14 @@
         {{ formatNumber(item.SEL) }}
       </td>
       <td class="text-center">
-        <input 
-          type="checkbox" 
-          :checked="item.RECID === '1'" 
-          @change="updateAdjustStatus(item, $event)"
-          class="adjust-checkbox" 
-        />
+        <input type="checkbox" :checked="item.RECID === '1'" @change="updateAdjustStatus(item, $event)"
+          class="adjust-checkbox" />
       </td>
       <td class="text-center">{{ formatDateTime(item.LASTCATCH) }}</td>
       <td class="text-center note-cell">
-        <div 
-          class="note-display" 
-          v-if="!item.editingNote" 
-          @click="startEditingNote(item)"
-        >
-          <div 
-            class="note-category" 
-            v-if="item.note && item.note.category"
-            :class="getCategoryClass(item.note.category.name)"
-          >
+        <div class="note-display" v-if="!item.editingNote" @click="startEditingNote(item)">
+          <div class="note-category" v-if="item.note && item.note.category"
+            :class="getCategoryClass(item.note.category.name)">
             {{ item.note.category.name }}
           </div>
           <div class="note-text" v-if="item.note">
@@ -143,14 +115,10 @@
             Add note...
           </div>
           <div class="note-meta-icons" v-if="item.note">
-            <i 
-              class="pi pi-user note-icon note-icon-pic" 
-              v-tooltip.top="item.note.fullName || item.note.pic || 'Unknown'"
-            ></i>
-            <i 
-              class="pi pi-clock note-icon note-icon-time" 
-              v-tooltip.top="item.note.updated_at ? formatDateTime(item.note.updated_at) : 'No update time'"
-            ></i>
+            <i class="pi pi-user note-icon note-icon-pic"
+              v-tooltip.top="item.note.fullName || item.note.pic || 'Unknown'"></i>
+            <i class="pi pi-clock note-icon note-icon-time"
+              v-tooltip.top="item.note.updated_at ? formatDateTime(item.note.updated_at) : 'No update time'"></i>
           </div>
         </div>
         <div class="note-editor" v-else>
@@ -160,34 +128,27 @@
               {{ category.name }}
             </option>
           </select>
-          <textarea 
-            v-model="item.editingNote.noteText" 
-            class="note-textarea" 
-            placeholder="Enter note..."
-            @keydown.enter.prevent="saveNote(item)"
-          ></textarea>
+          <textarea v-model="item.editingNote.noteText" class="note-textarea" placeholder="Enter note..."
+            @keydown.enter.prevent="saveNote(item)"></textarea>
           <div class="note-actions">
             <Button severity="secondary" raised size="small" label="Cancel" @click="cancelEditing(item)" />
             <Button severity="success" raised size="small" label="Save" @click="saveNote(item)" />
           </div>
         </div>
       </td>
-      <td>
+      <td v-if="user.role == `admin` || user.role == `superadmin`">
         <div class="action-buttons">
-          <Button 
-            label="Auto Note!" 
-            @click="autoUpdateNote(item)" 
-            :disabled="isItemAutoUpdating(item)"
+          <Button label="Auto Note!" @click="hitButtonAutoNote(item)" :disabled="isItemAutoUpdating(item)"
             :icon="isItemAutoUpdating(item) ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'"
-            :class="{ 'btn-processing': isItemAutoUpdating(item) }" 
-            severity="info" 
-            raised 
-            size="small" 
-          />
+            :class="{ 'btn-processing': isItemAutoUpdating(item) }" severity="info" raised size="small" />
         </div>
       </td>
     </template>
   </DataTable>
+
+  <!-- Confirmation Dialog When note is already available -->
+  <confirm-dialog v-model="showDialogConfirm" :title="confirmDialogData.title" :message="confirmDialogData.message"
+    :confirm-text="confirmDialogData.confirmText" @confirm="handlingConfirmation" />
 </template>
 
 <script setup>
@@ -198,6 +159,11 @@ import * as XLSX from 'xlsx';
 import { noteCategoriesService, rekonVirtualMrgService } from '../../services/index.js';
 import Button from 'primevue/button';
 import './RekonVirtualMrgTable.css';
+import ConfirmDialog from '../common/ConfirmDialog.vue';
+import { useAuthStore } from '../../stores';
+
+const authStore = useAuthStore();
+const user = computed(() => authStore.user);
 
 const props = defineProps({
   data: {
@@ -235,6 +201,14 @@ const emit = defineEmits(['refresh', 'page-change', 'items-per-page-change', 'so
 const toast = useToastService();
 const autoUpdatingItems = ref(new Set());
 const highlightedItems = ref(new Set());
+const showDialogConfirm = ref(false);
+const confirmDialogData = ref({
+  title: 'Confirmation Dialog',
+  message: 'Are you sure?',
+  confirmText: 'Yes',
+});
+// Confirmation dialog state
+const selectedItem = ref(null);
 
 // Search functionality
 const searchQuery = ref('');
@@ -250,6 +224,32 @@ const filteredData = computed(() => {
   }
   return [];
 });
+
+// trigger when button auto note clicked
+const hitButtonAutoNote = async (item) => {
+  console.log('Auto Note clicked for item:', item.note);
+  // kalau note kosong, langsung update
+  if (!item.note?.length == 0 || item.note == null || (item.note.noteText.trim() === '' && (item.note.categoryId == null || item.note.categoryId === ''))) {
+    autoUpdateNote(item);
+    return;
+  }
+
+  // kalau sudah ada note, tampilkan dialog konfirmasi
+  selectedItem.value = item;
+  confirmDialogData.value.message = 'Catatan sudah ada sebelumnya. Apakah Anda ingin menimpa catatan lama dengan auto note baru?';
+  confirmDialogData.value.title = 'Konfirmasi Auto Note';
+  confirmDialogData.value.confirmText = 'Ya!';
+  showDialogConfirm.value = true;
+};
+
+//function handling confirmation dialog
+const handlingConfirmation = () => {
+  if (selectedItem.value) {
+    autoUpdateNote(selectedItem.value)
+  }
+  showDialogConfirm.value = false
+  selectedItem.value = null
+}
 
 //method for auto note
 const autoUpdateNote = async (item) => {

@@ -1,168 +1,160 @@
 <template>
-  <div v-if="modelValue" class="dialog-overlay" @click.self="closeDialog">
-    <div class="dialog-content">
-      <div class="dialog-header">
-        <h2>{{ title }}</h2>
-        <button class="close-button" @click="closeDialog">
-          <i class="pi pi-times"></i>
-        </button>
-      </div>
-      <div class="dialog-body">
-        <p class="dialog-message">{{ message }}</p>
-      </div>
-      <div class="dialog-footer">
-        <button class="cancel-button" @click="closeDialog">{{ cancelText }}</button>
-        <button class="confirm-button" @click="confirm">{{ confirmText }}</button>
+  <transition name="fade-scale">
+    <div v-if="modelValue" class="dialog-overlay" @click.self="closeDialog">
+      <div class="dialog-content">
+        <div class="dialog-header">
+          <i class="pi pi-question-circle dialog-icon" />
+          <h2 class="dialog-title">{{ title }}</h2>
+          <button class="close-button" @click="closeDialog">
+            <i class="pi pi-times"></i>
+          </button>
+        </div>
+
+        <div class="dialog-body">
+          <p class="dialog-message">{{ message }}</p>
+        </div>
+
+        <div class="dialog-footer">
+          <Button :label="cancelText" @click="closeDialog" severity="secondary" size="small"
+            class="dialog-btn cancel-btn" icon="pi pi-times" raised />
+          <Button :label="confirmText" @click="confirm" severity="info" size="small" class="dialog-btn confirm-btn"
+            icon="pi pi-check" autofocus raised />
+        </div>
       </div>
     </div>
-  </div>
+  </transition>
 </template>
 
 <script setup>
-import { defineProps, defineEmits } from 'vue';
+import { defineProps, defineEmits } from "vue";
+import Button from "primevue/button";
 
 const props = defineProps({
-  modelValue: {
-    type: Boolean,
-    required: true
-  },
-  title: {
-    type: String,
-    default: 'Confirmation'
-  },
-  message: {
-    type: String,
-    default: 'Are you sure you want to proceed?'
-  },
-  confirmText: {
-    type: String,
-    default: 'Confirm'
-  },
-  cancelText: {
-    type: String,
-    default: 'Cancel'
-  }
+  modelValue: { type: Boolean, required: true },
+  title: { type: String, default: "Confirmation" },
+  message: { type: String, default: "Are you sure you want to proceed?" },
+  confirmText: { type: String, default: "Confirm" },
+  cancelText: { type: String, default: "Cancel" },
 });
 
-const emit = defineEmits(['update:modelValue', 'confirm']);
+const emit = defineEmits(["update:modelValue", "confirm"]);
 
-const closeDialog = () => {
-  emit('update:modelValue', false);
-};
+const closeDialog = () => emit("update:modelValue", false);
 
 const confirm = () => {
-  emit('confirm');
+  emit("confirm");
   closeDialog();
 };
 </script>
 
 <style scoped>
+/* === Overlay Background === */
 .dialog-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: 2000;
+  backdrop-filter: blur(2px);
 }
 
+/* === Dialog Container === */
 .dialog-content {
-  background-color: white;
-  border-radius: 12px;
-  width: 100%;
-  max-width: 400px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-  animation: fadeIn 0.2s ease-out;
+  background: #fff;
+  border-radius: 10px;
+  min-width: 340px;
+  max-width: 420px;
+  padding: 1.25rem 1.5rem 1rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  animation: popIn 0.25s ease;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
+/* === Header === */
 .dialog-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  position: relative;
 }
 
-.dialog-header h2 {
-  font-size: 1.25rem;
+.dialog-title {
+  flex: 1;
+  font-size: 1.1rem;
   font-weight: 600;
-  margin: 0;
-  color: var(--text-color);
+  color: #333;
+  margin-left: 0.5rem;
+}
+
+.dialog-icon {
+  font-size: 1.6rem;
+  color: #2196f3;
 }
 
 .close-button {
-  background: none;
   border: none;
+  background: transparent;
   cursor: pointer;
-  color: var(--text-color-secondary);
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  color: #777;
+  font-size: 1.1rem;
+  transition: color 0.2s ease;
 }
 
 .close-button:hover {
-  background-color: rgba(0, 0, 0, 0.04);
+  color: #000;
 }
 
+/* === Body === */
 .dialog-body {
-  padding: 20px;
+  margin: 0.5rem 0 1rem;
+  color: #555;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .dialog-message {
-  font-size: 1rem;
-  color: var(--text-color);
   margin: 0;
-  line-height: 1.5;
+  font-size: 0.95rem;
 }
 
+/* === Footer === */
 .dialog-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
-  padding: 16px 20px;
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  gap: 0.5rem;
 }
 
-.cancel-button {
-  background-color: white;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 10px 16px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: border-color 0.2s;
+.dialog-btn {
+  transition: transform 0.15s ease;
 }
 
-.cancel-button:hover {
-  border-color: var(--text-color);
+.dialog-btn:hover {
+  transform: scale(1.04);
 }
 
-.confirm-button {
-  background-color: var(--primary-color);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 10px 16px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s;
+/* === Animations === */
+@keyframes popIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
-.confirm-button:hover {
-  background-color: var(--primary-color-darken);
+.fade-scale-enter-active,
+.fade-scale-leave-active {
+  transition: all 0.25s ease;
+}
+
+.fade-scale-enter-from,
+.fade-scale-leave-to {
+  opacity: 0;
+  transform: scale(0.95);
 }
 </style>

@@ -62,7 +62,7 @@ export default {
 
     // Detail query - get full record details for insertion
     detail: (filetToko, strPeriode, month, year) => `
-      SELECT (SELECT KIRIM FROM toko) AS CAB, '${strPeriode}' as PERIODE, (SELECT KDTK FROM TOKO) as KDTK, PRDCD, prod.SINGKATAN, prod.RECID, prod.PTAG, rp_sld_akh / saldo_akh as BEGBAL, trfin / qty_trfin as TRFIN, trfout / qty_trfout as TRFOUT, sales / qty_sales as RP_SALES, retur_sales / qty_retur_sales as RP_RETUR_SALES, adj / qty_adj as ADJ, ba / qty_ba as BA, bs / qty_bs as BS, ACOST, lcost, stock, (stock*acost) as rp_stock,
+      SELECT (SELECT KIRIM FROM toko) AS CAB, '${strPeriode}' as PERIODE, (SELECT KDTK FROM TOKO) as KDTK, PRDCD, prod.SINGKATAN, prod.RECID as RECID_PRODMAST, prod.PTAG, rp_sld_akh / saldo_akh as BEGBAL, trfin / qty_trfin as TRFIN, trfout / qty_trfout as TRFOUT, sales / qty_sales as RP_SALES, retur_sales / qty_retur_sales as RP_RETUR_SALES, adj / qty_adj as ADJ, ba / qty_ba as BA, bs / qty_bs as BS, ACOST, lcost, stock, (stock*acost) as rp_stock,
         (stock*if((IFNULL(qty_trfin,0)+IFNULL(qty_trfout,0)+IFNULL(qty_sales,0)+IFNULL(qty_retur_sales,0)+IFNULL(qty_adj,0)+IFNULL(qty_ba,0)+IFNULL(qty_bs,0) )= 0, rcost_flt, acost))-(rp_sld_akh+trfin-trfout-sales+retur_sales+adj+ba+bs) AS sesuai, now() as updtime FROM (
         
         SELECT 

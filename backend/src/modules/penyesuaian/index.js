@@ -1,17 +1,7 @@
 /**
  * Penyesuaian (Sesuai Toko) module index
  */
-import {
-  screeningByCabang,
-  getAllRecords,
-  getAll,
-  getRecord,
-  createRecord,
-  updateRecord,
-  deleteRecord,
-  updateNote,
-  getSummary,
-} from "./penyesuaian.controller.js";
+import { screeningByCabang, getAllRecords, getAll, getRecord, getSummary } from "./penyesuaian.controller.js";
 import penyesuaianRoutes from "./penyesuaian.routes.js";
 import PenyesuaianService from "./penyesuaian.service.js";
 
@@ -20,10 +10,6 @@ const PenyesuaianController = {
   getAllRecords,
   getAll,
   getRecord,
-  createRecord,
-  updateRecord,
-  deleteRecord,
-  updateNote,
   getSummary,
 };
 

@@ -17,6 +17,12 @@ const getSesuaiTokoModel = async () => {
       SesuaiToko = sequelize.define(
         "sesuaitoko",
         {
+          RECID: {
+            type: DataTypes.CHAR(1),
+            allowNull: false,
+            defaultValue: "*",
+            comment: "Tracking status: * = unresolved, 1 = resolved",
+          },
           CABANG: {
             type: DataTypes.CHAR(4),
             primaryKey: true,
@@ -41,10 +47,10 @@ const getSesuaiTokoModel = async () => {
             type: DataTypes.STRING(85),
             allowNull: true,
           },
-          RECID: {
+          RECID_PRODMAST: {
             type: DataTypes.CHAR(1),
             allowNull: true,
-            defaultValue: "*",
+            comment: "RECID from prodmast table in store",
           },
           PTAG: {
             type: DataTypes.CHAR(1),
@@ -115,16 +121,16 @@ const getSesuaiTokoModel = async () => {
           underscored: false,
           indexes: [
             {
+              name: "idx_sesuaitoko_recid",
+              fields: ["RECID"],
+            },
+            {
               name: "idx_sesuaitoko_cabang_periode",
               fields: ["CABANG", "PERIODE"],
             },
             {
               name: "idx_sesuaitoko_kdtk_prdcd",
               fields: ["KDTK", "PRDCD"],
-            },
-            {
-              name: "idx_sesuaitoko_recid",
-              fields: ["RECID"],
             },
           ],
         }

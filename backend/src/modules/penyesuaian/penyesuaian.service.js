@@ -222,17 +222,188 @@ class PenyesuaianService {
   }
 
   /**
+   * Process single store screening
+   * @param {Object} store - Store object with storeCode and cab
+   * @param {string} strPeriode - Period in YYMM format
+   * @param {string} strYear - Year in YYYY format
+   * @param {string} strMonth - Month in MM format
+   * @returns {Promise<Object>} Result with success status and records
+   */
+  async processSingleStore(store, strPeriode, strYear, strMonth) {
+    const { storeCode, cab } = store;
+    const results = { success: false, records: [], activeKeys: new Set() };
+
+    try {
+      // --- Store info --- //
+      const storeInfo = await storeService.getStoreIPHost(storeCode);
+
+      if (!storeInfo) {
+        await RekapRemoteService.addToTemp(cab, storeCode, "penyesuaian", `[${storeCode}] store info not found`);
+        return results;
+      }
+
+      // --- Create DB connection --- //
+      const storeConnection = await dbStore.createDbStore(storeInfo.dbHost, config.connectionRetry.maxRetries);
+
+      if (!storeConnection) {
+        await RekapRemoteService.addToTemp(
+          cab,
+          storeCode,
+          "penyesuaian",
+          `[${storeCode}] failed to connect after ${config.connectionRetry.maxRetries} attempts`
+        );
+        return results;
+      }
+
+      try {
+        // Generate filetToko table name
+        const filetToko = this.getFiletTokoTableName(storeCode, strPeriode);
+
+        // STEP 1: Run filter query to check if store has data exceeding threshold
+        const filterQuery = config.queries.filter(filetToko, strPeriode, strMonth, strYear);
+        const [filterResult] = await storeConnection.query(filterQuery, [strMonth, strYear, strMonth, strYear]);
+
+        await RekapRemoteService.addToTemp(
+          cab,
+          storeCode,
+          "penyesuaian",
+          `[${storeCode}] filter query completed, threshold check: ${filterResult.length > 0 ? "EXCEEDED" : "OK"}`
+        );
+
+        // STEP 2: If threshold exceeded, run detail query
+        if (filterResult.length > 0) {
+          const detailQuery = config.queries.detail(filetToko, strPeriode, strMonth, strYear);
+          const [detailResult] = await storeConnection.query(detailQuery, [strMonth, strYear, strMonth, strYear]);
+
+          await RekapRemoteService.addToTemp(
+            cab,
+            storeCode,
+            "penyesuaian",
+            `[${storeCode}] detail query completed, got ${detailResult.length} records`
+          );
+
+          if (detailResult.length > 0) {
+            // Normalize field names to match model (uppercase)
+            const normalizedRecords = detailResult.map(record => ({
+              RECID: "*", // Default value for tracking
+              CABANG: record.CAB,
+              PERIODE: record.PERIODE,
+              KDTK: record.KDTK,
+              PRDCD: record.PRDCD,
+              SINGKATAN: record.SINGKATAN,
+              RECID_PRODMAST: record.RECID_PRODMAST,
+              PTAG: record.PTAG,
+              BEGBAL: record.BEGBAL,
+              TRFIN: record.TRFIN,
+              TRFOUT: record.TRFOUT,
+              RP_SALES: record.RP_SALES,
+              RP_RETUR_SALES: record.RP_RETUR_SALES,
+              ADJ: record.ADJ,
+              BA: record.BA,
+              BS: record.BS,
+              ACOST: record.ACOST,
+              LCOST: record.lcost,
+              STOCK: record.stock,
+              RP_STOCK: record.rp_stock,
+              SESUAI: record.sesuai,
+              UPDTIME: new Date(),
+            }));
+
+            // Bulk create/update records to database
+            await SesuaiToko.bulkCreate(normalizedRecords, {
+              updateOnDuplicate: [
+                "SINGKATAN",
+                "RECID_PRODMAST",
+                "PTAG",
+                "BEGBAL",
+                "TRFIN",
+                "TRFOUT",
+                "RP_SALES",
+                "RP_RETUR_SALES",
+                "ADJ",
+                "BA",
+                "BS",
+                "ACOST",
+                "LCOST",
+                "STOCK",
+                "RP_STOCK",
+                "SESUAI",
+                "UPDTIME",
+              ],
+            });
+
+            // Collect records and active keys
+            results.records = normalizedRecords;
+            normalizedRecords.forEach(record => {
+              results.activeKeys.add(`${record.KDTK}-${record.PRDCD}`);
+            });
+
+            results.success = true;
+          }
+        } else {
+          results.success = true; // Below threshold is still success
+        }
+      } finally {
+        await storeConnection.end();
+      }
+    } catch (err) {
+      await RekapRemoteService.addToTemp(cab, storeCode, "penyesuaian", `[${storeCode}] ERROR: ${err.message}`);
+    }
+
+    return results;
+  }
+
+  /**
    * Screening stores to penyesuaian based on store query
+   * Supports 3 levels: All cabang, 1 cabang, or 1 specific store
    */
   async screening(options) {
     // Ensure storeService is initialized
     await storeService.ensureInitialized();
 
-    //declare taskID on Top
-    const username = options.username;
-    const taskId = `${config.taskProgressName}_${username}`;
+    const { cabang, periode, kdtk, username } = options;
 
-    //set limit branches and stores
+    // === LEVEL 3: Single Store Screening (No Progress Task) ===
+    if (kdtk) {
+      logger.info(`[penyesuaian.service] Starting single store screening: ${kdtk}, periode: ${periode}`);
+
+      try {
+        // Get store info to determine cabang
+        const storeInfo = await storeService.getStoreByCode(kdtk);
+        const storeCab = storeInfo ? storeInfo.branch || storeInfo.cab : "UNKNOWN";
+
+        // Convert periode
+        const strPeriode = periode;
+        const strYear = moment(periode, "YYMM").format("YYYY");
+        const strMonth = moment(periode, "YYMM").format("MM");
+
+        // Process single store
+        const result = await this.processSingleStore({ storeCode: kdtk, cab: storeCab }, strPeriode, strYear, strMonth);
+
+        // Save logs to database
+        await RekapRemoteService.saveLogsToDatabase();
+
+        // Update resolved records if any
+        if (result.activeKeys.size > 0) {
+          await this.updateResolvedRecords(storeCab, strPeriode, Array.from(result.activeKeys));
+        }
+
+        // Sync to JSON file
+        await this.syncToJsonFile();
+
+        return {
+          success: true,
+          message: `Single store screening completed for ${kdtk}`,
+          processedRecords: result.records.length,
+        };
+      } catch (error) {
+        logger.error(`[penyesuaian.service] Error during single store screening: ${error.message}`);
+        throw error;
+      }
+    }
+
+    // === LEVEL 1 & 2: Multi-Store Screening (With Progress Task) ===
+    const taskId = `${config.taskProgressName}_${username}`;
     const limitBranches = pLimit(config.parallelProcessing.branchConcurrencyLimit);
     const limitStores = pLimit(config.parallelProcessing.concurrencyLimit);
 
@@ -246,11 +417,11 @@ class PenyesuaianService {
     try {
       // === STEP 1: Branches ===
       let branches = [];
-      if (options.cabang === "All" || options.cabang === "ALL") {
+      if (cabang === "All" || cabang === "ALL") {
         const allStores = storeService.stores;
         branches = [...new Set(allStores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))];
       } else {
-        branches = [options.cabang];
+        branches = [cabang];
       }
 
       logger.info(`[penyesuaian.service] Branches to process: ${branches.join(", ")}`);
@@ -277,7 +448,7 @@ class PenyesuaianService {
         const timeStart = moment().format("YYYY-MM-DD HH:mm:ss");
         await progressService.startProgress(taskId, storesToProcess.length, {
           description: "registering task",
-          startedBy: options.username,
+          startedBy: username,
           status: "registering",
           createdAt: timeStart,
         });
@@ -305,9 +476,9 @@ class PenyesuaianService {
 
       // === PREPARE PROCESSING ===
       // Convert from string periode (YYMM)
-      const strPeriode = options.periode;
-      const strYear = moment(options.periode, "YYMM").format("YYYY");
-      const strMonth = moment(options.periode, "YYMM").format("MM");
+      const strPeriode = periode;
+      const strYear = moment(periode, "YYMM").format("YYYY");
+      const strMonth = moment(periode, "YYMM").format("MM");
 
       // Temporary array to collect new records and active keys
       const newRecords = [];
@@ -332,150 +503,32 @@ class PenyesuaianService {
             const { cab, storeCode } = store;
 
             try {
-              // --- Store info --- //
-              const storeInfo = await withTimeout(
-                storeService.getStoreIPHost(storeCode),
-                10000,
-                `get store info ${storeCode}`
+              const result = await withTimeout(
+                this.processSingleStore(store, strPeriode, strYear, strMonth),
+                config.parallelProcessing.storeTimeoutMs,
+                `process store ${storeCode}`
               );
 
-              if (!storeInfo) {
-                await RekapRemoteService.addToTemp(
-                  cab,
-                  storeCode,
-                  "penyesuaian",
-                  `[${storeCode}] store info not found`
-                );
-                await incrementProgress(storeCode, "Store info not found ❌");
-                return;
-              }
-
-              // --- Create DB connection --- //
-              const storeConnection = await withTimeout(
-                dbStore.createDbStore(storeInfo.dbHost, config.connectionRetry.maxRetries),
-                10000,
-                `connect ${storeCode}`
-              );
-
-              if (!storeConnection) {
-                await RekapRemoteService.addToTemp(
-                  cab,
-                  storeCode,
-                  "penyesuaian",
-                  `[${storeCode}] failed to connect after ${config.connectionRetry.maxRetries} attempts`
-                );
-                await incrementProgress(storeCode, "DB connection failed ❌");
-                return;
-              }
-
-              try {
-                // Generate filetToko table name
-                const filetToko = this.getFiletTokoTableName(storeCode, strPeriode);
-
-                // STEP 1: Run filter query to check if store has data exceeding threshold
-                const filterQuery = config.queries.filter(filetToko, strPeriode, strMonth, strYear);
-                const [filterResult] = await storeConnection.query(filterQuery, [strMonth, strYear, strMonth, strYear]);
-
-                await RekapRemoteService.addToTemp(
-                  cab,
-                  storeCode,
-                  "penyesuaian",
-                  `[${storeCode}] filter query completed, threshold check: ${
-                    filterResult.length > 0 ? "EXCEEDED" : "OK"
-                  }`
-                );
-
-                // STEP 2: If threshold exceeded, run detail query
-                if (filterResult.length > 0) {
-                  const detailQuery = config.queries.detail(filetToko, strPeriode, strMonth, strYear);
-                  const [detailResult] = await storeConnection.query(detailQuery, [
-                    strMonth,
-                    strYear,
-                    strMonth,
-                    strYear,
-                  ]);
-
-                  await RekapRemoteService.addToTemp(
-                    cab,
-                    storeCode,
-                    "penyesuaian",
-                    `[${storeCode}] detail query completed, got ${detailResult.length} records`
-                  );
-
-                  if (detailResult.length > 0) {
-                    // Normalize field names to match model (uppercase)
-                    const normalizedRecords = detailResult.map(record => ({
-                      CABANG: record.CAB,
-                      PERIODE: record.PERIODE,
-                      KDTK: record.KDTK,
-                      PRDCD: record.PRDCD,
-                      SINGKATAN: record.SINGKATAN,
-                      RECID: "*", // Default value for new records
-                      PTAG: record.PTAG,
-                      BEGBAL: record.BEGBAL,
-                      TRFIN: record.TRFIN,
-                      TRFOUT: record.TRFOUT,
-                      RP_SALES: record.RP_SALES,
-                      RP_RETUR_SALES: record.RP_RETUR_SALES,
-                      ADJ: record.ADJ,
-                      BA: record.BA,
-                      BS: record.BS,
-                      ACOST: record.ACOST,
-                      LCOST: record.lcost,
-                      STOCK: record.stock,
-                      RP_STOCK: record.rp_stock,
-                      SESUAI: record.sesuai,
-                      UPDTIME: new Date(),
-                    }));
-
-                    // Bulk create/update records to database
-                    await SesuaiToko.bulkCreate(normalizedRecords, {
-                      updateOnDuplicate: [
-                        "SINGKATAN",
-                        "PTAG",
-                        "BEGBAL",
-                        "TRFIN",
-                        "TRFOUT",
-                        "RP_SALES",
-                        "RP_RETUR_SALES",
-                        "ADJ",
-                        "BA",
-                        "BS",
-                        "ACOST",
-                        "LCOST",
-                        "STOCK",
-                        "RP_STOCK",
-                        "SESUAI",
-                        "UPDTIME",
-                      ],
-                    });
-
-                    // Collect records and active keys
-                    newRecords.push(...normalizedRecords);
-                    normalizedRecords.forEach(record => {
-                      activeKeys.add(`${record.KDTK}-${record.PRDCD}`);
-                    });
-
-                    await incrementProgress(storeCode, `Success ✅ (${detailResult.length} rows)`);
-                  } else {
-                    await incrementProgress(storeCode, "No detail records ⚠️");
-                  }
+              if (result.success) {
+                if (result.records.length > 0) {
+                  newRecords.push(...result.records);
+                  result.activeKeys.forEach(key => activeKeys.add(key));
+                  await incrementProgress(storeCode, `Success ✅ (${result.records.length} rows)`);
                 } else {
                   await incrementProgress(storeCode, "Below threshold ✓");
                 }
-              } finally {
-                await storeConnection.end();
+              } else {
+                await incrementProgress(storeCode, "Error ❌");
               }
             } catch (err) {
               await RekapRemoteService.addToTemp(cab, storeCode, "penyesuaian", `[${storeCode}] ERROR: ${err.message}`);
-
               await incrementProgress(storeCode, "Error ❌");
             }
           })
         )
       );
 
-      logger.info(`[penyesuaian.service] Screening process completed for periode ${options.periode}`);
+      logger.info(`[penyesuaian.service] Screening process completed for periode ${periode}`);
 
       //update status to progress service
       await progressService.updateProgress(taskId, processedCount, {
@@ -485,7 +538,7 @@ class PenyesuaianService {
 
       // Update resolved records (records that no longer meet the threshold)
       if (activeKeys.size > 0) {
-        await this.updateResolvedRecords(options.cabang, strPeriode, Array.from(activeKeys));
+        await this.updateResolvedRecords(cabang, strPeriode, Array.from(activeKeys));
       }
 
       //update status to progress service
@@ -536,32 +589,19 @@ class PenyesuaianService {
 
   /**
    * Update RECID to '1' for records that no longer meet the threshold
+   * IMPORTANT: Only update records with RECID='*' to preserve UPDTIME
    * @param {string} cabang - Branch code or 'All'
    * @param {string} periode - Period in YYMM format
    * @param {Array<string>} activeKeys - Array of KDTK-PRDCD combinations that still have issues
    */
   async updateResolvedRecords(cabang, periode, activeKeys) {
     try {
-      const whereConditions = {
-        PERIODE: periode,
-        RECID: "*",
-      };
-
-      // Add cabang filter if not "All"
-      if (cabang !== "All" && cabang !== "ALL") {
-        whereConditions.CABANG = cabang;
-      }
-
-      // Build the NOT IN condition for CONCAT(KDTK, '-', PRDCD)
-      // We need to use raw query for this since Sequelize doesn't support CONCAT in where clause easily
-      const { Sequelize } = await import("sequelize");
-      const Op = Sequelize.Op;
-
       // Get the database instance
       const model = await SesuaiToko.getModel();
       const sequelize = model.sequelize;
+      const { Sequelize } = await import("sequelize");
 
-      // Build the query
+      // Build the query - CRITICAL: Include RECID='*' condition
       let query = `
         UPDATE sesuai_toko 
         SET RECID = '1' 
@@ -599,6 +639,7 @@ class PenyesuaianService {
 
   /**
    * Build filter function for data filtering (DRY principle)
+   * IMPORTANT: Always filter RECID='*' for display
    * @param {Object} params - Filter parameters
    * @returns {Function} Filter function
    */
@@ -606,6 +647,11 @@ class PenyesuaianService {
     const { cabang, periode, kdtk } = params;
 
     return item => {
+      // CRITICAL: Always filter for RECID='*' (unresolved records only)
+      if (item.RECID !== "*") {
+        return false;
+      }
+
       // Filter by cabang
       if (cabang && cabang !== "All" && item.CABANG !== cabang) {
         return false;
@@ -627,6 +673,7 @@ class PenyesuaianService {
 
   /**
    * Get summary statistics from JSON file
+   * Only count RECID='*' records
    * @param {Object} options - Query options (cabang, periode)
    * @returns {Promise<Object>} Summary statistics
    */
@@ -637,7 +684,7 @@ class PenyesuaianService {
       // Ensure data is loaded from JSON file
       await this.ensureDataLoaded();
 
-      // Build filter function
+      // Build filter function (includes RECID='*' filter)
       const filterFn = this.buildFilterFunction({ cabang, periode });
 
       // Filter data
@@ -662,6 +709,7 @@ class PenyesuaianService {
 
   /**
    * Get all records without pagination and filtering from JSON file
+   * Only return RECID='*' records
    * @param {Object} options - Query options
    * @returns {Promise<Object>} All records
    */
@@ -672,7 +720,7 @@ class PenyesuaianService {
       // Ensure data is loaded from JSON file
       await this.ensureDataLoaded();
 
-      // Build filter function
+      // Build filter function (includes RECID='*' filter)
       const filterFn = this.buildFilterFunction({ cabang, periode });
 
       // Filter data
@@ -691,6 +739,7 @@ class PenyesuaianService {
 
   /**
    * Get all records with pagination and filtering from JSON file
+   * Only return RECID='*' records
    * @param {Object} options - Query options
    * @returns {Promise<Object>} Paginated results
    */
@@ -710,7 +759,7 @@ class PenyesuaianService {
       // Ensure data is loaded from JSON file
       await this.ensureDataLoaded();
 
-      // Build filter function
+      // Build filter function (includes RECID='*' filter)
       const filterFn = this.buildFilterFunction({ cabang, periode, kdtk });
 
       // Filter data
@@ -738,6 +787,7 @@ class PenyesuaianService {
         "KDTK",
         "PRDCD",
         "SINGKATAN",
+        "RECID_PRODMAST",
         "PTAG",
         "BEGBAL",
         "TRFIN",
@@ -818,89 +868,6 @@ class PenyesuaianService {
       return record;
     } catch (error) {
       logger.error(`[penyesuaian.service] Error getting record: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Create new record in database and sync to JSON
-   */
-  async createRecord(data) {
-    try {
-      const record = await SesuaiToko.create({
-        ...data,
-        RECID: data.RECID || "*",
-        UPDTIME: new Date(),
-      });
-
-      // Sync to JSON file after write operation
-      await this.syncToJsonFile();
-
-      return record;
-    } catch (error) {
-      logger.error(`[penyesuaian.service] Error creating record: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Update existing record in database and sync to JSON
-   */
-  async updateRecord(cabang, kdtk, periode, prdcd, data) {
-    try {
-      const [updated] = await SesuaiToko.update(
-        {
-          ...data,
-          UPDTIME: new Date(),
-        },
-        {
-          where: {
-            CABANG: cabang,
-            KDTK: kdtk,
-            PERIODE: periode,
-            PRDCD: prdcd,
-          },
-        }
-      );
-
-      if (updated === 0) {
-        throw new Error("Record not found");
-      }
-
-      // Sync to JSON file after write operation
-      await this.syncToJsonFile();
-
-      return this.getRecord(cabang, kdtk, periode, prdcd);
-    } catch (error) {
-      logger.error(`[penyesuaian.service] Error updating record: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Delete record from database and sync to JSON
-   */
-  async deleteRecord(cabang, kdtk, periode, prdcd) {
-    try {
-      const deleted = await SesuaiToko.destroy({
-        where: {
-          CABANG: cabang,
-          KDTK: kdtk,
-          PERIODE: periode,
-          PRDCD: prdcd,
-        },
-      });
-
-      if (deleted === 0) {
-        throw new Error("Record not found");
-      }
-
-      // Sync to JSON file after write operation
-      await this.syncToJsonFile();
-
-      return true;
-    } catch (error) {
-      logger.error(`[penyesuaian.service] Error deleting record: ${error.message}`);
       throw error;
     }
   }

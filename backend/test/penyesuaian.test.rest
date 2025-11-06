@@ -1,0 +1,406 @@
+###
+# Penyesuaian (Sesuai Toko) API Tests
+# Base URL: http://localhost:3000/api/penyesuaian
+# Note: This module only shows RECID='*' (unresolved) records
+###
+
+### Variables
+@baseUrl = http://localhost:3000/api
+@token = YOUR_JWT_TOKEN_HERE
+@cabang = G033
+@kdtk = TW75
+@periode = 2511
+@prdcd = 12345678
+
+###############################################
+# 1. AUTHENTICATION (Get Token First)
+###############################################
+
+### Login to get JWT token
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin2",
+  "password": "admin123"
+}
+
+###############################################
+# 2. SCREENING OPERATIONS (3 LEVELS)
+###############################################
+
+### LEVEL 1: Start screening for ALL cabang
+GET {{baseUrl}}/penyesuaian/screening?cabang=All&periode={{periode}}
+Authorization: Bearer {{token}}
+
+###
+
+### LEVEL 2: Start screening for specific cabang
+GET {{baseUrl}}/penyesuaian/screening?cabang={{cabang}}&periode={{periode}}
+Authorization: Bearer {{token}}
+
+###
+
+### LEVEL 3: Start screening for specific store (single store refresh)
+# This is used when user clicks refresh button on a specific row in UI
+GET {{baseUrl}}/penyesuaian/screening?kdtk={{kdtk}}&periode={{periode}}
+Authorization: Bearer {{token}}
+
+###
+
+### Screening without periode (should fail - validation test)
+GET {{baseUrl}}/penyesuaian/screening?cabang={{cabang}}
+Authorization: Bearer {{token}}
+
+###
+
+### Screening with invalid periode format (should fail)
+GET {{baseUrl}}/penyesuaian/screening?cabang={{cabang}}&periode=202511
+Authorization: Bearer {{token}}
+
+###
+
+### LEVEL 3: Screening specific store with different kdtk
+GET {{baseUrl}}/penyesuaian/screening?kdtk=T001&periode={{periode}}
+Authorization: Bearer {{token}}
+
+###############################################
+# 3. SUMMARY & STATISTICS
+###############################################
+
+### Get summary for specific cabang and periode (RECID='*' only)
+GET {{baseUrl}}/penyesuaian/summary?cabang={{cabang}}&periode={{periode}}
+Authorization: Bearer {{token}}
+
+###
+
+### Get summary for all cabang (RECID='*' only)
+GET {{baseUrl}}/penyesuaian/summary?cabang=All&periode={{periode}}
+Authorization: Bearer {{token}}
+
+###
+
+### Get summary without periode (should fail)
+GET {{baseUrl}}/penyesuaian/summary?cabang={{cabang}}
+Authorization: Bearer {{token}}
+
+###
+
+### Get summary for previous periode (for comparison)
+GET {{baseUrl}}/penyesuaian/summary?cabang={{cabang}}&periode=2510
+Authorization: Bearer {{token}}
+
+###############################################
+# 4. GET RECORDS (Paginated) - RECID='*' ONLY
+###############################################
+
+### Get records with pagination (default: page=1, limit=10)
+GET {{baseUrl}}/penyesuaian?periode={{periode}}&cabang={{cabang}}
+Authorization: Bearer {{token}}
+
+###
+
+### Get records - page 1, limit 20
+GET {{baseUrl}}/penyesuaian?page=1&limit=20&periode={{periode}}&cabang={{cabang}}
+Authorization: Bearer {{token}}
+
+###
+
+### Get records - filter by kdtk
+GET {{baseUrl}}/penyesuaian?periode={{periode}}&cabang={{cabang}}&kdtk={{kdtk}}
+Authorization: Bearer {{token}}
+
+###
+
+### Get records - with search query
+GET {{baseUrl}}/penyesuaian?periode={{periode}}&cabang={{cabang}}&searchQuery=pulsa
+Authorization: Bearer {{token}}
+
+###
+
+### Get records - sorted by SESUAI DESC (highest discrepancies first)
+GET {{baseUrl}}/penyesuaian?periode={{periode}}&cabang={{cabang}}&sortColumn=SESUAI&sortOrder=DESC
+Authorization: Bearer {{token}}
+
+###
+
+### Get records - sorted by KDTK ASC
+GET {{baseUrl}}/penyesuaian?periode={{periode}}&cabang={{cabang}}&sortColumn=KDTK&sortOrder=ASC
+Authorization: Bearer {{token}}
+
+###
+
+### Get records - sorted by UPDTIME DESC (most recent first)
+GET {{baseUrl}}/penyesuaian?periode={{periode}}&cabang={{cabang}}&sortColumn=UPDTIME&sortOrder=DESC
+Authorization: Bearer {{token}}
+
+###
+
+### Get records - multiple filters combined
+GET {{baseUrl}}/penyesuaian?page=1&limit=50&periode={{periode}}&cabang={{cabang}}&kdtk={{kdtk}}&searchQuery=simpati&sortColumn=SESUAI&sortOrder=DESC
+Authorization: Bearer {{token}}
+
+###
+
+### Get all records for a specific store (check all issues)
+GET {{baseUrl}}/penyesuaian?kdtk={{kdtk}}&periode={{periode}}&limit=100
+Authorization: Bearer {{token}}
+
+###############################################
+# 5. GET ALL RECORDS (No Pagination)
+###############################################
+
+### Get all records without pagination (RECID='*' only)
+GET {{baseUrl}}/penyesuaian/getData?periode={{periode}}&cabang={{cabang}}
+Authorization: Bearer {{token}}
+
+###
+
+### Get all records for all cabang
+GET {{baseUrl}}/penyesuaian/getData?periode={{periode}}&cabang=All
+Authorization: Bearer {{token}}
+
+###
+
+### Get all records for specific periode only
+GET {{baseUrl}}/penyesuaian/getData?periode={{periode}}
+Authorization: Bearer {{token}}
+
+###############################################
+# 6. GET SINGLE RECORD
+###############################################
+
+### Get single record by primary key
+GET {{baseUrl}}/penyesuaian/{{cabang}}/{{kdtk}}/{{periode}}/{{prdcd}}
+Authorization: Bearer {{token}}
+
+###
+
+### Get single record - not found test
+GET {{baseUrl}}/penyesuaian/G999/T999/9999/99999999
+Authorization: Bearer {{token}}
+
+###############################################
+# 7. ERROR HANDLING TESTS
+###############################################
+
+### Missing authentication token (should fail 401)
+GET {{baseUrl}}/penyesuaian?periode={{periode}}
+
+###
+
+### Invalid token (should fail 401)
+GET {{baseUrl}}/penyesuaian?periode={{periode}}
+Authorization: Bearer invalid_token_12345
+
+###
+
+### Invalid periode format (5 digits)
+GET {{baseUrl}}/penyesuaian/screening?cabang={{cabang}}&periode=25111
+Authorization: Bearer {{token}}
+
+###
+
+### Invalid periode format (alphabetic)
+GET {{baseUrl}}/penyesuaian/screening?cabang={{cabang}}&periode=ABCD
+Authorization: Bearer {{token}}
+
+###
+
+### Invalid page parameter
+GET {{baseUrl}}/penyesuaian?periode={{periode}}&page=abc
+Authorization: Bearer {{token}}
+
+###
+
+### Invalid limit parameter
+GET {{baseUrl}}/penyesuaian?periode={{periode}}&limit=-10
+Authorization: Bearer {{token}}
+
+###############################################
+# 8. PERFORMANCE TESTS
+###############################################
+
+### Large result set - test pagination
+GET {{baseUrl}}/penyesuaian?periode={{periode}}&limit=1000
+Authorization: Bearer {{token}}
+
+###
+
+### Get all data (no pagination) - test JSON cache
+GET {{baseUrl}}/penyesuaian/getData?cabang=All
+Authorization: Bearer {{token}}
+
+###
+
+### Multiple rapid requests - test TTL cache
+GET {{baseUrl}}/penyesuaian?periode={{periode}}&page=1
+Authorization: Bearer {{token}}
+
+###
+
+GET {{baseUrl}}/penyesuaian?periode={{periode}}&page=2
+Authorization: Bearer {{token}}
+
+###
+
+GET {{baseUrl}}/penyesuaian?periode={{periode}}&page=3
+Authorization: Bearer {{token}}
+
+###############################################
+# 9. WORKFLOW SIMULATION
+###############################################
+
+### WORKFLOW 1: Initial Screening Process
+# Step 1: Start screening for all cabang
+GET {{baseUrl}}/penyesuaian/screening?cabang=All&periode={{periode}}
+Authorization: Bearer {{token}}
+
+### Step 2: Check summary after screening
+GET {{baseUrl}}/penyesuaian/summary?cabang=All&periode={{periode}}
+Authorization: Bearer {{token}}
+
+### Step 3: Get records to review issues (sorted by highest SESUAI)
+GET {{baseUrl}}/penyesuaian?periode={{periode}}&sortColumn=SESUAI&sortOrder=DESC&limit=50
+Authorization: Bearer {{token}}
+
+###
+
+### WORKFLOW 2: Single Store Refresh (UI Button Click)
+# User sees data in table, clicks refresh button on specific row
+# Step 1: Refresh specific store
+GET {{baseUrl}}/penyesuaian/screening?kdtk={{kdtk}}&periode={{periode}}
+Authorization: Bearer {{token}}
+
+### Step 2: Verify updated data for that store
+GET {{baseUrl}}/penyesuaian?kdtk={{kdtk}}&periode={{periode}}
+Authorization: Bearer {{token}}
+
+###
+
+### WORKFLOW 3: Re-screening to Resolve Issues
+# After store fixes issues, re-run screening
+# Step 1: Re-run screening for same periode
+GET {{baseUrl}}/penyesuaian/screening?cabang={{cabang}}&periode={{periode}}
+Authorization: Bearer {{token}}
+
+### Step 2: Compare summary (resolved records moved to RECID='1', not shown)
+GET {{baseUrl}}/penyesuaian/summary?cabang={{cabang}}&periode={{periode}}
+Authorization: Bearer {{token}}
+
+### Step 3: Verify remaining issues (only RECID='*' shown)
+GET {{baseUrl}}/penyesuaian?periode={{periode}}&cabang={{cabang}}
+Authorization: Bearer {{token}}
+
+###
+
+### WORKFLOW 4: Store-by-Store Resolution
+# Process for handling multiple stores with issues
+# Step 1: Get list of stores with issues
+GET {{baseUrl}}/penyesuaian?periode={{periode}}&cabang={{cabang}}&limit=100
+Authorization: Bearer {{token}}
+
+### Step 2: Refresh first store
+GET {{baseUrl}}/penyesuaian/screening?kdtk=TW75&periode={{periode}}
+Authorization: Bearer {{token}}
+
+### Step 3: Refresh second store
+GET {{baseUrl}}/penyesuaian/screening?kdtk=T001&periode={{periode}}
+Authorization: Bearer {{token}}
+
+### Step 4: Check updated summary
+GET {{baseUrl}}/penyesuaian/summary?cabang={{cabang}}&periode={{periode}}
+Authorization: Bearer {{token}}
+
+###############################################
+# 10. COMPLEX SCENARIOS
+###############################################
+
+### Get records with highest positive discrepancies (SESUAI > 0)
+GET {{baseUrl}}/penyesuaian?periode={{periode}}&sortColumn=SESUAI&sortOrder=DESC&limit=20
+Authorization: Bearer {{token}}
+
+###
+
+### Get records with highest negative discrepancies (SESUAI < 0)
+GET {{baseUrl}}/penyesuaian?periode={{periode}}&sortColumn=SESUAI&sortOrder=ASC&limit=20
+Authorization: Bearer {{token}}
+
+###
+
+### Compare two different periodes
+# Current periode
+GET {{baseUrl}}/penyesuaian/summary?cabang={{cabang}}&periode=2511
+Authorization: Bearer {{token}}
+
+###
+
+# Previous periode
+GET {{baseUrl}}/penyesuaian/summary?cabang={{cabang}}&periode=2510
+Authorization: Bearer {{token}}
+
+###
+
+### Get all unresolved issues for specific store across time
+GET {{baseUrl}}/penyesuaian?kdtk={{kdtk}}&limit=200
+Authorization: Bearer {{token}}
+
+###
+
+### Search for specific product issues
+GET {{baseUrl}}/penyesuaian?periode={{periode}}&searchQuery=12345678
+Authorization: Bearer {{token}}
+
+###
+
+### Get stores with most issues (group by KDTK)
+GET {{baseUrl}}/penyesuaian/getData?periode={{periode}}&cabang={{cabang}}
+Authorization: Bearer {{token}}
+
+###############################################
+# 11. EDGE CASES
+###############################################
+
+### Screening with periode at year boundary (Dec to Jan)
+GET {{baseUrl}}/penyesuaian/screening?cabang={{cabang}}&periode=2501
+Authorization: Bearer {{token}}
+
+###
+
+### Get records for very old periode (data might not exist)
+GET {{baseUrl}}/penyesuaian?periode=2301
+Authorization: Bearer {{token}}
+
+###
+
+### Get records for future periode (should be empty)
+GET {{baseUrl}}/penyesuaian?periode=2612
+Authorization: Bearer {{token}}
+
+###
+
+### Screening non-existent store
+GET {{baseUrl}}/penyesuaian/screening?kdtk=XXXX&periode={{periode}}
+Authorization: Bearer {{token}}
+
+###
+
+### Get record with non-existent composite key
+GET {{baseUrl}}/penyesuaian/G999/XXXX/9999/99999999
+Authorization: Bearer {{token}}
+
+###############################################
+# 12. NOTES ON RECID BEHAVIOR
+###############################################
+
+# IMPORTANT NOTES:
+# 1. All GET endpoints only return records with RECID='*' (unresolved issues)
+# 2. Records with RECID='1' (resolved) are NOT shown in any endpoint
+# 3. RECID automatically changes from '*' to '1' during re-screening if issue is resolved
+# 4. Users cannot manually change RECID (no PUT/DELETE endpoints)
+# 5. Data is only inserted/updated through screening process
+# 6. UPDTIME is preserved when RECID changes from '*' to '1'
+
+###############################################
+# END OF TESTS
+###############################################

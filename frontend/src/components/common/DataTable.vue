@@ -1,6 +1,6 @@
 <template>
   <div class="data-table-container">
-    <!-- Filters - Always visible regardless of data state -->
+    <!-- Filters -->
     <div v-if="showFilters" class="filters-container">
       <div class="filters-header">
         <h3 class="filters-title">
@@ -26,7 +26,8 @@
         </div>
       </div>
     </div>
-    
+
+    <!-- Loading / Error / Empty States -->
     <div v-if="loading" class="loading-state">
       <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
       <p>{{ loadingMessage }}</p>
@@ -47,26 +48,34 @@
       <p class="help-text">{{ emptyHelpText }}</p>
     </div>
 
+    <!-- Table Section -->
     <div v-else>
-      <!-- Table -->
       <div class="table-container">
-        <div class="table-header">
-          <h3 class="table-title">{{ tableTitle }}</h3>
+        <div class="table-header elegant-header">
+          <div class="table-title-wrap">
+            <h3 class="table-title">
+              <i class="pi pi-database"></i>
+              <span>{{ tableTitle }}</span>
+            </h3>
+            <div class="table-subtitle">Data yang di tampilkan merupakan data yang perlu dicek</div>
+          </div>
           <div class="table-actions">
             <slot name="table-actions">
-              <button v-if="showExportButton" class="btn btn-export" @click.prevent="$emit('export')" title="Ekspor ke Excel">
-                <i class="pi pi-file-excel"></i> Ekspor Data
+              <button v-if="showExportButton" class="btn btn-export" @click.prevent="$emit('export')"
+                title="Ekspor ke Excel">
+                <i class="pi pi-file-excel"></i> Ekspor
               </button>
             </slot>
           </div>
         </div>
 
-        <div class="table-responsive">
+        <div class="table-responsive elegant-shadow">
           <table class="results-table">
             <thead>
               <tr>
                 <th v-if="showRowNumbers" class="text-center">No</th>
-                <slot name="table-header-sortable" :sort-column="sortColumn" :sort-order="sortOrder" :handle-sort="handleSort"></slot>
+                <slot name="table-header-sortable" :sort-column="sortColumn" :sort-order="sortOrder"
+                  :handle-sort="handleSort"></slot>
               </tr>
             </thead>
             <tbody>
@@ -82,7 +91,10 @@
       <!-- Pagination -->
       <div class="pagination-container" v-if="totalPages > 0 && showPagination">
         <div class="pagination-info">
-          <span class="records-info">Menampilkan {{ startIndex + 1 }}-{{ endIndex }} dari {{ filteredItems }} data <strong>(Halaman {{ currentPage }} dari {{ totalPages }})</strong></span>
+          <span class="records-info">
+            Menampilkan {{ startIndex + 1 }}-{{ endIndex }} dari {{ filteredItems }} data
+            <strong>(Halaman {{ currentPage }} dari {{ totalPages }})</strong>
+          </span>
         </div>
 
         <div class="pagination-controls">
@@ -90,8 +102,7 @@
             title="Halaman pertama">
             <i class="pi pi-angle-double-left"></i>
           </button>
-
-          <button @click.prevent="prevPage" :disabled="currentPage === 1" class="btn btn-nav" title="Halaman sebelumnya">
+          <button @click.prevent="prevPage" :disabled="currentPage === 1" class="btn btn-nav" title="Sebelumnya">
             <i class="pi pi-angle-left"></i>
           </button>
 
@@ -106,26 +117,26 @@
           </div>
 
           <button @click.prevent="nextPage" :disabled="currentPage === totalPages" class="btn btn-nav"
-            title="Halaman selanjutnya">
+            title="Berikutnya">
             <i class="pi pi-angle-right"></i>
           </button>
-
           <button @click.prevent="goToLastPage" :disabled="currentPage === totalPages" class="btn btn-nav"
-            title="Halaman terakhir">
+            title="Terakhir">
             <i class="pi pi-angle-double-right"></i>
           </button>
         </div>
 
         <div class="items-per-page">
           <label for="items-per-page-select">Per halaman:</label>
-          <select id="items-per-page-select" v-model="itemsPerPage" @change="handleItemsPerPageChange" class="items-select">
+          <select id="items-per-page-select" v-model="itemsPerPage" @change="handleItemsPerPageChange"
+            class="items-select">
             <option v-for="option in itemsPerPageOptions" :key="option" :value="option">{{ option }}</option>
           </select>
         </div>
       </div>
     </div>
-    
-    <!-- Actions - Always visible -->
+
+    <!-- Refresh Button -->
     <div v-if="showRefreshButton" class="actions-section">
       <button @click="handleRefreshClick" class="btn btn-refresh">
         <i class="pi pi-refresh"></i> Refresh Data
@@ -484,6 +495,82 @@ watch(() => props.filteredData, (newData) => {
 </script>
 
 <style scoped>
+/* tambahan gaya elegan */
+.table-header.elegant-header {
+  background: linear-gradient(135deg, #f9fafb, #f3f4f6);
+  border-bottom: 1px solid #e5e7eb;
+  border-radius: 8px 8px 0 0;
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.table-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.table-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #1f2937;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  letter-spacing: 0.3px;
+  transition: color 0.3s ease;
+}
+
+.table-title i {
+  color: #3b82f6;
+  font-size: 1.1rem;
+}
+
+.table-title:hover {
+  color: #2563eb;
+}
+
+.table-subtitle {
+  font-size: 0.75rem;
+  color: #6b7280;
+  font-weight: 400;
+}
+
+/* subtle glass shadow untuk container tabel */
+.elegant-shadow {
+  background-color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.04);
+  transition: box-shadow 0.3s ease;
+}
+
+.elegant-shadow:hover {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+}
+
+/* perhalus efek hover baris tabel */
+.results-table tr:hover {
+  background-color: #f9fafb !important;
+  transform: none;
+  box-shadow: none;
+}
+
+/* selaraskan warna border */
+.results-table {
+  border: 1px solid #e5e7eb;
+}
+
+/* sesuaikan tombol aksi tabel */
+.table-actions .btn {
+  border-radius: 8px;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+}
+
+
 .data-table-container {
   background-color: #fff;
   border-radius: 8px;
@@ -556,57 +643,6 @@ watch(() => props.filteredData, (newData) => {
 .sortable.sort-desc {
   background: linear-gradient(to bottom, #d3e5ff, #b8d7ff) !important;
   color: #0056b3;
-}
-
-/* Add extra space for sort icon */
-.results-table th.sortable.sort-asc:nth-child(2),
-.results-table th.sortable.sort-desc:nth-child(2) {
-  width: 128px; /* Cabang sorted */
-}
-
-.results-table th.sortable.sort-asc:nth-child(3),
-.results-table th.sortable.sort-desc:nth-child(3) {
-  width: 148px; /* Shop sorted */
-}
-
-.results-table th.sortable.sort-asc:nth-child(4),
-.results-table th.sortable.sort-desc:nth-child(4) {
-  width: 138px; /* Tanggal sorted */
-}
-
-.results-table th.sortable.sort-asc:nth-child(5),
-.results-table th.sortable.sort-desc:nth-child(5) {
-  width: 158px; /* Kode Produk sorted */
-}
-
-.results-table th.sortable.sort-asc:nth-child(7),
-.results-table th.sortable.sort-desc:nth-child(7) {
-  width: 138px; /* Cost sorted */
-}
-
-.results-table th.sortable.sort-asc:nth-child(8),
-.results-table th.sortable.sort-desc:nth-child(8) {
-  width: 138px; /* Price sorted */
-}
-
-.results-table th.sortable.sort-asc:nth-child(9),
-.results-table th.sortable.sort-desc:nth-child(9) {
-  width: 148px; /* Qty MSTRAN sorted */
-}
-
-.results-table th.sortable.sort-asc:nth-child(10),
-.results-table th.sortable.sort-desc:nth-child(10) {
-  width: 148px; /* Qty MTRAN sorted */
-}
-
-.results-table th.sortable.sort-asc:nth-child(11),
-.results-table th.sortable.sort-desc:nth-child(11) {
-  width: 158px; /* Selisih sorted */
-}
-
-.results-table th.sortable.sort-asc:nth-child(12),
-.results-table th.sortable.sort-desc:nth-child(12) {
-  width: 208px; /* Last Catch sorted */
 }
 
 .filters-header {
@@ -722,7 +758,6 @@ watch(() => props.filteredData, (newData) => {
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
   margin-bottom: 0;
   table-layout: auto;
-  min-width: 1400px;
 }
 
 .header-table, .body-table {

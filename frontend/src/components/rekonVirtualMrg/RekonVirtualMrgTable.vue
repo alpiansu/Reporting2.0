@@ -39,7 +39,7 @@
         <i v-if="sortColumn === 'TANGGAL'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
       <th class="sortable" :class="getSortClass('PRDCD', sortColumn, sortOrder)" @click="handleSort('PRDCD')">
-        Kode Produk
+        PRDCD
         <i v-if="sortColumn === 'PRDCD'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
       <th class="sortable" :class="getSortClass('SINGKATAN', sortColumn, sortOrder)" @click="handleSort('SINGKATAN')">

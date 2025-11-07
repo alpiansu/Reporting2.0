@@ -122,7 +122,7 @@
           </div>
         </div>
         <div class="note-editor" v-else>
-          <select v-model="item.editingNote.categoryId" class="note-category-select" @change="updateNoteCategory(item)">
+          <select v-model="item.editingNote.categoryId" class="note-category-select">
             <option value="">Select Category</option>
             <option v-for="category in noteCategories" :key="category.id" :value="category.id">
               {{ category.name }}
@@ -493,11 +493,6 @@ const startEditingNote = (item) => {
     noteText: item.note ? item.note.noteText : '',
     categoryId: item.note && item.note.categoryId ? item.note.categoryId : ''
   };
-};
-
-const updateNoteCategory = (item) => {
-  // This function is called when category is changed
-  // We could update the category name display here if needed
 };
 
 const saveNote = async (item) => {

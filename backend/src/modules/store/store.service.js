@@ -225,7 +225,18 @@ class StoreService {
 
       let filteredStores = this.stores.filter(store => store.branch === branchCode || store.cab === branchCode);
 
-      if (onlyInduk) {
+      if (options.storeCode) {
+        const storeCodes = Array.isArray(options.storeCode)
+          ? options.storeCode.map(code => code.trim().toUpperCase())
+          : [String(options.storeCode).trim().toUpperCase()];
+
+        filteredStores = filteredStores.filter(store => {
+          const code = (store.storeCode || store.kdtk || "").toUpperCase();
+          const isMatch = storeCodes.includes(code);
+          const isInduk = store.notes === "INDUK";
+          return isMatch && isInduk;
+        });
+      } else if (!options.storeCode && onlyInduk) {
         filteredStores = filteredStores.filter(store => store.notes === "INDUK");
       }
 

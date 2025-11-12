@@ -151,6 +151,7 @@
     :confirm-text="confirmDialogData.confirmText" @confirm="handlingConfirmation" />
 </template>
 
+<style src="./RekonVirtualMrgTable.css" scoped></style>
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useToastService } from '../../utils/toast';
@@ -158,7 +159,6 @@ import DataTable from '../common/DataTable.vue';
 import * as XLSX from 'xlsx';
 import { noteCategoriesService, rekonVirtualMrgService } from '../../services/index.js';
 import Button from 'primevue/button';
-import './RekonVirtualMrgTable.css';
 import ConfirmDialog from '../common/ConfirmDialog.vue';
 import { useAuthStore } from '../../stores';
 

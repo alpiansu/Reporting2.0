@@ -322,6 +322,7 @@
   </div>
 </template>
 
+<style src="./AdjustView.style.css" scoped></style>
 <script setup>
 import { ref, onBeforeUnmount, watch } from "vue";
 import { useToast } from "primevue/usetoast";
@@ -335,7 +336,6 @@ import progressService from "../../services/progress.service.js";
 import PageHeader from "../../components/PageHeader.vue";
 import DownloadButton from "../../components/common/DownloadButton.vue";
 import { exportAdjustmentHistory } from "./exportExcel.js";
-import "./AdjustView.style.css";
 import ProgressBar from "../../components/common/ProgressBar.vue";
 
 const toast = useToast();

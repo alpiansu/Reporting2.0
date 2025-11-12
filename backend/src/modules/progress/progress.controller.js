@@ -67,22 +67,28 @@ export const streamTaskProgress = async (req, res) => {
   const onStart = task => sendEvent("start", task);
   const onUpdate = task => sendEvent("update", task);
   const onComplete = task => {
-    sendEvent("complete", task);
-    // Auto-close connection when task completes
-    setTimeout(() => {
-      if (!res.writableEnded) {
-        res.end();
-      }
-    }, 2000);
+    if (task.id === taskId) {
+      sendEvent("complete", task);
+      setTimeout(() => {
+        if (!res.writableEnded) {
+          res.end();
+        }
+      }, 2000);
+    } else {
+      sendEvent("complete", task);
+    }
   };
   const onFail = task => {
-    sendEvent("fail", task);
-    // Auto-close connection when task fails
-    setTimeout(() => {
-      if (!res.writableEnded) {
-        res.end();
-      }
-    }, 2000);
+    if (task.id === taskId) {
+      sendEvent("fail", task);
+      setTimeout(() => {
+        if (!res.writableEnded) {
+          res.end();
+        }
+      }, 2000);
+    } else {
+      sendEvent("fail", task);
+    }
   };
   const onRemove = taskId => sendEvent("remove", { taskId });
 

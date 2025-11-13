@@ -238,8 +238,18 @@ export const updateNote = async (req, res) => {
     const { cabang, shop, tanggal, prdcd } = req.params;
     const { noteText, categoryId } = req.body;
     const pic = req.user?.username || "system";
+    const tableName = `saldovirtual`;
 
-    const result = await notesService.saveOrUpdateNote({ cabang, shop, tanggal, prdcd, noteText, categoryId, pic });
+    const result = await notesService.saveOrUpdateNote({
+      cabang,
+      shop,
+      tanggal,
+      prdcd,
+      noteText,
+      categoryId,
+      pic,
+      tableName,
+    });
 
     return apiResponse.success(res, result);
   } catch (error) {

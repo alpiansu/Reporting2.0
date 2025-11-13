@@ -80,13 +80,13 @@ class NotesService {
   /** Create or update a note */
   async upsert(payload) {
     // Validate required fields
-    if (!payload.unixKey || !payload.pic) {
-      throw new Error("unixKey, and pic are required");
+    if (!payload.unixKey || !payload.pic || !payload.tableName) {
+      throw new Error("unixKey, tableName, and pic are required");
     }
 
     // Check if note already exists
     let existing = await NotesModel.findOne({
-      where: { unixKey: payload.unixKey },
+      where: { unixKey: payload.unixKey, tableName: payload.tableName },
     });
 
     if (existing) {
@@ -100,7 +100,6 @@ class NotesService {
       // Create new note
       existing = await NotesModel.create({
         ...payload,
-        tableName: "saldovirtual", // Default table name for saldo virtual notes
       });
     }
 
@@ -126,7 +125,7 @@ class NotesService {
   }
 
   // core logic implementation for saving or updating note
-  async saveOrUpdateNote({ cabang, shop, tanggal, prdcd, noteText, categoryId, pic }) {
+  async saveOrUpdateNote({ cabang, shop, tanggal, prdcd, noteText, categoryId, pic, tableName }) {
     if (!noteText && categoryId === undefined) {
       throw new Error("Either noteText or categoryId must be provided");
     }
@@ -144,8 +143,8 @@ class NotesService {
       noteText: noteText || "",
       pic: pic || "system",
       categoryId: categoryId || null,
+      tableName: tableName,
     };
-
     // Upsert
     const note = await this.upsert(noteData);
 

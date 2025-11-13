@@ -772,14 +772,13 @@ class RekonVirtualService {
 
       // buat lookup map untuk kategori agar cepat
       const categoryMap = new Map(categories.map(c => [c.id, c]));
-
       // proses penggabungan data
       return data.map(item => {
         // bentuk unixKey dari saldo_virtual
         const unixKey = `${item.SHOP}${item.TANGGAL}${item.PRDCD}`;
 
         // ambil semua note yang terkait dengan unixKey ini
-        const note = notes.find(n => n.unixKey === unixKey);
+        const note = notes.find(n => n.unixKey === unixKey && n.tableName === `saldovirtual`);
         if (!note) return { ...item, note: null };
 
         const category = categoryMap.get(note.categoryId) || null;

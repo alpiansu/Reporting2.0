@@ -111,7 +111,7 @@ export default {
         
         PRODMAST prod USING(PRDCD) WHERE flagprod not like '%VIR=Y%'
         
-        ) AS cek_sesuai LEFT JOIN (SELECT PRDCD, SINGKATAN, RECID, PTAG FROM PRODMAST) prod USING (PRDCD) WHERE PRDCD NOT IN (20000459,20063701,20067408)
+        ) AS cek_sesuai LEFT JOIN (SELECT PRDCD, SINGKATAN, RECID, PTAG FROM PRODMAST) prod USING (PRDCD) WHERE PRDCD NOT IN (20000459,20063701,20067408) HAVING SESUAI != 0
     `,
   },
 
@@ -128,7 +128,7 @@ export default {
     // Maximum number of branches to process concurrently
     branchConcurrencyLimit: 3,
     // Timeout for individual store processing (milliseconds)
-    storeTimeoutMs: 10000, // 10 seconds
+    storeTimeoutMs: 90000, // 90 seconds
     // Timeout for individual query execution (milliseconds)
     queryTimeoutMs: 8000, // 8 seconds
   },

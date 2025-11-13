@@ -127,9 +127,9 @@ export const getAllRecords = async (req, res) => {
     };
 
     logger.info(
-      `Getting records: page=${page}, limit=${limit}, cabang=${cabang || "All"}, periode=${periode || "All"}, kdtk=${
-        kdtk || "All"
-      }`
+      `[penyesuaian controllers getAllRecords] Getting records: page=${page}, limit=${limit}, cabang=${
+        cabang || "All"
+      }, periode=${periode || "All"}, kdtk=${kdtk || "All"}`
     );
 
     const result = await penyesuaianService.getAllRecords(options);
@@ -157,6 +157,47 @@ export const getRecord = async (req, res) => {
     return apiResponse.success(res, result);
   } catch (error) {
     logger.error(`Error getting record: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+/**
+ * Get resume nilai per KDTK untuk periode tertentu (paginated)
+ * GET /api/penyesuaian/resume
+ * Query params:
+ *   - periode (wajib)
+ *   - cabang (opsional, default = All)
+ *   - page (opsional, default = 1)
+ *   - limit (opsional, default = 10)
+ *   - sortColumn (opsional, default = SESUAI)
+ *   - sortOrder (opsional, default = ASC)
+ */
+export const getResumeByKdtk = async (req, res) => {
+  try {
+    const { periode, cabang = "All", page = 1, limit = 10, sortColumn = "SESUAI", sortOrder = "ASC" } = req.query;
+
+    if (!periode) {
+      return apiResponse.badRequest(res, "Periode is required");
+    }
+
+    const cabParam = !cabang || cabang === "All" ? "All" : cabang;
+
+    logger.info(
+      `[penyesuaian.controller] Get resume by KDTK: cabang=${cabParam}, periode=${periode}, page=${page}, limit=${limit}, sort=${sortColumn} ${sortOrder}`
+    );
+
+    const result = await penyesuaianService.getResumeByKdtk({
+      cabang: cabParam,
+      periode,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      sortColumn,
+      sortOrder,
+    });
+
+    return apiResponse.success(res, result);
+  } catch (error) {
+    logger.error(`[penyesuaian.controller] Error getting resume by KDTK: ${error.message}`);
     return apiResponse.error(res, error.message);
   }
 };

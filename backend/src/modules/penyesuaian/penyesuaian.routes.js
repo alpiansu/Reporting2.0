@@ -19,6 +19,9 @@ router.get("/", penyesuaianController.getAllRecords);
 // Get all records without pagination and filters (RECID='*' only)
 router.get("/getData", penyesuaianController.getAll);
 
+// Get data resume per store (RECID='*' only) by periode and cabang
+router.get("/resumePerShop", penyesuaianController.getResumeByKdtk);
+
 // Get single record by primary key
 router.get("/:cabang/:kdtk/:periode/:prdcd", penyesuaianController.getRecord);
 

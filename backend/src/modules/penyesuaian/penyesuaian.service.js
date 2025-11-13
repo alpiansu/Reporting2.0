@@ -14,6 +14,7 @@ import RekapRemoteService from "../rekap_remote/rekap_remote.service.js";
 import noteCategoriesService from "../note_categories/noteCategories.service.js";
 import notesService from "../notes/notes.service.js";
 import progressService from "../progress/progress.service.js";
+import { isNumericString, toNumber, formatNumber } from "../../utils/numberUtils.js";
 
 // Path untuk file JSON penyesuaian
 const PENYESUAIAN_JSON_PATH = path.join(process.cwd(), "data/penyesuaian.json");
@@ -27,6 +28,10 @@ class PenyesuaianService {
     this.lastLoadTime = null;
     this.TTL = 60 * 60 * 1000; // 1 hour in milliseconds
     this.isLoading = false; // Prevent concurrent loading
+
+    // 🔥 New multi-key cache for records
+    this.cacheDetailData = new Map(); // key: JSON.stringify({periode,cabang,kdtk})
+    this.cacheTTL = 5 * 60 * 1000; // 5 minutes
   }
 
   /**
@@ -35,48 +40,23 @@ class PenyesuaianService {
    */
   async initialize() {
     try {
-      // Create directory if it doesn't exist
       const dir = path.dirname(PENYESUAIAN_JSON_PATH);
       await fs.mkdir(dir, { recursive: true });
 
       try {
-        // Try to read the file
         const data = await fs.readFile(PENYESUAIAN_JSON_PATH, "utf8");
-        const rawData = JSON.parse(data);
-
-        // Ensure numeric fields are numbers when loading from JSON
-        this.penyesuaianData = rawData.map(item => ({
-          ...item,
-          BEGBAL: Number(item.BEGBAL) || 0,
-          TRFIN: Number(item.TRFIN) || 0,
-          TRFOUT: Number(item.TRFOUT) || 0,
-          RP_SALES: Number(item.RP_SALES) || 0,
-          RP_RETUR_SALES: Number(item.RP_RETUR_SALES) || 0,
-          ADJ: Number(item.ADJ) || 0,
-          BA: Number(item.BA) || 0,
-          BS: Number(item.BS) || 0,
-          ACOST: Number(item.ACOST) || 0,
-          LCOST: Number(item.LCOST) || 0,
-          STOCK: Number(item.STOCK) || 0,
-          RP_STOCK: Number(item.RP_STOCK) || 0,
-          SESUAI: Number(item.SESUAI) || 0,
-        }));
-
-        logger.info(`Loaded ${this.penyesuaianData.length} penyesuaian records from JSON file`);
-      } catch (error) {
-        // If file doesn't exist or is invalid, create an empty file
-        if (error.code === "ENOENT" || error instanceof SyntaxError) {
+        this.penyesuaianData = JSON.parse(data);
+        logger.info(`Loaded ${this.penyesuaianData.length} penyesuaian records from JSON`);
+      } catch (err) {
+        if (err.code === "ENOENT") {
           this.penyesuaianData = [];
           await this.saveToFile();
-          logger.info("Created new penyesuaian.json file");
-        } else {
-          throw error;
-        }
+        } else throw err;
       }
 
       this.initialized = true;
     } catch (error) {
-      logger.error(`Failed to initialize penyesuaian service: ${error.message}`);
+      logger.error(`[penyesuaian.service] Failed to initialize: ${error.message}`);
       throw error;
     }
   }
@@ -91,6 +71,88 @@ class PenyesuaianService {
     } catch (error) {
       logger.error(`Failed to save penyesuaian to file: ${error.message}`);
       throw error;
+    }
+  }
+
+  /**
+   * Generate cache key based on periode, cabang, and kdtk
+   */
+  generateCacheKey(periode, cabang, kdtk) {
+    return JSON.stringify({ periode, cabang, kdtk });
+  }
+
+  /**
+   * Check if cache entry is still valid (based on lastAccessTime)
+   */
+  isCacheFromDbValid(entry) {
+    if (!entry) return false;
+    const now = Date.now();
+    return now - entry.lastAccessTime < this.cacheTTL;
+  }
+
+  /**
+   * Load data langsung dari database sesuai filter
+   * Jika kdtk ada → abaikan cabang, else filter by cabang
+   */
+  async loadRecordsDetailFromDb({ periode, cabang, kdtk }) {
+    const model = await SesuaiToko.getModel();
+    const sequelize = model.sequelize;
+    const { Sequelize } = await import("sequelize");
+
+    const whereClauses = [`PERIODE = :periode`, `RECID = '*'`, `ABS(SESUAI) > 1000 `];
+    const replacements = { periode };
+
+    if (kdtk) {
+      whereClauses.push(`KDTK = :kdtk`);
+      replacements.kdtk = kdtk;
+    } else if (cabang && cabang !== "All") {
+      whereClauses.push(`CABANG = :cabang`);
+      replacements.cabang = cabang;
+    }
+
+    const query = `
+    SELECT RECID_PRODMAST AS RECID, PRDCD, SINGKATAN, PTAG, 
+    CAST(SESUAI AS SIGNED) AS SESUAI,
+    CAST(BEGBAL AS SIGNED) AS BEGBAL,
+    CAST(TRFIN AS SIGNED) AS TRFIN,
+    CAST(TRFOUT AS SIGNED) AS TRFOUT,
+    CAST(RP_SALES AS SIGNED) AS RP_SALES,
+    CAST(RP_RETUR_SALES AS SIGNED) AS RP_RETUR_SALES,
+    CAST(ADJ AS SIGNED) AS ADJ,
+    CAST(BA AS SIGNED) AS BA,
+    CAST(BS AS SIGNED) AS BS,
+    CAST(ACOST AS SIGNED) AS ACOST,
+    CAST(LCOST AS SIGNED) AS LCOST,
+    CAST(STOCK AS SIGNED) AS STOCK,
+    CAST(RP_STOCK AS SIGNED) AS RP_STOCK
+    FROM sesuai_toko
+    WHERE ${whereClauses.join(" AND ")}
+    ORDER BY SESUAI DESC
+  `;
+
+    const records = await sequelize.query(query, {
+      replacements,
+      type: Sequelize.QueryTypes.SELECT,
+    });
+
+    logger.info(
+      `[penyesuaian.service] Loaded ${records.length} records from DB for periode=${periode}, cabang=${
+        cabang || "-"
+      }, kdtk=${kdtk || "-"}`
+    );
+    return records;
+  }
+
+  /**
+   * Optional: Cleanup expired cache entries
+   */
+  cleanupCache() {
+    const now = Date.now();
+    for (const [key, entry] of this.cacheDetailData.entries()) {
+      if (now - entry.lastAccessTime > this.cacheTTL) {
+        this.cacheDetailData.delete(key);
+        logger.debug(`[penyesuaian.service] Cache expired & removed for key=${key}`);
+      }
     }
   }
 
@@ -152,49 +214,41 @@ class PenyesuaianService {
   }
 
   /**
-   * Synchronize data from database to JSON file
-   * Call this after any write operation to keep JSON in sync
+   * 🔁 Sync data ke JSON file hanya berupa hasil agregasi SUM(SESUAI)
    */
   async syncToJsonFile() {
     try {
-      // Get all data from database
-      const dbData = await SesuaiToko.findAll();
+      const model = await SesuaiToko.getModel();
+      const sequelize = model.sequelize;
 
-      // Convert to plain objects and ensure numeric fields are numbers
-      this.penyesuaianData = dbData.map(item => {
-        const plainItem = item.get({ plain: true });
+      // Query agregasi langsung ke DB
+      const [rows] = await sequelize.query(`
+        SELECT 
+          CABANG,
+          KDTK,
+          PERIODE,
+          SUM(SESUAI) AS SESUAI,
+          MAX(UPDTIME) AS UPDTIME
+        FROM sesuai_toko
+        WHERE RECID='*'
+        GROUP BY CABANG, KDTK, PERIODE
+      `);
 
-        return {
-          ...plainItem,
-          BEGBAL: Number(plainItem.BEGBAL) || 0,
-          TRFIN: Number(plainItem.TRFIN) || 0,
-          TRFOUT: Number(plainItem.TRFOUT) || 0,
-          RP_SALES: Number(plainItem.RP_SALES) || 0,
-          RP_RETUR_SALES: Number(plainItem.RP_RETUR_SALES) || 0,
-          ADJ: Number(plainItem.ADJ) || 0,
-          BA: Number(plainItem.BA) || 0,
-          BS: Number(plainItem.BS) || 0,
-          ACOST: Number(plainItem.ACOST) || 0,
-          LCOST: Number(plainItem.LCOST) || 0,
-          STOCK: Number(plainItem.STOCK) || 0,
-          RP_STOCK: Number(plainItem.RP_STOCK) || 0,
-          SESUAI: Number(plainItem.SESUAI) || 0,
-        };
-      });
+      this.penyesuaianData = rows.map(r => ({
+        CABANG: r.CABANG,
+        KDTK: r.KDTK,
+        PERIODE: r.PERIODE,
+        SESUAI: Number(r.SESUAI) || 0,
+        UPDTIME: r.UPDTIME,
+      }));
 
-      // Save to file
       await this.saveToFile();
-
-      // Update cache timestamp since we just loaded fresh data
       this.lastLoadTime = Date.now();
       this.initialized = true;
 
-      logger.info(`Synchronized ${this.penyesuaianData.length} penyesuaian records to JSON file`);
-      logger.info(`Cache refreshed. TTL expires at: ${new Date(this.lastLoadTime + this.TTL).toISOString()}`);
-
-      return this.penyesuaianData.length;
+      logger.info(`[penyesuaian.service] Synced ${this.penyesuaianData.length} aggregated records to JSON`);
     } catch (error) {
-      logger.error(`Failed to synchronize penyesuaian data: ${error.message}`);
+      logger.error(`[penyesuaian.service] Failed to sync aggregated data: ${error.message}`);
       throw error;
     }
   }
@@ -227,11 +281,11 @@ class PenyesuaianService {
    * @param {string} strPeriode - Period in YYMM format
    * @param {string} strYear - Year in YYYY format
    * @param {string} strMonth - Month in MM format
-   * @returns {Promise<Object>} Result with success status and records
+   * @returns {Promise<Object>} Result with success status, records, and hasIssue flag
    */
   async processSingleStore(store, strPeriode, strYear, strMonth) {
     const { storeCode, cab } = store;
-    const results = { success: false, records: [], activeKeys: new Set() };
+    const results = { success: false, records: [], hasIssue: false };
 
     try {
       // --- Store info --- //
@@ -312,6 +366,7 @@ class PenyesuaianService {
             // Bulk create/update records to database
             await SesuaiToko.bulkCreate(normalizedRecords, {
               updateOnDuplicate: [
+                "RECID",
                 "SINGKATAN",
                 "RECID_PRODMAST",
                 "PTAG",
@@ -332,16 +387,13 @@ class PenyesuaianService {
               ],
             });
 
-            // Collect records and active keys
             results.records = normalizedRecords;
-            normalizedRecords.forEach(record => {
-              results.activeKeys.add(`${record.KDTK}-${record.PRDCD}`);
-            });
-
+            results.hasIssue = true; // Store has issues
             results.success = true;
           }
         } else {
           results.success = true; // Below threshold is still success
+          results.hasIssue = false; // No issues
         }
       } finally {
         await storeConnection.end();
@@ -383,10 +435,14 @@ class PenyesuaianService {
         // Save logs to database
         await RekapRemoteService.saveLogsToDatabase();
 
-        // Update resolved records if any
-        if (result.activeKeys.size > 0) {
-          await this.updateResolvedRecords(storeCab, strPeriode, Array.from(result.activeKeys));
-        }
+        // Update resolved records for this specific store
+        // Level 3: Update all records of this store that are not in current screening result
+        await this.updateResolvedRecords({
+          periode: strPeriode,
+          level: 3,
+          kdtk: kdtk,
+          hasIssue: result.hasIssue,
+        });
 
         // Sync to JSON file
         await this.syncToJsonFile();
@@ -432,7 +488,6 @@ class PenyesuaianService {
           limitBranches(async () => {
             const stores = await storeService.getStoresByBranch(cab, true);
             logger.info(`[penyesuaian.service] Found ${stores.length} stores for branch ${cab}`);
-
             // tambahkan info cabang ke tiap store
             return stores.map(s => ({ ...s, cab }));
           })
@@ -480,9 +535,10 @@ class PenyesuaianService {
       const strYear = moment(periode, "YYMM").format("YYYY");
       const strMonth = moment(periode, "YYMM").format("MM");
 
-      // Temporary array to collect new records and active keys
+      // Track stores: screened vs active (has issues)
       const newRecords = [];
-      const activeKeys = new Set(); // Set to store KDTK-PRDCD combinations that still have issues
+      const screenedStores = new Set(); // All stores that were processed (success or error)
+      const activeStores = new Set(); // Stores that still have issues
 
       let processedCount = 0;
       const totalStores = storesToProcess.length;
@@ -502,6 +558,9 @@ class PenyesuaianService {
           limitStores(async () => {
             const { cab, storeCode } = store;
 
+            // Always mark as screened (even if error/timeout)
+            screenedStores.add(storeCode);
+
             try {
               const result = await withTimeout(
                 this.processSingleStore(store, strPeriode, strYear, strMonth),
@@ -510,12 +569,15 @@ class PenyesuaianService {
               );
 
               if (result.success) {
-                if (result.records.length > 0) {
+                // logger.info(`[penyesuaian.service] value result: ${JSON.stringify(result)}`);
+                if (result.hasIssue) {
+                  // Store has issues
+                  activeStores.add(storeCode);
                   newRecords.push(...result.records);
-                  result.activeKeys.forEach(key => activeKeys.add(key));
                   await incrementProgress(storeCode, `Success ✅ (${result.records.length} rows)`);
                 } else {
-                  await incrementProgress(storeCode, "Below threshold ✓");
+                  // Store below threshold (no issues)
+                  await incrementProgress(storeCode, "Masih Dibawah Nilai Toleransi ✓");
                 }
               } else {
                 await incrementProgress(storeCode, "Error ❌");
@@ -529,6 +591,9 @@ class PenyesuaianService {
       );
 
       logger.info(`[penyesuaian.service] Screening process completed for periode ${periode}`);
+      logger.info(
+        `[penyesuaian.service] Screened stores: ${screenedStores.size}, Active stores (has issues): ${activeStores.size}`
+      );
 
       //update status to progress service
       await progressService.updateProgress(taskId, processedCount, {
@@ -536,10 +601,15 @@ class PenyesuaianService {
         status: "finalizing",
       });
 
-      // Update resolved records (records that no longer meet the threshold)
-      if (activeKeys.size > 0) {
-        await this.updateResolvedRecords(cabang, strPeriode, Array.from(activeKeys));
-      }
+      // Update resolved records
+      // Level 1 or 2: Update stores that were screened but no longer have issues
+      await this.updateResolvedRecords({
+        periode: strPeriode,
+        level: cabang === "All" || cabang === "ALL" ? 1 : 2,
+        cabang: cabang === "All" || cabang === "ALL" ? null : cabang,
+        screenedStores: Array.from(screenedStores),
+        activeStores: Array.from(activeStores),
+      });
 
       //update status to progress service
       await progressService.updateProgress(taskId, processedCount, {
@@ -557,10 +627,8 @@ class PenyesuaianService {
       });
 
       // Sync database to JSON file after write operations
-      if (newRecords.length > 0 || activeKeys.size > 0) {
-        await this.syncToJsonFile();
-        logger.info(`Synchronized ${newRecords.length} new records from database to JSON file`);
-      }
+      await this.syncToJsonFile();
+      logger.info(`Synchronized ${newRecords.length} new records from database to JSON file`);
 
       const timeCompleted = moment().format("YYYY-MM-DD HH:mm:ss");
       await progressService.completeProgress(taskId, {
@@ -573,7 +641,9 @@ class PenyesuaianService {
         success: true,
         message: "Screening process completed",
         processedRecords: newRecords.length,
-        resolvedRecords: activeKeys.size,
+        screenedStores: screenedStores.size,
+        activeStores: activeStores.size,
+        resolvedStores: screenedStores.size - activeStores.size,
       };
     } catch (error) {
       logger.error(`[penyesuaian.service] Error during screening: ${error.message}`);
@@ -590,45 +660,114 @@ class PenyesuaianService {
   /**
    * Update RECID to '1' for records that no longer meet the threshold
    * IMPORTANT: Only update records with RECID='*' to preserve UPDTIME
-   * @param {string} cabang - Branch code or 'All'
-   * @param {string} periode - Period in YYMM format
-   * @param {Array<string>} activeKeys - Array of KDTK-PRDCD combinations that still have issues
+   *
+   * @param {Object} params - Update parameters
+   * @param {string} params.periode - Period in YYMM format
+   * @param {number} params.level - Screening level (1=All cabang, 2=1 cabang, 3=1 toko)
+   * @param {string} [params.cabang] - Branch code (for level 2)
+   * @param {string} [params.kdtk] - Store code (for level 3)
+   * @param {boolean} [params.hasIssue] - Does the store have issues? (for level 3)
+   * @param {Array<string>} [params.screenedStores] - Stores that were screened (for level 1 & 2)
+   * @param {Array<string>} [params.activeStores] - Stores that still have issues (for level 1 & 2)
    */
-  async updateResolvedRecords(cabang, periode, activeKeys) {
+  async updateResolvedRecords(params) {
+    const { periode, level, cabang, kdtk, hasIssue, screenedStores, activeStores } = params;
+
     try {
       // Get the database instance
       const model = await SesuaiToko.getModel();
       const sequelize = model.sequelize;
       const { Sequelize } = await import("sequelize");
 
-      // Build the query - CRITICAL: Include RECID='*' condition
-      let query = `
-        UPDATE sesuai_toko 
-        SET RECID = '1' 
-        WHERE PERIODE = :periode 
-          AND RECID = '*'
-      `;
+      let query = "";
+      let replacements = { periode };
 
-      const replacements = { periode };
+      // LEVEL 3: Single Store
+      if (level === 3) {
+        if (hasIssue) {
+          // Store has issues: Don't update anything
+          logger.info(`[penyesuaian.service] Level 3: Store ${kdtk} has issues, no RECID update needed`);
+          return 0;
+        } else {
+          // Store has no issues: Update all its records to RECID='1'
+          query = `
+            UPDATE sesuai_toko 
+            SET RECID = '1' 
+            WHERE PERIODE = :periode 
+              AND KDTK = :kdtk
+              AND RECID = '*'
+          `;
+          replacements.kdtk = kdtk;
 
-      if (cabang !== "All" && cabang !== "ALL") {
-        query += ` AND CABANG = :cabang`;
+          logger.info(`[penyesuaian.service] Level 3: Updating RECID='1' for store ${kdtk} (no issues)`);
+        }
+      }
+      // LEVEL 2: Single Branch
+      else if (level === 2) {
+        if (!screenedStores || screenedStores.length === 0) {
+          logger.info(`[penyesuaian.service] Level 2: No stores were screened, skipping update`);
+          return 0;
+        }
+
+        query = `
+          UPDATE sesuai_toko 
+          SET RECID = '1' 
+          WHERE PERIODE = :periode 
+            AND CABANG = :cabang
+            AND RECID = '*'
+            AND KDTK IN (:screenedStores)
+        `;
         replacements.cabang = cabang;
+        replacements.screenedStores = screenedStores;
+
+        // Exclude active stores (that still have issues)
+        if (activeStores && activeStores.length > 0) {
+          query += ` AND KDTK NOT IN (:activeStores)`;
+          replacements.activeStores = activeStores;
+        }
+
+        logger.info(
+          `[penyesuaian.service] Level 2: Updating RECID='1' for cabang ${cabang}, screened: ${
+            screenedStores.length
+          }, active: ${activeStores?.length || 0}`
+        );
+      }
+      // LEVEL 1: All Branches
+      else if (level === 1) {
+        if (!screenedStores || screenedStores.length === 0) {
+          logger.info(`[penyesuaian.service] Level 1: No stores were screened, skipping update`);
+          return 0;
+        }
+
+        query = `
+          UPDATE sesuai_toko 
+          SET RECID = '1' 
+          WHERE PERIODE = :periode 
+            AND RECID = '*'
+            AND KDTK IN (:screenedStores)
+        `;
+        replacements.screenedStores = screenedStores;
+
+        // Exclude active stores (that still have issues)
+        if (activeStores && activeStores.length > 0) {
+          query += ` AND KDTK NOT IN (:activeStores)`;
+          replacements.activeStores = activeStores;
+        }
+
+        logger.info(
+          `[penyesuaian.service] Level 1: Updating RECID='1' for all cabang, screened: ${
+            screenedStores.length
+          }, active: ${activeStores?.length || 0}`
+        );
       }
 
-      if (activeKeys.length > 0) {
-        query += ` AND CONCAT(KDTK, '-', PRDCD) NOT IN (:activeKeys)`;
-        replacements.activeKeys = activeKeys;
-      }
-
+      // Execute query
       const [results, metadata] = await sequelize.query(query, {
         replacements,
         type: Sequelize.QueryTypes.UPDATE,
       });
 
-      logger.info(
-        `[penyesuaian.service] Updated ${metadata} records to RECID='1' for periode ${periode}, cabang ${cabang}`
-      );
+      logger.info(`[penyesuaian.service] Updated ${metadata} records to RECID='1'`);
 
       return metadata;
     } catch (error) {
@@ -708,6 +847,79 @@ class PenyesuaianService {
   }
 
   /**
+   * Ambil resume nilai per KDTK dari file JSON (tanpa query DB)
+   */
+  async getResumeByKdtk(options = {}) {
+    const { cabang = "All", periode, page = 1, limit = 10, sortColumn = "KDTK", sortOrder = "ASC" } = options;
+
+    if (!periode) throw new Error("Periode wajib diisi");
+
+    try {
+      await this.ensureDataLoaded();
+      await storeService.ensureInitialized();
+
+      let filtered = this.penyesuaianData.filter(
+        i => i.PERIODE === periode && (cabang === "All" || i.CABANG === cabang)
+      );
+
+      // Ambil nama toko dari storeService
+      const results = [];
+      for (const item of filtered) {
+        let storeName = "-";
+        try {
+          const storeInfo = await storeService.getStoreByCode(item.KDTK);
+          if (storeInfo?.storeName) storeName = storeInfo.storeName;
+        } catch {
+          logger.warn(`[penyesuaian.service] Nama toko tidak ditemukan untuk ${item.KDTK}`);
+        }
+        results.push({
+          CABANG: item.CABANG,
+          PERIODE: item.PERIODE,
+          KDTK: item.KDTK,
+          NAMA: storeName,
+          SESUAI: Number(item.SESUAI.toFixed(2)),
+          UPDTIME: item.UPDTIME,
+        });
+      }
+
+      // Sorting
+      const allowedSortColumns = ["CABANG", "KDTK", "SESUAI", "UPDTIME"];
+      const col = allowedSortColumns.includes(sortColumn) ? sortColumn : "KDTK";
+      const order = sortOrder?.toUpperCase() === "DESC" ? "DESC" : "ASC";
+
+      results.sort((a, b) => {
+        let av = a[col],
+          bv = b[col];
+        if (col === "UPDTIME") {
+          av = av ? new Date(av).getTime() : 0;
+          bv = bv ? new Date(bv).getTime() : 0;
+        }
+        if (typeof av === "number" || !isNaN(Number(av))) {
+          av = Number(av);
+          bv = Number(bv);
+        }
+        return order === "ASC" ? (av > bv ? 1 : av < bv ? -1 : 0) : av < bv ? 1 : av > bv ? -1 : 0;
+      });
+
+      // Pagination
+      const totalRecords = results.length;
+      const start = (page - 1) * limit;
+      const paginated = results.slice(start, start + limit);
+
+      return {
+        data: paginated,
+        total: totalRecords,
+        page,
+        limit,
+        totalPages: Math.ceil(totalRecords / limit),
+      };
+    } catch (error) {
+      logger.error(`[penyesuaian.service] Error getResumeByKdtk: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * Get all records without pagination and filtering from JSON file
    * Only return RECID='*' records
    * @param {Object} options - Query options
@@ -738,10 +950,8 @@ class PenyesuaianService {
   }
 
   /**
-   * Get all records with pagination and filtering from JSON file
-   * Only return RECID='*' records
-   * @param {Object} options - Query options
-   * @returns {Promise<Object>} Paginated results
+   * Get all records (with cache, search, sort, and pagination in-memory)
+   * Includes cache cleanup and robust error handling
    */
   async getAllRecords(options = {}) {
     const {
@@ -751,35 +961,52 @@ class PenyesuaianService {
       cabang,
       periode,
       searchQuery,
-      sortColumn = "UPDTIME",
+      sortColumn = "SESUAI", // default: urutkan berdasarkan SESUAI
       sortOrder = "DESC",
     } = options;
 
     try {
-      // Ensure data is loaded from JSON file
-      await this.ensureDataLoaded();
+      // 🧩 Validasi input
+      if (!periode) throw new Error("Periode wajib diisi");
 
-      // Build filter function (includes RECID='*' filter)
-      const filterFn = this.buildFilterFunction({ cabang, periode, kdtk });
+      // 🧹 Bersihkan cache lama dulu
+      this.cleanupCache();
 
-      // Filter data
-      let filteredData = this.penyesuaianData.filter(filterFn);
+      const key = this.generateCacheKey(periode, cabang, kdtk);
+      const now = Date.now();
 
-      // Apply search query if provided
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        filteredData = filteredData.filter(item => {
-          return (
-            (item.KDTK && item.KDTK.toLowerCase().includes(query)) ||
-            (item.CABANG && item.CABANG.toLowerCase().includes(query)) ||
-            (item.PRDCD && item.PRDCD.toLowerCase().includes(query)) ||
-            (item.SINGKATAN && item.SINGKATAN.toLowerCase().includes(query)) ||
-            (item.PERIODE && item.PERIODE.toLowerCase().includes(query))
-          );
-        });
+      let cacheEntry = this.cacheDetailData.get(key);
+
+      // 🔄 Cek apakah cache masih valid
+      if (!cacheEntry || !this.isCacheValid(cacheEntry)) {
+        const freshData = await this.loadRecordsDetailFromDb({ periode, cabang, kdtk });
+        cacheEntry = {
+          data: freshData,
+          lastFetchTime: now,
+          lastAccessTime: now,
+        };
+        this.cacheDetailData.set(key, cacheEntry);
+        logger.info(`[penyesuaian.service] Cache refreshed for key=${key}`);
+      } else {
+        // ⏳ Perpanjang TTL (karena ada aktivitas)
+        cacheEntry.lastAccessTime = now;
+        this.cacheDetailData.set(key, cacheEntry);
+        logger.debug(`[penyesuaian.service] Cache hit for key=${key}`);
       }
 
-      // Sort data
+      let filteredData = [...cacheEntry.data];
+
+      // 🔍 Search (optional)
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        filteredData = filteredData.filter(item =>
+          ["PRDCD", "SINGKATAN", "SESUAI"].some(
+            field => item[field] && item[field].toString().toLowerCase().includes(q)
+          )
+        );
+      }
+
+      // 📊 Sorting (numeric-aware)
       const allowedSortColumns = [
         "RECID",
         "CABANG",
@@ -804,49 +1031,54 @@ class PenyesuaianService {
         "SESUAI",
         "UPDTIME",
       ];
-      const sanitizedSortColumn = allowedSortColumns.includes(sortColumn) ? sortColumn : "UPDTIME";
-      const sanitizedSortOrder = sortOrder && sortOrder.toUpperCase() === "ASC" ? "ASC" : "DESC";
+
+      const col = allowedSortColumns.includes(sortColumn) ? sortColumn : "UPDTIME";
+      const order = sortOrder?.toUpperCase() === "ASC" ? "ASC" : "DESC";
 
       filteredData.sort((a, b) => {
-        let aVal = a[sanitizedSortColumn];
-        let bVal = b[sanitizedSortColumn];
+        let av = a[col];
+        let bv = b[col];
 
-        // Handle dates
-        if (sanitizedSortColumn === "UPDTIME") {
-          aVal = aVal ? new Date(aVal).getTime() : 0;
-          bVal = bVal ? new Date(bVal).getTime() : 0;
-        }
-
-        // Handle numbers
-        if (typeof aVal === "number" || !isNaN(Number(aVal))) {
-          aVal = Number(aVal) || 0;
-          bVal = Number(bVal) || 0;
-        }
-
-        if (sanitizedSortOrder === "ASC") {
-          return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+        if (col === "UPDTIME") {
+          av = av ? new Date(av).getTime() : 0;
+          bv = bv ? new Date(bv).getTime() : 0;
+        } else if (isNumericString(av) && isNumericString(bv)) {
+          av = toNumber(av);
+          bv = toNumber(bv);
         } else {
-          return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+          av = (av || "").toString();
+          bv = (bv || "").toString();
         }
+
+        if (av === bv) return 0;
+        return order === "ASC" ? (av > bv ? 1 : -1) : av < bv ? 1 : -1;
       });
 
-      // Pagination
+      // 📄 Pagination
       const totalRecords = filteredData.length;
-      const startIndex = (parseInt(page) - 1) * parseInt(limit);
-      const endIndex = startIndex + parseInt(limit);
-      const paginatedData = filteredData.slice(startIndex, endIndex);
+      const start = (page - 1) * limit;
+      const paginated = filteredData.slice(start, start + limit);
 
-      const enrichedData = await this.enrichWithNotes(paginatedData);
+      // 🔢 Format numbering di tahap akhir (tanpa ubah logic sorting)
+      const formattedData = paginated.map(row => {
+        const formattedRow = {};
+        for (const [key, value] of Object.entries(row)) {
+          formattedRow[key] = isNumericString(value) ? formatNumber(value) : value;
+        }
+        return formattedRow;
+      });
 
+      // 🚀 Return hasil akhir
       return {
-        data: enrichedData,
+        data: formattedData,
         total: totalRecords,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        totalPages: Math.ceil(totalRecords / parseInt(limit)),
+        page: Number(page),
+        limit: Number(limit),
+        totalPages: Math.ceil(totalRecords / limit),
+        fromCache: true,
       };
     } catch (error) {
-      logger.error(`[penyesuaian.service] Error getting records: ${error.message}`);
+      logger.error(`[penyesuaian.service] Error in getAllRecords: ${error.message}`);
       throw error;
     }
   }

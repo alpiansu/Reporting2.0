@@ -348,7 +348,7 @@ onUnmounted(() => {
 
 /* Modal Body */
 .modal-body {
-    padding: 2rem;
+    padding: 1rem;
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
@@ -381,8 +381,8 @@ onUnmounted(() => {
 .detail-header {
     background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
     border-radius: 18px;
-    padding: 1.5rem 2rem;
-    margin-bottom: 2rem;
+    padding: 1px 1rem;
+    margin-bottom: 0.5rem;
     border: 1px solid #e5e7eb;
     box-shadow:
         0 8px 20px rgba(0, 0, 0, 0.05),

@@ -2547,6 +2547,68 @@
   gap: 0.5rem;
 }
 
+.datatable-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.375rem 0.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+.datatable-search-input {
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 0.375rem 0.5rem;
+  min-width: 220px;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.datatable-search-input::placeholder {
+  color: #94a3b8;
+}
+
+.search-icon {
+  color: #64748b;
+  font-size: 1rem;
+}
+
+.clear-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  background: #f9fafb;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+  padding: 0.375rem 0.625rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.clear-filter-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  color: #0ea5e9;
+}
+
+.clear-filter-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 576px) {
+  .datatable-search-input {
+    min-width: 140px;
+  }
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .datatable-header {

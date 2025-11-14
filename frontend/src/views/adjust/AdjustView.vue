@@ -217,6 +217,14 @@
               Adjustment History
             </h4>
             <div class="datatable-actions">
+              <div class="datatable-search">
+                <i class="pi pi-search search-icon"></i>
+                <input class="datatable-search-input" type="text" v-model="filters['global'].value" placeholder="Cari data..." />
+                <button class="clear-filter-btn" @click="clearFilters" :disabled="isProcessing">
+                  <i class="pi pi-filter-slash"></i>
+                  <span>Clear</span>
+                </button>
+              </div>
               <button class="export-btn" @click="exportToExcel"
                 :disabled="!processResults?.historyRecords || processResults.historyRecords.length === 0"
                 title="Export to Excel">
@@ -227,6 +235,8 @@
           </div>
 
           <DataTable :value="processResults?.historyRecords || []" :paginator="true" :rows="10"
+            v-model:filters="filters"
+            :globalFilterFields="['kdtk','prdcd','qty_adj','keter','status','note','updtime','pic']"
             :rowsPerPageOptions="[10, 25, 50, 100]"
             paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
             currentPageReportTemplate="Showing {first} to {last} of {totalRecords} entries" class="modern-datatable"
@@ -237,7 +247,7 @@
               </template>
             </Column>
 
-            <Column field="kdtk" header="Store" class="col-store">
+            <Column field="kdtk" header="Store" class="col-store" sortable>
               <template #body="{ data }">
                 <div class="store-cell">
                   <span class="store-code">{{ data.kdtk }}</span>
@@ -245,7 +255,7 @@
               </template>
             </Column>
 
-            <Column field="prdcd" header="Product" class="col-product">
+            <Column field="prdcd" header="Product" class="col-product" sortable>
               <template #body="{ data }">
                 <div class="product-cell">
                   <span class="product-code">{{ data.prdcd }}</span>
@@ -253,7 +263,7 @@
               </template>
             </Column>
 
-            <Column field="qty_adj" header="Qty" class="col-qty">
+            <Column field="qty_adj" header="Qty" class="col-qty" sortable>
               <template #body="{ data }">
                 <div class="qty-cell">
                   <Tag :severity="getQtySeverity(data.qty_adj)" :icon="getQtyIcon(data.qty_adj)" class="qty-tag">
@@ -263,7 +273,7 @@
               </template>
             </Column>
 
-            <Column field="keter" header="Description" class="col-description">
+            <Column field="keter" header="Description" class="col-description" sortable>
               <template #body="{ data }">
                 <div class="description-cell" :title="data.keter">
                   <span class="description-text">{{ truncateText(data.keter, 35) }}</span>
@@ -271,7 +281,7 @@
               </template>
             </Column>
 
-            <Column field="status" header="Status" class="col-status">
+            <Column field="status" header="Status" class="col-status" sortable>
               <template #body="{ data }">
                 <div class="status-cell">
                   <Tag :severity="data.status === 'SUCCESS' ? 'success' : 'danger'"
@@ -282,7 +292,7 @@
               </template>
             </Column>
 
-            <Column field="note" header="Note" class="col-note">
+            <Column field="note" header="Note" class="col-note" sortable>
               <template #body="{ data }">
                 <div class="note-cell" :title="data.note">
                   <span class="note-text">{{ truncateText(data.note, 30) }}</span>
@@ -290,7 +300,7 @@
               </template>
             </Column>
 
-            <Column field="updtime" header="Time" class="col-time">
+            <Column field="updtime" header="Time" class="col-time" sortable>
               <template #body="{ data }">
                 <div class="time-cell">
                   <div class="time-content">
@@ -301,7 +311,7 @@
               </template>
             </Column>
 
-            <Column field="pic" header="PIC" class="col-pic">
+            <Column field="pic" header="PIC" class="col-pic" sortable>
               <template #body="{ data }">
                 <div class="pic-cell">
                   <span class="pic-code">{{ data.pic || '-' }}</span>
@@ -352,6 +362,17 @@ const processResults = ref(null);
 const showFormatDetails = ref(false);
 const isDragOver = ref(false);
 const fileInput = ref(null);
+const filters = ref({
+  global: { value: null, matchMode: 'contains' },
+  kdtk: { value: null, matchMode: 'contains' },
+  prdcd: { value: null, matchMode: 'contains' },
+  qty_adj: { value: null, matchMode: 'equals' },
+  keter: { value: null, matchMode: 'contains' },
+  status: { value: null, matchMode: 'contains' },
+  note: { value: null, matchMode: 'contains' },
+  updtime: { value: null, matchMode: 'contains' },
+  pic: { value: null, matchMode: 'contains' }
+});
 const progress = ref({
   percentage: 0,
   info: "",
@@ -642,6 +663,20 @@ const handleFileDrop = (event) => {
     const file = files[0];
     validateAndSetFile(file);
   }
+};
+
+const clearFilters = () => {
+  filters.value = {
+    global: { value: null, matchMode: 'contains' },
+    kdtk: { value: null, matchMode: 'contains' },
+    prdcd: { value: null, matchMode: 'contains' },
+    qty_adj: { value: null, matchMode: 'equals' },
+    keter: { value: null, matchMode: 'contains' },
+    status: { value: null, matchMode: 'contains' },
+    note: { value: null, matchMode: 'contains' },
+    updtime: { value: null, matchMode: 'contains' },
+    pic: { value: null, matchMode: 'contains' }
+  };
 };
 
 const validateAndSetFile = (file) => {

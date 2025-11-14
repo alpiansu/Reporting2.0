@@ -1104,8 +1104,29 @@ watch(() => props.filteredData, (newData) => {
     max-height: 60vh;
   }
   
-  .results-table {
-    min-width: 1200px;
+.results-table {
+  min-width: 1200px;
+}
+}
+
+.row-updated {
+  background: #f0f9ff !important;
+  animation: highlightFade 2s ease-out;
+  border-left: 3px solid #3b82f6 !important;
+  position: relative;
+}
+
+@keyframes highlightFade {
+  0% {
+    background: #dbeafe !important;
+    transform: scale(1.005);
+  }
+  50% {
+    background: #eff6ff !important;
+  }
+  100% {
+    background: #f0f9ff !important;
+    transform: scale(1);
   }
 }
 </style>

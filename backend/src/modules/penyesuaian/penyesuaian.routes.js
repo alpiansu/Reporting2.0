@@ -22,7 +22,13 @@ router.get("/getData", penyesuaianController.getAll);
 // Get data resume per store (RECID='*' only) by periode and cabang
 router.get("/resumePerShop", penyesuaianController.getResumeByKdtk);
 
+// Get data resume per store (RECID='*' only) by kdtk
+router.get("/singleResumeShop", penyesuaianController.getSingleResumeKdtk);
+
 // Get single record by primary key
 router.get("/:cabang/:kdtk/:periode/:prdcd", penyesuaianController.getRecord);
+
+// Update or create note for a specific store and periode
+router.put("/note/", penyesuaianController.updateNote);
 
 export default router;

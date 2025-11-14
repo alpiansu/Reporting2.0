@@ -882,6 +882,31 @@ class PenyesuaianService {
         });
       }
 
+      // Enrich with notes for tableName 'sesuai_toko' using unixKey KDTK+PERIODE
+      try {
+        const notes = await notesService.getAll();
+        const notesByKey = new Map(notes.filter(n => n.tableName === "sesuai_toko").map(n => [n.unixKey, n]));
+
+        for (let i = 0; i < results.length; i++) {
+          const key = `${results[i].KDTK}${results[i].PERIODE}`;
+          const note = notesByKey.get(key) || null;
+          results[i] = {
+            ...results[i],
+            note: note
+              ? {
+                  unixKey: note.unixKey,
+                  noteText: note.noteText,
+                  pic: note.pic,
+                  fullName: note.fullName || null,
+                  updated_at: note.updated_at || null,
+                }
+              : null,
+          };
+        }
+      } catch (err) {
+        logger.warn(`[penyesuaian.service] Failed to enrich resume with notes: ${err.message}`);
+      }
+
       // Sorting
       const allowedSortColumns = ["CABANG", "KDTK", "SESUAI", "UPDTIME"];
       const col = allowedSortColumns.includes(sortColumn) ? sortColumn : "KDTK";
@@ -915,6 +940,72 @@ class PenyesuaianService {
       };
     } catch (error) {
       logger.error(`[penyesuaian.service] Error getResumeByKdtk: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Ambil resume nilai per KDTK dari file JSON (tanpa query DB)
+   */
+  async getSingleResumeKdtk(options = {}) {
+    const { periode, kdtk } = options;
+
+    try {
+      await this.ensureDataLoaded();
+      await storeService.ensureInitialized();
+
+      let filtered = this.penyesuaianData.filter(i => i.PERIODE === periode && i.KDTK === kdtk);
+
+      // Ambil nama toko dari storeService
+      const results = [];
+      for (const item of filtered) {
+        let storeName = "-";
+        try {
+          const storeInfo = await storeService.getStoreByCode(item.KDTK);
+          if (storeInfo?.storeName) storeName = storeInfo.storeName;
+        } catch {
+          logger.warn(`[penyesuaian.service] Nama toko tidak ditemukan untuk ${item.KDTK}`);
+        }
+        results.push({
+          CABANG: item.CABANG,
+          PERIODE: item.PERIODE,
+          KDTK: item.KDTK,
+          NAMA: storeName,
+          SESUAI: Number(item.SESUAI.toFixed(2)),
+          UPDTIME: item.UPDTIME,
+        });
+      }
+
+      // Enrich with notes for tableName 'sesuai_toko' using unixKey KDTK+PERIODE
+      try {
+        const notes = await notesService.getAll();
+        const notesByKey = new Map(notes.filter(n => n.tableName === "sesuai_toko").map(n => [n.unixKey, n]));
+
+        for (let i = 0; i < results.length; i++) {
+          const key = `${results[i].KDTK}${results[i].PERIODE}`;
+          const note = notesByKey.get(key) || null;
+          results[i] = {
+            ...results[i],
+            note: note
+              ? {
+                  unixKey: note.unixKey,
+                  noteText: note.noteText,
+                  pic: note.pic,
+                  fullName: note.fullName || null,
+                  updated_at: note.updated_at || null,
+                }
+              : null,
+          };
+        }
+      } catch (err) {
+        logger.warn(`[penyesuaian.service] Failed to enrich resume with notes: ${err.message}`);
+      }
+
+      return {
+        data: results,
+      };
+    } catch (error) {
+      logger.error(`[penyesuaian.service] Error getSingleResumeKdtk: ${error.message}`);
       throw error;
     }
   }
@@ -1063,7 +1154,7 @@ class PenyesuaianService {
       const formattedData = paginated.map(row => {
         const formattedRow = {};
         for (const [key, value] of Object.entries(row)) {
-          formattedRow[key] = isNumericString(value) ? formatNumber(value) : value;
+          formattedRow[key] = isNumericString(value) && key !== `PRDCD` ? formatNumber(value) : value;
         }
         return formattedRow;
       });
@@ -1109,38 +1200,23 @@ class PenyesuaianService {
    */
   async enrichWithNotes(data) {
     try {
-      // ambil semua notes & categories dari service (cached dengan TTL)
-      const [notes, categoryResult] = await Promise.all([
-        await notesService.getAll(),
-        await noteCategoriesService.getAll(),
-      ]);
+      const notes = await notesService.getAll();
 
-      const categories = categoryResult.data || [];
+      const notesByKey = new Map(notes.filter(n => n.tableName === "sesuai_toko").map(n => [n.unixKey, n]));
 
-      logger.info(
-        `[penyesuaian.service] Notes & Categories loaded: ${notes.length} notes, ${categories.length} categories`
-      );
-
-      // buat lookup map untuk kategori agar cepat
-      const categoryMap = new Map(categories.map(c => [c.id, c]));
-
-      // proses penggabungan data
       return data.map(item => {
-        // bentuk unixKey dari sesuai_toko
-        const unixKey = `${item.KDTK}${item.PERIODE}${item.PRDCD}`;
-
-        // ambil semua note yang terkait dengan unixKey ini
-        const note = notes.find(n => n.unixKey === unixKey);
+        const unixKey = `${item.KDTK}${item.PERIODE}`;
+        const note = notesByKey.get(unixKey) || null;
         if (!note) return { ...item, note: null };
 
-        const category = categoryMap.get(note.categoryId) || null;
-
-        // kembalikan data + notes
         return {
           ...item,
           note: {
-            ...note,
-            category,
+            unixKey: note.unixKey,
+            noteText: note.noteText,
+            pic: note.pic,
+            fullName: note.fullName || null,
+            updated_at: note.updated_at || null,
           },
         };
       });

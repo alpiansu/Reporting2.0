@@ -4,6 +4,8 @@
 import logger from "../../config/logger.js";
 import { apiResponse } from "../../utils/index.js";
 import penyesuaianService from "./penyesuaian.service.js";
+import notesService from "../notes/notes.service.js";
+import UserService from "../user/user.service.js";
 
 /**
  * Start screening/reconciliation process
@@ -198,6 +200,70 @@ export const getResumeByKdtk = async (req, res) => {
     return apiResponse.success(res, result);
   } catch (error) {
     logger.error(`[penyesuaian.controller] Error getting resume by KDTK: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+export const getSingleResumeKdtk = async (req, res) => {
+  try {
+    const { periode, kdtk } = req.query;
+
+    if (!periode || !kdtk) {
+      return apiResponse.badRequest(res, "Periode && kdtk is required");
+    }
+
+    logger.info(`[penyesuaian.controller] Get single resume kdtk: periode=${periode}, kdtk=${kdtk}`);
+
+    const result = await penyesuaianService.getSingleResumeKdtk({
+      periode,
+      kdtk,
+    });
+
+    return apiResponse.success(res, result);
+  } catch (error) {
+    logger.error(`[penyesuaian.controller] Error getting single resume kdtk: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+/**
+ * Update or create note for a specific record
+ * PUT /api/penyesuaian/note/
+ */
+export const updateNote = async (req, res) => {
+  try {
+    const { cabang, kdtk, periode, noteText } = req.body;
+    const pic = req.user?.username || "system";
+    const tableName = `sesuai_toko`;
+    const unixKey = `${kdtk}${periode}`;
+
+    if (!cabang || !kdtk || !periode) {
+      return apiResponse.badRequest(res, "cabang, kdtk, dan periode wajib diisi");
+    }
+
+    if (noteText === undefined) {
+      return apiResponse.badRequest(res, "noteText wajib diisi");
+    }
+
+    const userService = new UserService();
+    const user = await userService.findByCredentials(pic);
+
+    const noteData = {
+      Cabang: cabang,
+      unixKey,
+      noteText: noteText || "",
+      pic: pic,
+      categoryId: null,
+      tableName: tableName,
+    };
+
+    const note = await notesService.upsert(noteData);
+
+    const result = { ...note.toJSON(), fullName: user?.fullName || null };
+
+    return apiResponse.success(res, result);
+  } catch (error) {
+    logger.error(`[penyesuaian] Error updating note: ${error.message}`);
     return apiResponse.error(res, error.message);
   }
 };

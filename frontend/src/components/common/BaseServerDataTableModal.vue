@@ -460,6 +460,10 @@ thead th {
   color: #3b82f6;
 }
 
+.sortable:hover{
+  cursor: pointer;
+}
+
 tbody td {
   padding: 0.875rem 1rem;
   border-bottom: 1px solid #f3f4f6;

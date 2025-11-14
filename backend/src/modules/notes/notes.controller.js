@@ -7,6 +7,10 @@ import logger from "../../config/logger.js";
 import config from "./notes.config.js";
 import dbStore from "../../config/db_store.js";
 import storeService from "../store/storeService.js";
+import noteCategoriesService from "../note_categories/noteCategories.service.js";
+import UserService from "../user/user.service.js";
+
+const userService = new UserService();
 
 export const getAll = async (req, res) => {
   try {
@@ -65,20 +69,35 @@ export const autoNoteVirtMrg = async (req, res) => {
           logger.info(
             `[autoNoteVirtMrg] Preparing to save or update and autonote for kdtk ${kdtk} on prdcd ${prdcd} for date ${tanggal}`
           );
+          const tableName = `saldovirtual`;
+          const unixKey = `${kdtk}${tanggal}${prdcd}`;
+          const noteData = {
+            Cabang: cabang,
+            unixKey,
+            noteText: noteCategory || "",
+            pic: pic,
+            categoryId: codeCategory || null,
+            tableName: tableName,
+          };
           // call reuse logic
-          const resultupdNote = await service.saveOrUpdateNote({
-            cabang: cabang,
-            shop: kdtk,
-            tanggal,
-            prdcd,
-            noteText: noteCategory,
-            categoryId: codeCategory,
-            pic,
-          });
+          const resultupdNote = await service.upsert(noteData);
+
+          //convert categoryId to integer
+          const strCategoryId = codeCategory ? parseInt(codeCategory) : null;
+
+          let category = null;
+          if (strCategoryId) {
+            const categoryResult = await noteCategoriesService.getAll();
+            const categories = categoryResult.data || [];
+            category = categories.find(c => c.id === strCategoryId) || null;
+          }
+
+          const user = await userService.findByCredentials(pic);
+          const rslt = { ...resultupdNote.toJSON(), category, fullName: user?.fullName || null };
 
           return apiResponse.success(res, {
             message: `Auto note processed successfully for ${kdtk}`,
-            data: resultupdNote,
+            data: rslt,
           });
         } else {
           logger.info(

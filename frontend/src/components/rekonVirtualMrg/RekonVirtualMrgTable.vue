@@ -153,7 +153,7 @@
 
 <style src="./RekonVirtualMrgTable.css" scoped></style>
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { useToastService } from '../../utils/toast';
 import DataTable from '../common/DataTable.vue';
 import * as XLSX from 'xlsx';
@@ -199,8 +199,8 @@ const props = defineProps({
 
 const emit = defineEmits(['refresh', 'page-change', 'items-per-page-change', 'sort-change']);
 const toast = useToastService();
-const autoUpdatingItems = ref(new Set());
-const highlightedItems = ref(new Set());
+const autoUpdatingItems = reactive(new Set());
+const highlightedItems = reactive(new Set());
 const showDialogConfirm = ref(false);
 const confirmDialogData = ref({
   title: 'Confirmation Dialog',
@@ -256,7 +256,7 @@ const autoUpdateNote = async (item) => {
   const itemKey = `${item.CABANG}_${item.SHOP}_${item.TANGGAL}_${item.PRDCD}`;
   try {
     // Add item to loading set
-    autoUpdatingItems.value.add(itemKey);
+    autoUpdatingItems.add(itemKey);
 
     toast.showInfo('Proses', 'Sedang memperbarui notes secara otomatis...');
     const hasilAutoNote = await rekonVirtualMrgService.autoUpdateNote(
@@ -268,29 +268,29 @@ const autoUpdateNote = async (item) => {
     
     item.note = hasilAutoNote.data.data;
 
-    highlightedItems.value.add(itemKey);
+    highlightedItems.add(itemKey);
     // Remove highlight after animation (2 detik)
     setTimeout(() => {
-      highlightedItems.value.delete(itemKey);
+      highlightedItems.delete(itemKey);
     }, 2000);
   } catch (error) {
     console.error('Error auto updating notes:', error);
     toast.showError('Error', `Gagal memperbarui notes kdtk ${item.SHOP} secara otomatis`);
   }finally {
-    autoUpdatingItems.value.delete(itemKey);
+    autoUpdatingItems.delete(itemKey);
   }
 };
 
 // Helper function untuk cek apakah item sedang loading
 const isItemAutoUpdating = (item) => {
   const itemKey = `${item.CABANG}_${item.SHOP}_${item.TANGGAL}_${item.PRDCD}`;
-  return autoUpdatingItems.value.has(itemKey);
+  return autoUpdatingItems.has(itemKey);
 };
 
 //  TAMBAHKAN: Helper untuk check apakah item di-highlight
 const isItemHighlighted = (item) => {
   const itemKey = `${item.CABANG}_${item.SHOP}_${item.TANGGAL}_${item.PRDCD}`;
-  return highlightedItems.value.has(itemKey);
+  return highlightedItems.has(itemKey);
 };
 
 // Fungsi untuk mendapatkan kelas CSS berdasarkan nama kategori

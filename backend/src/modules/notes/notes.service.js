@@ -8,7 +8,6 @@ import path from "path";
 import NotesModel from "../../models/notes.model.js";
 import config from "./notes.config.js";
 import logger from "../../config/logger.js";
-import noteCategoriesService from "../note_categories/noteCategories.service.js";
 import UserService from "../user/user.service.js";
 
 const userService = new UserService();
@@ -122,41 +121,6 @@ class NotesService {
     await this.writeJson(all.map(n => n.toJSON()));
 
     return true;
-  }
-
-  // core logic implementation for saving or updating note
-  async saveOrUpdateNote({ cabang, shop, tanggal, prdcd, noteText, categoryId, pic, tableName }) {
-    if (!noteText && categoryId === undefined) {
-      throw new Error("Either noteText or categoryId must be provided");
-    }
-
-    // get user full name
-    const user = await userService.findByCredentials(pic);
-
-    //convert categoryId to integer
-    categoryId = categoryId ? parseInt(categoryId) : null;
-
-    const unixKey = `${shop}${tanggal}${prdcd}`;
-    const noteData = {
-      Cabang: cabang,
-      unixKey,
-      noteText: noteText || "",
-      pic: pic || "system",
-      categoryId: categoryId || null,
-      tableName: tableName,
-    };
-    // Upsert
-    const note = await this.upsert(noteData);
-
-    // Get category
-    let category = null;
-    if (categoryId) {
-      const categoryResult = await noteCategoriesService.getAll();
-      const categories = categoryResult.data || [];
-      category = categories.find(c => c.id === categoryId) || null;
-    }
-
-    return { ...note.toJSON(), category, fullName: user?.fullName || null };
   }
 }
 

@@ -5,6 +5,10 @@ import logger from "../../config/logger.js";
 import { apiResponse } from "../../utils/index.js";
 import rekonVirtualService from "./rekon_virtual_mrg.service.js";
 import notesService from "../notes/notes.service.js";
+import UserService from "../user/user.service.js";
+import noteCategoriesService from "../note_categories/noteCategories.service.js";
+
+const userService = new UserService();
 
 /**
  * Start screening/reconciliation process
@@ -239,17 +243,36 @@ export const updateNote = async (req, res) => {
     const { noteText, categoryId } = req.body;
     const pic = req.user?.username || "system";
     const tableName = `saldovirtual`;
+    const unixKey = `${shop}${tanggal}${prdcd}`;
 
-    const result = await notesService.saveOrUpdateNote({
-      cabang,
-      shop,
-      tanggal,
-      prdcd,
-      noteText,
-      categoryId,
-      pic,
-      tableName,
-    });
+    if (!noteText && categoryId === undefined) {
+      throw new Error("Either noteText or categoryId must be provided");
+    }
+
+    const user = await userService.findByCredentials(pic);
+
+    //convert categoryId to integer
+    const strCategoryId = categoryId ? parseInt(categoryId) : null;
+
+    const noteData = {
+      Cabang: cabang,
+      unixKey,
+      noteText: noteText || "",
+      pic: pic,
+      categoryId: strCategoryId || null,
+      tableName: tableName,
+    };
+
+    const note = await notesService.upsert(noteData);
+
+    let category = null;
+    if (strCategoryId) {
+      const categoryResult = await noteCategoriesService.getAll();
+      const categories = categoryResult.data || [];
+      category = categories.find(c => c.id === strCategoryId) || null;
+    }
+
+    const result = { ...note.toJSON(), category, fullName: user?.fullName || null };
 
     return apiResponse.success(res, result);
   } catch (error) {

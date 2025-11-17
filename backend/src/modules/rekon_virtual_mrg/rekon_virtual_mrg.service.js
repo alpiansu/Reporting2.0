@@ -14,6 +14,7 @@ import RekapRemoteService from "../rekap_remote/rekap_remote.service.js";
 import noteCategoriesService from "../note_categories/noteCategories.service.js";
 import notesService from "../notes/notes.service.js";
 import progressService from "../progress/progress.service.js";
+import { Op } from "sequelize";
 
 // Path untuk file JSON rekon_virtual_mrg
 const REKON_VIRTUAL_MRG_JSON_PATH = path.join(process.cwd(), "data/rekon_virtual_mrg.json");
@@ -348,6 +349,8 @@ class RekonVirtualService {
                   });
 
                   newRecords.push(...result);
+                } else {
+                  await this.deleteStorePeriod(cab, storeCode, strYear, strMonth);
                 }
 
                 await incrementProgress(storeCode, `Success ✅ (${result.length} rows)`);
@@ -408,6 +411,56 @@ class RekonVirtualService {
         status: "failed",
       });
 
+      throw error;
+    }
+  }
+
+  async deleteStorePeriod(cabang, shop, year, month) {
+    try {
+      // pastikan cache memory terload
+      await this.ensureDataLoaded();
+
+      const ym = `${year}-${month}`;
+
+      // cari record lama dari memory
+      const oldRecords = this.virtualData.filter(
+        item => item.CABANG === cabang && item.SHOP === shop && moment(item.TANGGAL).format("YYYY-MM") === ym
+      );
+
+      if (oldRecords.length === 0) {
+        logger.info(`[rekon_virtual_mrg.service - deleteStorePeriod] No old records for ${shop} (${ym})`);
+        return 0;
+      }
+
+      // hapus dari database
+      await SaldoVirtual.destroy({
+        where: {
+          CABANG: cabang,
+          SHOP: shop,
+          TANGGAL: {
+            [Op.between]: [
+              `${year}-${month}-01`,
+              moment(`${year}-${month}`, "YYYY-MM").endOf("month").format("YYYY-MM-DD"),
+            ],
+          },
+        },
+      });
+
+      // hapus dari memory
+      this.virtualData = this.virtualData.filter(
+        item => !(item.CABANG === cabang && item.SHOP === shop && moment(item.TANGGAL).format("YYYY-MM") === ym)
+      );
+
+      // simpan ulang file JSON
+      await this.saveToFile();
+
+      logger.info(
+        `[rekon_virtual_mrg.service - deleteStorePeriod] Deleted ${oldRecords.length} records for SHOP=${shop} periode=${ym}`
+      );
+
+      return oldRecords.length;
+    } catch (error) {
+      logger.error(`[rekon_virtual_mrg.service - deleteStorePeriod] Error: ${error.message}`);
       throw error;
     }
   }

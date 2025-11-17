@@ -918,11 +918,22 @@ class PenyesuaianService {
       // 🔍 Search (optional)
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
-        results = results.filter(item =>
-          ["CABANG", "KDTK", "NAMA", "SESUAI"].some(
-            field => item[field] && item[field].toString().toLowerCase().includes(q)
-          )
-        );
+        results = results.filter(item => {
+          // fields biasa
+          const fields = ["CABANG", "KDTK", "NAMA", "SESUAI"];
+
+          // cocokkan field normal
+          const matchNormal = fields.some(field => item[field] && item[field].toString().toLowerCase().includes(q));
+
+          // cocokkan field di dalam note
+          const matchNote =
+            item.note &&
+            ((item.note.noteText && item.note.noteText.toLowerCase().includes(q)) ||
+              (item.note.pic && item.note.pic.toLowerCase().includes(q)) ||
+              (item.note.fullName && item.note.fullName.toLowerCase().includes(q)));
+
+          return matchNormal || matchNote;
+        });
       }
 
       // Sorting

@@ -850,7 +850,15 @@ class PenyesuaianService {
    * Ambil resume nilai per KDTK dari file JSON (tanpa query DB)
    */
   async getResumeByKdtk(options = {}) {
-    const { cabang = "All", periode, page = 1, limit = 10, sortColumn = "KDTK", sortOrder = "ASC" } = options;
+    const {
+      cabang = "All",
+      periode,
+      page = 1,
+      limit = 10,
+      sortColumn = "KDTK",
+      sortOrder = "ASC",
+      searchQuery,
+    } = options;
 
     if (!periode) throw new Error("Periode wajib diisi");
 
@@ -863,7 +871,7 @@ class PenyesuaianService {
       );
 
       // Ambil nama toko dari storeService
-      const results = [];
+      let results = [];
       for (const item of filtered) {
         let storeName = "-";
         try {
@@ -905,6 +913,16 @@ class PenyesuaianService {
         }
       } catch (err) {
         logger.warn(`[penyesuaian.service] Failed to enrich resume with notes: ${err.message}`);
+      }
+
+      // 🔍 Search (optional)
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        results = results.filter(item =>
+          ["CABANG", "KDTK", "NAMA", "SESUAI"].some(
+            field => item[field] && item[field].toString().toLowerCase().includes(q)
+          )
+        );
       }
 
       // Sorting

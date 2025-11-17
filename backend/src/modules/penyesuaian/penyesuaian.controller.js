@@ -176,7 +176,15 @@ export const getRecord = async (req, res) => {
  */
 export const getResumeByKdtk = async (req, res) => {
   try {
-    const { periode, cabang = "All", page = 1, limit = 10, sortColumn = "SESUAI", sortOrder = "ASC" } = req.query;
+    const {
+      periode,
+      cabang = "All",
+      page = 1,
+      limit = 10,
+      sortColumn = "SESUAI",
+      sortOrder = "ASC",
+      searchQuery,
+    } = req.query;
 
     if (!periode) {
       return apiResponse.badRequest(res, "Periode is required");
@@ -193,6 +201,7 @@ export const getResumeByKdtk = async (req, res) => {
       periode,
       page: parseInt(page),
       limit: parseInt(limit),
+      searchQuery,
       sortColumn,
       sortOrder,
     });

@@ -11,7 +11,6 @@ import storeService from "../store/storeService.js";
 import pLimit from "p-limit";
 import moment from "moment-timezone";
 import RekapRemoteService from "../rekap_remote/rekap_remote.service.js";
-import noteCategoriesService from "../note_categories/noteCategories.service.js";
 import notesService from "../notes/notes.service.js";
 import progressService from "../progress/progress.service.js";
 import { isNumericString, toNumber, formatNumber } from "../../utils/numberUtils.js";

@@ -6,6 +6,7 @@ import fs from "fs/promises";
 import path from "path";
 import logger from "../../config/logger.js";
 import RekapRemote from "../../models/rekap_remote.model.js";
+import moment from "moment-timezone";
 
 // Path untuk file JSON rekap_remote
 const REKAP_REMOTE_JSON_PATH = path.join(process.cwd(), "data/rekap_remote.json");
@@ -589,7 +590,7 @@ class RekapRemoteStagingService {
 
         summary[item.module_name].cabangs.push({
           cab: item.cab,
-          last_scan: item.last_mass_scan,
+          last_scan: moment.utc(item.last_mass_scan).utcOffset(7).format("YYYY-MM-DD HH:mm:ss"),
           stores_count: item.stores_count,
         });
 

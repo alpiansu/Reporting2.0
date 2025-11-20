@@ -9,77 +9,37 @@
       <form @submit.prevent="submitForm" class="rekon-form">
         <div class="form-group">
           <label for="cab">Cabang</label>
-          <Dropdown 
-            id="cab" 
-            v-model="formData.cab" 
-            :options="cabangOptions" 
-            optionLabel="namacab" 
-            optionValue="kdcab"
-            placeholder="Pilih Cabang" 
-            :disabled="loading"
-            class="w-full"
-            @change="handleCabChange"
-          />
+          <Dropdown id="cab" v-model="formData.cab" :options="cabangOptions" optionLabel="namacab" optionValue="kdcab"
+            placeholder="Pilih Cabang" :disabled="loading" class="w-full" @change="handleCabChange" />
           <small v-if="errors.cab" class="error-text">{{ errors.cab }}</small>
         </div>
 
         <div class="form-group">
           <label for="periode">Periode</label>
-          <Calendar 
-            id="periode" 
-            v-model="selectedDate" 
-            view="month" 
-            dateFormat="mm/yy" 
-            placeholder="Pilih Bulan/Tahun"
-            :disabled="loading"
-            :maxDate="today"
-            showIcon
-            class="w-full"
-            @date-select="updatePeriode"
-          />
+          <Calendar id="periode" v-model="selectedDate" view="month" dateFormat="mm/yy" placeholder="Pilih Bulan/Tahun"
+            :disabled="loading" :maxDate="today" showIcon class="w-full" @date-select="updatePeriode" />
           <small v-if="errors.periode" class="error-text">{{ errors.periode }}</small>
         </div>
 
         <div class="form-actions">
-          <Button 
-            type="button" 
-            label="Mulai Rekonsiliasi" 
-            icon="pi pi-refresh" 
-            class="p-button-primary" 
-            @click="startReconciliation"
-            :loading="isReconciling"
-            :disabled="loading"
-          />
+          <Button type="button" label="Mulai Rekonsiliasi" icon="pi pi-refresh" class="p-button-primary"
+            @click="startReconciliation" :loading="isReconciling" :disabled="loading" />
         </div>
       </form>
 
+      <!-- card info last screening -->
+      <LastScanInfo moduleName="rekon_wt_harian" :selectedCabang="formData.cab" v-if="!loading" style="margin-top: 15px;" />
+
       <!-- Progress Bar Component -->
-      <ProgressBar 
-        :visible="showProgressBar"
-        :title="progressTitle"
-        :status="progressStatus"
-        :processed="processedItems"
-        :total="totalItems"
-        :differences="totalDifferences"
-        :timeElapsed="timeElapsed"
-        :message="progressMessage"
-        :percentage="progressPercentage"
-        :currentWave="currentWave"
-        :maxWaves="maxWaves"
-        :currentBranch="currentBranch"
-        :currentItem="currentItem"
-        @close="hideProgressBar"
-      />
-      
+      <ProgressBar :visible="showProgressBar" :title="progressTitle" :status="progressStatus"
+        :processed="processedItems" :total="totalItems" :differences="totalDifferences" :timeElapsed="timeElapsed"
+        :message="progressMessage" :percentage="progressPercentage" :currentWave="currentWave" :maxWaves="maxWaves"
+        :currentBranch="currentBranch" :currentItem="currentItem" @close="hideProgressBar" />
+
       <!-- Confirmation Dialog -->
-      <ConfirmDialog
-        v-model="showConfirmDialog"
-        :title="confirmDialogTitle"
-        :message="confirmDialogMessage"
-        :confirm-text="confirmDialogConfirmText"
-        :cancel-text="confirmDialogCancelText"
-        @confirm="handleConfirmDialogConfirm"
-      />
+      <ConfirmDialog v-model="showConfirmDialog" :title="confirmDialogTitle" :message="confirmDialogMessage"
+        :confirm-text="confirmDialogConfirmText" :cancel-text="confirmDialogCancelText"
+        @confirm="handleConfirmDialogConfirm" />
     </div>
   </div>
 </template>
@@ -94,6 +54,7 @@ import Button from 'primevue/button';
 import ProgressBar from './ProgressBar.vue';
 import ConfirmDialog from '../common/ConfirmDialog.vue';
 import rekonWtHarianService from '../../services/rekonWtHarian.service';
+import LastScanInfo from "@/components/common/LastScanInfo.vue";
 
 const toast = useToastService();
 const loading = ref(false);

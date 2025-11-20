@@ -1,20 +1,16 @@
 /**
  * RekapRemote module index
  */
-import {
-  getRekapData,
-  getSummary,
-  saveLogsManually,
-  clearLogs,
-} from './rekap_remote.controller.js';
-import rekapRemoteRoutes from './rekap_remote.routes.js';
-import rekapRemoteService from './rekap_remote.service.js';
+import { getRekapData, getSummary, saveLogsManually, clearLogs, getLastMassScan } from "./rekap_remote.controller.js";
+import rekapRemoteRoutes from "./rekap_remote.routes.js";
+import rekapRemoteService from "./rekap_remote.service.js";
 
 const RekapRemoteController = {
   getRekapData,
   getSummary,
   saveLogsManually,
   clearLogs,
+  getLastMassScan,
 };
 
 export default {
@@ -27,7 +23,7 @@ export default {
     return true;
   },
   // Initialize function for use with app.js
-  initialize: (app) => {
+  initialize: app => {
     // Register routes
     app.use("/api/rekap-remote", rekapRemoteRoutes);
     return {

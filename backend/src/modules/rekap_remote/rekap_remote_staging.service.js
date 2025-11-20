@@ -159,7 +159,7 @@ class RekapRemoteStagingService {
       // Convert to plain objects - handle both Sequelize instances and plain objects
       this.rekapData = dbData.map(item => {
         // Check if item is a Sequelize model instance
-        if (item && typeof item.get === 'function') {
+        if (item && typeof item.get === "function") {
           return item.get({ plain: true });
         }
         // If it's already a plain object (from fallback), return as is
@@ -184,10 +184,10 @@ class RekapRemoteStagingService {
       return this.rekapData.length;
     } catch (error) {
       // Handle specific database errors gracefully
-      if (error.message.includes('Database sedang tidak tersedia')) {
+      if (error.message.includes("Database sedang tidak tersedia")) {
         logger.warn(`JSON sync skipped - database not available [REKAP REMOTE STAGING]`);
         return; // Don't throw error, just skip sync
-      } else if (error.message.includes('item.get is not a function')) {
+      } else if (error.message.includes("item.get is not a function")) {
         logger.error(`JSON sync error - data format issue: ${error.message} [REKAP REMOTE STAGING]`);
         // Try to handle the data differently
         try {
@@ -202,7 +202,7 @@ class RekapRemoteStagingService {
           logger.error(`JSON sync retry failed: ${retryError.message} [REKAP REMOTE STAGING]`);
         }
       }
-      
+
       logger.error(`Failed to synchronize rekap_remote data: ${error.message}`);
       // Don't throw error to prevent crashing the main process
       return;
@@ -405,7 +405,7 @@ class RekapRemoteStagingService {
    * Get all rekap data without pagination (for module integration)
    * @param {Object} filters - Optional filter options
    * @param {string} filters.cab - Filter by cab
-   * @param {string} filters.kdtk - Filter by kdtk  
+   * @param {string} filters.kdtk - Filter by kdtk
    * @param {string} filters.moduleName - Filter by module_name
    * @returns {Promise<Array>} Array of rekap data (clean copy, no reference to internal data)
    */
@@ -441,7 +441,7 @@ class RekapRemoteStagingService {
           module_name: item.module_name,
           status: item.status,
           updtime: item.updtime,
-          message: item.message || null
+          message: item.message || null,
         });
       }
 
@@ -453,11 +453,157 @@ class RekapRemoteStagingService {
       });
 
       logger.debug(`Retrieved ${filteredData.length} rekap records for module integration`);
-      
+
       // Return clean array - no references to internal data
       return filteredData;
     } catch (error) {
       logger.error(`Error getting all rekap data from staging: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get last mass scan time per module and cabang
+   * Detects mass scanning by finding the largest cluster of records with consistent time deltas
+   * @returns {Promise<Array>} Array of last mass scan info per module per cab
+   */
+  async getLastMassScan() {
+    try {
+      await this.ensureDataLoaded();
+
+      // Group by module_name and cab
+      const grouped = {};
+
+      this.rekapData.forEach(item => {
+        const key = `${item.module_name}_${item.cab}`;
+        if (!grouped[key]) {
+          grouped[key] = {
+            module_name: item.module_name,
+            cab: item.cab,
+            records: [],
+          };
+        }
+        grouped[key].records.push({
+          kdtk: item.kdtk,
+          updtime: new Date(item.updtime),
+          status: item.status,
+        });
+      });
+
+      const results = [];
+
+      // Process each group
+      Object.values(grouped).forEach(group => {
+        // Sort by updtime descending
+        group.records.sort((a, b) => b.updtime - a.updtime);
+
+        if (group.records.length === 0) return;
+
+        // Calculate deltas between consecutive records
+        const deltas = [];
+        for (let i = 0; i < group.records.length - 1; i++) {
+          const delta = Math.abs(group.records[i].updtime - group.records[i + 1].updtime) / 1000; // in seconds
+          deltas.push({
+            index: i,
+            delta: delta,
+            updtime: group.records[i].updtime,
+          });
+        }
+
+        if (deltas.length === 0) {
+          // Only 1 record, consider it as the last scan
+          results.push({
+            module_name: group.module_name,
+            cab: group.cab,
+            last_mass_scan: group.records[0].updtime.toISOString().replace("T", " ").substring(0, 19),
+            stores_count: 1,
+          });
+          return;
+        }
+
+        // Find clusters based on similar deltas
+        // Sort deltas to find the most common range
+        const sortedDeltas = [...deltas].sort((a, b) => a.delta - b.delta);
+
+        // Use median delta as reference, with tolerance
+        const medianDelta = sortedDeltas[Math.floor(sortedDeltas.length / 2)].delta;
+        const tolerance = medianDelta * 2 || 300; // 2x median or max 5 minutes
+
+        // Find largest cluster with consistent deltas
+        let clusters = [];
+        let currentCluster = [deltas[0]];
+
+        for (let i = 1; i < deltas.length; i++) {
+          const prevDelta = deltas[i - 1].delta;
+          const currDelta = deltas[i].delta;
+
+          // Check if current delta is consistent with cluster
+          if (Math.abs(currDelta - prevDelta) <= tolerance) {
+            currentCluster.push(deltas[i]);
+          } else {
+            // Start new cluster if current one has significant size
+            if (currentCluster.length > 0) {
+              clusters.push([...currentCluster]);
+            }
+            currentCluster = [deltas[i]];
+          }
+        }
+
+        // Don't forget the last cluster
+        if (currentCluster.length > 0) {
+          clusters.push(currentCluster);
+        }
+
+        // Find the largest cluster
+        const largestCluster = clusters.reduce(
+          (max, cluster) => (cluster.length > max.length ? cluster : max),
+          clusters[0] || []
+        );
+
+        if (largestCluster && largestCluster.length > 0) {
+          // Get the most recent updtime from the largest cluster
+          const latestInCluster = largestCluster.reduce((latest, item) =>
+            item.updtime > latest.updtime ? item : latest
+          );
+
+          results.push({
+            module_name: group.module_name,
+            cab: group.cab,
+            last_mass_scan: latestInCluster.updtime.toISOString().replace("T", " ").substring(0, 19),
+            stores_count: largestCluster.length + 1, // +1 because deltas are between records
+          });
+        }
+      });
+
+      // Group results by module_name for summary
+      const summary = {};
+      results.forEach(item => {
+        if (!summary[item.module_name]) {
+          summary[item.module_name] = {
+            module_name: item.module_name,
+            last_mass_scan: item.last_mass_scan,
+            total_stores: 0,
+            cabangs: [],
+          };
+        }
+
+        summary[item.module_name].cabangs.push({
+          cab: item.cab,
+          last_scan: item.last_mass_scan,
+          stores_count: item.stores_count,
+        });
+
+        summary[item.module_name].total_stores += item.stores_count;
+
+        // Update last_mass_scan to the most recent across all cabangs
+        if (item.last_mass_scan > summary[item.module_name].last_mass_scan) {
+          summary[item.module_name].last_mass_scan = item.last_mass_scan;
+        }
+      });
+
+      return Object.values(summary);
+    } catch (error) {
+      logger.error(`Error getting last mass scan: ${error.message}`);
       throw error;
     }
   }

@@ -3,7 +3,7 @@
     <template #title>
       Rekonsiliasi Penyesuaian Toko
     </template>
-    
+
     <template #description>
       Lihat hasil rekonsiliasi nilai penyesuaian toko
     </template>
@@ -19,11 +19,13 @@
     </template>
 
     <template #actions>
-      <Button type="button" :label="isReconciling ? `Please Wait...` : `Mulai Screening`" icon="pi pi-refresh" class="p-button-primary"
-        @click="startReconciliation" :loading="isReconciling" :disabled="isReconciling" />
+      <Button type="button" :label="isReconciling ? `Please Wait...` : `Mulai Screening`" icon="pi pi-refresh"
+        class="p-button-primary" @click="startReconciliation" :loading="isReconciling" :disabled="isReconciling" />
     </template>
   </RekonFormComponent>
 
+  <!-- card info last screening -->
+  <LastScanInfo moduleName="penyesuaian" :selectedCabang="formData.cab" v-if="!isReconciling" />
 
   <!-- Processing Loading State -->
   <ProgressBar v-if="isReconciling" :visible="isReconciling" :percentage="progress.percentage" :info="progress.info">
@@ -55,6 +57,7 @@ import ProgressBar from "../../components/common/ProgressBar.vue";
 import RekonFormComponent from "../../components/common/RekonFormComponent.vue";
 import progressService from "../../services/progress.service.js";
 import api from "../../services/api.js";
+import LastScanInfo from '@/components/common/LastScanInfo.vue';
 
 const toast = useToastService();
 const loading = ref(false);

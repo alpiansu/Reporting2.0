@@ -3,7 +3,7 @@
     <template #title>
       Hasil Rekonsiliasi Saldo Virtual Margin Based
     </template>
-    
+
     <template #description>
       Lihat hasil rekonsiliasi saldo virtual margin based per toko
     </template>
@@ -24,6 +24,8 @@
     </template>
   </RekonFormComponent>
 
+  <!-- card info last screening -->
+  <LastScanInfo moduleName="rekon_virtual_mrg" :selectedCabang="formData.cab" v-if="!isReconciling" />
 
   <!-- Processing Loading State -->
   <ProgressBar v-if="isReconciling" :visible="isReconciling" :percentage="progress.percentage" :info="progress.info">
@@ -57,6 +59,7 @@ import RekonFormComponent from "../../components/common/RekonFormComponent.vue";
 import progressService from "../../services/progress.service.js";
 import { useAuthStore } from '../../stores';
 import api from "../../services/api.js";
+import LastScanInfo from "@/components/common/LastScanInfo.vue";
 
 const toast = useToastService();
 const loading = ref(false);

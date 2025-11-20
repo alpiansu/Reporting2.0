@@ -42,7 +42,7 @@ const showResults = computed(() => {
 
 // Methods
 const handleViewResults = (data) => {
-  console.log('handleViewResults called with data:', data);
+  // console.log('handleViewResults called with data:', data);
   activeCab.value = data.cab;
   activePeriode.value = data.periode;
   

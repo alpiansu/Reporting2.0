@@ -191,6 +191,99 @@ class DbStoreService {
       throw error;
     }
   }
+
+  /***********************************************************************
+   * ====================================================================
+   *     NEW MODEL DB_STORE.JS
+   * ====================================================================
+   ***********************************************************************/
+
+  /**
+   * SQL variable replacer
+   */
+  replaceSqlVariables(sql, vars = {}) {
+    let replaced = sql;
+    for (const [key, val] of Object.entries(vars)) {
+      const pattern = new RegExp(`{${key}}`, "g");
+      replaced = replaced.replace(pattern, val);
+    }
+    return replaced;
+  }
+
+  /**
+   * Detect transient errors for retry
+   */
+  isTransientError(err) {
+    if (!err || !err.code) return false;
+    return ["PROTOCOL_CONNECTION_LOST", "PROTOCOL_TIMEOUT", "ETIMEDOUT", "ECONNRESET"].includes(err.code);
+  }
+
+  delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /***********************************************************************
+   * 1) RUN SINGLE QUERY (Retry + Variable Replace)
+   ***********************************************************************/
+  async runStoreQuery(host, sql, params = [], vars = {}, options = {}) {
+    const { retries = 2, delayMs = 150, timeout = 10000 } = options;
+    let attempt = 0;
+
+    const pool = await this.createDbStore(host);
+    const finalSql = this.replaceSqlVariables(sql, vars);
+
+    while (true) {
+      let conn;
+      try {
+        conn = await pool.getConnection();
+        const [rows] = await conn.query({ sql: finalSql, timeout }, params);
+        return rows;
+      } catch (err) {
+        if (!this.isTransientError(err) || attempt >= retries) throw err;
+        attempt++;
+        await this.delay(delayMs);
+      } finally {
+        if (conn) conn.release();
+      }
+    }
+  }
+
+  /***********************************************************************
+   * 2) RUN MULTIPLE QUERIES (1 connection)
+   ***********************************************************************/
+  async runStoreQueries(host, queries = [], vars = {}, options = {}) {
+    const { retries = 2, delayMs = 150, timeout = 10000 } = options;
+
+    const pool = await this.createDbStore(host);
+    const results = [];
+
+    let conn;
+    try {
+      conn = await pool.getConnection();
+
+      for (const q of queries) {
+        let attempt = 0;
+        const sql = this.replaceSqlVariables(q.sql, vars);
+        const params = q.params || [];
+
+        while (true) {
+          try {
+            const [rows] = await conn.query({ sql, timeout }, params);
+            results.push(rows);
+            break;
+          } catch (err) {
+            if (!this.isTransientError(err) || attempt >= retries) throw err;
+            attempt++;
+            await this.delay(delayMs);
+          }
+        }
+      }
+    } finally {
+      if (conn) conn.release();
+    }
+
+    return results;
+  }
 }
 
 export default new DbStoreService();

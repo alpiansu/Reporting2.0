@@ -87,10 +87,10 @@ class WrcUtils {
       const beforeClause = finalQuery.substring(0, clauseIndex).trim();
       const afterClause = finalQuery.substring(clauseIndex);
 
-      // Check if WHERE already exists in the before part
-      const hasWhere = /\bWHERE\b/i.test(beforeClause);
+      // Check if WHERE exists at the main query level (not in subqueries)
+      const hasMainWhere = this.hasMainQueryWhere(beforeClause);
 
-      if (hasWhere) {
+      if (hasMainWhere) {
         // Add AND condition before the clause
         return `${beforeClause} AND ${shopFilter} ${afterClause}`;
       } else {
@@ -99,14 +99,35 @@ class WrcUtils {
       }
     } else {
       // No special clauses found, use the simple approach
-      const hasWhere = /\bWHERE\b/i.test(finalQuery);
+      const hasMainWhere = this.hasMainQueryWhere(finalQuery);
 
-      if (hasWhere) {
+      if (hasMainWhere) {
         return `${finalQuery} AND ${shopFilter}`;
       } else {
         return `${finalQuery} WHERE ${shopFilter}`;
       }
     }
+  }
+
+  // Helper function to check if WHERE exists at main query level
+  hasMainQueryWhere(queryPart) {
+    // Remove all subqueries (content within parentheses) to avoid false detection
+    let cleaned = queryPart;
+    let depth = 0;
+    let result = "";
+
+    for (let i = 0; i < cleaned.length; i++) {
+      if (cleaned[i] === "(") {
+        depth++;
+      } else if (cleaned[i] === ")") {
+        depth--;
+      } else if (depth === 0) {
+        result += cleaned[i];
+      }
+    }
+
+    // Now check for WHERE in the cleaned query (without subqueries)
+    return /\bWHERE\b/i.test(result);
   }
 
   /**
@@ -175,6 +196,9 @@ class WrcUtils {
 
         const [rows] = await connection.execute(finalQuery);
         allWrcData = rows || [];
+        logger.info(`final query : ${finalQuery}`);
+        logger.info(`Retrieved ${allWrcData.length} records from direct table query.`);
+        logger.info(`result sample: ${JSON.stringify(allWrcData.slice(0, 2))}`);
       } else {
         // ORIGINAL MODE (UNION ALL berdasarkan tanggal)
         const year = "20" + period.substring(0, 2);

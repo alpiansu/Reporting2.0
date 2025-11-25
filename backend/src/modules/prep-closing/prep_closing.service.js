@@ -16,7 +16,6 @@ import RekapRemoteService from "../rekap_remote/rekap_remote.service.js";
 import notesService from "../notes/notes.service.js";
 import progressService from "../progress/progress.service.js";
 import wrcUtils from "../../utils/wrc.utils.js";
-import { json } from "sequelize";
 
 // Path untuk file JSON
 const PREP_CLOSING_JSON_PATH = path.join(process.cwd(), "data/prep_closing.json");

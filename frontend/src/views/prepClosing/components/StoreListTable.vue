@@ -36,7 +36,7 @@
                 </template>
 
                 <!-- Status Column -->
-                <Column header="Status" style="width: 80px">
+                <Column header="Status" field="IS_READY" :sortable="true" style="width: 80px">
                     <template #body="{ data: item }">
                         <div class="status-icon">
                             <i :class="item.IS_READY ? 'pi pi-check-circle' : 'pi pi-times-circle'"
@@ -191,7 +191,6 @@ const setStoreLoading = (kdtk, isLoading) => {
 const handleReScreen = async (item) => {
     // Set loading state untuk toko ini
     setStoreLoading(item.KDTK, true);
-
     try {
         // Panggil callback function dari parent (yang mengembalikan Promise)
         await props.onReScreen(item);

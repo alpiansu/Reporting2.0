@@ -67,8 +67,7 @@ export function useProgress(username) {
       stopMonitoring();
 
       isMonitoring.value = true;
-
-      console.log(`🔗 Starting SSE monitoring for task: ${taskid}`);
+      // console.log(`🔗 Starting SSE monitoring for task: ${taskid}`);
 
       // Check if task exists first
       const taskExists = await progressService.checkProgressTask(taskid);
@@ -104,8 +103,6 @@ export function useProgress(username) {
       taskid,
       // onUpdate callback
       progressData => {
-        console.log("📊 Progress update received:", progressData);
-
         progress.value = {
           ...progressData,
           percentage: progressData?.percentage || 0,
@@ -120,8 +117,6 @@ export function useProgress(username) {
       },
       // onComplete callback
       progressData => {
-        console.log("✅ Progress completed:", progressData);
-
         progress.value = {
           ...progressData,
           percentage: 100,

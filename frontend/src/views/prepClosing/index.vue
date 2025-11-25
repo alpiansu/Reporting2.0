@@ -66,12 +66,14 @@ const {
   selectedStore,
   categories,
   pagination,
-  fetchSummary,
   fetchStores,
   fetchStoreDetails,
-  fetchCategories,
   updateNote,
-  refreshAll
+  refreshAll,
+  sortColumn,      
+  sortOrder,       
+  searchQuery,     
+  resetFilters,
 } = usePrepClosing();
 
 const {
@@ -85,14 +87,9 @@ const {
 const username = authStore.user?.username || '';
 const {
   progress: progressData,
-  percentage,
-  isMonitoring,
   isCompleted,
   isFailed,
   progressError,
-  currentInfo,
-  totalStores,
-  currentStore,
   startMonitoring,
   stopMonitoring,
   resetProgress
@@ -111,6 +108,7 @@ const progressDialogVisible = ref(false);
 const noteDialogVisible = ref(false);
 const screeningLevel = ref('all');
 const noteStore = ref(null);
+const isMassScreening = ref(false);
 
 // Initialize
 onMounted(async () => {
@@ -127,47 +125,69 @@ onMounted(async () => {
 // Watch periode and cabang changes
 watch([() => filters.periode, () => filters.cabang], async () => {
   if (filters.periode) {
+    resetFilters();
     await loadData();
   }
 });
 
-// Watch untuk monitoring progress - auto start/stop
+// Watch untuk monitoring progress - HANYA untuk mass screening
 watch(isScreening, (newVal) => {
+  // HANYA jalankan untuk mass screening
+  if (!isMassScreening.value) {
+    return;
+  }
+
   if (newVal) {
-    console.log('🎬 Screening started, showing progress dialog');
+    console.log('🎬 Mass screening started, showing progress dialog');
     progressDialogVisible.value = true;
     startMonitoring();
   } else {
-    console.log('🛑 Screening stopped');
+    console.log('🛑 Mass screening stopped');
     // Don't auto-stop monitoring, let it finish naturally
   }
 });
 
-// Watch untuk auto-close dialog saat screening selesai
+// Watch untuk auto-close dialog saat screening selesai - HANYA untuk mass screening
 watch(isCompleted, (newVal) => {
+  // HANYA jalankan untuk mass screening
+  if (!isMassScreening.value) {
+    return;
+  }
+
   if (newVal) {
-    console.log('✅ Screening completed, auto-closing dialog in 2 seconds');
+    console.log('✅ Mass screening completed, auto-closing dialog in 2 seconds');
     setTimeout(() => {
       handleScreeningComplete();
     }, 2000);
   }
 });
 
-// Watch untuk handle screening failure
+// Watch untuk handle screening failure - HANYA untuk mass screening
 watch(isFailed, (newVal) => {
+  // HANYA jalankan untuk mass screening
+  if (!isMassScreening.value) {
+    return;
+  }
+
   if (newVal) {
-    console.log('❌ Screening failed');
+    console.log('❌ Mass screening failed');
     toast.showError('Error', progressError.value || 'Screening gagal, silakan coba lagi');
     setTimeout(() => {
       progressDialogVisible.value = false;
       stopMonitoring();
       resetProgress();
+      isMassScreening.value = false;
     }, 3000);
   }
 });
 
-// Watch untuk handle progress error
+// Watch untuk handle progress error - HANYA untuk mass screening
 watch(progressError, (newVal) => {
+  // HANYA jalankan untuk mass screening
+  if (!isMassScreening.value) {
+    return;
+  }
+
   if (newVal) {
     console.error('❌ Progress error:', newVal);
     toast.showError('Error', newVal);
@@ -176,7 +196,16 @@ watch(progressError, (newVal) => {
 
 // Methods
 const loadData = async () => {
-  await refreshAll(filters.periode, filters.cabang === 'All' ? undefined : filters.cabang);
+  // refreshAll akan otomatis menggunakan state sorting dari usePrepClosing
+  await refreshAll(
+    filters.periode,
+    filters.cabang === 'All' ? undefined : filters.cabang,
+    {
+      sortColumn: sortColumn.value || undefined,
+      sortOrder: sortOrder.value || undefined,
+      searchQuery: searchQuery.value || undefined
+    }
+  );
 };
 
 const handleRefresh = async () => {
@@ -184,26 +213,68 @@ const handleRefresh = async () => {
   toast.showSuccess('Sukses', 'Data berhasil diperbarui');
 };
 
-const handleTableRefresh = async (params) => {
-  await fetchStores(filters.periode, filters.cabang === 'All' ? undefined : filters.cabang, params);
+const handleTableRefresh = async (params = {}) => {
+  console.log('🔄 Table refresh with params:', params);
+
+  // Merge params dengan state sorting yang ada
+  const mergedParams = {
+    sortColumn: params.sortColumn || sortColumn.value,
+    sortOrder: params.sortOrder || sortOrder.value,
+    searchQuery: params.searchQuery || searchQuery.value,
+    ...params
+  };
+
+  await fetchStores(
+    filters.periode,
+    filters.cabang === 'All' ? undefined : filters.cabang,
+    mergedParams
+  );
 };
 
 const handlePageChange = async (data) => {
   pagination.value.currentPage = data.page;
-  await fetchStores(filters.periode, filters.cabang === 'All' ? undefined : filters.cabang);
+
+  // fetchStores akan otomatis gunakan state sorting
+  await fetchStores(
+    filters.periode,
+    filters.cabang === 'All' ? undefined : filters.cabang,
+    {
+      sortColumn: sortColumn.value,
+      sortOrder: sortOrder.value,
+      searchQuery: searchQuery.value || undefined
+    }
+  );
 };
 
 const handleItemsPerPageChange = async (data) => {
   pagination.value.itemsPerPage = data.itemsPerPage;
   pagination.value.currentPage = 1;
-  await fetchStores(filters.periode, filters.cabang === 'All' ? undefined : filters.cabang);
+
+  // fetchStores akan otomatis gunakan state sorting
+  await fetchStores(
+    filters.periode,
+    filters.cabang === 'All' ? undefined : filters.cabang,
+    {
+      sortColumn: sortColumn.value,
+      sortOrder: sortOrder.value,
+      searchQuery: searchQuery.value || undefined
+    }
+  );
 };
 
 const handleSortChange = async (data) => {
-  await fetchStores(filters.periode, filters.cabang === 'All' ? undefined : filters.cabang, {
-    sortColumn: data.sortColumn,
-    sortOrder: data.sortOrder
-  });
+  console.log('🔀 Sort changed:', data);
+
+  // fetchStores akan otomatis update state sorting internal
+  await fetchStores(
+    filters.periode,
+    filters.cabang === 'All' ? undefined : filters.cabang,
+    {
+      sortColumn: data.sortColumn,
+      sortOrder: data.sortOrder,
+      searchQuery: searchQuery.value || undefined
+    }
+  );
 };
 
 const handleViewDetails = async (store) => {
@@ -227,25 +298,28 @@ const handleConfirmScreening = async (data) => {
     // Reset progress sebelum memulai screening baru
     resetProgress();
 
-    // Show progress dialog
-    progressDialogVisible.value = true;
+    // Tentukan apakah ini mass screening atau single store
+    const isSingleStore = data.level === 'store' && data.kdtk;
+    isMassScreening.value = !isSingleStore;
 
-    console.log('🚀 Starting screening with data:', data);
+    // Show progress dialog HANYA untuk mass screening
+    if (isMassScreening.value) {
+      progressDialogVisible.value = true;
+    }
 
     // Start screening based on level
-    if (data.level === 'store' && data.kdtk) {
-      console.log(`🏪 Screening single store: ${data.kdtk}`);
-      await screenStore(filters.periode, data.kdtk);
-    } else if (data.level === 'cabang') {
+    if (data.level === 'cabang') {
       console.log(`🏢 Screening cabang: ${filters.cabang}`);
+      toast.showInfo('Info', `Memulai screening cabang ${filters.cabang}...`);
       await screenCabang(filters.periode, filters.cabang);
+
     } else {
       console.log('🌍 Screening all cabang');
+      toast.showInfo('Info', 'Memulai screening semua cabang...');
       await screenAllCabang(filters.periode);
     }
 
-    // Progress monitoring akan dimulai otomatis oleh watch isScreening
-    toast.showInfo('Info', 'Screening dimulai, mohon tunggu...');
+    // Progress monitoring akan dimulai otomatis oleh watch isScreening (jika mass screening)
 
   } catch (err) {
     console.error('❌ Error starting screening:', err);
@@ -253,33 +327,32 @@ const handleConfirmScreening = async (data) => {
     progressDialogVisible.value = false;
     stopMonitoring();
     resetProgress();
+    isMassScreening.value = false;
   }
 };
 
 const handleReScreenStore = async (store) => {
   try {
-    console.log(`🔄 Re-screening store: ${store.KDTK}`);
+    // Set flag bahwa ini BUKAN mass screening
+    isMassScreening.value = false;
 
-    // Reset progress
-    resetProgress();
-
-    // Show progress dialog
-    progressDialogVisible.value = true;
+    // JANGAN show progress dialog untuk single store
+    // progressDialogVisible.value = true; // <-- HAPUS ini
 
     toast.showInfo('Info', `Memulai screening untuk toko ${store.KDTK}...`);
 
     // Start screening
     await screenStore(filters.periode, store.KDTK);
 
-    // Progress monitoring akan dimulai otomatis oleh watch isScreening
-    // Toast success akan ditampilkan oleh handleScreeningComplete
+    // Langsung success untuk single store
+    toast.showSuccess('Sukses', `Screening toko ${store.KDTK} selesai`);
+
+    // Refresh data
+    await loadData();
 
   } catch (err) {
     console.error('❌ Error re-screening store:', err);
     toast.showError('Error', err.message || 'Gagal melakukan screening');
-    progressDialogVisible.value = false;
-    stopMonitoring();
-    resetProgress();
 
     // Re-throw error agar bisa ditangkap di child component
     throw err;
@@ -338,19 +411,34 @@ const handleScreeningComplete = async () => {
   // Reset progress state
   resetProgress();
 
+  // Reset mass screening flag
+  isMassScreening.value = false;
+
   console.log('✅ Screening complete, data refreshed');
 };
 
 const handleMinimizeProgress = () => {
+  console.log('📦 Minimizing progress dialog, monitoring continues in background');
   progressDialogVisible.value = false;
   // Progress monitoring continues in background
   toast.showInfo('Info', 'Progress monitoring berjalan di background');
 };
 
 const handleCategoryFilter = (category) => {
-  // Filter stores by category
+  console.log('📊 Category filter clicked:', category);
+
+  // Set search filter
   filters.search = category;
-  handleTableRefresh({ searchQuery: category });
+
+  // Reset ke page 1
+  pagination.value.currentPage = 1;
+
+  // Refresh dengan filter baru (sorting tetap terjaga)
+  handleTableRefresh({
+    searchQuery: category,
+    sortColumn: sortColumn.value,
+    sortOrder: sortOrder.value
+  });
 };
 </script>
 

@@ -55,6 +55,17 @@ export function usePrepClosing() {
       loading.value = true;
       error.value = null;
 
+      // Update internal state jika ada sorting baru
+      if (params.sortColumn !== undefined) {
+        sortColumn.value = params.sortColumn;
+      }
+      if (params.sortOrder !== undefined) {
+        sortOrder.value = params.sortOrder;
+      }
+      if (params.searchQuery !== undefined) {
+        searchQuery.value = params.searchQuery;
+      }
+
       const response = await prepClosingApi.getResumePerShop({
         periode,
         cabang,
@@ -129,8 +140,12 @@ export function usePrepClosing() {
     }
   };
 
-  const refreshAll = async (periode, cabang) => {
-    await Promise.all([fetchSummary(periode, cabang), fetchStores(periode, cabang), fetchCategories(periode, cabang)]);
+  const refreshAll = async (periode, cabang, params = {}) => {
+    await Promise.all([
+      fetchSummary(periode, cabang),
+      fetchStores(periode, cabang, params),
+      fetchCategories(periode, cabang),
+    ]);
   };
 
   const resetFilters = () => {

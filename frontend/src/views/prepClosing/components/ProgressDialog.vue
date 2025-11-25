@@ -18,16 +18,45 @@
                 <ProgressBar :value="progressPercentage" :showValue="true" :class="progressClass" />
 
                 <div class="progress-details">
-                    <span>{{ progress?.current || 0 }} / {{ progress?.total || 0 }} toko</span>
+                    <span>{{ progress?.completed || 0 }} / {{ progress?.total || 0 }} toko</span>
                     <span>{{ timeElapsed }}</span>
                 </div>
             </div>
 
-            <!-- Description -->
-            <div v-if="progress?.description" class="description-section">
-                <Message severity="info" :closable="false">
-                    {{ progress.description }}
-                </Message>
+            <!-- Progress Info Section -->
+            <div class="info-section">
+                <!-- Current Status Info -->
+                <div v-if="progress?.description || progress?.info?.description" class="info-card">
+                    <div class="info-icon">
+                        <i class="pi pi-info-circle"></i>
+                    </div>
+                    <div class="info-text">
+                        <strong>Status:</strong>
+                        <p>{{ progress?.description || progress?.info?.description || 'Memproses data...' }}</p>
+                    </div>
+                </div>
+
+                <!-- Store Progress Info -->
+                <div v-if="progress?.completed !== undefined && progress?.total !== undefined" class="info-card">
+                    <div class="info-icon">
+                        <i class="pi pi-building"></i>
+                    </div>
+                    <div class="info-text">
+                        <strong>Progress Toko:</strong>
+                        <p>{{ progress.completed }} dari {{ progress.total }} toko telah diproses</p>
+                    </div>
+                </div>
+
+                <!-- Error Info -->
+                <div v-if="hasError" class="info-card error-card">
+                    <div class="info-icon">
+                        <i class="pi pi-exclamation-triangle"></i>
+                    </div>
+                    <div class="info-text">
+                        <strong>Error:</strong>
+                        <p>{{ errorMessage }}</p>
+                    </div>
+                </div>
             </div>
 
             <!-- ETA Section -->
@@ -117,6 +146,18 @@ onUnmounted(() => {
     stopTimer();
 });
 
+const progressStatus = computed(() => {
+    return props.progress?.status || 'processing';
+});
+
+const hasError = computed(() => {
+    return props.progress?.error !== undefined;
+});
+
+const errorMessage = computed(() => {
+    return props.progress?.error?.message || props.progress?.error?.description || '';
+});
+
 const progressPercentage = computed(() => {
     return props.progress?.percentage || 0;
 });
@@ -150,7 +191,7 @@ const statusTitle = computed(() => {
 const statusMessage = computed(() => {
     if (isCompleted.value) return 'Semua toko telah berhasil di-screening';
     if (isFailed.value) return 'Terjadi kesalahan saat screening';
-    return props.progress?.description || 'Mohon tunggu, proses screening sedang berjalan';
+    return 'Mohon tunggu, proses screening sedang berjalan';
 });
 
 const progressClass = computed(() => {
@@ -207,6 +248,69 @@ const handleMinimize = () => {
 </script>
 
 <style scoped>
+.info-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.info-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1rem;
+    background: #f9fafb;
+    border-radius: 8px;
+    border-left: 3px solid #3b82f6;
+    transition: all 0.3s ease;
+}
+
+.info-card:hover {
+    background: #f3f4f6;
+    transform: translateX(2px);
+}
+
+.info-card.error-card {
+    background: #fef2f2;
+    border-left-color: #ef4444;
+}
+
+.info-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: white;
+    color: #3b82f6;
+    font-size: 1.125rem;
+    flex-shrink: 0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.error-card .info-icon {
+    color: #ef4444;
+}
+
+.info-text {
+    flex: 1;
+}
+
+.info-text strong {
+    display: block;
+    color: #111827;
+    margin-bottom: 0.25rem;
+    font-size: 0.875rem;
+}
+
+.info-text p {
+    margin: 0;
+    color: #6b7280;
+    line-height: 1.5;
+    font-size: 0.875rem;
+}
+
 .progress-content {
     display: flex;
     flex-direction: column;

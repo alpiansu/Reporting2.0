@@ -20,13 +20,6 @@
                 </div>
             </div>
 
-            <!-- Store Selection (if single store) -->
-            <div v-if="selectedLevel === 'store'" class="store-selection">
-                <label for="kdtk">Kode Toko</label>
-                <InputText id="kdtk" v-model="selectedStore" placeholder="Masukkan kode toko (contoh: T001)"
-                    class="w-full" />
-            </div>
-
             <!-- Info Section -->
             <div class="info-section">
                 <Message severity="info" :closable="false">
@@ -77,8 +70,6 @@
 <script setup>
 import { ref, computed, watch, reactive } from 'vue';
 import Dialog from 'primevue/dialog';
-import Button from 'primevue/button';
-import InputText from 'primevue/inputtext';
 import Checkbox from 'primevue/checkbox';
 import Message from 'primevue/message';
 
@@ -128,7 +119,7 @@ const screeningOptions = [
         color: '#3b82f6',
         info: [
             'Memproses semua toko aktif',
-            'Estimasi waktu: 30-60 menit',
+            'Estimasi waktu: 60-120 menit',
             'Progress dapat dipantau secara real-time'
         ]
     },
@@ -144,18 +135,6 @@ const screeningOptions = [
             'Lebih cepat dari screening semua cabang'
         ]
     },
-    {
-        value: 'store',
-        title: 'Single Toko',
-        description: 'Screening satu toko spesifik',
-        icon: 'pi pi-shop',
-        color: '#f59e0b',
-        info: [
-            'Memproses 1 toko saja',
-            'Estimasi waktu: 1-5 menit',
-            'Paling cepat untuk re-check'
-        ]
-    }
 ];
 
 const currentLevelInfo = computed(() => {
@@ -181,10 +160,6 @@ const handleCancel = () => {
 
 const handleStart = () => {
     const data = { level: selectedLevel.value };
-
-    if (selectedLevel.value === 'store') {
-        data.kdtk = selectedStore.value.trim();
-    }
 
     emit('start', data);
     localVisible.value = false;

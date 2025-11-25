@@ -41,7 +41,7 @@
 <script setup>
 import { ref, reactive, onMounted, watch } from 'vue';
 import { useToastService } from '@/utils/toast';
-import { useAuthStore, useCabangStore } from '@/stores';
+import { useAuthStore } from '@/stores';
 import PageHeader from '@/components/PageHeader.vue';
 import FilterBar from './components/FilterBar.vue';
 import Dashboard from './components/Dashboard.vue';
@@ -56,7 +56,6 @@ import { useProgress } from './composables/useProgress';
 
 const toast = useToastService();
 const authStore = useAuthStore();
-const cabangStore = useCabangStore();
 
 // Composables
 const {
@@ -82,8 +81,22 @@ const {
   screenAllCabang
 } = useScreening();
 
+// Initialize useProgress composable dengan destructuring lengkap
 const username = authStore.user?.username || '';
-const { progress: progressData, startMonitoring, stopMonitoring, resetProgress } = useProgress(username);
+const {
+  progress: progressData,
+  percentage,
+  isMonitoring,
+  isCompleted,
+  isFailed,
+  progressError,
+  currentInfo,
+  totalStores,
+  currentStore,
+  startMonitoring,
+  stopMonitoring,
+  resetProgress
+} = useProgress(username);
 
 // State
 const filters = reactive({
@@ -115,6 +128,49 @@ onMounted(async () => {
 watch([() => filters.periode, () => filters.cabang], async () => {
   if (filters.periode) {
     await loadData();
+  }
+});
+
+// Watch untuk monitoring progress - auto start/stop
+watch(isScreening, (newVal) => {
+  if (newVal) {
+    console.log('🎬 Screening started, showing progress dialog');
+    progressDialogVisible.value = true;
+    startMonitoring();
+  } else {
+    console.log('🛑 Screening stopped');
+    // Don't auto-stop monitoring, let it finish naturally
+  }
+});
+
+// Watch untuk auto-close dialog saat screening selesai
+watch(isCompleted, (newVal) => {
+  if (newVal) {
+    console.log('✅ Screening completed, auto-closing dialog in 2 seconds');
+    setTimeout(() => {
+      handleScreeningComplete();
+    }, 2000);
+  }
+});
+
+// Watch untuk handle screening failure
+watch(isFailed, (newVal) => {
+  if (newVal) {
+    console.log('❌ Screening failed');
+    toast.showError('Error', progressError.value || 'Screening gagal, silakan coba lagi');
+    setTimeout(() => {
+      progressDialogVisible.value = false;
+      stopMonitoring();
+      resetProgress();
+    }, 3000);
+  }
+});
+
+// Watch untuk handle progress error
+watch(progressError, (newVal) => {
+  if (newVal) {
+    console.error('❌ Progress error:', newVal);
+    toast.showError('Error', newVal);
   }
 });
 
@@ -166,41 +222,64 @@ const handleStartScreening = () => {
 
 const handleConfirmScreening = async (data) => {
   screeningDialogVisible.value = false;
-  progressDialogVisible.value = true;
 
   try {
+    // Reset progress sebelum memulai screening baru
+    resetProgress();
+
+    // Show progress dialog
+    progressDialogVisible.value = true;
+
+    console.log('🚀 Starting screening with data:', data);
+
+    // Start screening based on level
     if (data.level === 'store' && data.kdtk) {
+      console.log(`🏪 Screening single store: ${data.kdtk}`);
       await screenStore(filters.periode, data.kdtk);
     } else if (data.level === 'cabang') {
+      console.log(`🏢 Screening cabang: ${filters.cabang}`);
       await screenCabang(filters.periode, filters.cabang);
     } else {
+      console.log('🌍 Screening all cabang');
       await screenAllCabang(filters.periode);
     }
 
-    // Start progress monitoring
-    startMonitoring();
+    // Progress monitoring akan dimulai otomatis oleh watch isScreening
+    toast.showInfo('Info', 'Screening dimulai, mohon tunggu...');
+
   } catch (err) {
+    console.error('❌ Error starting screening:', err);
     toast.showError('Error', err.message || 'Gagal memulai screening');
     progressDialogVisible.value = false;
+    stopMonitoring();
+    resetProgress();
   }
 };
 
 const handleReScreenStore = async (store) => {
   try {
+    console.log(`🔄 Re-screening store: ${store.KDTK}`);
+
+    // Reset progress
+    resetProgress();
+
+    // Show progress dialog
+    progressDialogVisible.value = true;
+
     toast.showInfo('Info', `Memulai screening untuk toko ${store.KDTK}...`);
 
-    // Await screenStore
+    // Start screening
     await screenStore(filters.periode, store.KDTK);
 
-    toast.showSuccess('Sukses', `Screening toko ${store.KDTK} selesai`);
+    // Progress monitoring akan dimulai otomatis oleh watch isScreening
+    // Toast success akan ditampilkan oleh handleScreeningComplete
 
-    // Refresh data
-    await loadData();
-
-    // Penting: tidak ada throw error di sini jika sukses
   } catch (err) {
-    console.error('Error re-screening store:', err);
+    console.error('❌ Error re-screening store:', err);
     toast.showError('Error', err.message || 'Gagal melakukan screening');
+    progressDialogVisible.value = false;
+    stopMonitoring();
+    resetProgress();
 
     // Re-throw error agar bisa ditangkap di child component
     throw err;
@@ -242,16 +321,30 @@ const handleSaveNote = async (noteText) => {
 };
 
 const handleScreeningComplete = async () => {
+  console.log('🎉 Handling screening completion');
+
+  // Stop monitoring
   stopMonitoring();
-  resetProgress();
+
+  // Close dialog
   progressDialogVisible.value = false;
-  toast.showSuccess('Sukses', 'Screening selesai!');
+
+  // Show success message
+  toast.showSuccess('Sukses', 'Screening selesai! Data sedang diperbarui...');
+
+  // Refresh all data
   await loadData();
+
+  // Reset progress state
+  resetProgress();
+
+  console.log('✅ Screening complete, data refreshed');
 };
 
 const handleMinimizeProgress = () => {
   progressDialogVisible.value = false;
   // Progress monitoring continues in background
+  toast.showInfo('Info', 'Progress monitoring berjalan di background');
 };
 
 const handleCategoryFilter = (category) => {

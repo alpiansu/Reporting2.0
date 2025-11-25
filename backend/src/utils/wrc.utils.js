@@ -70,7 +70,7 @@ class WrcUtils {
     }
 
     // Determine column name based on table type
-    const columnName = tableType === "pr" ? "toko" : "shop";
+    const columnName = tableType === "pr" ? "toko" : tableType === "kodetoko" ? "kode_toko" : "shop";
 
     // Create shop filter condition
     const shopList = shops.map(shop => `'${shop}'`).join(", ");
@@ -159,107 +159,68 @@ class WrcUtils {
     const wrcConfig = await wrcInstance.getConnWRC(cab);
     const connection = await mysql.createConnection(wrcConfig);
 
+    let allWrcData = [];
+
     try {
       logger.info(`Getting ${tableType.toUpperCase()} data for cab: ${cab}, period: ${period} ...`);
-      const year = "20" + period.substring(0, 2);
-      const month = period.substring(2, 4);
 
-      // Get all dates in the month
-      const currentDate = new Date();
-      const currentYear = currentDate.getFullYear();
-      const currentMonth = currentDate.getMonth() + 1;
-      const isCurrentMonth = parseInt(year) === currentYear && parseInt(month) === currentMonth;
+      // Cek apakah pakai {date} untuk UNION ALL
+      const hasDatePlaceholder = strQuery.includes("{date}");
 
-      const dates = this.getAllDatesInMonth(year, month, isCurrentMonth);
+      // Jika query TIDAK pakai {date} -> eksekusi langsung tanpa loop
+      if (!hasDatePlaceholder) {
+        logger.info(`Direct table mode: executing single query for ${tableType}_${period}`);
 
-      if (dates.length === 0) {
-        return null;
+        const finalQuery = this.smartReplaceAndFilter(strQuery, period, shops, tableType);
+
+        const [rows] = await connection.execute(finalQuery);
+        allWrcData = rows || [];
+      } else {
+        // ORIGINAL MODE (UNION ALL berdasarkan tanggal)
+        const year = "20" + period.substring(0, 2);
+        const month = period.substring(2, 4);
+
+        const currentDate = new Date();
+        const currentYear = currentDate.getFullYear();
+        const currentMonth = currentDate.getMonth() + 1;
+        const isCurrentMonth = parseInt(year) === currentYear && parseInt(month) === currentMonth;
+
+        const dates = this.getAllDatesInMonth(year, month, isCurrentMonth);
+        if (dates.length === 0) return null;
+
+        const unionQueries = [];
+        const validDates = [];
+
+        for (const date of dates) {
+          const dateParts = date.split("-");
+          const tableDate = dateParts[0].substring(2) + dateParts[1] + dateParts[2];
+
+          const finalQuery = this.smartReplaceAndFilter(strQuery, tableDate, shops, tableType);
+          unionQueries.push(`(${finalQuery})`);
+          validDates.push(tableDate);
+        }
+
+        const combinedQuery = unionQueries.join(" UNION ALL ");
+        logger.info(`Executing combined query for ${validDates.length} tables ...`);
+
+        const [rows] = await connection.execute(combinedQuery);
+        allWrcData = rows || [];
       }
 
-      // Create temporary file to store WRC data
+      // SAVE FILE
       const tempDir = path.join(os.tmpdir());
       const shopSuffix = shops && shops.length > 0 ? `_shops_${shops.join("_")}` : "";
       const tempFile = path.join(tempDir, `${tableType}_data_${cab}_${period}${shopSuffix}_${Date.now()}.json`);
 
-      // Ensure temp directory exists
-      try {
-        await fs.mkdir(tempDir, { recursive: true });
-      } catch (error) {
-        if (error.code !== "EEXIST") {
-          throw error;
-        }
-      }
-
-      // Build UNION ALL query for all dates
-      const unionQueries = [];
-      const validDates = [];
-
-      for (const date of dates) {
-        const dateParts = date.split("-");
-        const tableDate = dateParts[0].substring(2) + dateParts[1] + dateParts[2];
-
-        // Smart replace {date} and add shop filter in one operation
-        const finalQuery = this.smartReplaceAndFilter(strQuery, tableDate, shops, tableType);
-
-        unionQueries.push(`(${finalQuery})`);
-        validDates.push(tableDate);
-      }
-
-      // Combine all queries with UNION ALL
-      const combinedQuery = unionQueries.join(" UNION ALL ");
-      logger.info(
-        `Executing combined query for ${validDates.length} tables: ${tableType}_${validDates[0]} to ${tableType}_${
-          validDates[validDates.length - 1]
-        }`
-      );
-
-      // Execute the combined query once
-      let allWrcData = [];
-      try {
-        const [rows] = await connection.execute(combinedQuery);
-        allWrcData = rows || [];
-        logger.info(`Retrieved ${allWrcData.length} records from ${validDates.length} tables`);
-      } catch (error) {
-        logger.error(`Error executing combined query: ${error.message}`);
-        // If combined query fails, fallback to individual queries for debugging
-        logger.info("Falling back to individual queries for error diagnosis...");
-
-        for (let i = 0; i < dates.length; i++) {
-          const date = dates[i];
-          const tableDate = validDates[i];
-
-          try {
-            // Smart replace {date} and add shop filter in one operation
-            const finalQuery = this.smartReplaceAndFilter(strQuery, tableDate, shops, tableType);
-
-            const [rows] = await connection.execute(finalQuery);
-
-            if (rows && rows.length > 0) {
-              allWrcData.push(...rows);
-            }
-          } catch (individualError) {
-            logger.error(`Error querying ${tableType}_${tableDate}: ${individualError.message}`);
-            // Continue with next date even if there's an error
-          }
-        }
-      }
-
-      // Save data to temporary file
+      await fs.mkdir(tempDir, { recursive: true }).catch(() => {});
       await fs.writeFile(tempFile, JSON.stringify(allWrcData));
 
-      // Explicit memory cleanup to prevent memory leaks
       allWrcData = this.cleanupMemory(allWrcData, true);
 
-      logger.info(`Data saved to temporary file: ${tempFile}`);
+      logger.info(`WRC data saved to file: ${tempFile}`);
       return tempFile;
     } catch (error) {
       logger.error(`Error getting ${tableType.toUpperCase()} data: ${error.message}`);
-
-      // Cleanup memory in case of error
-      if (typeof allWrcData !== "undefined" && allWrcData !== null) {
-        allWrcData = this.cleanupMemory(allWrcData);
-      }
-
       throw error;
     } finally {
       await connection.end();

@@ -1,127 +1,112 @@
 import api from "./api";
-import { EventSourcePolyfill } from "event-source-polyfill";
+// src/pages/PrepClosing/services/prepClosingApi.js
 
-/**
- * Service for Prep Closing operations
- */
-export default {
+const BASE_URL = "/prep-closing";
+
+export const prepClosingApi = {
+  // ==================== SCREENING ENDPOINTS ====================
+
   /**
-   * Start screening pra closing process
-   * @param {String} strCab - Branch code
-   * @param {String} strMonth - Month (2 digits)
-   * @param {String} strYear - Year (4 digits)
-   * @returns {Promise}
+   * Screen a single store (Level 3)
    */
-  startScreening(strCab, strMonth, strYear) {
-    return api.post('/prep-closing/screening', {
-      strCab,
-      strMonth,
-      strYear
+  async screenStore(periode, kdtk) {
+    const response = await api.get(`${BASE_URL}/screening`, {
+      params: { periode, kdtk },
     });
+    return response.data;
   },
 
   /**
-   * Get screening progress by progress ID
-   * @param {String} progressId - Progress ID
-   * @returns {Promise}
+   * Screen a single cabang (Level 2)
    */
-  getProgress(progressId) {
-    return api.get(`/prep-closing/progress/${progressId}`);
-  },
-
-  /**
-   * Get latest screening progress
-   * @param {String} cab - Branch code
-   * @param {String} periode - Period in YYYYMM format
-   * @returns {Promise}
-   */
-  getLatestProgress(cab, periode) {
-    return api.get(`/prep-closing/progress/${cab}/${periode}`);
-  },
-
-  /**
-   * Get screening results with pagination
-   * @param {String} cab - Branch code
-   * @param {String} periode - Period in YYYYMM format
-   * @param {Object} params - Query parameters (page, limit, etc.)
-   * @returns {Promise}
-   */
-  getResults(cab, periode, params = {}) {
-    const queryParams = new URLSearchParams({
-      cab: cab || '',
-      periode: periode || '',
-      ...params
+  async screenCabang(periode, cabang) {
+    const response = await api.get(`${BASE_URL}/screening`, {
+      params: { periode, cabang },
     });
-    return api.get(`/prep-closing?${queryParams}`);
+    return response.data;
   },
 
   /**
-   * Get screening summary
-   * @param {String} cab - Branch code
-   * @param {String} periode - Period in YYYYMM format
-   * @returns {Promise}
+   * Screen all cabang (Level 1)
    */
-  getSummary(cab, periode) {
-    return api.get(`/prep-closing/stats?cab=${cab}&periode=${periode}`);
+  async screenAllCabang(periode) {
+    const response = await api.get(`${BASE_URL}/screening`, {
+      params: { periode, cabang: "All" },
+    });
+    return response.data;
+  },
+
+  // ==================== SUMMARY & STATISTICS ENDPOINTS ====================
+
+  /**
+   * Get summary statistics
+   */
+  async getSummary(periode, cabang) {
+    const response = await api.get(`${BASE_URL}/summary`, {
+      params: { periode, cabang: cabang || "All" },
+    });
+    return response.data;
   },
 
   /**
-   * Connect to SSE progress stream
-   * @param {String} progressId - Progress ID
-   * @param {Function} onMessage - Message handler function
-   * @param {Function} onError - Error handler function
-   * @param {Function} onOpen - Open handler function
-   * @returns {EventSource} EventSource instance
+   * Get resume per shop with pagination
    */
-  connectToProgressStream(progressId, onMessage, onError, onOpen) {
-    const token = localStorage.getItem('token');
-    const url = `${api.defaults.baseURL}/prep-closing/progress/stream/${progressId}`;
-    
-    const eventSource = new EventSourcePolyfill(url, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'text/event-stream',
-        'Cache-Control': 'no-cache'
+  async getResumePerShop(params) {
+    const response = await api.get(`${BASE_URL}/resumePerShop`, {
+      params: {
+        periode: params.periode,
+        cabang: params.cabang || "All",
+        page: params.page || 1,
+        limit: params.limit || 10,
+        sortColumn: params.sortColumn || "KDTK",
+        sortOrder: params.sortOrder || "ASC",
+        searchQuery: params.searchQuery || "",
       },
-      heartbeatTimeout: 120000,
-      retryDelayMs: 3000
     });
+    return response.data;
+  },
 
-    if (onOpen) {
-      eventSource.onopen = onOpen;
-    }
+  // ==================== DETAILS & ISSUES ENDPOINTS ====================
 
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (onMessage) {
-          onMessage(data);
-        }
-      } catch (error) {
-        console.error('Error parsing SSE message:', error);
-        if (onError) {
-          onError(error);
-        }
-      }
-    };
-
-    eventSource.onerror = (error) => {
-      console.error('SSE connection error:', error);
-      if (onError) {
-        onError(error);
-      }
-    };
-
-    return eventSource;
+  /**
+   * Get store details with issues
+   */
+  async getStoreDetails(kdtk, periode) {
+    const response = await api.get(`${BASE_URL}/details`, {
+      params: { kdtk, periode },
+    });
+    return response.data;
   },
 
   /**
-   * Check if there's an existing screening process
-   * @param {String} cab - Branch code
-   * @param {String} periode - Period in YYYYMM format
-   * @returns {Promise}
+   * Get issues grouped by category
    */
-  checkExistingProcess(cab, periode) {
-    return this.getLatestProgress(cab, periode);
-  }
+  async getIssuesByCategory(periode, cabang) {
+    const response = await api.get(`${BASE_URL}/issuesByCategory`, {
+      params: { periode, cabang: cabang || "All" },
+    });
+    return response.data;
+  },
+
+  // ==================== NOTES MANAGEMENT ENDPOINTS ====================
+
+  /**
+   * Update or create note for a store
+   */
+  async updateNote(data) {
+    const response = await api.put(`${BASE_URL}/note`, data);
+    return response.data;
+  },
+
+  // ==================== PROGRESS MONITORING ====================
+
+  /**
+   * Get progress status for screening task
+   */
+  async getProgress(username) {
+    const response = await api.get(`/api/progress/prepClosingTask_${username}`);
+    return response.data;
+  },
 };
+
+export default prepClosingApi;

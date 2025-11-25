@@ -1,30 +1,36 @@
 /**
- * Prep Closing Module
- * Exports all prep closing related functionality
+ * Prep Closing (Screening Pra Closing) module index
  */
-import prepClosingController from './prep_closing.controller.js';
-import prepClosingService from './prep_closing.service.js';
-import prepClosingRoutes from './prep_closing.routes.js';
+import {
+  screeningByCabang,
+  getSummary,
+  getResumeByKdtk,
+  getStoreDetails,
+  getIssuesByCategory,
+  updateNote,
+} from "./prep_closing.controller.js";
+import prepClosingRoutes from "./prep_closing.routes.js";
+import PrepClosingService from "./prep_closing.service.js";
 
-const prepClosingModule = {
-  controller: prepClosingController,
-  service: prepClosingService,
-  routes: prepClosingRoutes,
-  
-  // Initialize service and register routes
-  initialize: (app) => {
-    // Initialize service
-    prepClosingService.initialize().catch(error => {
-      console.error('Failed to initialize prep closing service:', error);
-    });
-    
-    // Register routes
-    app.use('/api/prep-closing', prepClosingRoutes);
-    
-    return {
-      prepClosingService
-    };
-  }
+const PrepClosingController = {
+  screeningByCabang,
+  getSummary,
+  getResumeByKdtk,
+  getStoreDetails,
+  getIssuesByCategory,
+  updateNote,
 };
 
-export default prepClosingModule;
+export default {
+  PrepClosingController,
+  prepClosingRoutes,
+  PrepClosingService,
+  initialize: app => {
+    // Register routes
+    app.use("/api/prep-closing", prepClosingRoutes);
+
+    return {
+      prepClosingService: PrepClosingService,
+    };
+  },
+};

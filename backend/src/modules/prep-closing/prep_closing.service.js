@@ -1,101 +1,63 @@
 /**
- * Service for managing prep closing data
- * Handles database operations with JSON file synchronization
- * Konsep: Read dari JSON file, Write ke database + sync ke JSON
+ * Service for Prep Closing (Screening Pra Closing)
  */
-import { DataTypes } from 'sequelize';
-import fs from 'fs/promises';
-import path from 'path';
-import mysql from 'mysql2/promise';
-import resilientDb from '../../config/resilient-database.js';
-import logger from '../../config/logger.js';
-import wrcService from '../../services/wrc.service.js';
-import storeService from '../store/storeService.js';
-import config from '../../config/prep_closing.config.js';
+import fs from "fs/promises";
+import path from "path";
+import logger from "../../config/logger.js";
+import ScreeningPraClosing from "./prep_closing.model.js";
+import dbStore from "../../config/db_store.js";
+import config from "./prep_closing.config.js";
+import wrcQueries from "./queries/wrc.queries.js";
+import storeService from "../store/storeService.js";
+import ruleEngine from "./rules/rule.engine.js";
+import pLimit from "p-limit";
+import moment from "moment-timezone";
+import RekapRemoteService from "../rekap_remote/rekap_remote.service.js";
+import notesService from "../notes/notes.service.js";
+import progressService from "../progress/progress.service.js";
+import wrcUtils from "../../utils/wrc.utils.js";
+import { json } from "sequelize";
 
-// Path untuk file JSON prep_closing
+// Path untuk file JSON
 const PREP_CLOSING_JSON_PATH = path.join(process.cwd(), "data/prep_closing.json");
-
-// Define PrepClosing model
-let PrepClosing = null;
 
 class PrepClosingService {
   constructor() {
     this.prepClosingData = [];
     this.initialized = false;
+
+    // TTL Cache Management
+    this.lastLoadTime = null;
+    this.TTL = 60 * 60 * 1000; // 1 hour
+    this.isLoading = false;
+
+    // Multi-key cache for detailed records
+    this.cacheDetailData = new Map();
+    this.cacheTTL = 5 * 60 * 1000; // 5 minutes
   }
 
   /**
-   * Initialize the service by loading data from JSON file and setting up model
+   * Initialize the service by loading data from JSON file
    */
   async initialize() {
     try {
-      // Initialize model if database is available
-      if (resilientDb.sequelize && !PrepClosing) {
-        PrepClosing = resilientDb.sequelize.define('PrepClosing', {
-          id: {
-            type: DataTypes.INTEGER,
-            primaryKey: true,
-            autoIncrement: true
-          },
-          cab: {
-            type: DataTypes.STRING(10),
-            allowNull: false
-          },
-          kdtk: {
-            type: DataTypes.STRING(10),
-            allowNull: false
-          },
-          key: {
-            type: DataTypes.STRING(50),
-            allowNull: false
-          },
-          nilai: {
-            type: DataTypes.DECIMAL(15, 2),
-            allowNull: true
-          },
-          valid: {
-            type: DataTypes.TINYINT,
-            allowNull: false,
-            defaultValue: 1
-          }
-        }, {
-          tableName: 'prep_closing',
-          timestamps: true,
-          underscored: true,
-          indexes: [
-            {
-              unique: true,
-              fields: ['cab', 'kdtk', 'key']
-            }
-          ]
-        });
-      }
-
-      // Create directory if it doesn't exist
       const dir = path.dirname(PREP_CLOSING_JSON_PATH);
       await fs.mkdir(dir, { recursive: true });
 
       try {
-        // Try to read the file
         const data = await fs.readFile(PREP_CLOSING_JSON_PATH, "utf8");
         this.prepClosingData = JSON.parse(data);
-        logger.info(`Loaded ${this.prepClosingData.length} prep_closing records from JSON file`);
-      } catch (error) {
-        // If file doesn't exist or is invalid, create an empty file
-        if (error.code === "ENOENT" || error instanceof SyntaxError) {
+        logger.info(`[prep_closing.service] Loaded ${this.prepClosingData.length} records from JSON`);
+      } catch (err) {
+        if (err.code === "ENOENT") {
           this.prepClosingData = [];
           await this.saveToFile();
-          logger.info("Created new prep_closing.json file");
-        } else {
-          throw error;
-        }
+        } else throw err;
       }
 
       this.initialized = true;
-      logger.info('PrepClosingService initialized successfully');
     } catch (error) {
-      logger.error(`Failed to initialize prep closing service: ${error.message}`);
+      logger.error(`[prep_closing.service] Failed to initialize: ${error.message}`);
       throw error;
     }
   }
@@ -106,439 +68,1040 @@ class PrepClosingService {
   async saveToFile() {
     try {
       await fs.writeFile(PREP_CLOSING_JSON_PATH, JSON.stringify(this.prepClosingData, null, 2));
+      logger.debug(`[prep_closing.service] Saved ${this.prepClosingData.length} records to JSON`);
     } catch (error) {
-      logger.error(`Failed to save prep_closing data to file: ${error.message}`);
+      logger.error(`[prep_closing.service] Failed to save to file: ${error.message}`);
       throw error;
     }
   }
 
   /**
-   * Ensure service is initialized
+   * Generate cache key
    */
-  async ensureInitialized() {
-    if (!this.initialized) {
+  generateCacheKey(periode, cabang, kdtk) {
+    return JSON.stringify({ periode, cabang, kdtk });
+  }
+
+  /**
+   * Check if cache is valid
+   */
+  isCacheFromDbValid(entry) {
+    if (!entry) return false;
+    const now = Date.now();
+    return now - entry.lastAccessTime < this.cacheTTL;
+  }
+
+  /**
+   * Check if summary cache is valid
+   */
+  isCacheValid() {
+    if (!this.initialized || !this.lastLoadTime) {
+      return false;
+    }
+    const now = Date.now();
+    return now - this.lastLoadTime <= this.TTL;
+  }
+
+  /**
+   * Invalidate cache manually
+   */
+  invalidateCache() {
+    this.prepClosingData = [];
+    this.initialized = false;
+    this.lastLoadTime = null;
+    this.isLoading = false;
+    this.cacheDetailData.clear();
+    logger.info("[prep_closing.service] Cache invalidated");
+  }
+
+  /**
+   * Ensure data is loaded with TTL-based lazy loading
+   */
+  async ensureDataLoaded() {
+    if (this.isCacheValid()) {
+      return;
+    }
+
+    if (this.isLoading) {
+      while (this.isLoading) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      return;
+    }
+
+    try {
+      this.isLoading = true;
+      logger.info("[prep_closing.service] Loading data from JSON (cache expired)");
+
       await this.initialize();
+      this.lastLoadTime = Date.now();
+
+      logger.info(
+        `[prep_closing.service] Data loaded. TTL expires at: ${new Date(this.lastLoadTime + this.TTL).toISOString()}`
+      );
+    } finally {
+      this.isLoading = false;
     }
   }
 
   /**
-   * Sync data from database to JSON file
+   * Sync aggregated data to JSON file
    */
   async syncToJsonFile() {
     try {
-      if (!resilientDb.isDatabaseAvailable() || !PrepClosing) {
-        logger.warn('Database not available, skipping sync to JSON');
-        return;
-      }
+      const model = await ScreeningPraClosing.getModel();
+      const sequelize = model.sequelize;
 
-      const records = await PrepClosing.findAll({
-        order: [['id', 'ASC']]
-      });
-      this.prepClosingData = records.map(record => record.toJSON());
+      // Query agregasi
+      const [rows] = await sequelize.query(`
+        SELECT 
+          CAB,
+          KDTK,
+          PRD_CLOSING,
+          TOTAL_RULES,
+          PASSED_RULES,
+          FAILED_RULES,
+          CRITICAL_ISSUES,
+          IS_READY,
+          LAST_SCREENED,
+          UPDTIME
+        FROM screening_praclosing
+      `);
+
+      this.prepClosingData = rows.map(r => ({
+        CAB: r.CAB,
+        KDTK: r.KDTK,
+        PRD_CLOSING: r.PRD_CLOSING,
+        TOTAL_RULES: r.TOTAL_RULES || 0,
+        PASSED_RULES: r.PASSED_RULES || 0,
+        FAILED_RULES: r.FAILED_RULES || 0,
+        CRITICAL_ISSUES: r.CRITICAL_ISSUES || 0,
+        IS_READY: r.IS_READY || false,
+        LAST_SCREENED: r.LAST_SCREENED,
+        UPDTIME: r.UPDTIME,
+      }));
+
       await this.saveToFile();
-      
-      logger.info(`Synced ${this.prepClosingData.length} prep_closing records to JSON file`);
+      this.lastLoadTime = Date.now();
+      this.initialized = true;
+
+      logger.info(`[prep_closing.service] Synced ${this.prepClosingData.length} records to JSON`);
     } catch (error) {
-      logger.error(`Failed to sync prep_closing data to JSON: ${error.message}`);
+      logger.error(`[prep_closing.service] Failed to sync: ${error.message}`);
+      throw error;
     }
   }
 
   /**
-   * Get all prep closing data with optional filters (READ dari JSON)
+   * Calculate previous periode (1 month before)
    */
-  async getAllPrepClosing(filters = {}, limit = 100, offset = 0) {
-    await this.ensureInitialized();
-    
-    let filteredData = [...this.prepClosingData];
-
-    // Apply filters
-    if (filters.id) {
-      filteredData = filteredData.filter(item => item.id === parseInt(filters.id));
-    }
-    if (filters.cab) {
-      filteredData = filteredData.filter(item => item.cab === filters.cab);
-    }
-    if (filters.kdtk) {
-      filteredData = filteredData.filter(item => item.kdtk === filters.kdtk);
-    }
-    if (filters.key) {
-      filteredData = filteredData.filter(item => item.key === filters.key);
-    }
-    if (filters.valid !== undefined) {
-      filteredData = filteredData.filter(item => item.valid === parseInt(filters.valid));
-    }
-
-    // Apply pagination
-    const startIndex = offset;
-    const endIndex = startIndex + limit;
-    
-    return filteredData.slice(startIndex, endIndex);
+  getPreviousPeriode(periode) {
+    const currentDate = moment(periode, "YYMM");
+    const previousDate = currentDate.subtract(1, "months");
+    return previousDate.format("YYMM");
   }
 
   /**
-   * Get prep closing by ID (READ dari JSON)
+   * Generate filet table names
    */
-  async getPrepClosingById(id) {
-    await this.ensureInitialized();
-    const record = this.prepClosingData.find(item => item.id === parseInt(id));
-    return record || null;
+  getFiletTableNames(kdtk, periode) {
+    const previousPeriode = this.getPreviousPeriode(periode);
+    const tblFilet = `${kdtk}${previousPeriode}`;
+    const tblFiletMaju = `${kdtk}${periode}`;
+    return { tblFilet, tblFiletMaju };
   }
 
   /**
-   * Create new prep closing record (WRITE ke database + sync ke JSON)
+   * Tarik saldo filet dari WRC menggunakan wrcUtils
+   * @param {string} cab - Branch code
+   * @param {string} kdtk - Store code (or 'ALL' for all stores)
+   * @param {string} prdFilet - Period filet format YYMM
+   * @param {string} strPrdStore - Store period format YYYY-MM-DD
+   * @returns {Promise<Array>} Array of saldo data from WRC
    */
-  async addPrepClosing(data) {
+  async tarikSaldoFltWrc(cab, kdtk, prdFilet, strPrdStore) {
     try {
-      if (!resilientDb.isDatabaseAvailable() || !PrepClosing) {
-        throw new Error('Database sedang tidak tersedia. Operasi tulis tidak dapat dilakukan.');
+      // Parse explicit format YYMM to avoid wrong parsing
+      const m = moment(prdFilet, "YYMM", true);
+
+      if (!m.isValid()) {
+        throw new Error(`Invalid period format: ${prdFilet} expected YYMM`);
       }
 
-      // Check for duplicate based on unique constraint
-      const existing = await PrepClosing.findOne({
-        where: {
-          cab: data.cab,
-          kdtk: data.kdtk,
-          key: data.key
+      const getMonth = moment(strPrdStore).format("MM");
+      const getYear = moment(strPrdStore).format("YYYY");
+      const getPeriod = m.format("YYMM");
+      // Query template from wrcQueries
+      let queryTemplate = wrcQueries.tarikSaldoFltWrc;
+
+      queryTemplate = queryTemplate
+        .replace(/{period}/g, getPeriod)
+        .replace(/{month}/g, getMonth)
+        .replace(/{year}/g, getYear);
+
+      const shops = kdtk !== "ALL" ? [kdtk] : null;
+
+      logger.info(
+        `[prep_closing.service] Fetching saldo from WRC - cab: ${cab}, kdtk: ${kdtk}, period: ${prdFilet}, tablePeriod: ${strPrdStore}`
+      );
+      const tempFilePath = await wrcUtils.getWrcData(cab, prdFilet, "kodetoko", queryTemplate, shops);
+
+      if (!tempFilePath) {
+        logger.warn(`[prep_closing.service] No WRC data returned for cab: ${cab}, period: ${prdFilet}`);
+        return [];
+      }
+
+      const fs = await import("fs/promises");
+      const fileContent = await fs.readFile(tempFilePath, "utf8");
+      const wrcData = JSON.parse(fileContent);
+
+      await fs.unlink(tempFilePath).catch(err => {
+        logger.warn(`[prep_closing.service] Failed to delete temp file ${tempFilePath}: ${err.message}`);
+      });
+
+      logger.info(`[prep_closing.service] Retrieved ${wrcData.length} saldo records from WRC`);
+
+      return wrcData;
+    } catch (error) {
+      logger.error(`[prep_closing.service] Error in tarikSaldoFltWrc: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get saldo data from WRC for a store
+   * @param {string} kdtk - Store code
+   * @param {Array} dataSaldoWrc - Array of saldo data from WRC
+   * @returns {Object} Saldo data with fallback to default values
+   */
+  async getSaldoFromWrc(kdtk, dataSaldoWrc) {
+    const saldoData = dataSaldoWrc.find(item => item.KODE_TOKO === kdtk);
+
+    if (!saldoData) {
+      logger.warn(`[prep_closing.service] Saldo data not found for store ${kdtk}, using default values`);
+      return {
+        saldoBlnQty: 0,
+        saldoBlnRp: 0,
+        strBlnSlsWrc: null,
+        strMaxBlnAktWrc: null,
+      };
+    }
+
+    return {
+      saldoBlnQty: saldoData.SALDO_AKH_BLN || 0,
+      saldoBlnRp: saldoData.RP_SLD_AKH_BLN || 0,
+      strBlnSlsWrc: saldoData.bln_sls || null,
+      strMaxBlnAktWrc: saldoData.terakhir_bln_akt || null,
+    };
+  }
+
+  /**
+   * Process single store screening
+   */
+  async processSingleStore(store, strPeriode, strYear, strMonth, dataSaldoWrc) {
+    const { storeCode, cab } = store;
+    const results = { success: false, records: null, hasIssue: false };
+
+    try {
+      // Get store info
+      const storeInfo = await storeService.getStoreIPHost(storeCode);
+
+      if (!storeInfo) {
+        await RekapRemoteService.addToTemp(cab, storeCode, "prep_closing", `[${storeCode}] store info not found`);
+        return results;
+      }
+
+      // Create DB connection
+      const storeConnection = await dbStore.createDbStore(storeInfo.dbHost, config.connectionRetry.maxRetries);
+
+      if (!storeConnection) {
+        await RekapRemoteService.addToTemp(
+          cab,
+          storeCode,
+          "prep_closing",
+          `[${storeCode}] failed to connect after ${config.connectionRetry.maxRetries} attempts`
+        );
+        return results;
+      }
+
+      try {
+        // Generate table names
+        const { tblFilet, tblFiletMaju } = this.getFiletTableNames(storeCode, strPeriode);
+
+        // Get saldo data from WRC
+        const saldoData = await this.getSaldoFromWrc(storeCode, dataSaldoWrc);
+
+        // Prepare context for rule execution
+        const context = {
+          cab,
+          kdtk: storeCode,
+          periode: strPeriode,
+          strYear,
+          strMonth,
+          strPrd: moment(`${strYear}-${strMonth}-01`).subtract(1, "month").format("YYYYMM"),
+          tblFilet,
+          tblFiletMaju,
+          ...saldoData,
+        };
+
+        await RekapRemoteService.addToTemp(cab, storeCode, "prep_closing", `[${storeCode}] executing rules...`);
+
+        // Execute all rules
+        const ruleResults = await ruleEngine.executeRules(storeConnection, context);
+
+        await RekapRemoteService.addToTemp(
+          cab,
+          storeCode,
+          "prep_closing",
+          `[${storeCode}] rules completed: ${ruleResults.passedRules}/${ruleResults.totalRules} passed, ${ruleResults.criticalIssues} critical issues`
+        );
+
+        // Prepare record for database
+        const recordId = `${cab}${storeCode}${strPeriode}`;
+        const recordData = {
+          ID: recordId,
+          RECID: "*", // Always mark as unresolved for screening
+          CAB: cab,
+          KDTK: storeCode,
+          PRD_CLOSING: strPeriode,
+          ISSUES: ruleResults.issues,
+          TOTAL_RULES: ruleResults.totalRules,
+          PASSED_RULES: ruleResults.passedRules,
+          FAILED_RULES: ruleResults.failedRules,
+          CRITICAL_ISSUES: ruleResults.criticalIssues,
+          IS_READY: ruleResults.isReady,
+          LAST_SCREENED: new Date(),
+          UPDTIME: new Date(),
+        };
+
+        // Save to database
+        await ScreeningPraClosing.upsert(recordData, {
+          conflictFields: ["ID"],
+        });
+
+        results.records = recordData;
+        results.hasIssue = !ruleResults.isReady; // Has issue if not ready
+        results.success = true;
+      } finally {
+        await storeConnection.end();
+      }
+    } catch (err) {
+      await RekapRemoteService.addToTemp(cab, storeCode, "prep_closing", `[${storeCode}] ERROR: ${err.message}`);
+      logger.error(`[prep_closing.service] Error processing store ${storeCode}: ${err.message}`);
+    }
+
+    return results;
+  }
+
+  /**
+   * Update resolved records
+   */
+  async updateResolvedRecords(params) {
+    const { periode, level, cabang, kdtk, hasIssue, screenedStores, activeStores } = params;
+
+    try {
+      const model = await ScreeningPraClosing.getModel();
+      const sequelize = model.sequelize;
+      const { Sequelize } = await import("sequelize");
+
+      let query = "";
+      let replacements = { periode };
+
+      // LEVEL 3: Single Store
+      if (level === 3) {
+        if (hasIssue) {
+          logger.info(`[prep_closing.service] Level 3: Store ${kdtk} has issues, no RECID update`);
+          return 0;
+        } else {
+          query = `
+            UPDATE screening_praclosing 
+            SET RECID = '1' 
+            WHERE PRD_CLOSING = :periode 
+              AND KDTK = :kdtk
+              AND RECID = '*'
+          `;
+          replacements.kdtk = kdtk;
+
+          logger.info(`[prep_closing.service] Level 3: Updating RECID='1' for store ${kdtk}`);
         }
+      }
+      // LEVEL 2: Single Branch
+      else if (level === 2) {
+        if (!screenedStores || screenedStores.length === 0) {
+          logger.info(`[prep_closing.service] Level 2: No stores screened, skipping`);
+          return 0;
+        }
+
+        query = `
+          UPDATE screening_praclosing 
+          SET RECID = '1' 
+          WHERE PRD_CLOSING = :periode 
+            AND CAB = :cabang
+            AND RECID = '*'
+            AND KDTK IN (:screenedStores)
+        `;
+        replacements.cabang = cabang;
+        replacements.screenedStores = screenedStores;
+
+        if (activeStores && activeStores.length > 0) {
+          query += ` AND KDTK NOT IN (:activeStores)`;
+          replacements.activeStores = activeStores;
+        }
+
+        logger.info(
+          `[prep_closing.service] Level 2: Updating for cabang ${cabang}, screened: ${screenedStores.length}, active: ${
+            activeStores?.length || 0
+          }`
+        );
+      }
+      // LEVEL 1: All Branches
+      else if (level === 1) {
+        if (!screenedStores || screenedStores.length === 0) {
+          logger.info(`[prep_closing.service] Level 1: No stores screened, skipping`);
+          return 0;
+        }
+
+        query = `
+          UPDATE screening_praclosing 
+          SET RECID = '1' 
+          WHERE PRD_CLOSING = :periode 
+            AND RECID = '*'
+            AND KDTK IN (:screenedStores)
+        `;
+        replacements.screenedStores = screenedStores;
+
+        if (activeStores && activeStores.length > 0) {
+          query += ` AND KDTK NOT IN (:activeStores)`;
+          replacements.activeStores = activeStores;
+        }
+
+        logger.info(
+          `[prep_closing.service] Level 1: Updating all cabang, screened: ${screenedStores.length}, active: ${
+            activeStores?.length || 0
+          }`
+        );
+      }
+
+      // Execute query
+      const [results, metadata] = await sequelize.query(query, {
+        replacements,
+        type: Sequelize.QueryTypes.UPDATE,
       });
 
-      if (existing) {
-        throw new Error(`Record already exists for cab: ${data.cab}, kdtk: ${data.kdtk}, key: ${data.key}`);
-      }
+      logger.info(`[prep_closing.service] Updated ${metadata} records to RECID='1'`);
 
-      const record = await PrepClosing.create(data);
-      
-      // Sync to JSON after database operation
-      await this.syncToJsonFile();
-
-      return record.toJSON();
+      return metadata;
     } catch (error) {
-      logger.error(`Error in addPrepClosing: ${error.message}`);
+      logger.error(`[prep_closing.service] Error updating resolved records: ${error.message}`);
       throw error;
     }
   }
 
+  // 👇 Lanjutan di Part 2...
+  // ... (lanjutan dari Part 1)
+
   /**
-   * Update prep closing record by ID (WRITE ke database + sync ke JSON)
+   * Main screening method
+   * Supports 3 levels: All cabang, 1 cabang, or 1 specific store
    */
-  async updatePrepClosing(id, data) {
-    try {
-      if (!resilientDb.isDatabaseAvailable() || !PrepClosing) {
-        throw new Error('Database sedang tidak tersedia. Operasi tulis tidak dapat dilakukan.');
+  async screening(options) {
+    // Ensure storeService and ruleEngine are initialized
+    await storeService.ensureInitialized();
+    await ruleEngine.ensureInitialized();
+
+    const { cabang, periode, kdtk, username } = options;
+
+    // === LEVEL 3: Single Store Screening (No Progress Task) ===
+    if (kdtk) {
+      logger.info(`[prep_closing.service] Starting single store screening: ${kdtk}, periode: ${periode}`);
+
+      try {
+        // Get store info to determine cabang
+        const storeInfo = await storeService.getStoreByCode(kdtk);
+        const storeCab = storeInfo ? storeInfo.branch || storeInfo.cab : "UNKNOWN";
+
+        // Convert periode
+        const strPeriode = periode;
+        const strYear = moment(periode, "YYMM").format("YYYY");
+        const strMonth = moment(periode, "YYMM").format("MM");
+
+        // Get WRC saldo data using new method
+        const prdFiletnya = moment(periode, "YYMM").subtract(1, "month").format("YYMM");
+        const strPrdStore = `${strYear}-${strMonth}-01`;
+
+        logger.info(`[prep_closing.service] Fetching WRC data for single store ${kdtk}`);
+        const dataSaldoWrc = await this.tarikSaldoFltWrc(storeCab, kdtk, prdFiletnya, strPrdStore);
+
+        if (!dataSaldoWrc || dataSaldoWrc.length === 0) {
+          throw new Error(`Failed to fetch WRC data for store ${kdtk}`);
+        }
+
+        // Process single store
+        const result = await this.processSingleStore(
+          { storeCode: kdtk, cab: storeCab },
+          strPeriode,
+          strYear,
+          strMonth,
+          dataSaldoWrc
+        );
+
+        // Save logs to database
+        await RekapRemoteService.saveLogsToDatabase();
+
+        // Update resolved records
+        await this.updateResolvedRecords({
+          periode: strPeriode,
+          level: 3,
+          kdtk: kdtk,
+          hasIssue: result.hasIssue,
+        });
+
+        // Sync to JSON file
+        await this.syncToJsonFile();
+
+        return {
+          success: true,
+          message: `Single store screening completed for ${kdtk}`,
+          isReady: result.records?.IS_READY || false,
+          totalRules: result.records?.TOTAL_RULES || 0,
+          passedRules: result.records?.PASSED_RULES || 0,
+          failedRules: result.records?.FAILED_RULES || 0,
+          criticalIssues: result.records?.CRITICAL_ISSUES || 0,
+        };
+      } catch (error) {
+        logger.error(`[prep_closing.service] Error during single store screening: ${error.message}`);
+        throw error;
       }
-
-      const record = await PrepClosing.findByPk(id);
-      if (!record) {
-        throw new Error('Record not found');
-      }
-
-      await record.update(data);
-      
-      // Sync to JSON after database operation
-      await this.syncToJsonFile();
-
-      return record.toJSON();
-    } catch (error) {
-      logger.error(`Error in updatePrepClosing: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Delete prep closing record by ID (WRITE ke database + sync ke JSON)
-   */
-  async deletePrepClosing(id) {
-    try {
-      if (!resilientDb.isDatabaseAvailable() || !PrepClosing) {
-        throw new Error('Database sedang tidak tersedia. Operasi tulis tidak dapat dilakukan.');
-      }
-
-      const record = await PrepClosing.findByPk(id);
-      if (!record) {
-        throw new Error('Record not found');
-      }
-
-      const deletedRecord = record.toJSON();
-      await record.destroy();
-      
-      // Sync to JSON after database operation
-      await this.syncToJsonFile();
-
-      return deletedRecord;
-    } catch (error) {
-      logger.error(`Error in deletePrepClosing: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Get count of records with filters (READ dari JSON)
-   */
-  async getCount(filters = {}) {
-    await this.ensureInitialized();
-    
-    let filteredData = [...this.prepClosingData];
-
-    // Apply same filters as getAllPrepClosing
-    if (filters.id) {
-      filteredData = filteredData.filter(item => item.id === parseInt(filters.id));
-    }
-    if (filters.cab) {
-      filteredData = filteredData.filter(item => item.cab === filters.cab);
-    }
-    if (filters.kdtk) {
-      filteredData = filteredData.filter(item => item.kdtk === filters.kdtk);
-    }
-    if (filters.key) {
-      filteredData = filteredData.filter(item => item.key === filters.key);
-    }
-    if (filters.valid !== undefined) {
-      filteredData = filteredData.filter(item => item.valid === parseInt(filters.valid));
     }
 
-    return filteredData.length;
-  }
+    // === LEVEL 1 & 2: Multi-Store Screening (With Progress Task) ===
+    const taskId = `${config.taskProgressName}_${username}`;
+    const limitBranches = pLimit(config.parallelProcessing.branchConcurrencyLimit);
+    const limitStores = pLimit(config.parallelProcessing.concurrencyLimit);
 
-  /**
-   * Get all WRC saldo data for a branch (optimized - fetch once before loop)
-   * @param {string} cab - Branch code
-   * @param {string} year - Year (4 digits)
-   * @param {string} month - Month (2 digits)
-   * @param {Object} connection - Database connection
-   * @returns {Promise<Map>} Map of store codes to saldo data
-   */
-  async getAllWrcData(cab, year, month, connection) {
-    try {
-      const period = `${year}${month.padStart(2, '0')}`;
-      
-      logger.debug(`Getting all WRC saldo data for cab: ${cab}, period: ${period}`);
-      
-      // Use query from config
-      const query = config.queries.wrcSaldo;
-      
-      const [results] = await connection.execute(query, [cab, period]);
-      
-      // Convert to Map for fast lookup
-      const wrcDataMap = new Map();
-      results.forEach(row => {
-        wrcDataMap.set(row.store_code, row);
-      });
-      
-      logger.debug(`Retrieved WRC data for ${results.length} stores in cab ${cab}`);
-      return wrcDataMap;
-    } catch (error) {
-      logger.error(`Error getting all WRC saldo data for cab ${cab}: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Process a single store for screening (similar to rekon_wt_harian pattern)
-   * @param {Object} store - Store object with storeCode, dbHost, storeName
-   * @param {string} cab - Branch code
-   * @param {string} year - Year (4 digits)
-   * @param {string} month - Month (2 digits)
-   * @param {Map} wrcDataMap - Pre-fetched WRC data map
-   * @returns {Promise<Object>} Store screening result
-   */
-  async processStoreScreening(store, cab, year, month, wrcDataMap) {
-    const storeCode = store.storeCode;
-    const storeInfo = {
-      dbHost: store.dbHost,
-      storeName: store.storeName,
-    };
-
-    let screeningResult = {
-      storeCode,
-      storeName: storeInfo.storeName,
-      status: 'UNKNOWN',
-      wrcData: null,
-      storeData: null,
-      errors: [],
-      connectionError: null,
-      isReady: false
+    const withTimeout = (promise, ms, label) => {
+      return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout: ${label}`)), ms)),
+      ]);
     };
 
     try {
-      // 1. Get WRC saldo data from pre-fetched map
-      const wrcSaldoData = wrcDataMap.get(storeCode);
-      screeningResult.wrcData = wrcSaldoData;
-
-      if (!wrcSaldoData) {
-        screeningResult.errors.push(`No WRC saldo data found for store ${storeCode}`);
-        screeningResult.status = 'NO_WRC_DATA';
-        return screeningResult;
+      // === STEP 1: Determine branches ===
+      let branches = [];
+      if (cabang === "All" || cabang === "ALL") {
+        const allStores = storeService.stores;
+        branches = [...new Set(allStores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))];
+      } else {
+        branches = [cabang];
       }
 
-      // 2. Connect to store database and check readiness
-      if (!storeInfo.dbHost) {
-        screeningResult.connectionError = `No dbHost found for store ${storeCode}`;
-        screeningResult.errors.push(screeningResult.connectionError);
-        screeningResult.status = 'NO_HOST';
-        return screeningResult;
+      logger.info(`[prep_closing.service] Branches to process: ${branches.join(", ")}`);
+
+      // === STEP 2: Collect all stores ===
+      const storeGroups = await Promise.all(
+        branches.map(cab =>
+          limitBranches(async () => {
+            const stores = await storeService.getStoresByBranch(cab, true);
+            logger.info(`[prep_closing.service] Found ${stores.length} stores for branch ${cab}`);
+            return stores.map(s => ({ ...s, cab }));
+          })
+        )
+      );
+
+      const storesToProcess = storeGroups.flat();
+
+      logger.info(`[prep_closing.service] Total stores to process: ${storesToProcess.length}`);
+
+      // === STEP 3: Register progress task ===
+      try {
+        const timeStart = moment().format("YYYY-MM-DD HH:mm:ss");
+        await progressService.startProgress(taskId, storesToProcess.length, {
+          description: "Registering task for prep closing screening",
+          startedBy: username,
+          status: "registering",
+          createdAt: timeStart,
+        });
+
+        logger.info(`[prep_closing.service] Progress task registered: ${taskId}`);
+      } catch (error) {
+        logger.error(`[prep_closing.service] Error registering progress: ${error.message}`);
+
+        if (error.message.includes("Maximum concurrent")) {
+          await progressService.failProgress(taskId, {
+            description: `Task failed: ${error.message}`,
+            status: "failed",
+          });
+          throw new Error("[prep_closing.service] System is busy processing other tasks");
+        }
+
+        await progressService.failProgress(taskId, {
+          description: `Task failed: ${error.message}`,
+          status: "failed",
+        });
+        throw new Error("[prep_closing.service] Failed to register progress task");
       }
 
-      // Try connect to store database
-      const dbStore = (await import('../../config/db_store.js')).default;
-      const storeConnection = await dbStore.createDbStore(storeInfo.dbHost, 2);
-      
-      if (storeConnection) {
-        try {
-          // Execute store readiness query to get all checks
-          const storeReadinessQuery = this.getStoreReadinessQuery(cab, year, month, {
-            saldoBlnQty: wrcSaldoData?.SALDO_AKHIR || '0',
-            saldoBlnRp: wrcSaldoData?.TOTAL_PENJUALAN || '0'
-          });
-          logger.debug(`[${storeCode}] Executing store readiness query...`);
-          
-          const queryTimeout = 15000; // 15 seconds timeout
-          const queryPromise = storeConnection.query(storeReadinessQuery);
-          const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error("Query timeout")), queryTimeout);
-          });
-          
-          const [storeData] = await Promise.race([queryPromise, timeoutPromise]);
-          screeningResult.storeData = storeData;
-          
-          // Save each check result to prep_closing table
-          if (storeData && storeData.length > 0) {
-            for (const checkResult of storeData) {
-              try {
-                await this.addPrepClosing({
-                  cab: checkResult.cab,
-                  kdtk: checkResult.kdtk,
-                  key: checkResult.key,
-                  nilai: checkResult.nilai,
-                  valid: checkResult.valid
-                });
-              } catch (error) {
-                // Ignore duplicate key errors, just log them
-                if (!error.message.includes('already exists')) {
-                  logger.warn(`[${storeCode}] Error saving check result ${checkResult.key}: ${error.message}`);
-                }
-              }
-            }
-          }
-          
-          // Analyze overall readiness based on query results
-          const failedChecks = storeData.filter(check => check.valid === 0);
-          screeningResult.isReady = failedChecks.length === 0;
-          screeningResult.status = screeningResult.isReady ? 'READY' : 'NOT_READY';
-          screeningResult.failedChecks = failedChecks.map(check => check.key);
-          screeningResult.totalChecks = storeData.length;
-          screeningResult.passedChecks = storeData.length - failedChecks.length;
-          
-          logger.debug(`[${storeCode}] Screening completed: ${screeningResult.status} (${screeningResult.passedChecks}/${screeningResult.totalChecks} checks passed)`);
-          
-        } finally {
-          // Close store connection
-          if (storeConnection) {
+      logger.info(`[prep_closing.service] Starting screening for branches: ${branches.join(", ")}`);
+
+      // === STEP 4: Prepare processing ===
+      const strPeriode = periode;
+      const strYear = moment(periode, "YYMM").format("YYYY");
+      const strMonth = moment(periode, "YYMM").format("MM");
+      const strPrdStore = `${strYear}-${strMonth}-01`;
+      const prdFiletnya = moment(periode, "YYMM").subtract(1, "month").format("YYMM");
+
+      // Get WRC data for all branches using new method
+      logger.info(`[prep_closing.service] Fetching WRC data for branches: ${branches.join(", ")}`);
+
+      const wrcDataByBranch = {};
+      for (const cab of branches) {
+        logger.info(`[prep_closing.service] Fetching WRC data for branch: ${cab}`);
+
+        const wrcData = await this.tarikSaldoFltWrc(cab, "ALL", prdFiletnya, strPrdStore);
+
+        if (!wrcData || wrcData.length === 0) {
+          logger.warn(`[prep_closing.service] No WRC data returned for branch ${cab}`);
+          wrcDataByBranch[cab] = [];
+        } else {
+          wrcDataByBranch[cab] = wrcData;
+          logger.info(`[prep_closing.service] Branch ${cab}: ${wrcData.length} stores data fetched`);
+        }
+      }
+
+      // Track stores
+      const screenedStores = new Set();
+      const activeStores = new Set();
+
+      let processedCount = 0;
+      const totalStores = storesToProcess.length;
+
+      const incrementProgress = async (storeCode, statusText) => {
+        processedCount++;
+
+        await progressService.updateProgress(taskId, processedCount, {
+          description: `Store ${storeCode} → ${statusText} (${processedCount}/${totalStores})`,
+          status: "Screening Stores",
+        });
+      };
+
+      // === STEP 5: Process each store ===
+      await Promise.all(
+        storesToProcess.map(store =>
+          limitStores(async () => {
+            const { cab, storeCode } = store;
+
+            screenedStores.add(storeCode);
+
             try {
-              if (storeConnection.end) {
-                await storeConnection.end();
-              } else if (storeConnection.destroy) {
-                storeConnection.destroy();
+              const result = await withTimeout(
+                this.processSingleStore(store, strPeriode, strYear, strMonth, wrcDataByBranch[cab]),
+                config.parallelProcessing.storeTimeoutMs,
+                `process store ${storeCode}`
+              );
+
+              if (result.success) {
+                if (result.hasIssue) {
+                  activeStores.add(storeCode);
+                  await incrementProgress(storeCode, `Has Issues ⚠️ (${result.records.CRITICAL_ISSUES} critical)`);
+                } else {
+                  await incrementProgress(storeCode, "Ready for Closing ✅");
+                }
+              } else {
+                await incrementProgress(storeCode, "Error ❌");
               }
-            } catch (closeError) {
-              logger.warn(`[${storeCode}] Error closing store connection: ${closeError.message}`);
+            } catch (err) {
+              await RekapRemoteService.addToTemp(
+                cab,
+                storeCode,
+                "prep_closing",
+                `[${storeCode}] ERROR: ${err.message}`
+              );
+              await incrementProgress(storeCode, "Error ❌");
+            }
+          })
+        )
+      );
+
+      logger.info(`[prep_closing.service] Screening completed for periode ${periode}`);
+      logger.info(
+        `[prep_closing.service] Screened: ${screenedStores.size}, Active (has issues): ${activeStores.size}, Ready: ${
+          screenedStores.size - activeStores.size
+        }`
+      );
+
+      // === STEP 6: Update resolved records ===
+      await progressService.updateProgress(taskId, processedCount, {
+        description: "Updating resolved records (RECID = 1)",
+        status: "finalizing",
+      });
+
+      await this.updateResolvedRecords({
+        periode: strPeriode,
+        level: cabang === "All" || cabang === "ALL" ? 1 : 2,
+        cabang: cabang === "All" || cabang === "ALL" ? null : cabang,
+        screenedStores: Array.from(screenedStores),
+        activeStores: Array.from(activeStores),
+      });
+
+      // === STEP 7: Save logs ===
+      await progressService.updateProgress(taskId, processedCount, {
+        description: "Saving logs to database",
+        status: "finalizing",
+      });
+
+      await RekapRemoteService.saveLogsToDatabase();
+
+      // === STEP 8: Sync to JSON ===
+      await progressService.updateProgress(taskId, processedCount, {
+        description: "Syncing data to JSON file, please wait...",
+        status: "finalizing",
+      });
+
+      await this.syncToJsonFile();
+      logger.info(`[prep_closing.service] Synchronized data to JSON file`);
+
+      // === STEP 9: Complete progress ===
+      const timeCompleted = moment().format("YYYY-MM-DD HH:mm:ss");
+      await progressService.completeProgress(taskId, {
+        description: "All stores processed successfully",
+        status: "completed",
+        completedAt: timeCompleted,
+      });
+
+      return {
+        success: true,
+        message: "Screening process completed",
+        screenedStores: screenedStores.size,
+        activeStores: activeStores.size,
+        resolvedStores: screenedStores.size - activeStores.size,
+      };
+    } catch (error) {
+      logger.error(`[prep_closing.service] Error during screening: ${error.message}`);
+
+      await progressService.failProgress(taskId, {
+        description: `Task failed: ${error.message}`,
+        status: "failed",
+      });
+
+      throw error;
+    }
+  }
+
+  /**
+   * Build filter function for data filtering
+   */
+  buildFilterFunction(params = {}) {
+    const { cabang, periode, kdtk } = params;
+
+    return item => {
+      if (cabang && cabang !== "All" && item.CAB !== cabang) {
+        return false;
+      }
+
+      if (kdtk && item.KDTK !== kdtk) {
+        return false;
+      }
+
+      if (periode && item.PRD_CLOSING !== periode) {
+        return false;
+      }
+
+      return true;
+    };
+  }
+
+  /**
+   * Get summary statistics from JSON file
+   */
+  async getSummary(options = {}) {
+    const { cabang, periode } = options;
+
+    try {
+      await this.ensureDataLoaded();
+
+      const filterFn = this.buildFilterFunction({ cabang, periode });
+      const filteredData = this.prepClosingData.filter(filterFn);
+      console.log(
+        `[prep_closing.service] getSummary - filteredData is ready count: ${filteredData.filter(item => item.IS_READY)}`
+      );
+      // Calculate statistics
+      const uniqueStores = new Set(filteredData.map(item => item.KDTK));
+      const readyStores = filteredData.filter(item => item.IS_READY).length;
+      const criticalIssues = filteredData.reduce((sum, item) => sum + (item.CRITICAL_ISSUES || 0), 0);
+
+      return {
+        data: {
+          total_stores: uniqueStores.size,
+          ready_stores: readyStores,
+          stores_with_issues: uniqueStores.size - readyStores,
+          total_critical_issues: criticalIssues,
+        },
+      };
+    } catch (error) {
+      logger.error(`[prep_closing.service] Error getting summary: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get resume by store (paginated)
+   */
+  async getResumeByKdtk(options = {}) {
+    const {
+      cabang = "All",
+      periode,
+      page = 1,
+      limit = 10,
+      sortColumn = "KDTK",
+      sortOrder = "ASC",
+      searchQuery,
+    } = options;
+
+    if (!periode) throw new Error("Periode wajib diisi");
+
+    try {
+      await this.ensureDataLoaded();
+      await storeService.ensureInitialized();
+
+      let filtered = this.prepClosingData.filter(
+        i => i.PRD_CLOSING === periode && (cabang === "All" || i.CAB === cabang)
+      );
+
+      // Enrich with store name
+      let results = [];
+      for (const item of filtered) {
+        let storeName = "-";
+        try {
+          const storeInfo = await storeService.getStoreByCode(item.KDTK);
+          if (storeInfo?.storeName) storeName = storeInfo.storeName;
+        } catch {
+          logger.warn(`[prep_closing.service] Store name not found for ${item.KDTK}`);
+        }
+        results.push({
+          CAB: item.CAB,
+          KDTK: item.KDTK,
+          NAMA: storeName,
+          PRD_CLOSING: item.PRD_CLOSING,
+          TOTAL_RULES: item.TOTAL_RULES,
+          PASSED_RULES: item.PASSED_RULES,
+          FAILED_RULES: item.FAILED_RULES,
+          CRITICAL_ISSUES: item.CRITICAL_ISSUES,
+          IS_READY: item.IS_READY,
+          LAST_SCREENED: item.LAST_SCREENED,
+          UPDTIME: item.UPDTIME,
+        });
+      }
+
+      // Enrich with notes
+      try {
+        const notes = await notesService.getAll();
+        const notesByKey = new Map(notes.filter(n => n.tableName === "screening_praclosing").map(n => [n.unixKey, n]));
+
+        for (let i = 0; i < results.length; i++) {
+          const key = `${results[i].KDTK}${results[i].PRD_CLOSING}`;
+          const note = notesByKey.get(key) || null;
+          results[i] = {
+            ...results[i],
+            note: note
+              ? {
+                  unixKey: note.unixKey,
+                  noteText: note.noteText,
+                  pic: note.pic,
+                  fullName: note.fullName || null,
+                  updated_at: note.updated_at || null,
+                }
+              : null,
+          };
+        }
+      } catch (err) {
+        logger.warn(`[prep_closing.service] Failed to enrich with notes: ${err.message}`);
+      }
+
+      // Search
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        results = results.filter(item => {
+          const fields = ["CAB", "KDTK", "NAMA", "PASSED_RULES", "FAILED_RULES", "CRITICAL_ISSUES", "IS_READY"];
+          const matchNormal = fields.some(field => item[field] && item[field].toString().toLowerCase().includes(q));
+
+          const matchNote =
+            item.note &&
+            ((item.note.noteText && item.note.noteText.toLowerCase().includes(q)) ||
+              (item.note.pic && item.note.pic.toLowerCase().includes(q)) ||
+              (item.note.fullName && item.note.fullName.toLowerCase().includes(q)));
+
+          return matchNormal || matchNote;
+        });
+      }
+
+      // Sorting
+      const allowedSortColumns = ["CAB", "KDTK", "NAMA", "CRITICAL_ISSUES", "IS_READY", "LAST_SCREENED", "UPDTIME"];
+      const col = allowedSortColumns.includes(sortColumn) ? sortColumn : "KDTK";
+      const order = sortOrder?.toUpperCase() === "DESC" ? "DESC" : "ASC";
+
+      results.sort((a, b) => {
+        let av = a[col];
+        let bv = b[col];
+
+        if (col === "LAST_SCREENED" || col === "UPDTIME") {
+          av = av ? new Date(av).getTime() : 0;
+          bv = bv ? new Date(bv).getTime() : 0;
+        }
+
+        if (typeof av === "number" || !isNaN(Number(av))) {
+          av = Number(av);
+          bv = Number(bv);
+        }
+
+        return order === "ASC" ? (av > bv ? 1 : av < bv ? -1 : 0) : av < bv ? 1 : av > bv ? -1 : 0;
+      });
+
+      // Pagination
+      const totalRecords = results.length;
+      const start = (page - 1) * limit;
+      const paginated = results.slice(start, start + limit);
+
+      return {
+        data: paginated,
+        total: totalRecords,
+        page,
+        limit,
+        totalPages: Math.ceil(totalRecords / limit),
+      };
+    } catch (error) {
+      logger.error(`[prep_closing.service] Error getResumeByKdtk: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get detailed issues for a specific store
+   */
+  async getStoreDetails(options = {}) {
+    const { kdtk, periode } = options;
+
+    if (!kdtk || !periode) {
+      throw new Error("kdtk and periode are required");
+    }
+
+    try {
+      const model = await ScreeningPraClosing.getModel();
+
+      const record = await model.findOne({
+        where: {
+          KDTK: kdtk,
+          PRD_CLOSING: periode,
+          RECID: "*",
+        },
+      });
+
+      if (!record) {
+        return null;
+      }
+
+      // Get store name
+      let storeName = "-";
+      try {
+        const storeInfo = await storeService.getStoreByCode(kdtk);
+        if (storeInfo?.storeName) storeName = storeInfo.storeName;
+      } catch {
+        logger.warn(`[prep_closing.service] Store name not found for ${kdtk}`);
+      }
+
+      // Get note
+      let note = null;
+      try {
+        const unixKey = `${kdtk}${periode}`;
+        note = await notesService.getByKey(unixKey, "screening_praclosing");
+      } catch {
+        // Note not found
+      }
+
+      return {
+        CAB: record.CAB,
+        KDTK: record.KDTK,
+        NAMA: storeName,
+        PRD_CLOSING: record.PRD_CLOSING,
+        TOTAL_RULES: record.TOTAL_RULES,
+        PASSED_RULES: record.PASSED_RULES,
+        FAILED_RULES: record.FAILED_RULES,
+        CRITICAL_ISSUES: record.CRITICAL_ISSUES,
+        IS_READY: record.IS_READY,
+        ISSUES: record.ISSUES || [],
+        LAST_SCREENED: record.LAST_SCREENED,
+        UPDTIME: record.UPDTIME,
+        note: note
+          ? {
+              unixKey: note.unixKey,
+              noteText: note.noteText,
+              pic: note.pic,
+              fullName: note.fullName || null,
+              updated_at: note.updated_at || null,
+            }
+          : null,
+      };
+    } catch (error) {
+      logger.error(`[prep_closing.service] Error getStoreDetails: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get issues grouped by category
+   */
+  async getIssuesByCategory(options = {}) {
+    const { cabang, periode } = options;
+
+    try {
+      await this.ensureDataLoaded();
+      await ruleEngine.ensureInitialized();
+
+      const filterFn = this.buildFilterFunction({ cabang, periode });
+      const filteredData = this.prepClosingData.filter(filterFn);
+
+      // Get all issues from database
+      const model = await ScreeningPraClosing.getModel();
+      const records = await model.findAll({
+        where: {
+          PRD_CLOSING: periode,
+          RECID: "*",
+          ...(cabang && cabang !== "All" ? { CAB: cabang } : {}),
+        },
+        attributes: ["KDTK", "ISSUES"],
+      });
+
+      // Group issues by category
+      const categories = ruleEngine.getCategories();
+      const issuesByCategory = {};
+
+      Object.keys(categories).forEach(catKey => {
+        issuesByCategory[catKey] = {
+          ...categories[catKey],
+          count: 0,
+          stores: [],
+        };
+      });
+
+      records.forEach(record => {
+        const issues = record.ISSUES || [];
+        issues.forEach(issue => {
+          if (issuesByCategory[issue.category]) {
+            issuesByCategory[issue.category].count++;
+            if (!issuesByCategory[issue.category].stores.includes(record.KDTK)) {
+              issuesByCategory[issue.category].stores.push(record.KDTK);
             }
           }
-        }
-      } else {
-        screeningResult.connectionError = `Could not connect to store database ${storeInfo.dbHost}`;
-        screeningResult.errors.push(screeningResult.connectionError);
-        screeningResult.status = 'CONNECTION_FAILED';
-      }
+        });
+      });
 
+      return {
+        data: Object.values(issuesByCategory).sort((a, b) => a.order - b.order),
+      };
     } catch (error) {
-      const errorMsg = `Processing error for store ${storeCode}: ${error.message}`;
-      logger.error(errorMsg);
-      screeningResult.errors.push(errorMsg);
-      
-      if (error.message.includes('timeout')) {
-        screeningResult.status = 'TIMEOUT';
-      } else {
-        screeningResult.status = 'ERROR';
-      }
+      logger.error(`[prep_closing.service] Error getIssuesByCategory: ${error.message}`);
+      throw error;
     }
-
-    return screeningResult;
-  }
-
-  /**
-   * Get screening query to check store readiness
-   * @param {string} year - Year (4 digits)
-   * @param {string} month - Month (2 digits)
-   * @returns {string} SQL query
-   */
-  getScreeningQuery(year, month) {
-    const period = `${year}${month.padStart(2, '0')}`;
-    
-    // Use query from config and replace period placeholder
-    return config.queries.closingReadiness.replace('{period}', period);
-  }
-
-  /**
-   * Get store readiness query with parameter replacement
-   * @param {string} cab - Cabang code
-   * @param {string} year - Year (4 digits)
-   * @param {string} month - Month (2 digits)
-   * @param {Object} params - Additional parameters
-   * @returns {string} Query with replaced parameters
-   */
-  getStoreReadinessQuery(cab, year, month, params = {}) {
-    let query = config.queries.storeReadiness;
-    
-    // Default parameters
-    const defaultParams = {
-      strBlnSlsWrc: `${year}${month.padStart(2, '0')}`,
-      strPrd: `${year}${month.padStart(2, '0')}`,
-      tblFilet: `filet${year}${month.padStart(2, '0')}`,
-      tblFiletMaju: `filet${year}${(parseInt(month) + 1).toString().padStart(2, '0')}`,
-      strMaxBlnAktWrc: `${year}${month.padStart(2, '0')}`,
-      saldoBlnQty: '0',
-      saldoBlnRp: '0'
-    };
-    
-    // Merge with provided params
-    const allParams = { ...defaultParams, ...params };
-    
-    // Replace all placeholders
-    query = query.replace(/{cab}/g, cab);
-    query = query.replace(/{year}/g, year);
-    query = query.replace(/{month}/g, month.padStart(2, '0'));
-    query = query.replace(/{strBlnSlsWrc}/g, allParams.strBlnSlsWrc);
-    query = query.replace(/{strPrd}/g, allParams.strPrd);
-    query = query.replace(/{tblFilet}/g, allParams.tblFilet);
-    query = query.replace(/{tblFiletMaju}/g, allParams.tblFiletMaju);
-    query = query.replace(/{strMaxBlnAktWrc}/g, allParams.strMaxBlnAktWrc);
-    query = query.replace(/{saldoBlnQty}/g, allParams.saldoBlnQty);
-    query = query.replace(/{saldoBlnRp}/g, allParams.saldoBlnRp);
-    
-    return query;
-  }
-
-  /**
-   * Analyze store readiness based on query results
-   * @param {Array} storeData - Store query results
-   * @param {Object} wrcData - WRC saldo data
-   * @returns {boolean} Whether store is ready for closing
-   */
-  analyzeStoreReadiness(storeData, wrcData) {
-    if (!storeData || storeData.length === 0) {
-      return false; // No data means not ready
-    }
-
-    // With UNION ALL query, we get multiple rows with individual check results
-    // Store is ready if ALL checks pass (valid = 1)
-    const failedChecks = storeData.filter(check => check.valid === 0);
-    const allChecksPassed = failedChecks.length === 0;
-    
-    // Additional check: WRC data should exist (indicates store is tracked in WRC)
-    const hasWrcData = wrcData && (wrcData.SALDO_AWAL !== undefined || wrcData.SALDO_AKHIR !== undefined);
-    
-    // Store is ready if all checks pass and WRC data exists
-    return allChecksPassed && hasWrcData;
   }
 }
 

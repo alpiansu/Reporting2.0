@@ -1,0 +1,818 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2024-11-18T00:00:00Z",
+  "updatedBy": "system",
+  "description": "Aturan pengecekan kesiapan closing bulanan",
+  
+  "rules": [
+    {
+      "key": "bln_sls_check",
+      "name": "Bulan Sales WRC",
+      "description": "Memastikan periode sales di WRC sesuai dengan periode closing",
+      "category": "wrc_data",
+      "priority": 1,
+      "enabled": true,
+      "query": {
+        "type": "existence_check",
+        "sql": "SELECT bln_sls FROM bln_akt WHERE tahun='{year}' AND bulan='{month}' AND bln_sls!='{strBlnSlsWrc}'"
+      },
+      "validation": {
+        "type": "null_check",
+        "operator": "IS_NULL",
+        "expected": null,
+        "failMessage": "Bulan sales WRC tidak sesuai dengan periode closing (Ada data: {actual})",
+        "passMessage": "Periode sales WRC sudah sesuai"
+      },
+      "severity": "critical",
+      "ui": {
+        "icon": "pi pi-calendar",
+        "color": "#dc2626",
+        "helpText": "Periode sales di WRC harus sama dengan periode closing yang akan dilakukan",
+        "fixable": false,
+        "expandable": true
+      },
+      "metadata": {
+        "impactArea": "Data Consistency",
+        "estimatedFixTime": "5 minutes"
+      }
+    },
+    {
+      "key": "ada_bln_akt_check",
+      "name": "Keberadaan Bulan Aktif",
+      "description": "Memastikan ada data bulan aktif untuk periode ini",
+      "category": "wrc_data",
+      "priority": 2,
+      "enabled": true,
+      "query": {
+        "type": "count_check",
+        "sql": "SELECT COUNT(*) as ada_bln_akt FROM bln_akt WHERE tahun='{year}' AND bulan='{month}'"
+      },
+      "validation": {
+        "type": "comparison",
+        "operator": "GREATER_THAN",
+        "expected": 0,
+        "failMessage": "Tidak ada data bulan aktif untuk periode ini",
+        "passMessage": "Data bulan aktif tersedia"
+      },
+      "severity": "critical",
+      "ui": {
+        "icon": "pi pi-calendar-plus",
+        "color": "#dc2626",
+        "helpText": "Harus ada data bulan aktif di tabel bln_akt untuk periode closing",
+        "fixable": true,
+        "fixAction": "create_active_month",
+        "expandable": true
+      },
+      "metadata": {
+        "impactArea": "Period Management",
+        "estimatedFixTime": "2 minutes"
+      }
+    },
+    {
+      "key": "terakhir_bln_akt_check",
+      "name": "Periode Terakhir Bulan Aktif",
+      "description": "Memastikan periode terakhir bln_akt sesuai dengan WRC",
+      "category": "wrc_data",
+      "priority": 3,
+      "enabled": true,
+      "query": {
+        "type": "value_check",
+        "sql": "SELECT MAX(CONCAT(tahun,bulan)) as terakhir_bln_akt FROM bln_akt"
+      },
+      "validation": {
+        "type": "equals",
+        "operator": "EQUALS",
+        "expected": "{strMaxBlnAktWrc}",
+        "failMessage": "Periode terakhir bln_akt ({actual}) tidak sesuai dengan WRC ({expected})",
+        "passMessage": "Periode terakhir bln_akt sudah sesuai"
+      },
+      "severity": "high",
+      "ui": {
+        "icon": "pi pi-history",
+        "color": "#f59e0b",
+        "helpText": "Periode terakhir di bln_akt harus sesuai dengan data WRC",
+        "fixable": false,
+        "expandable": true
+      },
+      "metadata": {
+        "impactArea": "Period Consistency",
+        "estimatedFixTime": "Manual check required"
+      }
+    },
+    {
+      "key": "vir_disc05_check",
+      "name": "Virtual Discount 05",
+      "description": "Pengecekan status virtual discount 05",
+      "category": "system_config",
+      "priority": 4,
+      "enabled": true,
+      "query": {
+        "type": "value_check",
+        "sql": "SELECT filter AS vir_disc05 FROM vir_bacaprod WHERE jenis='DISCOUNT_05'"
+      },
+      "validation": {
+        "type": "equals",
+        "operator": "EQUALS",
+        "expected": "ON",
+        "failMessage": "Virtual discount 05 belum diaktifkan (Status: {actual})",
+        "passMessage": "Virtual discount 05 sudah aktif"
+      },
+      "severity": "high",
+      "ui": {
+        "icon": "pi pi-percentage",
+        "color": "#f59e0b",
+        "helpText": "Fitur virtual discount 05 harus dalam status ON sebelum closing",
+        "fixable": true,
+        "fixAction": "enable_discount_05",
+        "expandable": true
+      },
+      "metadata": {
+        "impactArea": "Pricing",
+        "estimatedFixTime": "2 minutes"
+      }
+    },
+    {
+      "key": "bebasppn_persubbkp_check",
+      "name": "Bebas PPN per Sub BKP",
+      "description": "Pengecekan status bebas PPN per sub BKP",
+      "category": "system_config",
+      "priority": 5,
+      "enabled": true,
+      "query": {
+        "type": "value_check",
+        "sql": "SELECT filter AS bebasppn FROM vir_bacaprod WHERE jenis='BEBASPPN_PERSUBBKP'"
+      },
+      "validation": {
+        "type": "equals",
+        "operator": "EQUALS",
+        "expected": "ON",
+        "failMessage": "Bebas PPN per Sub BKP belum diaktifkan (Status: {actual})",
+        "passMessage": "Bebas PPN per Sub BKP sudah aktif"
+      },
+      "severity": "high",
+      "ui": {
+        "icon": "pi pi-shield",
+        "color": "#f59e0b",
+        "helpText": "Fitur bebas PPN per sub BKP harus aktif",
+        "fixable": true,
+        "fixAction": "enable_bebasppn",
+        "expandable": true
+      },
+      "metadata": {
+        "impactArea": "Tax Configuration",
+        "estimatedFixTime": "2 minutes"
+      }
+    },
+    {
+      "key": "mulai_flagprodpot_check",
+      "name": "Flag Produk Potongan",
+      "description": "Pengecekan flag produk potongan",
+      "category": "system_config",
+      "priority": 6,
+      "enabled": true,
+      "query": {
+        "type": "value_check",
+        "sql": "SELECT filter AS flagprodpot FROM vir_bacaprod WHERE jenis='MULAI_FLAGPRODPOT'"
+      },
+      "validation": {
+        "type": "equals",
+        "operator": "EQUALS",
+        "expected": "ON",
+        "failMessage": "Flag produk potongan belum diaktifkan (Status: {actual})",
+        "passMessage": "Flag produk potongan sudah aktif"
+      },
+      "severity": "medium",
+      "ui": {
+        "icon": "pi pi-tag",
+        "color": "#3b82f6",
+        "helpText": "Flag untuk produk dengan potongan harus aktif",
+        "fixable": true,
+        "fixAction": "enable_flagprodpot",
+        "expandable": true
+      },
+      "metadata": {
+        "impactArea": "Product Configuration",
+        "estimatedFixTime": "2 minutes"
+      }
+    },
+    {
+      "key": "const_prd_check",
+      "name": "Konstanta Periode",
+      "description": "Memastikan tidak ada konstanta periode yang berbeda",
+      "category": "system_config",
+      "priority": 7,
+      "enabled": true,
+      "query": {
+        "type": "existence_check",
+        "sql": "SELECT docno AS const_prd FROM const WHERE rkey='PRD' AND docno!='{strPrd}'"
+      },
+      "validation": {
+        "type": "null_check",
+        "operator": "IS_NULL",
+        "expected": null,
+        "failMessage": "Ada konstanta periode yang tidak sesuai: {actual}",
+        "passMessage": "Konstanta periode sudah benar"
+      },
+      "severity": "critical",
+      "ui": {
+        "icon": "pi pi-cog",
+        "color": "#dc2626",
+        "helpText": "Konstanta PRD harus sesuai dengan periode closing",
+        "fixable": false,
+        "expandable": true
+      },
+      "metadata": {
+        "impactArea": "System Configuration",
+        "estimatedFixTime": "Manual check required"
+      }
+    },
+    {
+      "key": "const_cpi_check",
+      "name": "Konstanta CPI",
+      "description": "Pengecekan konstanta CPI (Consumer Price Index)",
+      "category": "system_config",
+      "priority": 8,
+      "enabled": true,
+      "query": {
+        "type": "value_check",
+        "sql": "SELECT period as const_cpi FROM const WHERE rkey='CPI'"
+      },
+      "validation": {
+        "type": "not_null_and_valid_date",
+        "operator": "IS_NOT_NULL",
+        "expected": "valid_date",
+        "failMessage": "Konstanta CPI tidak valid atau kosong: {actual}",
+        "passMessage": "Konstanta CPI sudah valid"
+      },
+      "severity": "medium",
+      "ui": {
+        "icon": "pi pi-chart-line",
+        "color": "#3b82f6",
+        "helpText": "Konstanta CPI harus berisi tanggal yang valid",
+        "fixable": true,
+        "fixAction": "set_cpi_date",
+        "expandable": true
+      },
+      "metadata": {
+        "impactArea": "Price Index",
+        "estimatedFixTime": "3 minutes"
+      }
+    },
+    {
+      "key": "const_shi_check",
+      "name": "Konstanta SHI",
+      "description": "Pengecekan konstanta SHI (Stock History)",
+      "category": "system_config",
+      "priority": 9,
+      "enabled": true,
+      "query": {
+        "type": "value_check",
+        "sql": "SELECT period1 as period1_shi FROM const WHERE rkey='SHI'"
+      },
+      "validation": {
+        "type": "null_check",
+        "operator": "IS_NOT_NULL",
+        "expected": "not_null",
+        "failMessage": "Konstanta SHI period1 kosong",
+        "passMessage": "Konstanta SHI sudah terisi"
+      },
+      "severity": "medium",
+      "ui": {
+        "icon": "pi pi-history",
+        "color": "#3b82f6",
+        "helpText": "Konstanta SHI period1 harus terisi",
+        "fixable": false,
+        "expandable": true
+      },
+      "metadata": {
+        "impactArea": "Stock History",
+        "estimatedFixTime": "Manual check required"
+      }
+    },
+    {
+      "key": "const_hih_check",
+      "name": "Konstanta HIH",
+      "description": "Pengecekan konstanta HIH",
+      "category": "system_config",
+      "priority": 10,
+      "enabled": true,
+      "query": {
+        "type": "existence_check",
+        "sql": "SELECT rkey as const_hih FROM const WHERE rkey='HIH'"
+      },
+      "validation": {
+        "type": "null_check",
+        "operator": "IS_NOT_NULL",
+        "expected": "not_null",
+        "failMessage": "Konstanta HIH tidak ditemukan",
+        "passMessage": "Konstanta HIH tersedia"
+      },
+      "severity": "medium",
+      "ui": {
+        "icon": "pi pi-database",
+        "color": "#3b82f6",
+        "helpText": "Konstanta HIH harus ada di tabel const",
+        "fixable": false,
+        "expandable": true
+      },
+      "metadata": {
+        "impactArea": "System Configuration",
+        "estimatedFixTime": "Manual check required"
+      }
+    },
+    {
+      "key": "const_brk_check",
+      "name": "Konstanta Break",
+      "description": "Pengecekan konstanta break (BA-BAIV)",
+      "category": "system_config",
+      "priority": 11,
+      "enabled": true,
+      "query": {
+        "type": "value_check",
+        "sql": "SELECT REPLACE(`desc`,',','-') AS const_brk FROM const WHERE rkey='BRK'"
+      },
+      "validation": {
+        "type": "equals",
+        "operator": "EQUALS",
+        "expected": "BA-BAIV",
+        "failMessage": "Konstanta BRK tidak sesuai, nilai: {actual}",
+        "passMessage": "Konstanta BRK sudah sesuai (BA-BAIV)"
+      },
+      "severity": "high",
+      "ui": {
+        "icon": "pi pi-exclamation-triangle",
+        "color": "#f59e0b",
+        "helpText": "Konstanta BRK harus bernilai BA-BAIV",
+        "fixable": true,
+        "fixAction": "fix_const_brk",
+        "expandable": true
+      },
+      "metadata": {
+        "impactArea": "System Configuration",
+        "estimatedFixTime": "2 minutes"
+      }
+    },
+    {
+      "key": "so_produk_khusus_check",
+      "name": "SO Produk Khusus",
+      "description": "Memastikan ada data produk khusus di SO",
+      "category": "inventory",
+      "priority": 12,
+      "enabled": true,
+      "query": {
+        "type": "count_check",
+        "sql": "SELECT COUNT(PLU) AS so_produk_khusus FROM so_produk_khusus"
+      },
+      "validation": {
+        "type": "comparison",
+        "operator": "GREATER_THAN",
+        "expected": 0,
+        "failMessage": "Belum ada data produk khusus di SO (Jumlah: {actual})",
+        "passMessage": "Data produk khusus sudah tersedia ({actual} items)"
+      },
+      "severity": "medium",
+      "ui": {
+        "icon": "pi pi-box",
+        "color": "#3b82f6",
+        "helpText": "Harus ada minimal 1 produk khusus yang terdaftar di SO",
+        "fixable": true,
+        "fixAction": "add_special_products",
+        "expandable": true
+      },
+      "metadata": {
+        "impactArea": "Inventory Management",
+        "estimatedFixTime": "10 minutes"
+      }
+    },
+    {
+      "key": "plastik_berbayar_check",
+      "name": "Status Plastik Berbayar",
+      "description": "Pengecekan status plastik berbayar",
+      "category": "inventory",
+      "priority": 13,
+      "enabled": true,
+      "query": {
+        "type": "value_check",
+        "sql": "SELECT DISTINCT berbayar FROM plastik"
+      },
+      "validation": {
+        "type": "in_list",
+        "operator": "IN",
+        "expected": ["Y", ""],
+        "failMessage": "Status plastik berbayar tidak valid: {actual}",
+        "passMessage": "Status plastik berbayar valid"
+      },
+      "severity": "medium",
+      "ui": {
+        "icon": "pi pi-shopping-bag",
+        "color": "#3b82f6",
+        "helpText": "Status plastik berbayar harus Y atau kosong",
+        "fixable": false,
+        "expandable": true
+      },
+      "metadata": {
+        "impactArea": "Product Configuration",
+        "estimatedFixTime": "Manual check required"
+      }
+    },
+    {
+      "key": "filet_table_check",
+      "name": "Tabel Filet Periode Ini",
+      "description": "Memastikan tabel filet untuk periode ini sudah dibuat",
+      "category": "database",
+      "priority": 14,
+      "enabled": true,
+      "query": {
+        "type": "existence_check",
+        "sql": "SELECT COUNT(*) AS filet_lama FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='{tblFilet}'"
+      },
+      "validation": {
+        "type": "comparison",
+        "operator": "GREATER_THAN",
+        "expected": 0,
+        "failMessage": "Tabel filet {tblFilet} belum dibuat",
+        "passMessage": "Tabel filet periode ini sudah tersedia"
+      },
+      "severity": "critical",
+      "ui": {
+        "icon": "pi pi-database",
+        "color": "#dc2626",
+        "helpText": "Tabel filet untuk periode ini harus sudah dibuat sebelum closing",
+        "fixable": true,
+        "fixAction": "create_filet_table",
+        "expandable": true
+      },
+      "metadata": {
+        "impactArea": "Database Structure",
+        "estimatedFixTime": "3 minutes"
+      }
+    },
+    {
+      "key": "filetbaru_check",
+      "name": "Tabel Filet Periode Berikutnya",
+      "description": "Memastikan tabel filet untuk periode berikutnya belum ada",
+      "category": "database",
+      "priority": 15,
+      "enabled": true,
+      "query": {
+        "type": "existence_check",
+        "sql": "SELECT COUNT(*) AS filetbaru_baru FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='{tblFiletMaju}'"
+      },
+      "validation": {
+        "type": "comparison",
+        "operator": "EQUALS",
+        "expected": 0,
+        "failMessage": "Tabel filet periode berikutnya {tblFiletMaju} sudah ada (prematur)",
+        "passMessage": "Tabel filet periode berikutnya belum dibuat"
+      },
+      "severity": "high",
+      "ui": {
+        "icon": "pi pi-calendar-plus",
+        "color": "#f59e0b",
+        "helpText": "Tabel filet periode berikutnya tidak boleh ada sebelum closing periode ini",
+        "fixable": true,
+        "fixAction": "drop_premature_table",
+        "expandable": true
+      },
+      "metadata": {
+        "impactArea": "Database Structure",
+        "estimatedFixTime": "2 minutes"
+      }
+    },
+    {
+      "key": "db_backup_check",
+      "name": "Database Backup",
+      "description": "Pengecekan keberadaan database backup",
+      "category": "database",
+      "priority": 16,
+      "enabled": true,
+      "query": {
+        "type": "existence_check",
+        "sql": "SELECT COUNT(*) as db_backup FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = 'backup'"
+      },
+      "validation": {
+        "type": "comparison",
+        "operator": "GREATER_THAN",
+        "expected": 0,
+        "failMessage": "Database backup tidak ditemukan",
+        "passMessage": "Database backup tersedia"
+      },
+      "severity": "low",
+      "ui": {
+        "icon": "pi pi-save",
+        "color": "#6b7280",
+        "helpText": "Sebaiknya ada database backup untuk keamanan data",
+        "fixable": false,
+        "expandable": true
+      },
+      "metadata": {
+        "impactArea": "Data Safety",
+        "estimatedFixTime": "Manual backup required"
+      }
+    },
+    {
+      "key": "saldo_qty_accuracy",
+      "name": "Akurasi Saldo Quantity",
+      "description": "Memastikan saldo quantity toko sesuai dengan WRC",
+      "category": "saldo",
+      "priority": 17,
+      "enabled": true,
+      "query": {
+        "type": "calculation",
+        "sql": "SELECT COALESCE(SUM(saldo_akh), 0) as saldo FROM {tblFilet}",
+        "compareWith": "{saldoBlnQty}"
+      },
+      "validation": {
+        "type": "delta",
+        "operator": "DELTA_EQUALS",
+        "tolerance": 0,
+        "failMessage": "Saldo qty tidak cocok | Toko: {actual} | WRC: {expected} | Selisih: {delta}",
+        "passMessage": "Saldo quantity cocok dengan WRC"
+      },
+      "severity": "critical",
+      "ui": {
+        "icon": "pi pi-chart-line",
+        "color": "#dc2626",
+        "helpText": "Saldo quantity toko harus sama persis dengan data di WRC (toleransi 0)",
+        "fixable": false,
+        "expandable": true,
+        "showDelta": true
+      },
+      "metadata": {
+        "impactArea": "Stock Accuracy",
+        "estimatedFixTime": "Manual investigation required"
+      }
+    },
+    {
+      "key": "saldo_rp_accuracy",
+      "name": "Akurasi Saldo Rupiah",
+      "description": "Memastikan saldo rupiah toko mendekati WRC (toleransi Rp 50)",
+      "category": "saldo",
+      "priority": 18,
+      "enabled": true,
+      "query": {
+        "type": "calculation",
+        "sql": "SELECT COALESCE(SUM(rp_sld_akh), 0) as rp_sld FROM {tblFilet}",
+        "compareWith": "{saldoBlnRp}"
+      },
+      "validation": {
+        "type": "delta",
+        "operator": "DELTA_WITHIN",
+        "tolerance": 50,
+        "failMessage": "Saldo Rp selisih > Rp 50 | Toko: Rp {actual} | WRC: Rp {expected} | Selisih: Rp {delta}",
+        "passMessage": "Saldo rupiah dalam batas toleransi (selisih Rp {delta})"
+      },
+      "severity": "high",
+      "ui": {
+        "icon": "pi pi-money-bill",
+        "color": "#f59e0b",
+        "helpText": "Selisih saldo rupiah dengan WRC maksimal Rp 50",
+        "fixable": false,
+        "expandable": true,
+        "showDelta": true,
+        "formatDelta": "currency"
+      },
+      "metadata": {
+        "impactArea": "Financial Accuracy",
+        "estimatedFixTime": "Manual investigation required"
+      }
+    },
+    {
+      "key": "saldo_stmast_accuracy",
+      "name": "Akurasi Saldo vs StMast",
+      "description": "Membandingkan saldo dengan data di stmast",
+      "category": "saldo",
+      "priority": 19,
+      "enabled": true,
+      "query": {
+        "type": "comparison_query",
+        "sql": "SELECT COALESCE(SUM(begbal), 0) as begbal, COALESCE(SUM(rp_sld_akh), 0) as rp_stmast FROM stmast"
+      },
+      "validation": {
+        "type": "manual_check",
+        "operator": "CUSTOM",
+        "expected": "match_with_filet",
+        "failMessage": "Perlu pengecekan manual: Bandingkan saldo stmast dengan filet",
+        "passMessage": "Data stmast tersedia untuk pengecekan"
+      },
+      "severity": "low",
+      "ui": {
+        "icon": "pi pi-sync",
+        "color": "#6b7280",
+        "helpText": "Saldo di stmast sebaiknya konsisten dengan filet",
+        "fixable": false,
+        "expandable": true
+      },
+      "metadata": {
+        "impactArea": "Data Consistency",
+        "estimatedFixTime": "Manual comparison required"
+      }
+    },
+    {
+      "key": "initial_data_check",
+      "name": "Data Initial",
+      "description": "Memastikan tidak ada data initial yang belum diproses",
+      "category": "data_integrity",
+      "priority": 20,
+      "enabled": true,
+      "query": {
+        "type": "existence_check",
+        "sql": "SELECT CAST(GROUP_CONCAT(DISTINCT tanggal) AS CHAR) as tgl_initial FROM initial WHERE tanggal != CURDATE() AND recid!='C'"
+      },
+      "validation": {
+        "type": "null_check",
+        "operator": "IS_NULL",
+        "expected": null,
+        "failMessage": "Ada data initial yang belum C pada tanggal: {actual}",
+        "passMessage": "Semua data initial sudah C"
+      },
+      "severity": "critical",
+      "ui": {
+        "icon": "pi pi-file-import",
+        "color": "#dc2626",
+        "helpText": "Semua data initial harus sudah diproses sebelum closing",
+        "fixable": true,
+        "fixAction": "process_initial_data",
+        "expandable": true
+      },
+      "metadata": {
+        "impactArea": "Data Processing",
+        "estimatedFixTime": "Variable"
+      }
+    },
+    {
+      "key": "pajak_ws_check",
+      "name": "Status Pajak WS",
+      "description": "Validasi status pajak untuk transaksi BKP",
+      "category": "tax",
+      "priority": 21,
+      "enabled": true,
+      "query": {
+        "type": "conditional_check",
+        "sql": "SELECT IF((SELECT IFNULL(SUM(qty),0) FROM mtran WHERE tanggal RLIKE '{year}-{month}' AND sub_bkp IN('I','O'))>0 AND (SELECT IFNULL(filter,'') FROM vir_bacaprod WHERE jenis='STS_PAJAK')='', 'NOK', 'OK') as cek_pajak_ws"
+      },
+      "validation": {
+        "type": "equals",
+        "operator": "EQUALS",
+        "expected": "OK",
+        "failMessage": "Status pajak WS bermasalah untuk transaksi BKP",
+        "passMessage": "Status pajak WS sudah valid"
+      },
+      "severity": "high",
+      "ui": {
+        "icon": "pi pi-receipt",
+        "color": "#f59e0b",
+        "helpText": "Status pajak harus valid untuk semua transaksi BKP",
+        "fixable": true,
+        "fixAction": "fix_tax_status",
+        "expandable": true
+      },
+      "metadata": {
+        "impactArea": "Tax Compliance",
+        "estimatedFixTime": "5 minutes"
+      }
+    }
+  ],
+  
+  "categories": {
+    "wrc_data": {
+      "label": "Data WRC",
+      "description": "Validasi data dari Warehouse",
+      "icon": "pi pi-server",
+      "color": "#3b82f6",
+      "order": 1
+    },
+    "system_config": {
+      "label": "Konfigurasi Sistem",
+      "description": "Pengaturan dan konfigurasi sistem",
+      "icon": "pi pi-cog",
+      "color": "#8b5cf6",
+      "order": 2
+    },
+    "inventory": {
+      "label": "Inventory",
+      "description": "Data persediaan dan produk",
+      "icon": "pi pi-box",
+      "color": "#10b981",
+      "order": 3
+    },
+    "database": {
+      "label": "Database",
+      "description": "Struktur dan integritas database",
+      "icon": "pi pi-database",
+      "color": "#f59e0b",
+      "order": 4
+    },
+    "saldo": {
+      "label": "Saldo",
+      "description": "Akurasi saldo dan rekonsiliasi",
+      "icon": "pi pi-chart-line",
+      "color": "#ef4444",
+      "order": 5
+    },
+    "data_integrity": {
+      "label": "Integritas Data",
+      "description": "Kelengkapan dan konsistensi data",
+      "icon": "pi pi-shield",
+      "color": "#06b6d4",
+      "order": 6
+    },
+    "tax": {
+      "label": "Perpajakan",
+      "description": "Validasi dan kepatuhan pajak",
+      "icon": "pi pi-receipt",
+      "color": "#ec4899",
+      "order": 7
+    }
+  },
+  
+  "severityLevels": {
+    "critical": {
+      "label": "Kritis",
+      "description": "Harus diperbaiki sebelum closing",
+      "color": "#dc2626",
+      "bgColor": "#fee2e2",
+      "icon": "pi pi-exclamation-circle",
+      "iconBg": "#fecaca",
+      "blocking": true,
+      "priority": 1
+    },
+    "high": {
+      "label": "Tinggi",
+      "description": "Sangat disarankan untuk diperbaiki",
+      "color": "#f59e0b",
+      "bgColor": "#fef3c7",
+      "icon": "pi pi-exclamation-triangle",
+      "iconBg": "#fde68a",
+      "blocking": false,
+      "priority": 2
+    },
+    "medium": {
+      "label": "Sedang",
+      "description": "Perlu perhatian",
+      "color": "#3b82f6",
+      "bgColor": "#dbeafe",
+      "icon": "pi pi-info-circle",
+      "iconBg": "#bfdbfe",
+      "blocking": false,
+      "priority": 3
+    },
+    "low": {
+      "label": "Rendah",
+      "description": "Opsional untuk diperbaiki",
+      "color": "#6b7280",
+      "bgColor": "#f3f4f6",
+      "icon": "pi pi-info",
+      "iconBg": "#e5e7eb",
+      "blocking": false,
+      "priority": 4
+    }
+  },
+  
+  "operators": {
+    "IS_NULL": {
+      "label": "Harus Kosong",
+      "description": "Value harus null atau undefined"
+    },
+    "IS_NOT_NULL": {
+      "label": "Harus Ada",
+      "description": "Value tidak boleh null atau undefined"
+    },
+    "EQUALS": {
+      "label": "Harus Sama Dengan",
+      "description": "Value harus sama persis"
+    },
+    "NOT_EQUALS": {
+      "label": "Tidak Boleh Sama Dengan",
+      "description": "Value harus berbeda"
+    },
+    "GREATER_THAN": {
+      "label": "Harus Lebih Dari",
+      "description": "Value harus lebih besar"
+    },
+    "GREATER_THAN_OR_EQUALS": {
+      "label": "Harus Lebih Dari atau Sama Dengan",
+      "description": "Value harus lebih besar atau sama"
+    },
+    "LESS_THAN": {
+      "label": "Harus Kurang Dari",
+      "description": "Value harus lebih kecil"
+    },
+    "IN": {
+      "label": "Harus Salah Satu Dari",
+      "description": "Value harus ada dalam daftar yang diizinkan"
+    },
+    "DELTA_EQUALS": {
+      "label": "Selisih Harus Nol",
+      "description": "Selisih absolut harus sesuai toleransi"
+    },
+    "DELTA_WITHIN": {
+      "label": "Selisih Dalam Batas Toleransi",
+      "description": "Selisih absolut harus dalam batas yang ditentukan"
+    },
+    "CUSTOM": {
+      "label": "Custom Check",
+      "description": "Pengecekan khusus sesuai kebutuhan"
+    }
+  }
+}

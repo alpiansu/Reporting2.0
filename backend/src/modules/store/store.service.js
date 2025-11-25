@@ -5,6 +5,7 @@ import fs from "fs/promises";
 import path from "path";
 import logger from "../../config/logger.js";
 import syncConfig from "../../config/sync.config.js";
+import wrcUtils from "../../utils/wrc.utils.js";
 
 class StoreService {
   constructor() {
@@ -214,9 +215,106 @@ class StoreService {
   }
 
   /**
-   * Get stores by branch code
+   * Validate stores against WRC master toko table
+   * @param {Array} stores - Array of stores to validate
+   * @param {string} branchCode - Branch code
+   * @param {string} period - Period in YYMM format
+   * @returns {Array} Array of validated stores (only active stores from WRC)
+   */
+  async validateStoresFromWRC(stores, branchCode, period) {
+    try {
+      if (!stores || stores.length === 0) {
+        return [];
+      }
+
+      // Build query to get active stores from mstr_toko
+      const query = `
+      SELECT KodeToko, NamaToko, TokoTutup 
+      FROM mstr_toko_${period} 
+      WHERE KodeToko IN (${stores.map(s => `'${s.storeCode}'`).join(", ")})
+    `;
+
+      logger.info(`Validating ${stores.length} stores against WRC mstr_toko_${period}...`);
+
+      // Get data from WRC (without date placeholder)
+      const tempFile = await wrcUtils.getWrcData(
+        branchCode,
+        period,
+        "mstr_toko",
+        query,
+        null // no shop filter needed
+      );
+
+      if (!tempFile) {
+        logger.warn(`No WRC validation data found for branch ${branchCode}, returning original stores`);
+        return stores;
+      }
+
+      // Read the result file
+      const fileContent = await fs.readFile(tempFile, "utf8");
+      const wrcStores = JSON.parse(fileContent);
+
+      // Clean up temp file
+      await fs.unlink(tempFile).catch(() => {});
+
+      // Create a Map of active stores from WRC
+      const activeStoresMap = new Map();
+      wrcStores.forEach(wrcStore => {
+        // Store is active if TokoTutup is not '1' or is null/empty
+        const isActive = wrcStore.TokoTutup !== "1";
+        if (isActive) {
+          activeStoresMap.set(wrcStore.KodeToko, {
+            wrcName: wrcStore.NamaToko,
+            tokoTutup: wrcStore.TokoTutup,
+          });
+        }
+      });
+
+      logger.info(`Found ${activeStoresMap.size} active stores in WRC out of ${stores.length} stores`);
+
+      // Filter stores to only include those that exist and are active in WRC
+      const validatedStores = stores.filter(store => {
+        const isInWRC = activeStoresMap.has(store.storeCode);
+
+        if (!isInWRC) {
+          logger.debug(
+            `Store ${store.storeCode} (${store.storeName}) not found or inactive in WRC mstr_toko_${period}`
+          );
+        }
+
+        return isInWRC;
+      });
+
+      // Optional: Add WRC validation info to each store
+      validatedStores.forEach(store => {
+        const wrcData = activeStoresMap.get(store.storeCode);
+        store.wrcValidated = true;
+        store.wrcStoreName = wrcData.wrcName;
+        store.validatedAt = new Date().toISOString();
+      });
+
+      logger.info(
+        `Validated: ${validatedStores.length} active stores, ${
+          stores.length - validatedStores.length
+        } stores filtered out`
+      );
+
+      return validatedStores;
+    } catch (error) {
+      logger.error(`Error validating stores from WRC: ${error.message}`);
+      // If validation fails, return original stores to avoid breaking the flow
+      logger.warn(`Returning original stores without WRC validation`);
+      return stores;
+    }
+  }
+
+  /**
+   * Get stores by branch code with WRC validation
    * @param {string} branchCode - Branch code
    * @param {boolean} onlyInduk - If true, only return stores with notes='INDUK'
+   * @param {Object} options - Additional options
+   * @param {boolean} options.validateWRC - If true, validate stores against WRC mstr_toko (default: false)
+   * @param {string} options.period - Period in YYMM format (required if validateWRC is true)
    * @returns {Array} Array of store data
    */
   async getStoresByBranch(branchCode, onlyInduk = true, options = {}) {
@@ -238,6 +336,11 @@ class StoreService {
         });
       } else if (!options.storeCode && onlyInduk) {
         filteredStores = filteredStores.filter(store => store.notes === "INDUK");
+      }
+
+      // WRC Validation: Check if stores are still active in mstr_toko
+      if (options.validateWRC && options.period) {
+        filteredStores = await this.validateStoresFromWRC(filteredStores, branchCode, options.period);
       }
 
       // Jika options.limit dikirim, batasi jumlah hasil

@@ -154,6 +154,7 @@ class PrepClosingService {
       // Query agregasi
       const [rows] = await sequelize.query(`
         SELECT 
+          RECID,
           CAB,
           KDTK,
           PRD_CLOSING,
@@ -168,6 +169,7 @@ class PrepClosingService {
       `);
 
       this.prepClosingData = rows.map(r => ({
+        RECID: r.RECID,
         CAB: r.CAB,
         KDTK: r.KDTK,
         PRD_CLOSING: r.PRD_CLOSING,
@@ -243,6 +245,7 @@ class PrepClosingService {
       logger.info(
         `[prep_closing.service] Fetching saldo from WRC - cab: ${cab}, kdtk: ${kdtk}, period: ${prdFilet}, tablePeriod: ${strPrdStore}`
       );
+
       const tempFilePath = await wrcUtils.getWrcData(cab, prdFilet, "kodetoko", queryTemplate, shops);
 
       if (!tempFilePath) {
@@ -601,7 +604,10 @@ class PrepClosingService {
       const storeGroups = await Promise.all(
         branches.map(cab =>
           limitBranches(async () => {
-            const stores = await storeService.getStoresByBranch(cab, true);
+            const stores = await storeService.getStoresByBranch(cab, true, {
+              validateWRC: true,
+              period: periode,
+            });
             logger.info(`[prep_closing.service] Found ${stores.length} stores for branch ${cab}`);
             return stores.map(s => ({ ...s, cab }));
           })
@@ -821,9 +827,6 @@ class PrepClosingService {
 
       const filterFn = this.buildFilterFunction({ cabang, periode });
       const filteredData = this.prepClosingData.filter(filterFn);
-      console.log(
-        `[prep_closing.service] getSummary - filteredData is ready count: ${filteredData.filter(item => item.IS_READY)}`
-      );
       // Calculate statistics
       const uniqueStores = new Set(filteredData.map(item => item.KDTK));
       const readyStores = filteredData.filter(item => item.IS_READY).length;
@@ -878,6 +881,7 @@ class PrepClosingService {
           logger.warn(`[prep_closing.service] Store name not found for ${item.KDTK}`);
         }
         results.push({
+          RECID: item.RECID,
           CAB: item.CAB,
           KDTK: item.KDTK,
           NAMA: storeName,
@@ -935,7 +939,16 @@ class PrepClosingService {
       }
 
       // Sorting
-      const allowedSortColumns = ["CAB", "KDTK", "NAMA", "CRITICAL_ISSUES", "IS_READY", "LAST_SCREENED", "UPDTIME"];
+      const allowedSortColumns = [
+        "RECID",
+        "CAB",
+        "KDTK",
+        "NAMA",
+        "CRITICAL_ISSUES",
+        "IS_READY",
+        "LAST_SCREENED",
+        "UPDTIME",
+      ];
       const col = allowedSortColumns.includes(sortColumn) ? sortColumn : "KDTK";
       const order = sortOrder?.toUpperCase() === "DESC" ? "DESC" : "ASC";
 
@@ -991,7 +1004,6 @@ class PrepClosingService {
         where: {
           KDTK: kdtk,
           PRD_CLOSING: periode,
-          RECID: "*",
         },
       });
 

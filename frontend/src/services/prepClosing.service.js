@@ -97,16 +97,6 @@ export const prepClosingApi = {
     const response = await api.put(`${BASE_URL}/note`, data);
     return response.data;
   },
-
-  // ==================== PROGRESS MONITORING ====================
-
-  /**
-   * Get progress status for screening task
-   */
-  async getProgress(username) {
-    const response = await api.get(`/api/progress/prepClosingTask_${username}`);
-    return response.data;
-  },
 };
 
 export default prepClosingApi;

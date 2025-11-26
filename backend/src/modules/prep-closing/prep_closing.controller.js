@@ -83,6 +83,29 @@ export const getSummary = async (req, res) => {
 };
 
 /**
+ * Get rules summary
+ * GET /api/prep-closing/rules-summary
+ */
+export const getRulesSummary = async (req, res) => {
+  try {
+    const { cabang, periode } = req.query;
+
+    if (!periode) {
+      return apiResponse.badRequest(res, "Periode is required");
+    }
+
+    const cabParam = !cabang || cabang === "All" ? "All" : cabang;
+
+    const result = await prepClosingService.getRulesSummary({ cabang: cabParam, periode });
+
+    return apiResponse.success(res, result);
+  } catch (error) {
+    logger.error(`[prep_closing.controller] Error getting rules summary: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+/**
  * Get resume by store (paginated)
  * GET /api/prep-closing/resumePerShop
  */
@@ -96,6 +119,7 @@ export const getResumeByKdtk = async (req, res) => {
       sortColumn = "KDTK",
       sortOrder = "ASC",
       searchQuery,
+      ruleKeys,
     } = req.query;
 
     if (!periode) {
@@ -108,6 +132,28 @@ export const getResumeByKdtk = async (req, res) => {
       `[prep_closing.controller] Get resume by KDTK: cabang=${cabParam}, periode=${periode}, page=${page}, limit=${limit}`
     );
 
+    let parsedRuleKeys = undefined;
+    if (ruleKeys) {
+      if (Array.isArray(ruleKeys)) {
+        parsedRuleKeys = ruleKeys;
+      } else if (typeof ruleKeys === "string") {
+        try {
+          parsedRuleKeys = ruleKeys.includes(",")
+            ? ruleKeys
+                .split(",")
+                .map(s => s.trim())
+                .filter(Boolean)
+            : JSON.parse(ruleKeys);
+          if (!Array.isArray(parsedRuleKeys)) parsedRuleKeys = [ruleKeys];
+        } catch {
+          parsedRuleKeys = ruleKeys
+            .split(",")
+            .map(s => s.trim())
+            .filter(Boolean);
+        }
+      }
+    }
+
     const result = await prepClosingService.getResumeByKdtk({
       cabang: cabParam,
       periode,
@@ -116,6 +162,7 @@ export const getResumeByKdtk = async (req, res) => {
       searchQuery,
       sortColumn,
       sortOrder,
+      ruleKeys: parsedRuleKeys,
     });
 
     return apiResponse.success(res, result);
@@ -173,6 +220,54 @@ export const getIssuesByCategory = async (req, res) => {
     return apiResponse.success(res, result);
   } catch (error) {
     logger.error(`[prep_closing.controller] Error getting issues by category: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+/**
+ * Export full data set for Excel (4 sheets)
+ * GET /api/prep-closing/export-data
+ */
+export const getExportData = async (req, res) => {
+  try {
+    const { cabang, periode, searchQuery, ruleKeys } = req.query;
+
+    if (!periode) {
+      return apiResponse.badRequest(res, "Periode is required");
+    }
+
+    const cabParam = !cabang || cabang === "All" ? "All" : cabang;
+
+    let parsedRuleKeys = undefined;
+    if (ruleKeys) {
+      if (Array.isArray(ruleKeys)) parsedRuleKeys = ruleKeys;
+      else if (typeof ruleKeys === "string") {
+        try {
+          parsedRuleKeys = ruleKeys.includes(",")
+            ? ruleKeys
+                .split(",")
+                .map(s => s.trim())
+                .filter(Boolean)
+            : JSON.parse(ruleKeys);
+          if (!Array.isArray(parsedRuleKeys)) parsedRuleKeys = [ruleKeys];
+        } catch {
+          parsedRuleKeys = ruleKeys
+            .split(",")
+            .map(s => s.trim())
+            .filter(Boolean);
+        }
+      }
+    }
+
+    const result = await prepClosingService.getExportData({
+      cabang: cabParam,
+      periode,
+      searchQuery,
+      ruleKeys: parsedRuleKeys,
+    });
+    return apiResponse.success(res, result);
+  } catch (error) {
+    logger.error(`[prep_closing.controller] Error getExportData: ${error.message}`);
     return apiResponse.error(res, error.message);
   }
 };

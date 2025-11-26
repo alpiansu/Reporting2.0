@@ -78,50 +78,27 @@
             </Card>
         </div>
 
-        <!-- Issues by Category -->
-        <Card v-if="categories.length > 0" class="category-card">
-            <template #header>
-                <div class="category-header">
-                    <i class="pi pi-chart-bar"></i>
-                    <span>Issues by Category</span>
-                </div>
-            </template>
-            <template #content>
-                <div class="category-grid">
-                    <div v-for="category in categories" :key="category.label" class="category-item"
-                        :style="{ borderLeftColor: category.color }" @click="$emit('category-click', category.label)">
-                        <div class="category-icon" :style="{ color: category.color }">
-                            <i :class="category.icon"></i>
-                        </div>
-                        <div class="category-info">
-                            <div class="category-label">{{ category.label }}</div>
-                            <div class="category-description">{{ category.description }}</div>
-                            <div class="category-count">
-                                <Badge :value="category.count" severity="danger" />
-                                <span class="stores-count">{{ category.stores.length }} toko</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </template>
-        </Card>
+        <!-- Rules Grid -->
+        <RulesGrid :rules="rulesSummary || []" :selected-keys="selectedRuleKeys || []" @rule-selected="onRuleSelected" />
     </div>
 </template>
 
 <script setup>
 import { computed } from 'vue';
 import Card from 'primevue/card';
-import Badge from 'primevue/badge';
 import Skeleton from 'primevue/skeleton';
 import { formatNumber } from '../utils/formatters';
+import RulesGrid from './RulesGrid.vue';
 
 const props = defineProps({
     summary: Object,
     loading: Boolean,
-    categories: Array
+    rulesSummary: Array,
+    selectedRuleKeys: Array
 });
 
-const emit = defineEmits(['category-click']);
+const emit = defineEmits(['rule-selected']);
+const onRuleSelected = (keys) => emit('rule-selected', keys);
 
 const readyPercentage = computed(() => {
     if (!props.summary || props.summary.total_stores === 0) return '0.0';

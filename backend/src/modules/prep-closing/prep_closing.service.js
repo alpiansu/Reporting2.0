@@ -846,6 +846,83 @@ class PrepClosingService {
     }
   }
 
+  async getRulesSummary(options = {}) {
+    const { cabang, periode } = options;
+
+    try {
+      await ruleEngine.ensureInitialized();
+
+      const model = await ScreeningPraClosing.getModel();
+
+      const where = {
+        PRD_CLOSING: periode,
+        RECID: "*",
+      };
+      if (cabang && cabang !== "All") {
+        where.CAB = cabang;
+      }
+
+      const records = await model.findAll({
+        where,
+        attributes: ["KDTK", "ISSUES"],
+      });
+
+      const rules = ruleEngine.rules;
+      const aggMap = new Map();
+      for (const r of rules) {
+        aggMap.set(r.key, {
+          ruleKey: r.key,
+          ruleName: r.name,
+          category: r.category,
+          totalStores: 0,
+          storeList: [],
+          severity: null,
+          severityBreakdown: {
+            critical: 0,
+            high: 0,
+            medium: 0,
+            low: 0,
+          },
+        });
+      }
+
+      const storeSets = new Map();
+
+      for (const rec of records) {
+        const kdtk = rec.KDTK;
+        const issues = Array.isArray(rec.ISSUES) ? rec.ISSUES : [];
+        for (const issue of issues) {
+          const entry = aggMap.get(issue.ruleKey);
+          if (!entry) continue;
+          const sev = (issue.severity || "low").toLowerCase();
+          if (entry.severityBreakdown[sev] !== undefined) {
+            entry.severityBreakdown[sev] += 1;
+          }
+          if (!storeSets.has(issue.ruleKey)) storeSets.set(issue.ruleKey, new Set());
+          storeSets.get(issue.ruleKey).add(kdtk);
+        }
+      }
+
+      for (const [key, entry] of aggMap.entries()) {
+        const set = storeSets.get(key) || new Set();
+        entry.totalStores = set.size;
+        entry.storeList = Array.from(set);
+        if (entry.severityBreakdown.critical > 0) entry.severity = "critical";
+        else if (entry.severityBreakdown.high > 0) entry.severity = "high";
+        else if (entry.severityBreakdown.medium > 0) entry.severity = "medium";
+        else if (entry.severityBreakdown.low > 0) entry.severity = "low";
+        else entry.severity = null;
+      }
+
+      const result = Array.from(aggMap.values()).sort((a, b) => b.totalStores - a.totalStores);
+
+      return { data: result };
+    } catch (error) {
+      logger.error(`[prep_closing.service] Error getRulesSummary: ${error.message}`);
+      throw error;
+    }
+  }
+
   /**
    * Get resume by store (paginated)
    */
@@ -858,6 +935,7 @@ class PrepClosingService {
       sortColumn = "KDTK",
       sortOrder = "ASC",
       searchQuery,
+      ruleKeys,
     } = options;
 
     if (!periode) throw new Error("Periode wajib diisi");
@@ -869,6 +947,23 @@ class PrepClosingService {
       let filtered = this.prepClosingData.filter(
         i => i.PRD_CLOSING === periode && (cabang === "All" || i.CAB === cabang)
       );
+
+      if (Array.isArray(ruleKeys) && ruleKeys.length > 0) {
+        const model = await ScreeningPraClosing.getModel();
+        const where = {
+          PRD_CLOSING: periode,
+          RECID: "*",
+        };
+        if (cabang && cabang !== "All") where.CAB = cabang;
+        const issueRecords = await model.findAll({ where, attributes: ["KDTK", "ISSUES"] });
+        const includeSet = new Set();
+        for (const rec of issueRecords) {
+          const issues = Array.isArray(rec.ISSUES) ? rec.ISSUES : [];
+          const hasAny = issues.some(iss => ruleKeys.includes(iss.ruleKey));
+          if (hasAny) includeSet.add(rec.KDTK);
+        }
+        filtered = filtered.filter(i => includeSet.has(i.KDTK));
+      }
 
       // Enrich with store name
       let results = [];
@@ -921,6 +1016,20 @@ class PrepClosingService {
         logger.warn(`[prep_closing.service] Failed to enrich with notes: ${err.message}`);
       }
 
+      // Preload issues map for search and rule filter
+      let issuesByStore = new Map();
+      try {
+        const model = await ScreeningPraClosing.getModel();
+        const whereIssues = { PRD_CLOSING: periode };
+        if (cabang && cabang !== "All") whereIssues.CAB = cabang;
+        const recs = await model.findAll({ where: whereIssues, attributes: ["KDTK", "ISSUES"] });
+        for (const r of recs) {
+          issuesByStore.set(r.KDTK, Array.isArray(r.ISSUES) ? r.ISSUES : []);
+        }
+      } catch (err) {
+        logger.warn(`[prep_closing.service] Unable to preload issues for search: ${err.message}`);
+      }
+
       // Search
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
@@ -934,7 +1043,17 @@ class PrepClosingService {
               (item.note.pic && item.note.pic.toLowerCase().includes(q)) ||
               (item.note.fullName && item.note.fullName.toLowerCase().includes(q)));
 
-          return matchNormal || matchNote;
+          let matchIssue = false;
+          const storeIssues = issuesByStore.get(item.KDTK) || [];
+          if (storeIssues.length > 0) {
+            matchIssue = storeIssues.some(iss => {
+              const msg = (iss.message || "").toString().toLowerCase();
+              const rname = (iss.ruleName || "").toLowerCase();
+              return msg.includes(q) || rname.includes(q);
+            });
+          }
+
+          return matchNormal || matchNote || matchIssue;
         });
       }
 
@@ -1111,6 +1230,141 @@ class PrepClosingService {
       };
     } catch (error) {
       logger.error(`[prep_closing.service] Error getIssuesByCategory: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async getExportData(options = {}) {
+    const { cabang = "All", periode, searchQuery, ruleKeys } = options;
+    if (!periode) throw new Error("Periode wajib diisi");
+
+    try {
+      await this.ensureDataLoaded();
+      await storeService.ensureInitialized();
+      await ruleEngine.ensureInitialized();
+
+      const summary = await this.getSummary({ cabang, periode });
+
+      const model = await ScreeningPraClosing.getModel();
+      const where = { PRD_CLOSING: periode };
+      if (cabang && cabang !== "All") where.CAB = cabang;
+
+      const dbRecords = await model.findAll({
+        where,
+        attributes: ["CAB", "KDTK", "PRD_CLOSING", "ISSUES", "LAST_SCREENED", "UPDTIME"],
+      });
+
+      const nameCache = new Map();
+      const getName = async k => {
+        if (nameCache.has(k)) return nameCache.get(k);
+        try {
+          const info = await storeService.getStoreByCode(k);
+          const nm = info?.storeName || "-";
+          nameCache.set(k, nm);
+          return nm;
+        } catch {
+          nameCache.set(k, "-");
+          return "-";
+        }
+      };
+
+      const notes = await notesService.getAll().catch(() => []);
+      const notesByKey = new Map(notes.filter(n => n.tableName === "screening_praclosing").map(n => [n.unixKey, n]));
+
+      const allStores = this.prepClosingData.filter(
+        i => i.PRD_CLOSING === periode && (cabang === "All" || i.CAB === cabang)
+      );
+
+      const ruleKeySet = Array.isArray(ruleKeys) && ruleKeys.length > 0 ? new Set(ruleKeys) : null;
+
+      const stores = [];
+      const issuesBreakdown = [];
+
+      const issuesMapByStore = new Map();
+      for (const rec of dbRecords) {
+        const issues = Array.isArray(rec.ISSUES) ? rec.ISSUES : [];
+        const filteredIssues = ruleKeySet ? issues.filter(iss => ruleKeySet.has(iss.ruleKey)) : issues;
+        issuesMapByStore.set(rec.KDTK, filteredIssues);
+        for (const iss of filteredIssues) {
+          issuesBreakdown.push({
+            CAB: rec.CAB,
+            KDTK: rec.KDTK,
+            ruleKey: iss.ruleKey,
+            ruleName: iss.ruleName,
+            category: iss.category,
+            severity: iss.severity || null,
+            message: iss.message || "",
+          });
+        }
+      }
+
+      for (const item of allStores) {
+        const nm = await getName(item.KDTK);
+        const unixKey = `${item.KDTK}${item.PRD_CLOSING}`;
+        const note = notesByKey.get(unixKey) || null;
+        const storeIssues = issuesMapByStore.get(item.KDTK) || [];
+
+        const storeRow = {
+          RECID: item.RECID,
+          CAB: item.CAB,
+          KDTK: item.KDTK,
+          NAMA: nm,
+          PRD_CLOSING: item.PRD_CLOSING,
+          TOTAL_RULES: item.TOTAL_RULES,
+          PASSED_RULES: item.PASSED_RULES,
+          FAILED_RULES: item.FAILED_RULES,
+          CRITICAL_ISSUES: item.CRITICAL_ISSUES,
+          IS_READY: item.IS_READY,
+          LAST_SCREENED: item.LAST_SCREENED,
+          UPDTIME: item.UPDTIME,
+          note: note
+            ? {
+                unixKey: note.unixKey,
+                noteText: note.noteText,
+                pic: note.pic,
+                fullName: note.fullName || null,
+                updated_at: note.updated_at || null,
+              }
+            : null,
+        };
+
+        stores.push(storeRow);
+      }
+
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        stores.splice(
+          0,
+          stores.length,
+          ...stores.filter(item => {
+            const fields = ["CAB", "KDTK", "NAMA", "PASSED_RULES", "FAILED_RULES", "CRITICAL_ISSUES", "IS_READY"];
+            const matchNormal = fields.some(field => item[field] && item[field].toString().toLowerCase().includes(q));
+            const matchNote =
+              item.note &&
+              ((item.note.noteText && item.note.noteText.toLowerCase().includes(q)) ||
+                (item.note.pic && item.note.pic.toLowerCase().includes(q)) ||
+                (item.note.fullName && item.note.fullName.toLowerCase().includes(q)));
+            const storeIssues = issuesMapByStore.get(item.KDTK) || [];
+            let matchIssue = storeIssues.some(iss => {
+              const msg = (iss.message || "").toString().toLowerCase();
+              const rname = (iss.ruleName || "").toLowerCase();
+              return msg.includes(q) || rname.includes(q);
+            });
+            return matchNormal || matchNote || matchIssue;
+          })
+        );
+      }
+
+      const rulesSummary = await this.getRulesSummary({ cabang, periode });
+
+      return {
+        summary: summary.data,
+        stores,
+        issuesBreakdown,
+        rulesSummary: rulesSummary.data,
+      };
+    } catch (error) {
+      logger.error(`[prep_closing.service] Error getExportData: ${error.message}`);
       throw error;
     }
   }

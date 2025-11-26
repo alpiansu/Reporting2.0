@@ -4,6 +4,7 @@
 import {
   screeningByCabang,
   getSummary,
+  getRulesSummary,
   getResumeByKdtk,
   getStoreDetails,
   getIssuesByCategory,
@@ -15,6 +16,7 @@ import PrepClosingService from "./prep_closing.service.js";
 const PrepClosingController = {
   screeningByCabang,
   getSummary,
+  getRulesSummary,
   getResumeByKdtk,
   getStoreDetails,
   getIssuesByCategory,

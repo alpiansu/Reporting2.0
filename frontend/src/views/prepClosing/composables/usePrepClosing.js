@@ -11,6 +11,8 @@ export function usePrepClosing() {
   const stores = ref([]);
   const selectedStore = ref(null);
   const categories = ref([]);
+  const rulesSummary = ref([]);
+  const selectedRuleKeys = ref([]);
 
   // Pagination
   const pagination = ref({
@@ -50,6 +52,20 @@ export function usePrepClosing() {
     }
   };
 
+  const fetchRulesSummary = async (periode, cabang) => {
+    try {
+      loading.value = true;
+      error.value = null;
+      const response = await prepClosingApi.getRulesSummary(periode, cabang);
+      rulesSummary.value = response.data.data || [];
+    } catch (err) {
+      error.value = err.response?.data?.message || "Gagal memuat rules summary";
+      console.error("Error fetching rules summary:", err);
+    } finally {
+      loading.value = false;
+    }
+  };
+
   const fetchStores = async (periode, cabang, params = {}) => {
     try {
       loading.value = true;
@@ -74,6 +90,7 @@ export function usePrepClosing() {
         sortColumn: params.sortColumn || sortColumn.value,
         sortOrder: params.sortOrder || sortOrder.value,
         searchQuery: params.searchQuery || searchQuery.value,
+        ruleKeys: params.ruleKeys !== undefined ? params.ruleKeys : selectedRuleKeys.value,
       });
 
       stores.value = response.data.data;
@@ -143,9 +160,23 @@ export function usePrepClosing() {
   const refreshAll = async (periode, cabang, params = {}) => {
     await Promise.all([
       fetchSummary(periode, cabang),
+      fetchRulesSummary(periode, cabang),
       fetchStores(periode, cabang, params),
       fetchCategories(periode, cabang),
     ]);
+  };
+
+  const isRuleSelected = key => selectedRuleKeys.value.includes(key);
+  const toggleRuleSelection = key => {
+    const idx = selectedRuleKeys.value.indexOf(key);
+    if (idx >= 0) {
+      selectedRuleKeys.value.splice(idx, 1);
+    } else {
+      selectedRuleKeys.value.push(key);
+    }
+  };
+  const clearRuleSelection = () => {
+    selectedRuleKeys.value = [];
   };
 
   const resetFilters = () => {
@@ -163,6 +194,8 @@ export function usePrepClosing() {
     stores,
     selectedStore,
     categories,
+    rulesSummary,
+    selectedRuleKeys,
     pagination,
     sortColumn,
     sortOrder,
@@ -174,11 +207,15 @@ export function usePrepClosing() {
 
     // Methods
     fetchSummary,
+    fetchRulesSummary,
     fetchStores,
     fetchStoreDetails,
     fetchCategories,
     updateNote,
     refreshAll,
     resetFilters,
+    isRuleSelected,
+    toggleRuleSelection,
+    clearRuleSelection,
   };
 }

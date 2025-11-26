@@ -5,17 +5,18 @@
 
     <div class="content-container">
       <!-- Filter Bar -->
-      <FilterBar v-model:periode="filters.periode" v-model:cabang="filters.cabang" v-model:search="filters.search"
+      <FilterBar v-model:periode="filters.periode" v-model:cabang="filters.cabang" :showSearch="false"
         @refresh="handleRefresh" @start-screening="handleStartScreening" />
 
       <!-- Dashboard Summary -->
-      <Dashboard v-if="summary" :summary="summary" :loading="loading" :categories="categories"
-        @category-click="handleCategoryFilter" />
+      <Dashboard v-if="summary" :summary="summary" :loading="loading" :rulesSummary="rulesSummary" :selectedRuleKeys="selectedRuleKeys" @rule-selected="handleRuleSelected" />
+
+      <!-- Rules Grid moved into Dashboard -->
 
       <!-- Store List Table -->
-      <StoreListTable :data="stores" :loading="loading" :error="error" :pagination="pagination"
-        :periode="filters.periode" :onReScreen="handleReScreenStore" @refresh="handleTableRefresh"
-        @page-change="handlePageChange" @items-per-page-change="handleItemsPerPageChange"
+      <StoreListTable :data="stores" :loading="loading" :error="error" :pagination="pagination" :searchQuery="searchQuery" :selectedRuleKeys="selectedRuleKeys"
+        :periode="filters.periode" :cabang="filters.cabang" :onReScreen="handleReScreenStore" @refresh="handleTableRefresh"
+        @page-change="handlePageChange" @items-per-page-change="handleItemsPerPageChange" @search-change="handleSearchChange"
         @sort-change="handleSortChange" @view-details="handleViewDetails"
         @edit-note="handleEditNote" />
     </div>
@@ -65,6 +66,8 @@ const {
   stores,
   selectedStore,
   categories,
+  rulesSummary,
+  selectedRuleKeys,
   pagination,
   fetchStores,
   fetchStoreDetails,
@@ -74,6 +77,9 @@ const {
   sortOrder,       
   searchQuery,     
   resetFilters,
+  isRuleSelected,
+  toggleRuleSelection,
+  clearRuleSelection,
 } = usePrepClosing();
 
 const {
@@ -231,6 +237,16 @@ const handleTableRefresh = async (params = {}) => {
   );
 };
 
+const handleRuleSelected = async (keys) => {
+  selectedRuleKeys.value = keys;
+  pagination.value.currentPage = 1;
+  await fetchStores(
+    filters.periode,
+    filters.cabang === 'All' ? undefined : filters.cabang,
+    { ruleKeys: keys, sortColumn: sortColumn.value, sortOrder: sortOrder.value, searchQuery: searchQuery.value || undefined }
+  );
+};
+
 const handlePageChange = async (data) => {
   pagination.value.currentPage = data.page;
 
@@ -273,6 +289,21 @@ const handleSortChange = async (data) => {
       sortColumn: data.sortColumn,
       sortOrder: data.sortOrder,
       searchQuery: searchQuery.value || undefined
+    }
+  );
+};
+
+const handleSearchChange = async (q) => {
+  searchQuery.value = q || '';
+  pagination.value.currentPage = 1;
+  await fetchStores(
+    filters.periode,
+    filters.cabang === 'All' ? undefined : filters.cabang,
+    {
+      sortColumn: sortColumn.value,
+      sortOrder: sortOrder.value,
+      searchQuery: searchQuery.value,
+      ruleKeys: selectedRuleKeys.value
     }
   );
 };
@@ -440,6 +471,8 @@ const handleCategoryFilter = (category) => {
     sortOrder: sortOrder.value
   });
 };
+
+// severity icon moved to RulesGrid component
 </script>
 
 <style scoped>
@@ -452,6 +485,7 @@ const handleCategoryFilter = (category) => {
   flex-direction: column;
   gap: 1.5rem;
 }
+
 
 @media (max-width: 768px) {
   .prep-closing-view {

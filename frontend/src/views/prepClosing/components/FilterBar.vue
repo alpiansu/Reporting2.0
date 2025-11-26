@@ -24,7 +24,7 @@
                 </div>
 
                 <!-- Search Input -->
-                <div class="filter-group flex-grow">
+                <div v-if="showSearch" class="filter-group flex-grow">
                     <label for="search" class="filter-label">
                         <i class="pi pi-search"></i>
                         Pencarian
@@ -60,7 +60,8 @@ import { useCabangStore } from '@/stores';
 const props = defineProps({
     periode: String,
     cabang: String,
-    search: String
+    search: String,
+    showSearch: { type: Boolean, default: true }
 });
 
 const emit = defineEmits(['update:periode', 'update:cabang', 'update:search', 'refresh', 'start-screening']);
@@ -149,22 +150,22 @@ const clearSearch = () => {
 
 <style scoped>
 .filter-card {
-    border-radius: 8px;
+    border-radius: 10px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .filter-container {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 1rem;
-    align-items: flex-end;
+    align-items: start;
 }
 
 .filter-group {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    min-width: 200px;
+    min-width: 220px;
 }
 
 .filter-group.flex-grow {
@@ -198,8 +199,9 @@ const clearSearch = () => {
 .filter-actions {
     display: flex;
     gap: 0.5rem;
-    align-items: flex-end;
-    margin-left: auto;
+    align-items: center;
+    justify-content: flex-end;
+    grid-column: 1 / -1;
 }
 
 :deep(.p-calendar),
@@ -209,20 +211,9 @@ const clearSearch = () => {
 }
 
 @media (max-width: 1024px) {
-    .filter-container {
-        flex-direction: column;
-    }
-
-    .filter-group {
-        width: 100%;
-        min-width: unset;
-    }
-
     .filter-actions {
         width: 100%;
-        margin-left: 0;
     }
-
     .filter-actions button {
         flex: 1;
     }

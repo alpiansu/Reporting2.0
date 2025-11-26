@@ -7,6 +7,15 @@
                     <span>Daftar Toko</span>
                 </div>
                 <div class="header-actions">
+                    <div class="datatable-search">
+                        <i class="pi pi-search search-icon"></i>
+                        <input class="datatable-search-input" type="text" :value="internalQuery" @input="onSearchInput" placeholder="Cari KDTK, Nama, Note, Issue" />
+                        <button class="clear-filter-btn" @click="clearSearch" :disabled="!internalQuery">
+                            <i class="pi pi-filter-slash"></i>
+                            <span>Clear</span>
+                        </button>
+                        <i v-if="searchLoading" class="pi pi-spin pi-spinner search-loading"></i>
+                    </div>
                     <Button icon="pi pi-refresh" label="Refresh" class="p-button-outlined p-button-sm"
                         @click="$emit('refresh')" />
                     <Button icon="pi pi-file-excel" label="Export" class="p-button-success p-button-sm"
@@ -120,7 +129,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import Card from 'primevue/card';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
@@ -130,6 +139,7 @@ import ProgressBar from 'primevue/progressbar';
 import ProgressSpinner from 'primevue/progressspinner';
 import * as XLSX from 'xlsx';
 import { formatDateTime, formatRelativeTime } from '../utils/formatters';
+import prepClosingApi from '@/services/prepClosing.service.js';
 
 const props = defineProps({
     data: {
@@ -152,6 +162,18 @@ const props = defineProps({
         type: String,
         required: true
     },
+    cabang: {
+        type: String,
+        default: 'All'
+    },
+    searchQuery: {
+        type: String,
+        default: ''
+    },
+    selectedRuleKeys: {
+        type: Array,
+        default: () => []
+    },
     onReScreen: {
         type: Function,
         required: true
@@ -163,6 +185,7 @@ const emit = defineEmits([
     'page-change',
     'items-per-page-change',
     'sort-change',
+    'search-change',
     'view-details',
     're-screen',
     'edit-note'
@@ -229,27 +252,99 @@ const handleSortChange = (event) => {
     });
 };
 
-const exportToExcel = () => {
-    const exportData = props.data.map(item => ({
-        'Kode Toko': item.KDTK,
-        'Nama Toko': item.NAMA,
-        'Cabang': item.CAB,
-        'Total Rules': item.TOTAL_RULES,
-        'Passed Rules': item.PASSED_RULES,
-        'Failed Rules': item.FAILED_RULES,
-        'Critical Issues': item.CRITICAL_ISSUES,
-        'Status': item.IS_READY ? 'Siap' : 'Belum Siap',
-        'Last Screened': formatDateTime(item.LAST_SCREENED),
-        'Note': item.note?.noteText || ''
-    }));
+const exportToExcel = async () => {
+    try {
+        const response = await prepClosingApi.getExportData({
+            periode: props.periode,
+            cabang: props.cabang,
+            searchQuery: internalQuery.value || '',
+            ruleKeys: props.selectedRuleKeys || []
+        });
 
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    XLSX.utils.book_append_sheet(wb, ws, 'Prep Closing');
+        const data = response.data || response; // handle potential wrapping
 
-    const filename = `prep_closing_${props.periode}_${new Date().getTime()}.xlsx`;
-    XLSX.writeFile(wb, filename);
+        const wb = XLSX.utils.book_new();
+
+        const summarySheet = XLSX.utils.json_to_sheet([data.summary]);
+        XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
+
+        const storesSheet = XLSX.utils.json_to_sheet((data.stores || []).map(item => ({
+            RECID: item.RECID,
+            CAB: item.CAB,
+            KDTK: item.KDTK,
+            NAMA: item.NAMA,
+            PRD_CLOSING: item.PRD_CLOSING,
+            TOTAL_RULES: item.TOTAL_RULES,
+            PASSED_RULES: item.PASSED_RULES,
+            FAILED_RULES: item.FAILED_RULES,
+            CRITICAL_ISSUES: item.CRITICAL_ISSUES,
+            IS_READY: item.IS_READY ? 'Siap' : 'Belum Siap',
+            LAST_SCREENED: formatDateTime(item.LAST_SCREENED),
+            UPDTIME: formatDateTime(item.UPDTIME),
+            NOTE: item.note?.noteText || ''
+        })));
+        XLSX.utils.book_append_sheet(wb, storesSheet, 'Store Details');
+
+        const issuesSheet = XLSX.utils.json_to_sheet((data.issuesBreakdown || []).map(i => ({
+            CAB: i.CAB,
+            KDTK: i.KDTK,
+            ruleKey: i.ruleKey,
+            ruleName: i.ruleName,
+            category: i.category,
+            severity: i.severity || '',
+            message: i.message || ''
+        })));
+        XLSX.utils.book_append_sheet(wb, issuesSheet, 'Issues Breakdown');
+
+        const rulesSheet = XLSX.utils.json_to_sheet((data.rulesSummary || []).map(r => ({
+            ruleKey: r.ruleKey,
+            ruleName: r.ruleName,
+            category: r.category,
+            totalStores: r.totalStores,
+            severity: r.severity || '',
+            critical: r.severityBreakdown?.critical || 0,
+            high: r.severityBreakdown?.high || 0,
+            medium: r.severityBreakdown?.medium || 0,
+            low: r.severityBreakdown?.low || 0
+        })));
+        XLSX.utils.book_append_sheet(wb, rulesSheet, 'Rules Summary');
+
+        const filename = `prep_closing_${props.periode}_${props.cabang || 'All'}_${new Date().getTime()}.xlsx`;
+        XLSX.writeFile(wb, filename);
+    } catch (err) {
+        console.error('Error exporting to Excel:', err);
+    }
 };
+
+// Search state and debounce
+const internalQuery = ref('');
+const debounceTimer = ref(null);
+const searchLoading = ref(false);
+
+const onSearchInput = (e) => {
+    const val = e.target.value;
+    internalQuery.value = val;
+    if (debounceTimer.value) clearTimeout(debounceTimer.value);
+    searchLoading.value = true;
+    debounceTimer.value = setTimeout(() => {
+        emit('search-change', internalQuery.value);
+        searchLoading.value = false;
+    }, 500);
+};
+
+const clearSearch = () => {
+    internalQuery.value = '';
+    emit('search-change', internalQuery.value);
+};
+
+onMounted(() => {
+    internalQuery.value = props.searchQuery || '';
+});
+
+// Trigger refresh when selected rules change
+watch(() => props.selectedRuleKeys, () => {
+    emit('refresh');
+});
 </script>
 
 <style scoped>
@@ -282,6 +377,13 @@ const exportToExcel = () => {
     display: flex;
     gap: 0.5rem;
 }
+
+.datatable-search { display: inline-flex; align-items: center; gap: 6px; background: #f3f4f6; border: 1px solid #e5e7eb; padding: 6px 8px; border-radius: 6px; }
+.datatable-search-input { border: none; background: transparent; outline: none; min-width: 220px; }
+.search-icon { color: #6b7280; }
+.search-loading { color: #6b7280; }
+.clear-filter-btn { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border: none; background: #e5e7eb; border-radius: 6px; cursor: pointer; }
+.clear-filter-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .status-icon {
     text-align: center;

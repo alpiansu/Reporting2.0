@@ -49,6 +49,16 @@ export const prepClosingApi = {
   },
 
   /**
+   * Get rules summary (21 rules)
+   */
+  async getRulesSummary(periode, cabang) {
+    const response = await api.get(`${BASE_URL}/rules-summary`, {
+      params: { periode, cabang: cabang || "All" },
+    });
+    return response.data;
+  },
+
+  /**
    * Get resume per shop with pagination
    */
   async getResumePerShop(params) {
@@ -61,6 +71,7 @@ export const prepClosingApi = {
         sortColumn: params.sortColumn || "KDTK",
         sortOrder: params.sortOrder || "ASC",
         searchQuery: params.searchQuery || "",
+        ruleKeys: Array.isArray(params.ruleKeys) ? params.ruleKeys.join(",") : params.ruleKeys || undefined,
       },
     });
     return response.data;
@@ -95,6 +106,19 @@ export const prepClosingApi = {
    */
   async updateNote(data) {
     const response = await api.put(`${BASE_URL}/note`, data);
+    return response.data;
+  },
+
+  // ==================== EXPORT ENDPOINT ====================
+  async getExportData(params) {
+    const response = await api.get(`${BASE_URL}/export-data`, {
+      params: {
+        periode: params.periode,
+        cabang: params.cabang || "All",
+        searchQuery: params.searchQuery || "",
+        ruleKeys: Array.isArray(params.ruleKeys) ? params.ruleKeys.join(",") : params.ruleKeys || undefined,
+      },
+    });
     return response.data;
   },
 };

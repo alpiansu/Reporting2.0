@@ -196,9 +196,6 @@ class WrcUtils {
 
         const [rows] = await connection.execute(finalQuery);
         allWrcData = rows || [];
-        logger.info(`final query : ${finalQuery}`);
-        logger.info(`Retrieved ${allWrcData.length} records from direct table query.`);
-        logger.info(`result sample: ${JSON.stringify(allWrcData.slice(0, 2))}`);
       } else {
         // ORIGINAL MODE (UNION ALL berdasarkan tanggal)
         const year = "20" + period.substring(0, 2);

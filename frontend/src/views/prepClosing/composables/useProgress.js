@@ -56,6 +56,9 @@ export function useProgress(username) {
     }
   };
 
+  const maxRetry = 60;
+  let retryCount = 0;
+
   const startMonitoring = async () => {
     if (isMonitoring.value) {
       console.log("⚠️ Progress monitoring already active");
@@ -63,39 +66,46 @@ export function useProgress(username) {
     }
 
     try {
-      // Stop any existing connection
       stopMonitoring();
-
       isMonitoring.value = true;
-      // console.log(`🔗 Starting SSE monitoring for task: ${taskid}`);
+      retryCount = 0; // reset setiap mulai monitoring
 
-      // Check if task exists first
-      const taskExists = await progressService.checkProgressTask(taskid);
-
-      if (!taskExists) {
-        console.log("⚠️ Task not found, will retry...");
-
-        // Retry after delay if task doesn't exist yet
-        setTimeout(() => {
-          if (isMonitoring.value) {
-            console.log("🔄 Retrying progress monitoring...");
-            startDirectMonitoring();
-          }
-        }, 1000);
-
-        return;
-      }
-
-      // Start direct monitoring if task exists
-      startDirectMonitoring();
+      await checkTaskLoop();
     } catch (error) {
       console.error("❌ Error starting progress monitoring:", error);
       progressError.value = "Gagal memulai monitoring progress";
-
-      // Fallback: try direct monitoring anyway
       console.log("🔄 Fallback: Starting direct monitoring...");
       startDirectMonitoring();
     }
+  };
+
+  const checkTaskLoop = async () => {
+    const taskExists = await progressService.checkProgressTask(taskid);
+
+    if (taskExists) {
+      console.log("✅ Task ditemukan, memulai direct monitoring...");
+      startDirectMonitoring();
+      return;
+    }
+
+    // Kalau tidak ditemukan
+    retryCount++;
+    console.log(`⚠️ Task not found (retry ${retryCount}/${maxRetry})`);
+
+    // Sudah mencapai batas retry
+    if (retryCount >= maxRetry) {
+      console.log("⛔ Batas retry tercapai. Stop monitoring.");
+      stopMonitoring();
+      progressError.value = "Progress tidak ditemukan setelah 1 menit.";
+      return;
+    }
+
+    // Lanjut retry setelah 1 detik
+    setTimeout(() => {
+      if (isMonitoring.value) {
+        checkTaskLoop();
+      }
+    }, 1000);
   };
 
   const startDirectMonitoring = () => {

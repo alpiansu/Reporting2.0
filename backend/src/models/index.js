@@ -12,6 +12,9 @@ import NotesEdp from "./notes.model.js";
 import NoteCategories from "../modules/note_categories/noteCategories.model.js";
 import Penyesuaian from "../modules/penyesuaian/penyesuaian.model.js";
 import PrepClosing from "../modules/prep-closing/prep_closing.model.js";
+import DetailRekonSales from "../modules/rekon_sales/models/detail_rekon_sales.model.js";
+import MtranVsCd from "../modules/rekon_sales/models/mtran_vs_cd.model.js";
+import RekonSales from "../modules/rekon_sales/models/rekon_sales.model.js";
 import modelRegistry from "./registry.js";
 
 // Register all Sequelize models with the registry
@@ -26,6 +29,9 @@ modelRegistry.register("RekapRemote", () => RekapRemote.getModel(), { priority: 
 modelRegistry.register("SalesPerDept", () => SalesPerDept.getModel(), { priority: 8 });
 modelRegistry.register("MDept", () => MDept.getModel(), { priority: 7 });
 modelRegistry.register("HistAdjust", () => HistAdjust.getModel(), { priority: 6 });
+modelRegistry.register("DetailRekonSales", () => DetailRekonSales.getModel(), { priority: 5 });
+modelRegistry.register("MtranVsCd", () => MtranVsCd.getModel(), { priority: 4 });
+modelRegistry.register("RekonSales", () => RekonSales.getModel(), { priority: 3 });
 
 // Note: User and Store are JSON-based models, not Sequelize models
 // They don't need to be registered for database sync
@@ -58,6 +64,9 @@ export default {
   modelRegistry,
   Penyesuaian,
   PrepClosing,
+  DetailRekonSales,
+  MtranVsCd,
+  RekonSales,
 };
 
 // Named exports for backward compatibility
@@ -75,6 +84,9 @@ export {
   modelRegistry,
   Penyesuaian,
   PrepClosing,
+  DetailRekonSales,
+  MtranVsCd,
+  RekonSales,
 };
 
 // Database connection functions

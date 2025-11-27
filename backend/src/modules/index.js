@@ -21,6 +21,7 @@ import progressModule from "./progress/index.js";
 import notesCategoriesModule from "./note_categories/index.js";
 import notesModule from "./notes/index.js";
 import penyesuaianModule from "./penyesuaian/index.js";
+import rekonSalesModule from "./rekon_sales/index.js";
 
 export default {
   // Export all modules
@@ -42,6 +43,7 @@ export default {
   notesCategoriesModule,
   notesModule,
   penyesuaianModule,
+  rekonSalesModule,
 
   // Initialize all modules
   initialize: app => {
@@ -63,6 +65,7 @@ export default {
     const notesCategories = notesCategoriesModule.initialize(app);
     const notes = notesModule.initialize(app);
     const penyesuaian = penyesuaianModule.initialize(app);
+    const rekonSales = rekonSalesModule.initialize(app);
 
     // Initialize menu manager module
     app.use("/api/menu-manager", menuManagerModule.routes);
@@ -85,6 +88,7 @@ export default {
       notesCategories,
       notes,
       penyesuaian,
+      rekonSales,
       menuManager: true,
     };
   },

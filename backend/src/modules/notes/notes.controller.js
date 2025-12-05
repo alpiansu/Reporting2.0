@@ -32,6 +32,7 @@ export const remove = async (req, res) => {
 };
 
 export const autoNoteVirtMrg = async (req, res) => {
+  const tableName = `saldovirtual`;
   const pic = req.user?.username || "system";
   try {
     logger.info(`[autoNoteVirtMrg] Auto note process started, ensuring store service data is initialized first.`);
@@ -69,7 +70,6 @@ export const autoNoteVirtMrg = async (req, res) => {
           logger.info(
             `[autoNoteVirtMrg] Preparing to save or update and autonote for kdtk ${kdtk} on prdcd ${prdcd} for date ${tanggal}`
           );
-          const tableName = `saldovirtual`;
           const unixKey = `${kdtk}${tanggal}${prdcd}`;
           const noteData = {
             Cabang: cabang,
@@ -122,20 +122,34 @@ export const autoNoteVirtMrg = async (req, res) => {
             logger.info(
               `[autoNoteVirtMrg] Preparing to save or update and autonote for kdtk ${kdtk} on prdcd ${prdcd} for date ${tanggal}`
             );
+            const unixKey = `${kdtk}${tanggal}${prdcd}`;
+            const noteData = {
+              Cabang: cabang,
+              unixKey,
+              noteText: noteCategory || "",
+              pic: pic,
+              categoryId: codeCategory || null,
+              tableName: tableName,
+            };
             // call reuse logic
-            const resultupdNote = await service.saveOrUpdateNote({
-              cabang: cabang,
-              shop: kdtk,
-              tanggal,
-              prdcd,
-              noteText: noteCategory,
-              categoryId: codeCategory,
-              pic,
-            });
+            const resultupdNote = await service.upsert(noteData);
+
+            //convert categoryId to integer
+            const strCategoryId = codeCategory ? parseInt(codeCategory) : null;
+
+            let category = null;
+            if (strCategoryId) {
+              const categoryResult = await noteCategoriesService.getAll();
+              const categories = categoryResult.data || [];
+              category = categories.find(c => c.id === strCategoryId) || null;
+            }
+
+            const user = await userService.findByCredentials(pic);
+            const rslt = { ...resultupdNote.toJSON(), category, fullName: user?.fullName || null };
 
             return apiResponse.success(res, {
               message: `Auto note processed successfully for ${kdtk}`,
-              data: resultupdNote,
+              data: rslt,
             });
           } else {
             logger.info(`[autoNoteVirtMrg] No data found for the given parameters.`);

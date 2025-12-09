@@ -6,7 +6,7 @@
                 <div class="header-title">
                     <i class="pi pi-shop"></i>
                     <div>
-                        <h3>{{ store?.KDTK }} - {{ store?.NAMA }}</h3>
+                        <h3>{{ store?.KDTK }} - {{ store?.NAMA }} ({{ store?.CAB }})</h3>
                         <Badge :value="store?.IS_READY ? 'SIAP' : 'BELUM SIAP'"
                             :severity="store?.IS_READY ? 'success' : 'danger'" />
                     </div>
@@ -95,7 +95,6 @@
 
         <template #footer>
             <div class="footer-actions">
-                <Button label="Re-screen" icon="pi pi-refresh" class="p-button-outlined" @click="handleReScreen" />
                 <Button :label="store?.note ? 'Edit Note' : 'Tambah Note'" icon="pi pi-comment" class="p-button-info"
                     @click="handleEditNote" />
                 <Button label="Tutup" icon="pi pi-times" class="p-button-secondary" @click="handleClose" />
@@ -122,7 +121,7 @@ const props = defineProps({
     loading: Boolean
 });
 
-const emit = defineEmits(['update:visible', 'close', 're-screen', 'edit-note']);
+const emit = defineEmits(['update:visible', 'close', 'edit-note']);
 
 const localVisible = ref(props.visible);
 
@@ -168,10 +167,6 @@ const groupedIssues = computed(() => {
 const handleClose = () => {
     localVisible.value = false;
     emit('close');
-};
-
-const handleReScreen = () => {
-    emit('re-screen');
 };
 
 const handleEditNote = () => {

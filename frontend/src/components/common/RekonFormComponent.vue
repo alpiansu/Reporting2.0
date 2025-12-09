@@ -408,8 +408,8 @@ export default {
 }
 
 .input-container.has-value {
-    border-color: #10b981;
-    background: linear-gradient(135deg, #ffffff, #f0fdf4);
+    border-color: #e2e8f0;
+    background: #ffffff;
 }
 
 .input-container.calendar-open {

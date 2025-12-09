@@ -4,9 +4,25 @@
       description="Halaman ini menampilkan status kesiapan closing untuk setiap toko berdasarkan rule validation yang telah ditentukan." />
 
     <div class="content-container">
-      <!-- Filter Bar -->
-      <FilterBar v-model:periode="filters.periode" v-model:cabang="filters.cabang" :showSearch="false"
-        @refresh="handleRefresh" @start-screening="handleStartScreening" />
+      <!-- Filter Form (Seragam dengan Rekon) -->
+      <RekonFormComponent :formData="{ cab: filters.cabang, periode: filters.periode }">
+        <template #title>
+          Filter Prep Closing
+        </template>
+        <template #description>
+          Pilih cabang dan periode untuk melihat status kesiapan closing.
+        </template>
+        <template #cab>
+          <Dropdown v-model="filters.cabang" :options="cabangOptions" optionLabel="namacab" optionValue="kdcab" placeholder="Pilih Cabang" class="w-full" />
+        </template>
+        <template #periode>
+          <Calendar v-model="periodeDate" view="month" dateFormat="mm/yy" placeholder="Pilih Bulan/Tahun" :maxDate="today" showIcon class="w-full" @date-select="handlePeriodeSelect" />
+        </template>
+        <template #actions>
+          <Button icon="pi pi-refresh" label="Refresh" class="p-button-outlined" style="margin-right: 4px;" @click="handleRefresh" />
+          <Button icon="pi pi-bolt" label="Mulai Screening" class="p-button-primary" :disabled="!filters.periode" @click="handleStartScreening" />
+        </template>
+      </RekonFormComponent>
 
       <!-- Dashboard Summary -->
       <Dashboard v-if="summary" :summary="summary" :loading="loading" :rulesSummary="rulesSummary" :selectedRuleKeys="selectedRuleKeys" @rule-selected="handleRuleSelected" />
@@ -23,7 +39,7 @@
 
     <!-- Store Detail Modal -->
     <StoreDetailModal v-model:visible="detailModalVisible" :store="selectedStore" :periode="filters.periode"
-      :loading="loading" @close="handleCloseDetail" @re-screen="handleReScreenFromModal" @edit-note="handleEditNote" />
+      :loading="loading" @close="handleCloseDetail" @edit-note="handleEditNote" />
 
     <!-- Screening Dialog -->
     <ScreeningDialog v-model:visible="screeningDialogVisible" :periode="filters.periode" :cabang="filters.cabang"
@@ -44,7 +60,11 @@ import { ref, reactive, onMounted, watch } from 'vue';
 import { useToastService } from '@/utils/toast';
 import { useAuthStore } from '@/stores';
 import PageHeader from '@/components/PageHeader.vue';
-import FilterBar from './components/FilterBar.vue';
+import Calendar from 'primevue/calendar';
+import Dropdown from 'primevue/dropdown';
+import Button from 'primevue/button';
+import RekonFormComponent from '@/components/common/RekonFormComponent.vue';
+import { useCabangStore } from '@/stores';
 import Dashboard from './components/Dashboard.vue';
 import StoreListTable from './components/StoreListTable.vue';
 import StoreDetailModal from './components/StoreDetailModal.vue';
@@ -56,6 +76,7 @@ import { useScreening } from './composables/useScreening';
 import { useProgress } from './composables/useProgress';
 
 const toast = useToastService();
+const cabangStore = useCabangStore();
 const authStore = useAuthStore();
 
 // Composables
@@ -65,7 +86,6 @@ const {
   summary,
   stores,
   selectedStore,
-  categories,
   rulesSummary,
   selectedRuleKeys,
   pagination,
@@ -77,9 +97,6 @@ const {
   sortOrder,       
   searchQuery,     
   resetFilters,
-  isRuleSelected,
-  toggleRuleSelection,
-  clearRuleSelection,
 } = usePrepClosing();
 
 const {
@@ -108,6 +125,10 @@ const filters = reactive({
   search: ''
 });
 
+const today = ref(new Date());
+const periodeDate = ref(null);
+const cabangOptions = ref([]);
+
 const detailModalVisible = ref(false);
 const screeningDialogVisible = ref(false);
 const progressDialogVisible = ref(false);
@@ -123,6 +144,14 @@ onMounted(async () => {
   const year = now.getFullYear().toString().slice(-2);
   const month = (now.getMonth() + 1).toString().padStart(2, '0');
   filters.periode = year + month;
+  periodeDate.value = now;
+
+  // Load cabang options
+  const cabangData = cabangStore.allCabang || [];
+  cabangOptions.value = [
+    { kdcab: 'All', namacab: 'SEMUA CABANG' },
+    ...cabangData
+  ];
 
   // Load initial data
   await loadData();
@@ -217,6 +246,14 @@ const loadData = async () => {
 const handleRefresh = async () => {
   await loadData();
   toast.showSuccess('Sukses', 'Data berhasil diperbarui');
+};
+
+const handlePeriodeSelect = () => {
+  if (periodeDate.value) {
+    const year = periodeDate.value.getFullYear().toString().slice(-2);
+    const month = (periodeDate.value.getMonth() + 1).toString().padStart(2, '0');
+    filters.periode = year + month;
+  }
 };
 
 const handleTableRefresh = async (params = {}) => {
@@ -387,13 +424,6 @@ const handleReScreenStore = async (store) => {
 
     // Re-throw error agar bisa ditangkap di child component
     throw err;
-  }
-};
-
-const handleReScreenFromModal = async () => {
-  if (selectedStore.value) {
-    await handleReScreenStore(selectedStore.value);
-    await fetchStoreDetails(selectedStore.value.KDTK, filters.periode);
   }
 };
 

@@ -58,9 +58,7 @@
                 <!-- Store Code Column -->
                 <Column field="KDTK" header="KDTK" :sortable="true" style="min-width: 100px">
                     <template #body="{ data: item }">
-                        <a href="#" class="store-link" @click.prevent="$emit('view-details', item)">
-                            {{ item.KDTK }}
-                        </a>
+                        {{ item.KDTK }}
                     </template>
                 </Column>
 

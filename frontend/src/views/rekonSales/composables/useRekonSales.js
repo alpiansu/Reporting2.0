@@ -25,7 +25,7 @@ export function useRekonSales() {
   const fetchSummary = async () => {
     try {
       const res = await rekonSalesApi.getSummary({ cabang: filters.cabang, month: filters.month, year: filters.year });
-      summary.value = res;
+      summary.value = res?.data;
     } catch (err) {
       toast.showError("Error", err.message || "Gagal memuat ringkasan");
     }

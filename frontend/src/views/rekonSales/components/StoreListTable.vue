@@ -47,39 +47,43 @@
           </template>
         </Column>
 
-        <Column field="TOTAL_SEL_NET_GL" header="SEL NET GL" sortable
-          :style="{ minWidth: '150px', textAlign: 'right' }">
+        <Column header="Total SEL NET (GL+CD)" :style="{ minWidth: '180px', textAlign: 'right' }">
           <template #body="slotProps">
-            <span :class="['amount-value', amountClass(slotProps.data.TOTAL_SEL_NET_GL ?? 0)]">
-              {{ formatNumber(slotProps.data.TOTAL_SEL_NET_GL ?? 0) }}
+            <span :class="['amount-value', amountClass((slotProps.data.TOTAL_SEL_NET_GL ?? 0) + (slotProps.data.TOTAL_SEL_NET_CD ?? 0))]">
+              {{ formatNumber((slotProps.data.TOTAL_SEL_NET_GL ?? 0) + (slotProps.data.TOTAL_SEL_NET_CD ?? 0)) }}
             </span>
           </template>
         </Column>
 
-        <Column field="TOTAL_SEL_NET_CD" header="SEL NET CD" sortable
-          :style="{ minWidth: '150px', textAlign: 'right' }">
+        <Column header="Total SEL PPN (GL+CD)" :style="{ minWidth: '180px', textAlign: 'right' }">
           <template #body="slotProps">
-            <span :class="['amount-value', amountClass(slotProps.data.TOTAL_SEL_NET_CD ?? 0)]">
-              {{ formatNumber(slotProps.data.TOTAL_SEL_NET_CD ?? 0) }}
+            <span :class="['amount-value', amountClass((slotProps.data.TOTAL_SEL_PPN_GL ?? 0) + (slotProps.data.TOTAL_SEL_PPN_CD ?? 0))]">
+              {{ formatNumber((slotProps.data.TOTAL_SEL_PPN_GL ?? 0) + (slotProps.data.TOTAL_SEL_PPN_CD ?? 0)) }}
             </span>
           </template>
         </Column>
 
-        <Column field="LAST_SCREENED" header="Last Screened" sortable :style="{ minWidth: '150px' }">
+        <Column field="UPDTIME_LATEST" header="Last Screened" sortable :style="{ minWidth: '180px' }">
           <template #body="slotProps">
-            <span v-tooltip.top="formatDateTime(slotProps.data.LAST_SCREENED ?? '')" class="last-screened">
-              {{ formatRelativeTime(slotProps.data.LAST_SCREENED ?? '') }}
+            <span v-tooltip.top="formatDateTime(slotProps.data.UPDTIME_LATEST ?? '')" class="last-screened">
+              {{ formatRelativeTime(slotProps.data.UPDTIME_LATEST ?? '') }}
             </span>
           </template>
         </Column>
 
-        <Column header="Notes" :style="{ minWidth: '200px' }">
+        <Column header="Notes" :style="{ minWidth: '260px' }">
           <template #body="slotProps">
             <div class="notes-cell" @click="$emit('edit-note', slotProps.data)">
-              <i class="pi pi-pencil note-icon" />
-              <span class="note-text">
-                {{ slotProps.data.note?.noteText ?? slotProps.data.note ?? 'Tambah catatan...' }}
-              </span>
+              <div class="note-left">
+                <i class="pi pi-pencil note-icon" />
+                <span class="note-text">
+                  {{ slotProps.data.note?.noteText ?? slotProps.data.note ?? 'Tambah catatan...' }}
+                </span>
+              </div>
+              <div class="note-meta-icons" v-if="slotProps.data.note">
+                <i class="pi pi-user" v-tooltip.top="slotProps.data.note?.fullName || slotProps.data.note?.pic || '-'" />
+                <i class="pi pi-clock" v-tooltip.top="formatDateTime(slotProps.data.note?.updated_at || '')" />
+              </div>
             </div>
           </template>
         </Column>
@@ -238,6 +242,15 @@ const getRowClass = (row) => {
   z-index: 1;
 }
 
+.notes-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+}
+.note-left { display: inline-flex; align-items: center; gap: .5rem; }
+.note-meta-icons { display: inline-flex; align-items: center; gap: .5rem; color: #6b7280; }
+.note-meta-icons i { cursor: pointer; }
 .clear-btn {
   position: absolute;
   right: 0.25rem;
@@ -329,18 +342,10 @@ const getRowClass = (row) => {
   font-size: 0.813rem;
 }
 
-.notes-cell {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  padding: 0.375rem 0.5rem;
-  border-radius: 6px;
-  transition: background-color 0.2s ease;
-}
 
 .notes-cell:hover {
   background: #f3f4f6;
+  cursor: pointer;
 }
 
 .note-icon {

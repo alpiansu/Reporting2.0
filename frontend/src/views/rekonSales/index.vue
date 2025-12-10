@@ -39,7 +39,8 @@
 
       <NoteDialog v-model:visible="noteVisible" :store="noteStore"
         :defaultText="noteStore?.note?.noteText || noteStore?.note || ''"
-        :lastUpdate="noteStore?.note?.updated_at ? formatDateTime(noteStore.note.updated_at) : ''" @save="saveNote" />
+        :lastUpdate="noteStore?.note?.updated_at ? formatDateTime(noteStore.note.updated_at) : ''"
+        @save="saveNote" @delete="deleteNote" />
     </div>
   </div>
 </template>
@@ -227,15 +228,13 @@ watch(progressError, (newVal) => {
 });
 
 const openDetail = async (row) => {
-  const tanggal = row.DATES?.[0] || row.TANGGAL || row.tanggal;
-  if (!tanggal) { toast.showInfo('Peringatan', 'Tidak ada tanggal tersedia untuk toko ini'); return; }
   try {
-    const det = await fetchStoreDetails({ kdtk: row.KDTK, tanggal });
+    const det = await fetchStoreDetails({ kdtk: row.KDTK });
     selectedDetail.value = det.data || det;
     detailVisible.value = true;
     diffLoading.value = true; kodeLoading.value = true;
-    try { const diffRes = await fetchDifferences({ kdtk: row.KDTK, tanggal, page: 1, limit: 100 }); differences.value = diffRes.data || diffRes; } catch { differences.value = []; } finally { diffLoading.value = false; }
-    try { const kodeRes = await fetchKodePesananIssues({ kdtk: row.KDTK, tanggal }); kodePesananIssues.value = kodeRes.data || kodeRes; } catch { kodePesananIssues.value = []; } finally { kodeLoading.value = false; }
+    try { const diffRes = await fetchDifferences({ kdtk: row.KDTK, page: 1, limit: 100 }); differences.value = diffRes.data || diffRes; } catch { differences.value = []; } finally { diffLoading.value = false; }
+    try { const kodeRes = await fetchKodePesananIssues({ kdtk: row.KDTK }); kodePesananIssues.value = kodeRes.data || kodeRes; } catch { kodePesananIssues.value = []; } finally { kodeLoading.value = false; }
   } catch (err) { toast.showError('Error', err.message || 'Gagal mengambil detail'); }
 };
 
@@ -257,6 +256,20 @@ const saveNote = async ({ text }) => {
     await refreshAll();
   } catch (err) {
     toast.showError('Error', err.message || 'Gagal menyimpan catatan');
+  }
+};
+
+const deleteNote = async () => {
+  try {
+    const tanggal = noteStore.value.TANGGAL;
+    await updateNote({ cabang: filters.cabang, kdtk: noteStore.value.KDTK, tanggal, noteText: '' });
+    toast.showSuccess('Sukses', 'Catatan dihapus');
+    noteVisible.value = false;
+    highlightedItems.value.add(`${filters.cabang}_${noteStore.value.KDTK}`);
+    setTimeout(() => highlightedItems.value.delete(`${filters.cabang}_${noteStore.value.KDTK}`), 2000);
+    await refreshAll();
+  } catch (err) {
+    toast.showError('Error', err.message || 'Gagal menghapus catatan');
   }
 };
 

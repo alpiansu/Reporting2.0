@@ -20,7 +20,7 @@ import progressService from "../progress/progress.service.js";
 import StoreQueryHelper from "./helpers/store.query.helper.js";
 import RekonCalculator from "./helpers/rekon.calculator.js";
 import WrcDataHelper from "./helpers/wrc.data.helper.js";
-import { json } from "sequelize";
+import { json, Op } from "sequelize";
 
 class RekonSalesService {
   constructor() {
@@ -623,6 +623,7 @@ class RekonSalesService {
         });
 
         // Sync to JSON file
+        this.invalidateCache();
         await this.syncToJsonFile(strYear, strMonth);
 
         return {
@@ -878,6 +879,7 @@ class RekonSalesService {
         status: "finalizing",
       });
 
+      this.invalidateCache();
       await this.syncToJsonFile(strYear, strMonth);
       logger.info(`[rekon_sales.service] Synchronized data to JSON file`);
 
@@ -1146,6 +1148,8 @@ class RekonSalesService {
       const totalIssues = filteredData.length;
       const totalSelNetGL = filteredData.reduce((sum, item) => sum + Math.abs(item.SEL_NET_GL || 0), 0);
       const totalSelNetCD = filteredData.reduce((sum, item) => sum + Math.abs(item.SEL_NET_CD || 0), 0);
+      const totalSelPpnGL = filteredData.reduce((sum, item) => sum + Math.abs(item.SEL_PPN_GL || 0), 0);
+      const totalSelPpnCD = filteredData.reduce((sum, item) => sum + Math.abs(item.SEL_PPN_CD || 0), 0);
 
       return {
         data: {
@@ -1153,6 +1157,8 @@ class RekonSalesService {
           total_issues: totalIssues,
           total_sel_net_gl: totalSelNetGL,
           total_sel_net_cd: totalSelNetCD,
+          total_sel_ppn_gl: totalSelPpnGL,
+          total_sel_ppn_cd: totalSelPpnCD,
         },
       };
     } catch (error) {
@@ -1199,12 +1205,20 @@ class RekonSalesService {
             TOTAL_ISSUES: 0,
             TOTAL_SEL_NET_GL: 0,
             TOTAL_SEL_NET_CD: 0,
+            TOTAL_SEL_PPN_GL: 0,
+            TOTAL_SEL_PPN_CD: 0,
+            UPDTIME_LATEST: null,
             DATES: [],
           };
         }
         aggregated[item.KDTK].TOTAL_ISSUES++;
         aggregated[item.KDTK].TOTAL_SEL_NET_GL += Math.abs(item.SEL_NET_GL || 0);
         aggregated[item.KDTK].TOTAL_SEL_NET_CD += Math.abs(item.SEL_NET_CD || 0);
+        aggregated[item.KDTK].TOTAL_SEL_PPN_GL += Math.abs(item.SEL_PPN_GL || 0);
+        aggregated[item.KDTK].TOTAL_SEL_PPN_CD += Math.abs(item.SEL_PPN_CD || 0);
+        if (!aggregated[item.KDTK].UPDTIME_LATEST || aggregated[item.KDTK].UPDTIME_LATEST < item.UPDTIME) {
+          aggregated[item.KDTK].UPDTIME_LATEST = item.UPDTIME || aggregated[item.KDTK].UPDTIME_LATEST;
+        }
         aggregated[item.KDTK].DATES.push(item.TANGGAL);
       });
 
@@ -1269,7 +1283,17 @@ class RekonSalesService {
       }
 
       // Sorting
-      const allowedSortColumns = ["CAB", "KDTK", "NAMA", "TOTAL_ISSUES", "TOTAL_SEL_NET_GL", "TOTAL_SEL_NET_CD"];
+      const allowedSortColumns = [
+        "CAB",
+        "KDTK",
+        "NAMA",
+        "TOTAL_ISSUES",
+        "TOTAL_SEL_NET_GL",
+        "TOTAL_SEL_NET_CD",
+        "TOTAL_SEL_PPN_GL",
+        "TOTAL_SEL_PPN_CD",
+        "UPDTIME_LATEST",
+      ];
       const col = allowedSortColumns.includes(sortColumn) ? sortColumn : "KDTK";
       const order = sortOrder?.toUpperCase() === "DESC" ? "DESC" : "ASC";
 
@@ -1438,6 +1462,188 @@ class RekonSalesService {
       };
     } catch (error) {
       logger.error(`[rekon_sales.service] Error getKodePesananIssues: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get detailed data for a specific store and month (multi-date)
+   */
+  async getStoreDetailsByMonth(options = {}) {
+    const { kdtk, month, year } = options;
+
+    if (!kdtk || !month || !year) {
+      throw new Error("kdtk, month, and year are required");
+    }
+
+    try {
+      const model = await RekonSales.getModel();
+
+      const start = moment
+        .tz({ year: parseInt(year), month: parseInt(month) - 1, day: 1 }, "Asia/Jakarta")
+        .startOf("day");
+      const end = start.clone().endOf("month").endOf("day");
+
+      const rows = await model.findAll({
+        where: {
+          KDTK: kdtk,
+          TANGGAL: { [Op.between]: [start.format("YYYY-MM-DD"), end.format("YYYY-MM-DD")] },
+          RECID: "*",
+        },
+        order: [["TANGGAL", "ASC"]],
+      });
+
+      // Build daily array
+      const daily = rows.map(r => ({
+        tanggal: r.TANGGAL,
+        net_mtran: parseFloat(r.NET_TOKO) || 0,
+        net_gl: parseFloat(r.NET_GL) || 0,
+        net_cd: parseFloat(r.NET_CLOSINGDETAIL) || 0,
+        sel_net_gl: parseFloat(r.SEL_NET_GL) || 0,
+        sel_net_cd: parseFloat(r.SEL_NET_CD) || 0,
+        ppn_mtran: parseFloat(r.PPN_MTRAN) || 0,
+        ppn_gl: parseFloat(r.PPN_GL) || 0,
+        ppn_cd: parseFloat(r.PPN_CD) || 0,
+        sel_ppn_gl: parseFloat(r.SEL_PPN_GL) || 0,
+        sel_ppn_cd: parseFloat(r.SEL_PPN_CD) || 0,
+        updatetime: r.UPDTIME || null,
+      }));
+
+      // Summary totals
+      const summary = {
+        KDTK: kdtk,
+        month,
+        year,
+        total_sel_net_gl: daily.reduce((s, i) => s + Math.abs(i.sel_net_gl || 0), 0),
+        total_sel_net_cd: daily.reduce((s, i) => s + Math.abs(i.sel_net_cd || 0), 0),
+        total_sel_ppn_gl: daily.reduce((s, i) => s + Math.abs(i.sel_ppn_gl || 0), 0),
+        total_sel_ppn_cd: daily.reduce((s, i) => s + Math.abs(i.sel_ppn_cd || 0), 0),
+        updatetime_latest: daily.reduce((latest, i) => (latest && latest > i.updatetime ? latest : i.updatetime), null),
+      };
+
+      // Store name
+      let storeName = "-";
+      try {
+        const storeInfo = await storeService.getStoreByCode(kdtk);
+        if (storeInfo?.storeName) storeName = storeInfo.storeName;
+      } catch {
+        logger.warn(`[rekon_sales.service] Store name not found for ${kdtk}`);
+      }
+      summary.NAMA = storeName;
+
+      // Notes per date
+      let notes = [];
+      try {
+        const allNotes = await notesService.getAll();
+        const notesByKey = new Map(allNotes.filter(n => n.tableName === "rekon_sales").map(n => [n.unixKey, n]));
+        notes = daily
+          .map(d => {
+            const key = `${kdtk}${d.tanggal}`;
+            const note = notesByKey.get(key);
+            return note
+              ? {
+                  tanggal: d.tanggal,
+                  unixKey: note.unixKey,
+                  noteText: note.noteText,
+                  pic: note.pic,
+                  fullName: note.fullName || null,
+                  updated_at: note.updated_at || null,
+                }
+              : null;
+          })
+          .filter(Boolean);
+      } catch (err) {
+        logger.warn(`[rekon_sales.service] Failed to load notes: ${err.message}`);
+      }
+
+      return { summary, daily, notes };
+    } catch (error) {
+      logger.error(`[rekon_sales.service] Error getStoreDetailsByMonth: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get differences for a specific store and month (grouped per date)
+   */
+  async getDifferencesByMonth(options = {}) {
+    const { kdtk, month, year } = options;
+
+    if (!kdtk || !month || !year) {
+      throw new Error("kdtk, month, and year are required");
+    }
+
+    try {
+      const model = await MtranVsCd.getModel();
+      const start = moment
+        .tz({ year: parseInt(year), month: parseInt(month) - 1, day: 1 }, "Asia/Jakarta")
+        .startOf("day");
+      const end = start.clone().endOf("month").endOf("day");
+
+      const rows = await model.findAll({
+        where: {
+          SHOP: kdtk,
+          TANGGAL: { [Op.between]: [start.format("YYYY-MM-DD"), end.format("YYYY-MM-DD")] },
+        },
+        order: [
+          ["TANGGAL", "ASC"],
+          ["DOCNO", "ASC"],
+          ["SEQNO", "ASC"],
+        ],
+      });
+
+      const grouped = new Map();
+      rows.forEach(r => {
+        const tgl = r.TANGGAL;
+        if (!grouped.has(tgl)) grouped.set(tgl, []);
+        grouped.get(tgl).push(r);
+      });
+
+      const daily = Array.from(grouped.entries()).map(([tanggal, rows]) => ({ tanggal, rows }));
+      return { daily };
+    } catch (error) {
+      logger.error(`[rekon_sales.service] Error getDifferencesByMonth: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get kode pesanan issues for a specific store and month (grouped per date)
+   */
+  async getKodePesananIssuesByMonth(options = {}) {
+    const { kdtk, month, year } = options;
+
+    if (!kdtk || !month || !year) {
+      throw new Error("kdtk, month, and year are required");
+    }
+
+    try {
+      const model = await DetailRekonSales.getModel();
+      const start = moment
+        .tz({ year: parseInt(year), month: parseInt(month) - 1, day: 1 }, "Asia/Jakarta")
+        .startOf("day");
+      const end = start.clone().endOf("month").endOf("day");
+
+      const records = await model.findAll({
+        where: {
+          KDTK: kdtk,
+          TGL: { [Op.between]: [start.format("YYYY-MM-DD"), end.format("YYYY-MM-DD")] },
+          SUBKEY: "SEL_KODEPESANAN",
+        },
+        order: [["TGL", "ASC"]],
+      });
+
+      const grouped = new Map();
+      records.forEach(r => {
+        const tgl = r.TGL;
+        if (!grouped.has(tgl)) grouped.set(tgl, []);
+        grouped.get(tgl).push(r);
+      });
+
+      const daily = Array.from(grouped.entries()).map(([tanggal, issues]) => ({ tanggal, issues }));
+      return { daily };
+    } catch (error) {
+      logger.error(`[rekon_sales.service] Error getKodePesananIssuesByMonth: ${error.message}`);
       throw error;
     }
   }

@@ -62,16 +62,16 @@ export function useRekonSales() {
     }
   };
 
-  const fetchStoreDetails = async ({ kdtk, tanggal }) => {
-    return await rekonSalesApi.getStoreDetails({ kdtk, tanggal });
+  const fetchStoreDetails = async ({ kdtk }) => {
+    return await rekonSalesApi.getStoreDetails({ kdtk, month: filters.month, year: filters.year });
   };
 
-  const fetchDifferences = async ({ kdtk, tanggal, page = 1, limit = 100 }) => {
-    return await rekonSalesApi.getDifferences({ kdtk, tanggal, page, limit });
+  const fetchDifferences = async ({ kdtk, page = 1, limit = 100 }) => {
+    return await rekonSalesApi.getDifferences({ kdtk, month: filters.month, year: filters.year, page, limit });
   };
 
-  const fetchKodePesananIssues = async ({ kdtk, tanggal }) => {
-    return await rekonSalesApi.getKodePesananIssues({ kdtk, tanggal });
+  const fetchKodePesananIssues = async ({ kdtk }) => {
+    return await rekonSalesApi.getKodePesananIssues({ kdtk, month: filters.month, year: filters.year });
   };
 
   const updateNote = async ({ cabang, kdtk, tanggal, noteText }) => {

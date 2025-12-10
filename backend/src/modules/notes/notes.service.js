@@ -110,13 +110,12 @@ class NotesService {
   }
 
   /** Delete note by unixKey */
-  async remove(unixKey) {
-    const existing = await NotesModel.findByPk(unixKey);
-    if (!existing) throw new Error("Note not found");
+  async removeByKey(tableName, unixKey) {
+    const existing = await NotesModel.findOne({ where: { tableName, unixKey } });
+    if (!existing) return false;
 
     await existing.destroy();
 
-    // Sync JSON with DB
     const all = await NotesModel.findAll();
     await this.writeJson(all.map(n => n.toJSON()));
 

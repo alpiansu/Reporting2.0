@@ -31,12 +31,14 @@ const cards = computed(() => [
   { key: 'total_stores', title: 'Total Toko', value: getSummaryValue('total_stores'), icon: 'pi pi-shopping-bag', subtitle: 'Toko aktif', format: formatNumber },
   { key: 'total_issues', title: 'Total Issues', value: getSummaryValue('total_issues'), icon: 'pi pi-exclamation-triangle', subtitle: 'Masalah terdeteksi', format: formatNumber },
   { key: 'total_sel_net_gl', title: 'Total SEL NET GL', value: getSummaryValue('total_sel_net_gl'), icon: 'pi pi-chart-line', subtitle: 'Agregat', format: formatNumber },
-  { key: 'total_sel_net_cd', title: 'Total SEL NET CD', value: getSummaryValue('total_sel_net_cd'), icon: 'pi pi-chart-line', subtitle: 'Agregat', format: formatNumber }
+  { key: 'total_sel_net_cd', title: 'Total SEL NET CD', value: getSummaryValue('total_sel_net_cd'), icon: 'pi pi-chart-line', subtitle: 'Agregat', format: formatNumber },
+  { key: 'total_sel_ppn_gl', title: 'Total SEL PPN GL', value: getSummaryValue('total_sel_ppn_gl'), icon: 'pi pi-percentage', subtitle: 'Agregat', format: formatNumber },
+  { key: 'total_sel_ppn_cd', title: 'Total SEL PPN CD', value: getSummaryValue('total_sel_ppn_cd'), icon: 'pi pi-percentage', subtitle: 'Agregat', format: formatNumber }
 ]);
 </script>
 
 <style scoped>
-.dashboard-grid { display: grid; grid-template-columns: repeat(4, minmax(220px, 1fr)); gap: 1rem; align-items: stretch; }
+.dashboard-grid { display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 1rem; align-items: stretch; }
 .summary-card { border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,.1); background: #fff; padding: 1.25rem; transition: transform .2s ease, box-shadow .2s ease; box-sizing: border-box; overflow: hidden; display: flex; flex-direction: column; gap: .25rem; }
 .summary-card:hover { transform: translateY(-4px); box-shadow: 0 4px 12px rgba(0,0,0,.15); }
 .card-header { display: flex; align-items: center; gap: .75rem; margin-bottom: .25rem; }

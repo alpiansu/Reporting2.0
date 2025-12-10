@@ -136,21 +136,17 @@ export const getResumeByKdtk = async (req, res) => {
  */
 export const getStoreDetails = async (req, res) => {
   try {
-    const { kdtk, tanggal } = req.query;
+    const { kdtk, month, year } = req.query;
 
-    if (!kdtk || !tanggal) {
-      return apiResponse.badRequest(res, "kdtk and tanggal are required");
+    if (!kdtk || !month || !year) {
+      return apiResponse.badRequest(res, "kdtk, month, dan year wajib diisi");
     }
 
-    logger.info(`[rekon_sales.controller] Get store details: kdtk=${kdtk}, tanggal=${tanggal}`);
+    logger.info(`[rekon_sales.controller] Get store details (monthly): kdtk=${kdtk}, month=${month}, year=${year}`);
 
-    const result = await rekonSalesService.getStoreDetails({ kdtk, tanggal });
+    const result = await rekonSalesService.getStoreDetailsByMonth({ kdtk, month, year });
 
-    if (!result) {
-      return apiResponse.notFound(res, "Store details not found");
-    }
-
-    return apiResponse.success(res, { data: result });
+    return apiResponse.success(res, { data: result || { summary: null, daily: [], notes: [] } });
   } catch (error) {
     logger.error(`[rekon_sales.controller] Error getting store details: ${error.message}`);
     return apiResponse.error(res, error.message);
@@ -163,22 +159,17 @@ export const getStoreDetails = async (req, res) => {
  */
 export const getDifferences = async (req, res) => {
   try {
-    const { kdtk, tanggal, page = 1, limit = 50 } = req.query;
+    const { kdtk, month, year } = req.query;
 
-    if (!kdtk || !tanggal) {
-      return apiResponse.badRequest(res, "kdtk and tanggal are required");
+    if (!kdtk || !month || !year) {
+      return apiResponse.badRequest(res, "kdtk, month, dan year wajib diisi");
     }
 
-    logger.info(`[rekon_sales.controller] Get differences: kdtk=${kdtk}, tanggal=${tanggal}`);
+    logger.info(`[rekon_sales.controller] Get differences (monthly): kdtk=${kdtk}, month=${month}, year=${year}`);
 
-    const result = await rekonSalesService.getDifferences({
-      kdtk,
-      tanggal,
-      page: parseInt(page),
-      limit: parseInt(limit),
-    });
+    const result = await rekonSalesService.getDifferencesByMonth({ kdtk, month, year });
 
-    return apiResponse.success(res, result);
+    return apiResponse.success(res, { data: result || { daily: [] } });
   } catch (error) {
     logger.error(`[rekon_sales.controller] Error getting differences: ${error.message}`);
     return apiResponse.error(res, error.message);
@@ -191,17 +182,19 @@ export const getDifferences = async (req, res) => {
  */
 export const getKodePesananIssues = async (req, res) => {
   try {
-    const { kdtk, tanggal } = req.query;
+    const { kdtk, month, year } = req.query;
 
-    if (!kdtk || !tanggal) {
-      return apiResponse.badRequest(res, "kdtk and tanggal are required");
+    if (!kdtk || !month || !year) {
+      return apiResponse.badRequest(res, "kdtk, month, dan year wajib diisi");
     }
 
-    logger.info(`[rekon_sales.controller] Get kode pesanan issues: kdtk=${kdtk}, tanggal=${tanggal}`);
+    logger.info(
+      `[rekon_sales.controller] Get kode pesanan issues (monthly): kdtk=${kdtk}, month=${month}, year=${year}`
+    );
 
-    const result = await rekonSalesService.getKodePesananIssues({ kdtk, tanggal });
+    const result = await rekonSalesService.getKodePesananIssuesByMonth({ kdtk, month, year });
 
-    return apiResponse.success(res, result);
+    return apiResponse.success(res, { data: result || { daily: [] } });
   } catch (error) {
     logger.error(`[rekon_sales.controller] Error getting kode pesanan issues: ${error.message}`);
     return apiResponse.error(res, error.message);
@@ -257,6 +250,13 @@ export const updateNote = async (req, res) => {
     const userService = new UserService();
     const user = await userService.findByCredentials(pic);
 
+    // Jika note kosong (hapus note)
+    if (String(noteText).trim().length === 0) {
+      const deleted = await notesService.removeByKey(tableName, unixKey);
+      return apiResponse.success(res, { deleted, unixKey });
+    }
+
+    // Jika ada isi, lakukan upsert
     const noteData = {
       Cabang: cabang,
       unixKey,

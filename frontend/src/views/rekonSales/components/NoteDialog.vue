@@ -6,11 +6,13 @@
       </div>
       <Textarea v-model="noteText" rows="6" class="w-full" placeholder="Tulis catatan..." />
       <div class="controls">
+        <span class="last-update" v-if="store?.note?.pic || store?.note?.fullName">PIC: {{ store?.note?.fullName || store?.note?.pic }}</span>
         <span class="last-update" v-if="lastUpdate">Terakhir diupdate: {{ lastUpdate }}</span>
       </div>
     </div>
     <template #footer>
       <div class="footer">
+        <Button icon="pi pi-trash" label="Hapus" severity="danger" outlined @click="onDelete" />
         <Button icon="pi pi-save" label="Simpan" class="p-button-primary" @click="onSave" />
         <Button icon="pi pi-times" label="Batal" class="p-button-text" @click="onCancel" />
       </div>
@@ -31,7 +33,7 @@ const props = defineProps({
   lastUpdate: { type: String, default: '' }
 });
 
-const emit = defineEmits(['update:visible', 'save']);
+const emit = defineEmits(['update:visible', 'save', 'delete']);
 
 const visible = ref(props.visible);
 const noteText = ref(props.defaultText);
@@ -41,6 +43,7 @@ watch(visible, (v) => emit('update:visible', v));
 watch(() => props.defaultText, (v) => { noteText.value = v ?? ''; }, { immediate: true });
 
 const onSave = () => emit('save', { text: noteText.value });
+const onDelete = () => emit('delete');
 const onCancel = () => { visible.value = false; };
 </script>
 

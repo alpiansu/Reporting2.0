@@ -3,11 +3,9 @@
     <div class="note-form">
       <div class="meta">
         <div><strong>{{ store?.KDTK }}</strong> - {{ store?.NAMA }}</div>
-        <div class="badge" :style="{ background: selectedCategory?.color }">{{ selectedCategory?.name }}</div>
       </div>
       <Textarea v-model="noteText" rows="6" class="w-full" placeholder="Tulis catatan..." />
       <div class="controls">
-        <Dropdown v-model="category" :options="categoryOptions" optionLabel="name" optionValue="name" placeholder="Kategori" />
         <span class="last-update" v-if="lastUpdate">Terakhir diupdate: {{ lastUpdate }}</span>
       </div>
     </div>
@@ -21,18 +19,15 @@
   </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { ref, watch } from 'vue';
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
-import Dropdown from 'primevue/dropdown';
 import Textarea from 'primevue/textarea';
-import { NOTE_CATEGORIES } from '../utils/constants';
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
   store: { type: Object, default: () => ({}) },
   defaultText: { type: String, default: '' },
-  defaultCategory: { type: String, default: 'human-input' },
   lastUpdate: { type: String, default: '' }
 });
 
@@ -40,17 +35,12 @@ const emit = defineEmits(['update:visible', 'save']);
 
 const visible = ref(props.visible);
 const noteText = ref(props.defaultText);
-const category = ref(props.defaultCategory);
-
-const categoryOptions = Object.values(NOTE_CATEGORIES).map(c => ({ name: c.name, color: c.color }));
-const selectedCategory = computed(() => categoryOptions.find(c => c.name === category.value));
 
 watch(() => props.visible, (v) => { visible.value = v; });
 watch(visible, (v) => emit('update:visible', v));
 watch(() => props.defaultText, (v) => { noteText.value = v ?? ''; }, { immediate: true });
-watch(() => props.defaultCategory, (v) => { category.value = v ?? 'human-input'; }, { immediate: true });
 
-const onSave = () => emit('save', { text: noteText.value, category: category.value });
+const onSave = () => emit('save', { text: noteText.value });
 const onCancel = () => { visible.value = false; };
 </script>
 

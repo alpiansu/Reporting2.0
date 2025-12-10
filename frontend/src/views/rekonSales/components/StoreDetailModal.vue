@@ -34,7 +34,6 @@
       </TabView>
       <div class="dialog-actions">
         <Button label="Catatan" icon="pi pi-pencil" class="p-button-text" @click="$emit('open-note', detail)" />
-        <Button label="Re-screen" icon="pi pi-refresh" class="p-button-text" @click="$emit('re-screen', detail)" />
         <Button label="Tutup" icon="pi pi-times" class="p-button-text" @click="localVisible=false" />
       </div>
     </div>
@@ -60,7 +59,7 @@ const props = defineProps({
   kodeLoading: { type: Boolean, default: false }
 });
 
-const emit = defineEmits(['open-note', 're-screen', 'update:visible']);
+const emit = defineEmits(['open-note', 'update:visible']);
 
 const localVisible = ref(props.visible);
 watch(() => props.visible, (v) => { localVisible.value = v; });

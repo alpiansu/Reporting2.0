@@ -35,11 +35,10 @@
 
       <StoreDetailModal v-model:visible="detailVisible" :detail="selectedDetail" :differences="differences"
         :diffLoading="diffLoading" :kodePesananIssues="kodePesananIssues" :kodeLoading="kodeLoading"
-        @open-note="openNote" @re-screen="handleReScreen" />
+        @open-note="openNote" />
 
       <NoteDialog v-model:visible="noteVisible" :store="noteStore"
         :defaultText="noteStore?.note?.noteText || noteStore?.note || ''"
-        :defaultCategory="noteStore?.note?.category?.name || 'human-input'"
         :lastUpdate="noteStore?.note?.updated_at ? formatDateTime(noteStore.note.updated_at) : ''" @save="saveNote" />
     </div>
   </div>

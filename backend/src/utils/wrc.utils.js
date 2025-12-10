@@ -61,16 +61,21 @@ class WrcUtils {
    * @returns {string} Modified query with date replaced and shop filter added
    */
   smartReplaceAndFilter(query, tableDate, shops, tableType) {
-    // First replace the {date} placeholder
-    let finalQuery = query.replace("{date}", tableDate);
+    let finalQuery = query.split("{date}").join(tableDate);
 
     // If no shops filter needed, return the query as is
     if (!shops || !Array.isArray(shops) || shops.length === 0) {
       return finalQuery;
     }
 
+    const columnMap = {
+      pr: "toko",
+      kodetoko: "kode_toko",
+      glslp: "kode_toko",
+    };
+
     // Determine column name based on table type
-    const columnName = tableType === "pr" ? "toko" : tableType === "kodetoko" ? "kode_toko" : "shop";
+    const columnName = columnMap[tableType] || "shop";
 
     // Create shop filter condition
     const shopList = shops.map(shop => `'${shop}'`).join(", ");

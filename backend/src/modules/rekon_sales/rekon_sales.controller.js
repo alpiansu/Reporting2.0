@@ -44,13 +44,16 @@ export const screeningByCabang = async (req, res) => {
     const cabParam = !cabang || cabang === "All" ? "All" : cabang;
     logger.info(`[rekon_sales.controller] Starting screening for cabang: ${cabParam}, periode: ${periode}`);
 
+    const { default: config } = await import("./rekon_sales.config.js");
+    const taskId = `${config.taskProgressName}_${username}`;
+
     const result = await rekonSalesService.screening({
       cabang: cabParam,
       periode,
       username,
     });
 
-    return apiResponse.success(res, result);
+    return apiResponse.success(res, { ...result, taskId });
   } catch (error) {
     logger.error(`[rekon_sales.controller] Error in screeningByCabang: ${error.message}`);
     return apiResponse.error(res, error.message);

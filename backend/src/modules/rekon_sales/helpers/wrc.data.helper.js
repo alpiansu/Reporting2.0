@@ -56,7 +56,7 @@ class WrcDataHelper {
         GROUP BY KODE_TOKO
       `;
 
-      const tempFile = await WrcUtils.getWrcData(strCab, period, "gl", queryTemplate, shops);
+      const tempFile = await WrcUtils.getWrcData(strCab, period, "glslp", queryTemplate, shops);
 
       if (!tempFile) {
         logger.warn(`[rekon_sales.WrcDataHelper] No WRC data returned for cab: ${cab}, period: ${prdFilet}`);
@@ -108,7 +108,7 @@ class WrcDataHelper {
       // Use period in YYMM format
       const period = dt.substring(0, 4);
 
-      const tempFile = await WrcUtils.getWrcData(strCab, period, "pesanan", queryTemplate, shops);
+      const tempFile = await WrcUtils.getWrcData(strCab, period, "glslp", queryTemplate, shops);
       if (!tempFile) {
         logger.warn(`[rekon_sales.WrcDataHelper] No WRC data returned for cab: ${cab}, period: ${prdFilet}`);
         return [];
@@ -135,8 +135,32 @@ class WrcDataHelper {
   /**
    * Keep helper (same)
    */
-  findGLData(dataGL, kodeToko, tglGL) {
-    return dataGL.filter(item => item.KODE_TOKO === kodeToko && item.TGL_GL === tglGL);
+  findGLData(rawDataGL, kodeToko, tglGL) {
+    // Convert raw data if needed
+    const dataGL = Array.isArray(rawDataGL) ? rawDataGL : JSON.parse(rawDataGL);
+
+    // 🔥 Convert input date to YYMMDD
+    const normalizeToYYMMDD = dateStr => {
+      const d = new Date(dateStr);
+      if (isNaN(d)) return null; // handle invalid input
+
+      const year = String(d.getFullYear()).slice(-2); // last 2 digits
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+
+      return `${year}${month}${day}`; // YYMMDD
+    };
+
+    const tglFormatted = normalizeToYYMMDD(tglGL);
+
+    // logger.info(
+    //   `[WrcDataHelper] Search GL data:
+    //   KODE_TOKO: ${kodeToko},
+    //   TGL_GL input: ${tglGL},
+    //   parsed as YYMMDD: ${tglFormatted}`
+    // );
+
+    return dataGL.filter(item => item.KODE_TOKO === String(kodeToko) && item.TGL_GL === tglFormatted);
   }
 }
 

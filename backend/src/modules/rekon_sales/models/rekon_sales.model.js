@@ -36,7 +36,7 @@ const getRekonSalesModel = async () => {
             allowNull: false,
           },
           TGL: {
-            field: "tgl",
+            field: "TANGGAL",
             type: DataTypes.DATEONLY,
             primaryKey: true,
             allowNull: false,
@@ -141,7 +141,7 @@ const getRekonSalesModel = async () => {
             },
             {
               name: "idx_rekon_sales_shop",
-              fields: ["SHOP"],
+              fields: ["KDTK"],
             },
           ],
         }

@@ -53,11 +53,9 @@ class RekonCalculator {
    */
   async aggregateByDate(cab, kdtk, mtranData, dataGL) {
     const aggregated = {};
-
     for (const item of mtranData) {
       const key = `${item.SHOP}-${item.TANGGAL}`;
       const glData = WrcDataHelper.findGLData(dataGL, item.SHOP, item.TANGGAL);
-
       if (!aggregated[key]) {
         aggregated[key] = {
           CAB: item.CAB,
@@ -65,7 +63,7 @@ class RekonCalculator {
           TGL: item.TANGGAL,
           NET_TOKO: 0,
           NET_GL: glData.length > 0 ? parseFloat(glData[0].NET_GL) : 0,
-          NET_CD: 0,
+          NET_CLOSINGDETAIL: 0,
           SEL_NET_GL: 0,
           SEL_NET_CD: 0,
           PPN_TOKO: 0,
@@ -80,7 +78,7 @@ class RekonCalculator {
       }
 
       aggregated[key].NET_TOKO += parseFloat(item.NET_MTRAN);
-      aggregated[key].NET_CD += parseFloat(item.NET_ClosingDetail);
+      aggregated[key].NET_CLOSINGDETAIL += parseFloat(item.NET_ClosingDetail);
       aggregated[key].PPN_TOKO += parseFloat(item.PPN_MTRAN) - parseFloat(item.PPN_IO || 0);
       aggregated[key].PPN_CD += parseFloat(item.PPN_CD);
       aggregated[key].RETUR_PPNJP_ISTORE += parseFloat(item.RETUR_PPNJP_ISTORE || 0);
@@ -99,7 +97,7 @@ class RekonCalculator {
       const item = aggregated[key];
 
       item.SEL_NET_GL = parseFloat(item.NET_TOKO) - parseFloat(item.NET_GL);
-      item.SEL_NET_CD = parseFloat(item.NET_TOKO) - parseFloat(item.NET_CD);
+      item.SEL_NET_CD = parseFloat(item.NET_TOKO) - parseFloat(item.NET_CLOSINGDETAIL);
       item.SEL_PPN_GL = parseFloat(item.PPN_TOKO) - parseFloat(item.PPN_GL);
       item.SEL_PPN_CD = parseFloat(item.PPN_TOKO) - parseFloat(item.PPN_CD);
 
@@ -240,7 +238,7 @@ class RekonCalculator {
   shouldIncludeRecord(item, tolerance) {
     const selGLNet = item.SEL_NET_GL;
     const selGLPpn = item.SEL_PPN_GL;
-    const netCD = item.NET_CD;
+    const netCD = item.NET_CLOSINGDETAIL;
     const ppnCD = item.PPN_CD;
 
     // Include if:

@@ -26,7 +26,7 @@
 
         <template #content>
             <DataTable :value="data" :loading="loading" :paginator="true" :rows="pagination.itemsPerPage"
-                :totalRecords="pagination.total" :lazy="true" :rowsPerPageOptions="[10, 25, 50, 100]"
+                :totalRecords="pagination.total" :lazy="true"
                 paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
                 currentPageReportTemplate="Menampilkan {first} - {last} dari {totalRecords} toko"
                 responsiveLayout="scroll" stripedRows @page="handlePageChange" @sort="handleSortChange">

@@ -28,7 +28,8 @@
       </form>
 
       <!-- card info last screening -->
-      <LastScanInfo moduleName="rekon_wt_harian" :selectedCabang="formData.cab" v-if="!loading" style="margin-top: 15px;" />
+      <LastScanInfo moduleName="rekon_wt_harian" :selectedCabang="formData.cab" v-if="!isReconciling"
+        style="margin-top: 15px;" />
 
       <!-- Progress Bar Component -->
       <ProgressBar :visible="showProgressBar" :title="progressTitle" :status="progressStatus"

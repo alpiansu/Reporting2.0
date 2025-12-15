@@ -54,7 +54,9 @@ export function useRekonSales() {
       });
       const rawStores = Array.isArray(res?.data?.data) ? res.data.data : [];
       stores.value = normalizeStoreData(rawStores);
-      pagination.total = res.total || 0;
+      pagination.total = res?.data?.total ?? 0;
+      pagination.page = res?.data?.page ?? pagination.page;
+      pagination.limit = res?.data?.limit ?? pagination.limit;
     } catch (err) {
       toast.showError("Error", err.message || "Gagal memuat data toko");
     } finally {

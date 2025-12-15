@@ -1235,6 +1235,11 @@ class RekonSalesService {
         results.push({
           ...aggregated[kdtk],
           NAMA: storeName,
+          TOTAL_SEL_NET: (aggregated[kdtk].TOTAL_SEL_NET_GL || 0) + (aggregated[kdtk].TOTAL_SEL_NET_CD || 0),
+          TOTAL_SEL_PPN: (aggregated[kdtk].TOTAL_SEL_PPN_GL || 0) + (aggregated[kdtk].TOTAL_SEL_PPN_CD || 0),
+          TOTAL_DATES: Array.isArray(aggregated[kdtk].DATES)
+            ? aggregated[kdtk].DATES.length
+            : aggregated[kdtk].TOTAL_ISSUES,
         });
       }
 
@@ -1292,6 +1297,8 @@ class RekonSalesService {
         "TOTAL_SEL_NET_CD",
         "TOTAL_SEL_PPN_GL",
         "TOTAL_SEL_PPN_CD",
+        "TOTAL_SEL_NET",
+        "TOTAL_SEL_PPN",
         "UPDTIME_LATEST",
       ];
       const col = allowedSortColumns.includes(sortColumn) ? sortColumn : "KDTK";

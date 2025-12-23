@@ -335,6 +335,9 @@ class PenyesuaianService {
             `[${storeCode}] detail query completed, got ${detailResult.length} records`
           );
 
+          //UPDATE SEMUA DATA di database local MENJADI RECID 1 TERLEBIH DAHULU SEBELUM INSERT DAN DI BERIKAN RECID * YANG BARU
+          await SesuaiToko.update({ RECID: 1 }, { where: { KDTK: storeCode, PERIODE: strPeriode, RECID: "*" } });
+
           if (detailResult.length > 0) {
             // Normalize field names to match model (uppercase)
             const normalizedRecords = detailResult.map(record => ({

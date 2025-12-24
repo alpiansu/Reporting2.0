@@ -129,3 +129,19 @@ INVALID_STORE,12345,5
 T002,INVALID_PLU,3
 T003,12345,invalid_qty
 ------WebKitFormBoundary--
+
+### Test 10: Get history by month
+GET {{baseUrl}}/history?month=2025-11&limit=25&offset=0
+Authorization: Bearer {{authToken}}
+
+### Test 11: Get history by month with PIC and KDTK list
+GET {{baseUrl}}/history?month=2025-11&pic=joko&kdtk[]=T001&kdtk[]=T002&status=SUCCESS&limit=50&offset=0
+Authorization: Bearer {{authToken}}
+
+### Test 12: Get filters (PIC/KDTK)
+GET {{baseUrl}}/history/filters
+Authorization: Bearer {{authToken}}
+
+### Test 13: Export history CSV
+GET {{baseUrl}}/history/export?month=2025-11&status=SUCCESS
+Authorization: Bearer {{authToken}}

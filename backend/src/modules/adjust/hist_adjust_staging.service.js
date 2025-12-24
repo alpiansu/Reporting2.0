@@ -1,7 +1,17 @@
 import fs from "fs/promises";
+import { createWriteStream } from "fs";
 import path from "path";
 import logger from "../../config/logger.js";
 import HistAdjust from "../../models/hist_adjust.model.js";
+import UserService from "../user/user.service.js";
+import lockfile from "proper-lockfile";
+
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc.js";
+import timezone from "dayjs/plugin/timezone.js";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 /**
  * HistAdjust Staging Service
@@ -15,6 +25,8 @@ class HistAdjustStagingService {
     this.memoryCache = new Map();
     this.cacheTTL = 5 * 60 * 1000; // 5 minutes TTL
     this.isInitialized = false;
+
+    this.userService = new UserService();
   }
 
   /**
@@ -89,30 +101,86 @@ class HistAdjustStagingService {
    * Sync database data to JSON file
    */
   async syncToJson() {
+    let release;
+    const backupPath = path.join(this.dataDir, "hist_adjust.backup.json");
     try {
-      const records = await HistAdjust.findAll({
-        order: [["updtime", "DESC"]],
-        limit: 10000, // Limit to prevent memory issues
-        raw: true,
+      await fs.mkdir(this.dataDir, { recursive: true });
+      release = await lockfile.lock(this.jsonFilePath, {
+        stale: 120000,
+        retries: { retries: 10, factor: 2, minTimeout: 2000, maxTimeout: 10000 },
       });
 
-      // Convert dates to ISO strings for JSON serialization
-      const jsonData = records.map(record => ({
-        ...record,
-        updtime: record.updtime instanceof Date ? record.updtime.toISOString() : record.updtime,
-      }));
+      const exists = await fs
+        .access(this.jsonFilePath)
+        .then(() => true)
+        .catch(() => false);
 
-      await fs.writeFile(this.jsonFilePath, JSON.stringify(jsonData, null, 2));
+      if (exists) {
+        await fs.copyFile(this.jsonFilePath, backupPath);
+      } else {
+        await fs.writeFile(this.jsonFilePath, "[]");
+      }
 
-      // Update memory cache
-      this.memoryCache.set("hist_adjust_data", {
-        data: jsonData,
-        timestamp: Date.now(),
-      });
+      const stream = createWriteStream(this.jsonFilePath, { encoding: "utf8" });
+      await new Promise(resolve => stream.once("open", resolve));
+      stream.write("[");
 
-      logger.info(`Synced ${records.length} hist_adjust records to JSON file`);
-      return { success: true, recordCount: records.length };
+      let offset = 0;
+      const limit = 5000;
+      let total = 0;
+      let first = true;
+
+      while (true) {
+        const records = await HistAdjust.findAll({
+          order: [["updtime", "DESC"]],
+          offset,
+          limit,
+          raw: true,
+        });
+        if (!records.length) break;
+        total += records.length;
+        const mapped = records.map(record => ({
+          ...record,
+          updtime:
+            record.updtime instanceof Date
+              ? dayjs(record.updtime).tz("Asia/Jakarta").format("YYYY-MM-DD HH:mm:ss")
+              : record.updtime,
+        }));
+
+        for (const obj of mapped) {
+          if (!first) stream.write(",");
+          stream.write(JSON.stringify(obj));
+          first = false;
+        }
+        offset += records.length;
+      }
+
+      stream.write("]");
+      await new Promise((res, rej) => stream.end(err => (err ? rej(err) : res())));
+
+      await this.loadFromJson();
+
+      if (release) await release();
+      await fs.unlink(backupPath).catch(() => {});
+
+      logger.info(`Synced ${total} hist_adjust records to JSON file`);
+      return { success: true, recordCount: total };
     } catch (error) {
+      try {
+        const bakExists = await fs
+          .access(backupPath)
+          .then(() => true)
+          .catch(() => false);
+        if (bakExists) {
+          await fs.copyFile(backupPath, this.jsonFilePath);
+          await fs.unlink(backupPath).catch(() => {});
+        }
+      } catch {}
+      if (release) {
+        try {
+          await release();
+        } catch {}
+      }
       logger.error(`Error syncing hist_adjust to JSON: ${error.message}`);
       throw error;
     }
@@ -158,12 +226,37 @@ class HistAdjustStagingService {
     try {
       const data = await this.getData();
       let filteredData = [...data];
-
+      // console.log("Filters received:", filters);
       // Apply filters
       if (filters.kdtk) {
-        filteredData = filteredData.filter(
-          record => record.kdtk && record.kdtk.toLowerCase().includes(filters.kdtk.toLowerCase())
-        );
+        // console.log(`kebaca ini`);
+        let kdtkList = [];
+
+        // Handle array of kdtk values
+        if (Array.isArray(filters.kdtk)) {
+          kdtkList = filters.kdtk.map(v => String(v).trim()).filter(Boolean);
+        }
+        // Handle comma-separated string
+        else if (typeof filters.kdtk === "string" && filters.kdtk.includes(",")) {
+          kdtkList = filters.kdtk
+            .split(",")
+            .map(v => v.trim())
+            .filter(Boolean);
+        }
+        // Handle single string value
+        else if (typeof filters.kdtk === "string") {
+          kdtkList = [filters.kdtk.trim()];
+        }
+
+        // Filter by list of kdtk (exact match)
+        if (kdtkList.length > 0) {
+          const set = new Set(kdtkList);
+          filteredData = filteredData.filter(record => {
+            if (!record.kdtk) return false;
+            const recordKdtk = String(record.kdtk).trim();
+            return set.has(recordKdtk);
+          });
+        }
       }
 
       if (filters.pic) {
@@ -190,20 +283,73 @@ class HistAdjustStagingService {
       // Sort by updtime descending
       filteredData.sort((a, b) => new Date(b.updtime) - new Date(a.updtime));
 
+      // Calculate total before pagination
+      const totalCount = filteredData.length;
+
       // Apply pagination if requested
       if (filters.limit) {
         const offset = filters.offset || 0;
         filteredData = filteredData.slice(offset, offset + filters.limit);
       }
 
+      // Enrich data dengan fullName dari user
+      await this.enrichWithUserData(filteredData);
+
       return {
         success: true,
         data: filteredData,
-        totalCount: filteredData.length,
+        totalCount,
       };
     } catch (error) {
       logger.error(`Error searching hist_adjust records: ${error.message}`);
       throw error;
+    }
+  }
+
+  /**
+   * Enrich data dengan fullName - MEMORY EFFICIENT VERSION
+   * Hanya query user yang benar-benar ada di pic
+   */
+  async enrichWithUserData(records) {
+    try {
+      // Kumpulkan unique pic values
+      const uniquePics = [...new Set(records.map(r => r.pic).filter(Boolean))];
+
+      // Jika tidak ada pic, skip
+      if (uniquePics.length === 0) {
+        records.forEach(record => {
+          record.picFullName = null;
+        });
+        return;
+      }
+
+      // Load ALL users hanya sekali (masih pakai cache dari UserService)
+      const allUsers = await this.userService.getAllUsers();
+
+      // Buat map HANYA untuk pic yang ada di records
+      const userMap = new Map();
+      uniquePics.forEach(pic => {
+        const user = allUsers.find(u => u.username === pic);
+        if (user) {
+          userMap.set(pic, user.fullName);
+        }
+      });
+
+      // Enrich records
+      records.forEach(record => {
+        if (record.pic) {
+          record.picFullName = userMap.get(record.pic) || record.pic;
+        } else {
+          record.picFullName = null;
+        }
+      });
+
+      // allUsers akan di-garbage collect setelah function selesai
+    } catch (error) {
+      logger.error(`Error enriching user data: ${error.message}`);
+      records.forEach(record => {
+        record.picFullName = record.pic || null;
+      });
     }
   }
 

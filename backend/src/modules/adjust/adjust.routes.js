@@ -10,5 +10,7 @@ router.post("/upload", authenticateJWT, uploadCsv, handleMulterError, adjustCont
 router.get("/template", authenticateJWT, adjustController.downloadCsvTemplate);
 router.get("/history", authenticateJWT, adjustController.getAdjustHistory);
 router.get("/statistics", authenticateJWT, adjustController.getAdjustStatistics);
+router.get("/history/filters", authenticateJWT, adjustController.getAdjustFilters);
+router.get("/history/export", authenticateJWT, adjustController.exportAdjustHistoryCsv);
 
 export default router;

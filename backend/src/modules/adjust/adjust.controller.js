@@ -1,6 +1,7 @@
 import logger from "../../config/logger.js";
 import adjustService from "./adjust.service.js";
 import histAdjustStagingService from "./hist_adjust_staging.service.js";
+import HistAdjust from "../../models/hist_adjust.model.js";
 import { apiResponse } from "../../utils/index.js";
 
 /**
@@ -82,14 +83,27 @@ export const downloadCsvTemplate = async (req, res) => {
  */
 export const getAdjustHistory = async (req, res) => {
   try {
-    const { kdtk, pic, status, dateFrom, dateTo, limit = 100, offset = 0 } = req.query;
+    const { kdtk, pic, status, month, limit = 100, offset = 0 } = req.query;
+
+    let computedDateFrom;
+    let computedDateTo;
+
+    if (month) {
+      const [y, m] = month.split("-");
+      const year = parseInt(y);
+      const monthIndex = parseInt(m) - 1;
+      const start = new Date(year, monthIndex, 1, 0, 0, 0, 0);
+      const end = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
+      computedDateFrom = start.toISOString();
+      computedDateTo = end.toISOString();
+    }
 
     const filters = {
       kdtk,
       pic,
       status,
-      dateFrom,
-      dateTo,
+      dateFrom: computedDateFrom,
+      dateTo: computedDateTo,
       limit: parseInt(limit),
       offset: parseInt(offset),
     };
@@ -100,9 +114,114 @@ export const getAdjustHistory = async (req, res) => {
       message: "History retrieved successfully",
       data: result.data,
       totalCount: result.totalCount,
+      limit: parseInt(limit),
+      offset: parseInt(offset),
     });
   } catch (error) {
     logger.error(`Error getting adjust history: ${error.message}`);
+    return apiResponse.error(res, error.message, 500);
+  }
+};
+
+/**
+ * Get distinct filters (PIC, KDTK)
+ * @param {Request} req
+ * @param {Response} res
+ */
+export const getAdjustFilters = async (req, res) => {
+  try {
+    const picRows = await HistAdjust.findAll({ attributes: ["pic"], group: ["pic"], raw: true });
+    const kdtkRows = await HistAdjust.findAll({ attributes: ["kdtk"], group: ["kdtk"], raw: true });
+
+    const pics = picRows
+      .map(r => r.pic)
+      .filter(Boolean)
+      .sort();
+    const kdtks = kdtkRows
+      .map(r => r.kdtk)
+      .filter(Boolean)
+      .sort();
+
+    return apiResponse.success(res, {
+      message: "Filters retrieved successfully",
+      data: { pics, kdtks },
+    });
+  } catch (error) {
+    logger.error(`Error getting adjust filters: ${error.message}`);
+    return apiResponse.error(res, error.message, 500);
+  }
+};
+
+/**
+ * Export adjustment history as CSV
+ * @param {Request} req
+ * @param {Response} res
+ */
+export const exportAdjustHistoryCsv = async (req, res) => {
+  try {
+    const kdtk = req.query["kdtk[]"] || req.query.kdtk;
+    const { pic, status, month } = req.query;
+
+    let computedDateFrom;
+    let computedDateTo;
+    if (month) {
+      const [y, m] = month.split("-");
+      const year = parseInt(y);
+      const monthIndex = parseInt(m) - 1;
+      const start = new Date(year, monthIndex, 1, 0, 0, 0, 0);
+      const end = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
+      computedDateFrom = start.toISOString();
+      computedDateTo = end.toISOString();
+    }
+
+    const filters = {
+      kdtk,
+      pic,
+      status,
+      dateFrom: computedDateFrom,
+      dateTo: computedDateTo,
+    };
+    const result = await histAdjustStagingService.searchHistory(filters);
+    const rows = result.data;
+
+    const headers = ["kdtk", "prdcd", "qty_adj", "keter", "note", "pic", "updtime", "status"];
+
+    const escape = value => {
+      const v = value == null ? "" : String(value);
+      if (v.includes(",") || v.includes("\n") || v.includes('"')) {
+        return `"${v.replace(/\"/g, '"')}"`;
+      }
+      return v;
+    };
+
+    const csvLines = [headers.join(",")];
+    for (const r of rows) {
+      const line = [
+        escape(r.kdtk),
+        escape(r.prdcd),
+        escape(r.qty_adj),
+        escape(r.keter),
+        escape(r.note),
+        escape(r.picFullName),
+        escape(r.updtime),
+        escape(r.status),
+      ].join(",");
+      csvLines.push(line);
+    }
+
+    const csvContent = csvLines.join("\n");
+    const filename = `adjust_history_${month || "all"}.csv`;
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
+
+    return res.send(csvContent);
+  } catch (error) {
+    logger.error(`Error exporting adjust history CSV: ${error.message}`);
     return apiResponse.error(res, error.message, 500);
   }
 };

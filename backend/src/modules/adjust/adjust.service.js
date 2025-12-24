@@ -366,13 +366,35 @@ class AdjustService {
             if (result.affectedRows > 0) {
               result.processed++;
 
+              // Query untuk mendapatkan detail row yang baru diinsert
+              const [insertedRows] = await storeConnection.query(
+                `SELECT rtype, bukti_no, prdcd, qty, price, gross, gross_jual 
+                FROM mstadj 
+                WHERE prdcd = ? 
+                ORDER BY recid DESC 
+                LIMIT ?`,
+                [record.PRDCD, result.affectedRows]
+              );
+
+              // Format detail informasi
+              let detailInfo = "";
+              if (insertedRows && insertedRows.length > 0) {
+                const details = insertedRows
+                  .map(
+                    row =>
+                      `Rtype: ${row.rtype}, Docno: ${row.bukti_no}, Qty: ${row.qty}, Gross: ${row.gross}, Gross_jual: ${row.gross_jual}`
+                  )
+                  .join(" | ");
+                detailInfo = ` - Details: ${details}`;
+              }
+
               // Create success history record
               historyRecords.push({
                 kdtk: record.KDTK,
                 prdcd: record.PRDCD,
                 qty_adj: parseInt(record.QTY_ADJ) || 0,
                 keter: record.KETER || "",
-                note: `Successfully processed adjustment - ${result.affectedRows} rows affected`,
+                note: `Successfully processed adjustment - ${result.affectedRows} rows affected${detailInfo}`,
                 pic: username,
                 updtime: executedAt,
                 status: "SUCCESS",

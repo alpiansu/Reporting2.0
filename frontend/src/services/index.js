@@ -10,6 +10,8 @@ import noteCategoriesService from "./noteCategories.service";
 import progressService from "./progress.service";
 import notesService from "./notes.service";
 import penyesuaianService from "./penyesuaian.service";
+import userService from "./user.service";
+
 export {
   authService,
   rekonWtHarianService,
@@ -23,4 +25,5 @@ export {
   progressService,
   notesService,
   penyesuaianService,
+  userService,
 };

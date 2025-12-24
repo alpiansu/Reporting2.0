@@ -56,6 +56,9 @@
         </div>
       </div>
 
+      <!-- History Report Card -->
+      <AdjustHistoryReportCard />
+
       <!-- Upload Card -->
       <div class="card upload-card">
         <div class="upload-compact-section">
@@ -113,7 +116,7 @@
 
           <div class="upload-actions" v-if="selectedFile">
             <div class="action-buttons">
-              <button class="process-btn" @click="handleUpload" :disabled="!selectedFile || isProcessing"
+              <button class="process-btn" @click="handleUpload" :disabled="!selectedFile || isProcessing || !isFileApproved"
                 :class="{ 'processing': isProcessing }">
                 <i class="pi" :class="isProcessing ? 'pi-spin pi-spinner' : 'pi-cog'"></i>
                 <span>{{ isProcessing ? 'Processing...' : 'Process File' }}</span>
@@ -219,7 +222,8 @@
             <div class="datatable-actions">
               <div class="datatable-search">
                 <i class="pi pi-search search-icon"></i>
-                <input class="datatable-search-input" type="text" v-model="filters['global'].value" placeholder="Cari data..." />
+                <input class="datatable-search-input" type="text" v-model="filters['global'].value"
+                  placeholder="Cari data..." />
                 <button class="clear-filter-btn" @click="clearFilters" :disabled="isProcessing">
                   <i class="pi pi-filter-slash"></i>
                   <span>Clear</span>
@@ -328,6 +332,15 @@
           </DataTable>
         </div>
       </div>
+      <AdjustCsvPreviewDialog
+        :show="showCsvPreviewDialog"
+        :fileName="pendingSelectedFileName"
+        :headers="csvHeaders"
+        :rows="csvRows"
+        :totalRows="csvTotalRows"
+        @cancel="handlePreviewCancel"
+        @confirm="handlePreviewConfirm"
+      />
     </div>
   </div>
 </template>
@@ -347,6 +360,9 @@ import PageHeader from "../../components/PageHeader.vue";
 import DownloadButton from "../../components/common/DownloadButton.vue";
 import { exportAdjustmentHistory } from "./exportExcel.js";
 import ProgressBar from "../../components/common/ProgressBar.vue";
+import AdjustHistoryReportCard from "./components/AdjustHistoryReportCard.vue";
+import AdjustCsvPreviewDialog from "./components/AdjustCsvPreviewDialog.vue";
+import * as XLSX from "xlsx";
 
 const toast = useToast();
 const authStore = useAuthStore();
@@ -357,11 +373,18 @@ const strUsername = authStore.user.username;
 // State
 const selectedFile = ref(null);
 const selectedFileName = ref("");
+const pendingSelectedFile = ref(null);
+const pendingSelectedFileName = ref("");
 const isProcessing = ref(false);
 const processResults = ref(null);
 const showFormatDetails = ref(false);
 const isDragOver = ref(false);
 const fileInput = ref(null);
+const showCsvPreviewDialog = ref(false);
+const isFileApproved = ref(false);
+const csvHeaders = ref([]);
+const csvRows = ref([]);
+const csvTotalRows = ref(0);
 const filters = ref({
   global: { value: null, matchMode: 'contains' },
   kdtk: { value: null, matchMode: 'contains' },
@@ -565,7 +588,7 @@ const handleFileSelect = event => {
 };
 
 const handleUpload = async () => {
-  if (!selectedFile.value) return;
+  if (!selectedFile.value || !isFileApproved.value) return;
 
   try {
     isProcessing.value = true;
@@ -628,23 +651,20 @@ const handleUpload = async () => {
 const resetForm = () => {
   selectedFile.value = null;
   selectedFileName.value = "";
+  pendingSelectedFile.value = null;
+  pendingSelectedFileName.value = "";
   isDragOver.value = false;
   progress.value = {
     percentage: 0,
     info: "",
     status: "idle"
   };
-  
-  // Clear the file input properly
-  if (fileInput.value) {
-    fileInput.value.value = "";
-  }
-  
-  // Also clear by ID as fallback
-  const fileInputElement = document.getElementById("csvFile");
-  if (fileInputElement) {
-    fileInputElement.value = "";
-  }
+  showCsvPreviewDialog.value = false;
+  isFileApproved.value = false;
+  csvHeaders.value = [];
+  csvRows.value = [];
+  csvTotalRows.value = 0;
+  clearFileInputDom();
 };
 
 // Enhanced file handling methods
@@ -679,7 +699,7 @@ const clearFilters = () => {
   };
 };
 
-const validateAndSetFile = (file) => {
+const validateAndSetFile = async (file) => {
   if (file.type !== "text/csv" && !file.name.endsWith(".csv")) {
     toast.add({
       severity: "error",
@@ -689,9 +709,76 @@ const validateAndSetFile = (file) => {
     });
     return;
   }
-  
-  selectedFile.value = file;
-  selectedFileName.value = file.name;
+  try {
+    const content = await readFileAsText(file);
+    const workbook = XLSX.read(content, { type: "string" });
+    const sheetName = workbook.SheetNames[0];
+    const ws = workbook.Sheets[sheetName];
+    const rows2d = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+    const headerRow = (rows2d[0] || []).map(h => String(h).trim());
+    const dataRows = [];
+    for (let i = 1; i < rows2d.length; i++) {
+      const row = rows2d[i];
+      const isEmpty = Array.isArray(row) && row.every(cell => cell === "" || cell == null);
+      if (isEmpty) continue;
+      const obj = {};
+      for (let j = 0; j < headerRow.length; j++) {
+        const key = headerRow[j] || "";
+        const val = row[j] ?? "";
+        obj[String(key).trim()] = typeof val === "string" ? val.trim() : val;
+      }
+      dataRows.push(obj);
+    }
+    pendingSelectedFile.value = file;
+    pendingSelectedFileName.value = file.name;
+    csvHeaders.value = headerRow;
+    csvRows.value = dataRows;
+    csvTotalRows.value = dataRows.length;
+    isFileApproved.value = false;
+    showCsvPreviewDialog.value = true;
+  } catch (e) {
+    toast.add({
+      severity: "error",
+      summary: "Error",
+      detail: "Gagal membaca file CSV",
+      life: 4000,
+    });
+  }
+};
+
+const readFileAsText = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      let text = reader.result;
+      if (typeof text === "string" && text.charCodeAt(0) === 0xFEFF) {
+        text = text.slice(1);
+      }
+      resolve(text);
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(file, "UTF-8");
+  });
+};
+
+const handlePreviewCancel = () => {
+  showCsvPreviewDialog.value = false;
+  pendingSelectedFile.value = null;
+  pendingSelectedFileName.value = "";
+  csvHeaders.value = [];
+  csvRows.value = [];
+  csvTotalRows.value = 0;
+  clearFileInputDom();
+  toast.add({ severity: "info", summary: "Dibatalkan", detail: "Upload dibatalkan", life: 2500 });
+};
+
+const handlePreviewConfirm = () => {
+  selectedFile.value = pendingSelectedFile.value;
+  selectedFileName.value = pendingSelectedFileName.value;
+  isFileApproved.value = true;
+  showCsvPreviewDialog.value = false;
+  clearFileInputDom();
+  toast.add({ severity: "success", summary: "Valid", detail: "File siap diproses", life: 2500 });
 };
 
 const getFileSize = (file) => {
@@ -757,6 +844,16 @@ const exportToExcel = () => {
       detail: "Gagal mengekspor data ke Excel",
       life: 5000,
     });
+  }
+};
+
+const clearFileInputDom = () => {
+  if (fileInput.value) {
+    fileInput.value.value = "";
+  }
+  const fileInputElement = document.getElementById("csvFile");
+  if (fileInputElement) {
+    fileInputElement.value = "";
   }
 };
 

@@ -64,6 +64,42 @@ class AdjustService {
   }
 
   /**
+   * Get history for report with month-based filter
+   * @param {Object} params - { month: 'YYYY-MM', pic, kdtk, status, limit, offset }
+   */
+  async getHistory(params = {}) {
+    const response = await api.get("/adjust/history", { params });
+    return response.data;
+  }
+
+  /**
+   * Get distinct filter options (PIC, KDTK)
+   */
+  async getFilters() {
+    const response = await api.get("/adjust/history/filters");
+    return response.data;
+  }
+
+  /**
+   * Export history CSV according to filters
+   * @param {Object} params - same as getHistory
+   */
+  async exportHistoryCsv(params = {}) {
+    const response = await api.get("/adjust/history/export", { params, responseType: "blob" });
+    const blob = new Blob([response.data], { type: "text/csv; charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const month = params.month || "all";
+    link.href = url;
+    link.download = `adjust_history_${month}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    return { success: true };
+  }
+
+  /**
    * Get adjustment tasks (convenience method using progress service)
    * @returns {Promise<Array>} Adjustment-related tasks
    */

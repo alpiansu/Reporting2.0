@@ -15,11 +15,35 @@ const __dirname = path.dirname(__filename);
 
 class CetakBpbService {
   /**
+   * Cleanup output directory before processing
+   */
+  cleanupOutputDirectory() {
+    try {
+      const outputDir = path.join(__dirname, "../../output/bpb");
+      if (fs.existsSync(outputDir)) {
+        const files = fs.readdirSync(outputDir);
+        for (const file of files) {
+          const filePath = path.join(outputDir, file);
+          if (fs.statSync(filePath).isFile()) {
+            fs.unlinkSync(filePath);
+          }
+        }
+        logger.info(`Cleaned up output directory: ${outputDir}`);
+      }
+    } catch (error) {
+      logger.error(`Failed to cleanup output directory: ${error.message}`);
+    }
+  }
+
+  /**
    * Process BPB printing for exactly one store
    * @param {Object} params - { cabang, store, bukti_no, username }
    */
   async processCetakBpb({ store, bukti_no, username }) {
     try {
+      // 0. Cleanup output directory before processing
+      this.cleanupOutputDirectory();
+
       if (!store) {
         throw new Error("Store code must be specified");
       }

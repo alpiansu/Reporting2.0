@@ -1,7 +1,7 @@
 <template>
   <div class="adjust-view">
     <PageHeader title="Upload Adjustment CSV" subtitle="Proses adjustment dengan menggunakan file csv"
-      description="Upload file CSV dengan format KDTK, PRDCD, QTY_ADJ dan KETER untuk memproses penyesuaian item BJD di toko-toko yang ditentukan." />
+      description="Upload file CSV dengan format KDTK, PRDCD, QTY_ADJ, KETER dan opsional TGL_SELISIH untuk memproses penyesuaian item BJD di toko-toko yang ditentukan." />
 
     <div class="content-container">
       <!-- Template Download Card -->
@@ -93,7 +93,7 @@
                   <i class="pi pi-cloud-upload drop-icon"></i>
                   <div class="drop-text">
                     <p class="drop-primary">Klik untuk pilih file atau drag & drop</p>
-                    <p class="drop-secondary">Format: CSV (KDTK, PRDCD, QTY_ADJ, KETER)</p>
+                    <p class="drop-secondary">Format: CSV (KDTK, PRDCD, QTY_ADJ, KETER, [Optional Fields])</p>
                   </div>
                 </div>
 
@@ -428,6 +428,12 @@ const csvFields = [
     description: 'Keterangan atau deskripsi adjustment',
     example: 'Stock correction, Damaged goods',
     required: true
+  },
+  {
+    name: 'TGL_SELISIH',
+    description: 'Tanggal selisih (Opsional - Format: YYYY-MM-DD)',
+    example: '2024-01-20',
+    required: false
   }
 ];
 
@@ -711,12 +717,32 @@ const validateAndSetFile = async (file) => {
   }
   try {
     const content = await readFileAsText(file);
-    const workbook = XLSX.read(content, { type: "string" });
+    const workbook = XLSX.read(content, { type: "string", raw: true });
     const sheetName = workbook.SheetNames[0];
     const ws = workbook.Sheets[sheetName];
     const rows2d = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
     const headerRow = (rows2d[0] || []).map(h => String(h).trim());
     const dataRows = [];
+    
+    // Smart Formatter: Format pure numbers, keep others as-is
+    const formatSmart = (val) => {
+      if (val === null || val === undefined || val === "") return "";
+      const strVal = String(val).trim();
+      
+      // If it's a pure number and doesn't have leading zeros (unless it's just "0")
+      // This preserves codes like "00123" and dates/strings like "2024-01-01" or "TW75"
+      if (/^\d+$/.test(strVal)) {
+        if (strVal.length > 1 && strVal.startsWith('0')) {
+          return strVal; // Likely a code, keep leading zero
+        }
+        const num = Number(strVal);
+        if (!isNaN(num)) {
+          return num.toLocaleString('id-ID');
+        }
+      }
+      return strVal;
+    };
+
     for (let i = 1; i < rows2d.length; i++) {
       const row = rows2d[i];
       const isEmpty = Array.isArray(row) && row.every(cell => cell === "" || cell == null);
@@ -725,7 +751,7 @@ const validateAndSetFile = async (file) => {
       for (let j = 0; j < headerRow.length; j++) {
         const key = headerRow[j] || "";
         const val = row[j] ?? "";
-        obj[String(key).trim()] = typeof val === "string" ? val.trim() : val;
+        obj[String(key).trim()] = formatSmart(val);
       }
       dataRows.push(obj);
     }

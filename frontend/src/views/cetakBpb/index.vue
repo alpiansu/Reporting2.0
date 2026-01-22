@@ -11,16 +11,7 @@
       <CetakBpbForm 
         :is-processing="isProcessing"
         @process="handleProcess"
-        @complete="handleComplete"
       />
-      
-      <!-- Results Section -->
-      <transition name="fade">
-        <CetakBpbResults 
-          v-if="results && !isProcessing" 
-          :results="results" 
-        />
-      </transition>
     </div>
   </div>
 </template>
@@ -29,7 +20,6 @@
 import { ref } from 'vue';
 import PageHeader from '@/components/PageHeader.vue';
 import CetakBpbForm from './components/CetakBpbForm.vue';
-import CetakBpbResults from './components/CetakBpbResults.vue';
 import cetakBpbService from '@/services/cetak-bpb.service';
 import { useToastService } from '@/utils/toast';
 
@@ -37,43 +27,58 @@ const toast = useToastService();
 
 // State
 const isProcessing = ref(false);
-const results = ref(null);
 
 // Methods
 const handleProcess = async (formData) => {
   try {
     isProcessing.value = true;
-    results.value = null;
     
-    toast.showInfo('Info', 'Memulai proses cetak BPB...', 3000);
+    toast.showInfo('Info', 'Memproses dokumen BPB...', 3000);
     
     const response = await cetakBpbService.processCetakBpb(formData);
     
-    // Response handling handled by handleComplete via event from form if success
-    // but we also get it here. In this module, the service returns the result directly.
-    // However, the progress tracking is handled inside the form.
-    // We'll set results here when the API call finishes.
+    // Trigger download
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
     
-    results.value = response;
+    // Set filename
+    const filename = `BPB_${formData.store}_${formData.bukti_no}.pdf`;
+    link.setAttribute('download', filename);
     
-    if (response.success > 0) {
-      toast.showSuccess('Sukses', `Berhasil memproses ${response.success} toko`);
-    } else if (response.failed && response.failed.length > 0) {
-      toast.showWarn('Peringatan', 'Proses selesai namun semua toko gagal');
-    }
+    document.body.appendChild(link);
+    link.click();
+    
+    // Cleanup
+    link.remove();
+    window.URL.revokeObjectURL(url);
+    
+    toast.showSuccess('Sukses', 'Dokumen BPB berhasil diunduh');
     
   } catch (error) {
-    const errorMessage = error.response?.data?.message || error.message || 'Terjadi kesalahan saat memproses';
+    let errorMessage = 'Terjadi kesalahan saat memproses';
+    
+    // Handle blob error response
+    if (error.response?.data instanceof Blob) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const errorData = JSON.parse(reader.result);
+          toast.showError('Error', errorData.message || errorMessage);
+        } catch (e) {
+          toast.showError('Error', errorMessage);
+        }
+      };
+      reader.readAsText(error.response.data);
+      return;
+    }
+    
+    errorMessage = error.response?.data?.message || error.message || errorMessage;
     toast.showError('Error', errorMessage);
     console.error('Process error:', error);
   } finally {
     isProcessing.value = false;
   }
-};
-
-const handleComplete = (data) => {
-  // If we want to handle completion from the event source instead of the direct API call
-  console.log('Progress completed event received:', data);
 };
 </script>
 

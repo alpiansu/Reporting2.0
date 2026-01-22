@@ -99,6 +99,9 @@
       @validation-error="handleValidationError" 
     />
   </form-dialog>
+
+  <!-- Global Floating Progress Widget -->
+  <FloatingProgressWidget />
 </template>
 
 <script setup>
@@ -111,6 +114,7 @@ import FormDialog from '../components/common/FormDialog.vue';
 import ChangePasswordForm from '../components/auth/ChangePasswordForm.vue';
 import AppSidebar from '../components/sidebar/AppSidebar.vue';
 import LoadingOverlay from '../components/common/LoadingOverlay.vue';
+import FloatingProgressWidget from '../components/common/FloatingProgressWidget.vue';
 import api from '../services/api';
 
 const toast = useToastService();

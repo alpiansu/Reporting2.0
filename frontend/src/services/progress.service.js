@@ -103,7 +103,7 @@ class ProgressService {
    * @returns {EventSourcePolyfill} - SSE connection instance
    */
   monitorProgress(taskId, onUpdate, onComplete, onError) {
-    const apiUrl = import.meta.env.VITE_API_URL;
+    const apiUrl = import.meta.env.VITE_API_URL || api.defaults.baseURL || "http://localhost:3001/api";
     const token = localStorage.getItem("token");
     const sseUrl = `${apiUrl}/progress/stream/task/${taskId}`;
 
@@ -204,14 +204,15 @@ class ProgressService {
 
   /**
    * Monitor all progress tasks (global monitor)
+   * @param {Function} onInit - Callback for initial tasks list
    * @param {Function} onStart - Callback when new task starts
    * @param {Function} onUpdate - Callback when any task updates
    * @param {Function} onComplete - Callback when any task completes
    * @param {Function} onError - Callback when any task fails
    * @returns {EventSourcePolyfill} - SSE connection instance
    */
-  monitorAllProgress(onStart, onUpdate, onComplete, onError) {
-    const apiUrl = import.meta.env.VITE_API_URL;
+  monitorAllProgress(onInit, onStart, onUpdate, onComplete, onError) {
+    const apiUrl = import.meta.env.VITE_API_URL || api.defaults.baseURL || "http://localhost:3001/api";
     const token = localStorage.getItem("token");
     const sseUrl = `${apiUrl}/progress/stream`;
 
@@ -228,6 +229,7 @@ class ProgressService {
       try {
         const allTasks = JSON.parse(event.data);
         // console.log("🌐 Global INIT - All tasks:", allTasks);
+        if (onInit) onInit(allTasks);
       } catch (error) {
         console.error("❌ Error parsing Global INIT event:", error);
       }

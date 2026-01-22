@@ -8,7 +8,7 @@ export default {
   jsonPath: path.join(process.cwd(), "data/progress.json"),
 
   // Maximum number of concurrent running tasks
-  maxConcurrentTasks: 3,
+  maxConcurrentTasks: 1,
 
   // Cleanup configuration
   cleanup: {

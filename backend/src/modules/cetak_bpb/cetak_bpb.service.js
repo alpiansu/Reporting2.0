@@ -15,86 +15,38 @@ const __dirname = path.dirname(__filename);
 
 class CetakBpbService {
   /**
-   * Process BPB printing for multiple stores
-   * @param {Object} params - { cabang, stores, bukti_no, tanggal, username }
+   * Process BPB printing for exactly one store
+   * @param {Object} params - { cabang, store, bukti_no, username }
    */
-  async processCetakBpb({ cabang, stores, bukti_no, username }) {
-    const taskId = `${config.taskProgressName}_${username}`;
-    
+  async processCetakBpb({ store, bukti_no, username }) {
     try {
-      // 1. Identify target stores
-      let selectedStores = [];
-      if (stores && stores.length > 0) {
-        selectedStores = await storeService.getStoresByCodes(stores);
-      } else if (cabang) {
-        selectedStores = await storeService.getStoresByCabang(cabang);
-      } else {
-        throw new Error("Target stores or cabang must be specified");
+      if (!store) {
+        throw new Error("Store code must be specified");
       }
 
-      if (selectedStores.length === 0) {
-        throw new Error("No valid stores found for processing");
+      // 1. Identify target store
+      const selectedStore = await storeService.getStoreByCode(store);
+
+      if (!selectedStore) {
+        throw new Error(`Store ${store} not found`);
       }
 
-      // 2. Start Progress
-      const timeStart = moment().format("YYYY-MM-DD HH:mm:ss");
-      await progressService.startProgress(taskId, selectedStores.length, {
-        description: `Starting BPB print process for ${selectedStores.length} stores`,
-        startedBy: username,
-        status: "preparing",
-        createdAt: timeStart,
-      });
+      logger.info(`Processing BPB print for store ${store} by ${username}`);
 
-      const results = {
-        total: selectedStores.length,
-        success: 0,
-        failed: [],
-        outputFiles: [],
+      // 2. Process Store BPB
+      const result = await this.processStoreBpb(selectedStore, bukti_no);
+      
+      if (!result.success) {
+        throw new Error(result.error || "Failed to process BPB");
+      }
+
+      return {
+        success: true,
+        filePath: result.filePath,
+        fileName: `BPB_${store}_${bukti_no}.pdf`
       };
-
-      // 3. Process in parallel
-      const limit = pLimit(config.parallelProcessing.concurrencyLimit);
-      let processedCount = 0;
-
-      const processPromises = selectedStores.map(store => 
-        limit(async () => {
-          const currentCount = ++processedCount;
-          await progressService.updateProgress(taskId, currentCount, {
-            description: `Processing store ${store.storeCode} (${currentCount}/${selectedStores.length})`,
-            status: "Screening",
-          });
-
-          try {
-            const result = await this.processStoreBpb(store, bukti_no);
-            if (result.success) {
-              results.success++;
-              results.outputFiles.push(result.filePath);
-            } else {
-              results.failed.push({ storeCode: store.storeCode, error: result.error });
-            }
-          } catch (error) {
-            logger.error(`Error processing BPB for store ${store.storeCode}: ${error.message}`);
-            results.failed.push({ storeCode: store.storeCode, error: error.message });
-          }
-        })
-      );
-
-      await Promise.all(processPromises);
-
-      // 4. Complete Progress
-      await progressService.completeProgress(taskId, {
-        description: `Finished processing ${selectedStores.length} stores. Success: ${results.success}, Failed: ${results.failed.length}`,
-        status: "completed",
-        completedAt: moment().format("YYYY-MM-DD HH:mm:ss"),
-      });
-
-      return results;
     } catch (error) {
       logger.error(`Failed to process Cetak BPB: ${error.message}`);
-      await progressService.failProgress(taskId, {
-        description: `Task failed: ${error.message}`,
-        status: "failed",
-      });
       throw error;
     }
   }
@@ -115,7 +67,7 @@ class CetakBpbService {
       // Fetch Header
       const [headerRows] = await pool.query(config.queries.header(bukti_no));
       if (!headerRows || headerRows.length === 0) {
-        return { success: false, error: `Bukti No ${bukti_no} not found` };
+        return { success: false, error: `Bukti No ${bukti_no} tidak ditemukan di toko ${store.storeCode}` };
       }
       const header = headerRows[0];
 
@@ -123,21 +75,22 @@ class CetakBpbService {
       const [details] = await pool.query(config.queries.detail(bukti_no));
 
       // Generate PDF
-      const filePath = await this.generatePdf(store.storeCode, bukti_no, header, details || []);
+      const outName = `BPB_${store.storeCode}_${bukti_no}.pdf`;
+      const outPath = path.join(__dirname, "../../output/bpb", outName);
+      
+      fs.mkdirSync(path.dirname(outPath), { recursive: true });
+      await this.generatePdfFile(store.storeCode, bukti_no, header, details || [], outPath);
 
-      return { success: true, filePath };
+      return { success: true, filePath: outPath };
     } catch (error) {
       return { success: false, error: error.message };
-    } finally {
-      // In this project structure, pools from createDbStore might be shared or need cleanup
-      // Based on db_store.js, createDbStore returns a pool. Usually we don't end it here if it's cached.
     }
   }
 
   /**
-   * Refactored PDF Generation logic from original cetakBPB.js
+   * PDF Generation logic
    */
-  async generatePdf(kdtk, bukti_no, header, details) {
+  async generatePdfFile(kdtk, bukti_no, header, details, outputPath) {
     const pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage([595.28, 841.89]); // A4 portrait
     const { width, height } = page.getSize();
@@ -212,9 +165,9 @@ class CetakBpbService {
     let no = 1;
     for (const d of details) {
       if (currentY < 120) {
-        const newPage = pdfDoc.addPage([595.28, 841.89]);
-        currentY = 800; // Reset Y for new page (simplified, usually needs more checks)
-        // Note: original script didn't fully handle multi-page headers, just drawing "lanjutan"
+        page.drawText("...lanjutan", { x: width - 80, y: currentY, size: 7, font });
+        // Simplified multi-page
+        break; 
       }
 
       page.drawText(String(no), { x: 25, y: currentY, size: 9, font });
@@ -276,13 +229,7 @@ class CetakBpbService {
 
     // Save
     const pdfBytes = await pdfDoc.save();
-    const outName = `BPB_${kdtk}_${bukti_no}.pdf`;
-    const outPath = path.join(__dirname, "../../output/bpb", outName);
-    
-    fs.mkdirSync(path.dirname(outPath), { recursive: true });
-    fs.writeFileSync(outPath, pdfBytes);
-    
-    return outPath;
+    fs.writeFileSync(outputPath, pdfBytes);
   }
 }
 

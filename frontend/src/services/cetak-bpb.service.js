@@ -12,8 +12,10 @@ const cetakBpbService = {
    * @returns {Promise} - Response with process result
    */
   processCetakBpb: async (data) => {
-    const response = await api.post(`/${fixedPattern}/process`, data);
-    return response.data;
+    const response = await api.post(`${fixedPattern}/process`, data, {
+      responseType: 'blob'
+    });
+    return response;
   }
 };
 

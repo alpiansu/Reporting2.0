@@ -12,6 +12,7 @@ import os from "os";
 import pLimit from "p-limit";
 import progressService from "../progress/progress.service.js";
 import apiResponse from "../../utils/apiResponse.js";
+import adjustPostActionService from "./adjust_post_action.service.js";
 
 class AdjustService {
   /**
@@ -399,6 +400,9 @@ class AdjustService {
                 updtime: executedAt,
                 status: "SUCCESS",
               });
+
+              // Execute scalable post-adjustment actions
+              adjustPostActionService.executePostActions(record, store, username);
             } else {
               // Insert gagal - tidak ada rows yang terpengaruh
               historyRecords.push({

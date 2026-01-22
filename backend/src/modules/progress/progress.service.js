@@ -5,28 +5,38 @@ import fs from "fs";
 import EventEmitter from "events";
 import config from "./progress.config.js";
 import path from "path";
+import { Mutex } from "async-mutex";
 
 class ProgressService extends EventEmitter {
   constructor() {
     super();
     this.progressMap = new Map();
     this.isInitialized = false;
+    this.initializingPromise = null;
     this.cleanupTimer = null;
+    this.mutex = new Mutex();
   }
 
   async initialize() {
     if (this.isInitialized) return;
-    await this._ensureJsonFile();
-    await this._loadProgressData();
+    if (this.initializingPromise) return this.initializingPromise;
 
-    // Auto cleanup old tasks periodically
-    if (config.cleanup.enabled) {
-      this.cleanupTimer = setInterval(() => {
-        this.cleanupOldTasks(config.cleanup.maxAgeHours);
-      }, config.cleanup.intervalMinutes * 60 * 1000);
-    }
+    this.initializingPromise = (async () => {
+      await this._ensureJsonFile();
+      await this._loadProgressData();
 
-    this.isInitialized = true;
+      // Auto cleanup old tasks periodically
+      if (config.cleanup.enabled && !this.cleanupTimer) {
+        this.cleanupTimer = setInterval(() => {
+          this.cleanupOldTasks(config.cleanup.maxAgeHours);
+        }, config.cleanup.intervalMinutes * 60 * 1000);
+      }
+
+      this.isInitialized = true;
+      this.initializingPromise = null;
+    })();
+
+    return this.initializingPromise;
   }
 
   async _ensureJsonFile() {
@@ -43,9 +53,13 @@ class ProgressService extends EventEmitter {
     try {
       const data = fs.readFileSync(config.jsonPath, "utf-8");
       const parsed = JSON.parse(data);
+      
+      // Replace the entire map to ensure consistency with disk
+      const newMap = new Map();
       Object.entries(parsed).forEach(([taskId, task]) => {
-        this.progressMap.set(taskId, task);
+        newMap.set(taskId, task);
       });
+      this.progressMap = newMap;
     } catch (err) {
       console.error("[ProgressService] Failed to load JSON:", err.message);
       this.progressMap = new Map();
@@ -67,31 +81,44 @@ class ProgressService extends EventEmitter {
   async startProgress(taskId, total = 100, info = "") {
     await this.initialize();
 
-    if (this._activeTaskCount() >= config.maxConcurrentTasks) {
-      throw new Error("Maximum concurrent progress reached. Please wait for other tasks to complete.");
+    const release = await this.mutex.acquire();
+    try {
+      // Reload data from disk to ensure we have the latest state from all potential workers/processes
+      await this._loadProgressData();
+
+      const activeCount = this._activeTaskCount();
+      if (activeCount >= config.maxConcurrentTasks) {
+        console.warn(
+          `[ProgressService] Start task ${taskId} rejected: ${activeCount}/${config.maxConcurrentTasks} tasks active.`
+        );
+        throw new Error("Maximum concurrent progress reached. Please wait for other tasks to complete.");
+      }
+
+      const task = {
+        id: taskId,
+        total,
+        completed: 0,
+        percentage: 0,
+        info,
+        status: "in-progress",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      // Extract module from info if provided as object
+      if (typeof info === "object" && info.module) {
+        task.module = info.module;
+      }
+
+      this.progressMap.set(taskId, task);
+      await this._saveProgressData();
+
+      console.log(`[ProgressService] Task started: ${taskId} (${task.module || "no-module"})`);
+      this.emit("progressStart", task);
+      return task;
+    } finally {
+      release();
     }
-
-    const task = {
-      id: taskId,
-      total,
-      completed: 0,
-      percentage: 0,
-      info,
-      status: "in-progress",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    // Extract module from info if provided as object
-    if (typeof info === "object" && info.module) {
-      task.module = info.module;
-    }
-
-    this.progressMap.set(taskId, task);
-    await this._saveProgressData();
-
-    this.emit("progressStart", task);
-    return task;
   }
 
   /**

@@ -138,9 +138,10 @@
       </td>
       <td v-if="isAdmin" class="sticky-col sticky-actions">
         <div class="action-buttons">
-          <Button label="Auto Note!" @click="hitButtonAutoNote(item)" :disabled="isItemAutoUpdating(item)"
+          <Button :label="isItemAutoUpdating(item) ? 'Processing...' : 'Auto Note!'" @click="hitButtonAutoNote(item)"
+            :disabled="isItemAutoUpdating(item)"
             :icon="isItemAutoUpdating(item) ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'"
-            :class="{ 'btn-processing': isItemAutoUpdating(item) }" severity="info" raised size="small" />
+            :class="{ 'btn-processing': isItemAutoUpdating(item) }" severity="secondary" outlined size="small" />
         </div>
       </td>
     </template>

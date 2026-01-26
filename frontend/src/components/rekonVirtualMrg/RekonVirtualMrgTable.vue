@@ -79,8 +79,8 @@
         Last Catch
         <i v-if="sortColumn === 'LASTCATCH'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
-      <th>Notes</th>
-      <th v-if="user.role == `admin` || user.role == `superadmin`">Actions</th>
+      <th class="sticky-col sticky-notes" :style="stickyNotesStyle">Notes</th>
+      <th class="sticky-col sticky-actions" v-if="isAdmin">Actions</th>
     </template>
 
     <!-- Table Row -->
@@ -102,7 +102,7 @@
           class="adjust-checkbox" />
       </td>
       <td class="text-center">{{ formatDateTime(item.LASTCATCH) }}</td>
-      <td class="text-center note-cell">
+      <td class="text-center note-cell sticky-col sticky-notes" :style="stickyNotesStyle">
         <div class="note-display" v-if="!item.editingNote" @click="startEditingNote(item)">
           <div class="note-category" v-if="item.note && item.note.category"
             :class="getCategoryClass(item.note.category.name)">
@@ -136,7 +136,7 @@
           </div>
         </div>
       </td>
-      <td v-if="user.role == `admin` || user.role == `superadmin`">
+      <td v-if="isAdmin" class="sticky-col sticky-actions">
         <div class="action-buttons">
           <Button label="Auto Note!" @click="hitButtonAutoNote(item)" :disabled="isItemAutoUpdating(item)"
             :icon="isItemAutoUpdating(item) ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'"
@@ -164,6 +164,16 @@ import { useAuthStore } from '../../stores';
 
 const authStore = useAuthStore();
 const user = computed(() => authStore.user);
+
+const isAdmin = computed(() => {
+  return user.value?.role === 'admin' || user.value?.role === 'superadmin';
+});
+
+const stickyNotesStyle = computed(() => {
+  return {
+    right: isAdmin.value ? '150px' : '0px'
+  };
+});
 
 const props = defineProps({
   data: {
@@ -316,6 +326,7 @@ const formatCurrency = (value) => {
   }).format(value);
 };
 
+// Formatting formula
 const formatNumber = (value) => {
   if (value === null || value === undefined) return '0';
   return new Intl.NumberFormat('id-ID').format(value);

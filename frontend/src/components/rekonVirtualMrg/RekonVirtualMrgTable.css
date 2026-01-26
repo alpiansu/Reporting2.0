@@ -140,6 +140,64 @@
     color: #1f2937;
 }
 
+/* Sticky Column Styles */
+.sticky-col {
+    position: sticky !important;
+    z-index: 10 !important;
+    background-color: #ffffff !important;
+    /* Solid background by default */
+}
+
+.results-table th.sticky-col {
+    z-index: 30 !important;
+    background-color: #f8fafc !important;
+    /* Match header background */
+}
+
+/* Specific right-aligned sticky columns */
+.sticky-notes {
+    right: 180px;
+    /* Default when Actions column is present */
+    border-left: 2px solid #e5e7eb !important;
+    box-shadow: -4px 0 8px -4px rgba(0, 0, 0, 0.15);
+}
+
+.sticky-actions {
+    right: 0;
+    border-left: 1px solid #e5e7eb !important;
+    background-color: #f8fafc !important;
+    /* Slightly distinct or same as header */
+}
+
+/* Specific background handling for different row states */
+.results-table tbody tr:nth-child(even) td.sticky-col {
+    background-color: #fafbfc !important;
+}
+
+.results-table tbody tr:nth-child(odd) td.sticky-col {
+    background-color: #ffffff !important;
+}
+
+.results-table tbody tr:hover td.sticky-col {
+    background-color: #f0f9ff !important;
+    /* Match row hover color */
+}
+
+.results-table tbody tr.row-updated td.sticky-col {
+    background-color: #f0f9ff !important;
+    /* Match highlighted row color */
+}
+
+/* Adjust sticky notes when there's no Actions column (non-admin) */
+.no-actions .sticky-notes {
+    right: 0;
+}
+
+.results-table tbody tr:hover td.sticky-col {
+    background-color: #e0f2fe !important;
+    /* Slightly darker than row hover to distinguish */
+}
+
 /* Sortable Header Styling */
 .results-table th.sortable {
     cursor: pointer;
@@ -435,8 +493,8 @@
 
 /* Note cell styling */
 .note-cell {
-    min-width: 200px;
-    max-width: 250px;
+    min-width: 250px;
+    max-width: 300px;
     cursor: pointer;
     padding: 0.5rem !important;
 }
@@ -614,7 +672,7 @@
     position: relative;
 }
 
-.note-meta-icons{
+.note-meta-icons {
     margin-top: 15px;
 }
 
@@ -728,7 +786,7 @@
     align-items: center;
     justify-content: center;
     flex-wrap: nowrap;
-    min-width: 80px;
+    min-width: 150px;
 }
 
 /* Responsive adjustments for notes column */

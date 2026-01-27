@@ -725,9 +725,15 @@ const validateAndSetFile = async (file) => {
     const dataRows = [];
     
     // Smart Formatter: Format pure numbers, keep others as-is
-    const formatSmart = (val) => {
+    // Now accepts the column key so we can exclude specific columns (e.g. PRDCD)
+    const formatSmart = (val, key) => {
       if (val === null || val === undefined || val === "") return "";
       const strVal = String(val).trim();
+
+      // Skip formatting for PRDCD column — show as-is
+      if (key && String(key).trim().toUpperCase() === 'PRDCD') {
+        return strVal;
+      }
       
       // If it's a pure number and doesn't have leading zeros (unless it's just "0")
       // This preserves codes like "00123" and dates/strings like "2024-01-01" or "TW75"
@@ -751,7 +757,8 @@ const validateAndSetFile = async (file) => {
       for (let j = 0; j < headerRow.length; j++) {
         const key = headerRow[j] || "";
         const val = row[j] ?? "";
-        obj[String(key).trim()] = formatSmart(val);
+        // pass the header key to formatSmart so PRDCD can be excluded
+        obj[String(key).trim()] = formatSmart(val, key);
       }
       dataRows.push(obj);
     }

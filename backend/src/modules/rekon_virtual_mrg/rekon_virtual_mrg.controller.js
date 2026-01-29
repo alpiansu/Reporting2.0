@@ -16,7 +16,7 @@ const userService = new UserService();
  */
 export const screeningByCabang = async (req, res) => {
   try {
-    const { cabang, periode } = req.query;
+    const { cabang, periode, shops } = req.query;
 
     if (!periode) {
       return apiResponse.badRequest(res, "Periode is required");
@@ -29,11 +29,26 @@ export const screeningByCabang = async (req, res) => {
 
     const cabParam = !cabang || cabang === "All" ? "All" : cabang;
 
-    logger.info(`Starting screening for cabang: ${cabParam}, periode: ${periode}`);
+    // Sanitize shops parameter (can be string 'STORE1,STORE2' or array ['STORE1', 'STORE2'])
+    let shopList = [];
+    if (shops) {
+      if (Array.isArray(shops)) {
+        shopList = shops;
+      } else if (typeof shops === 'string') {
+        shopList = shops.split(',').map(s => s.trim()).filter(Boolean);
+      }
+    }
+
+    logger.info(`Starting screening for cabang: ${cabParam}, periode: ${periode}${shopList.length > 0 ? `, shops: ${shopList.join(',')}` : ''}`);
 
     const username = req.user?.username || "system";
 
-    const result = await rekonVirtualService.screening({ cabang: cabParam, periode, username });
+    const result = await rekonVirtualService.screening({ 
+      cabang: cabParam, 
+      periode, 
+      username,
+      shops: shopList 
+    });
 
     return apiResponse.success(res, result);
   } catch (error) {

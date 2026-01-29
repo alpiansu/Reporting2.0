@@ -234,37 +234,50 @@ class RekonVirtualService {
         )
       );
 
-      const storesToProcess = storeGroups.flat();
+      let storesToProcess = storeGroups.flat();
+
+      // === NEW: Filter by specific shops if provided ===
+      if (options.shops && options.shops.length > 0) {
+        storesToProcess = storesToProcess.filter(s => {
+            const code = (s.storeCode || s.kdtk || "").toUpperCase();
+            return options.shops.some(target => target.toUpperCase() === code);
+        });
+        logger.info(`[rekon_virtual_mrg.service] Filtered to ${storesToProcess.length} specific stores: ${options.shops.join(", ")}`);
+      }
 
       logger.info(`[rekon_virtual_mrg.service] Total stores to process: ${storesToProcess.length}`);
 
-      // Register progress task
-      try {
-        const timeStart = moment().format("YYYY-MM-DD HH:mm:ss");
-        await progressService.startProgress(taskId, storesToProcess.length, {
-          description: "registering task",
-          startedBy: options.username,
-          status: "registering",
-          createdAt: timeStart,
-        });
+      const skipProgress = storesToProcess.length <= 1;
 
-        logger.info(`Progress task registered for user ${username}, taskId: ${taskId}`);
-      } catch (error) {
-        logger.error(`Error registering progress task: ${error.message}`);
+      // Register progress task if not skipping
+      if (!skipProgress) {
+        try {
+          const timeStart = moment().format("YYYY-MM-DD HH:mm:ss");
+          await progressService.startProgress(taskId, storesToProcess.length, {
+            description: "registering task",
+            startedBy: options.username,
+            status: "registering",
+            createdAt: timeStart,
+          });
 
-        if (error.message.includes("Maximum concurrent")) {
+          logger.info(`Progress task registered for user ${username}, taskId: ${taskId}`);
+        } catch (error) {
+          logger.error(`Error registering progress task: ${error.message}`);
+
+          if (error.message.includes("Maximum concurrent")) {
+            await progressService.failProgress(taskId, {
+              description: `Task failed: ${error.message}`,
+              status: "failed",
+            });
+            throw new Error("[service rekon_virtual_mrg] System is busy processing other tasks");
+          }
+
           await progressService.failProgress(taskId, {
             description: `Task failed: ${error.message}`,
             status: "failed",
           });
-          throw new Error("[service rekon_virtual_mrg] System is busy processing other tasks");
+          throw new Error("[service rekon_virtual_mrg] Failed to register progress task");
         }
-
-        await progressService.failProgress(taskId, {
-          description: `Task failed: ${error.message}`,
-          status: "failed",
-        });
-        throw new Error("[service rekon_virtual_mrg] Failed to register progress task");
       }
 
       logger.info(`[rekon_virtual_mrg.service] Starting screening for branches: ${branches.join(", ")}`);
@@ -283,10 +296,12 @@ class RekonVirtualService {
       const incrementProgress = async (storeCode, statusText) => {
         processedCount++;
 
-        await progressService.updateProgress(taskId, processedCount, {
-          description: `Store ${storeCode} → ${statusText} (${processedCount}/${totalStores})`,
-          status: "Screening to Stores",
-        });
+        if (!skipProgress) {
+          await progressService.updateProgress(taskId, processedCount, {
+            description: `Store ${storeCode} → ${statusText} (${processedCount}/${totalStores})`,
+            status: "Screening to Stores",
+          });
+        }
       };
 
       // step 3, loop each stores asycronously
@@ -299,7 +314,7 @@ class RekonVirtualService {
               // --- Store info --- //
               const storeInfo = await withTimeout(
                 storeService.getStoreIPHost(storeCode),
-                10000, // ✅ ADDED timeout
+                10000, 
                 `get store info ${storeCode}`
               );
 
@@ -317,7 +332,7 @@ class RekonVirtualService {
               // --- Create DB connection --- //
               const storeConnection = await withTimeout(
                 dbStore.createDbStore(storeInfo.dbHost, config.connectionRetry.maxRetries),
-                10000, // ✅ ADDED timeout
+                10000, 
                 `connect ${storeCode}`
               );
 
@@ -343,14 +358,14 @@ class RekonVirtualService {
                   `[${storeCode}] query completed, got ${result.length} records`
                 );
 
+                await this.deleteStorePeriod(cab, storeCode, strYear, strMonth);
+
                 if (result.length > 0) {
                   await SaldoVirtual.bulkCreate(result, {
                     updateOnDuplicate: ["QTY_MSTRAN", "QTY_MTRAN", "SEL", "LASTCATCH"],
                   });
 
                   newRecords.push(...result);
-                } else {
-                  await this.deleteStorePeriod(cab, storeCode, strYear, strMonth);
                 }
 
                 await incrementProgress(storeCode, `Success ✅ (${result.length} rows)`);
@@ -372,19 +387,26 @@ class RekonVirtualService {
       );
 
       logger.info(`[rekon_virtual_mrg.service] Screening process completed for periode ${options.periode}`);
-      //update status to progress service
-      await progressService.updateProgress(taskId, processedCount, {
-        description: "Finalizing screening process, saving logs to database",
-        status: "finalizing",
-      });
+      
+      //update status to progress service if not skipping
+      if (!skipProgress) {
+        await progressService.updateProgress(taskId, processedCount, {
+          description: "Finalizing screening process, saving logs to database",
+          status: "finalizing",
+        });
+      }
+
       // Save logs to database
       await RekapRemoteService.saveLogsToDatabase();
 
-      //update status to progress service
-      await progressService.updateProgress(taskId, processedCount, {
-        description: "Syncing data to JSON file, please wait...",
-        status: "finalizing",
-      });
+      //update status to progress service if not skipping
+      if (!skipProgress) {
+        await progressService.updateProgress(taskId, processedCount, {
+          description: "Syncing data to JSON file, please wait...",
+          status: "finalizing",
+        });
+      }
+
       // Sync database to JSON file after write operations
       if (newRecords.length > 0) {
         await this.syncToJsonFile();
@@ -392,11 +414,13 @@ class RekonVirtualService {
       }
 
       const timeCompleted = moment().format("YYYY-MM-DD HH:mm:ss");
-      await progressService.completeProgress(taskId, {
-        description: "All stores processed",
-        status: "completed",
-        completedAt: timeCompleted,
-      });
+      if (!skipProgress) {
+        await progressService.completeProgress(taskId, {
+          description: "All stores processed",
+          status: "completed",
+          completedAt: timeCompleted,
+        });
+      }
 
       return {
         success: true,
@@ -406,10 +430,12 @@ class RekonVirtualService {
     } catch (error) {
       logger.error(`[rekon_virtual_mrg.service] Error during screening: ${error.message}`);
 
-      await progressService.failProgress(taskId, {
-        description: `Task failed: ${error.message}`,
-        status: "failed",
-      });
+      if (!skipProgress) {
+        await progressService.failProgress(taskId, {
+          description: `Task failed: ${error.message}`,
+          status: "failed",
+        });
+      }
 
       throw error;
     }

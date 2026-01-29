@@ -66,12 +66,16 @@ const rekonVirtualMrgService = {
    * @returns {Promise} - Response with reconciliation result
    */
   startReconciliation: async data => {
-    const response = await api.get(`/${fixedPattern}/screening`, {
-      params: {
-        cabang: data.cab || "All",
-        periode: data.periode,
-      },
-    });
+    const params = {
+      cabang: data.cab || "All",
+      periode: data.periode,
+    };
+
+    if (data.shops && data.shops.length > 0) {
+      params.shops = data.shops.join(',');
+    }
+
+    const response = await api.get(`/${fixedPattern}/screening`, { params });
     return response.data;
   },
 

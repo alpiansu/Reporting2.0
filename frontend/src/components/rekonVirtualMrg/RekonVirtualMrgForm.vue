@@ -10,22 +10,44 @@
 
     <template #cab>
       <Dropdown id="cab" v-model="formData.cab" :options="cabangOptions" optionLabel="namacab" optionValue="kdcab"
-        placeholder="Pilih Cabang" :disabled="isReconciling" class="w-full" @change="handleCabChange" />
+        placeholder="Pilih Cabang" :disabled="isReconciling || isSingleLoading" class="w-full" @change="handleCabChange" />
     </template>
 
     <template #periode>
       <Calendar id="periode" v-model="selectedDate" view="month" dateFormat="mm/yy" placeholder="Pilih Bulan/Tahun"
-        :disabled="isReconciling" :maxDate="today" showIcon class="w-full" @date-select="updatePeriode" />
+        :disabled="isReconciling || isSingleLoading" :maxDate="today" showIcon class="w-full" @date-select="updatePeriode" />
+    </template>
+
+    <template #additional-fields>
+      <div class="col-12 field">
+        <label for="shops" class="font-bold block mb-2">Toko (Opsional)</label>
+        <MultiSelect 
+          id="shops" 
+          v-model="formData.shops" 
+          :options="storeOptions" 
+          optionLabel="label" 
+          optionValue="kdtk"
+          placeholder="Ketik untuk mencari toko..." 
+          class="w-full"
+          :disabled="isReconciling || isSingleLoading || !formData.cab || formData.cab === 'All'"
+          :loading="loadingStores"
+          filter
+          :autoFilter="false"
+          @filter="onStoreFilter"
+          :maxSelectedLabels="3"
+        />
+        <small class="text-gray-500 block mt-1">Cari berdasarkan kode atau nama toko. Kosongkan untuk semua toko di cabang.</small>
+      </div>
     </template>
 
     <template #actions>
       <Button type="button" label="Mulai Rekonsiliasi" icon="pi pi-refresh" class="p-button-primary"
-        @click="startReconciliation" :loading="isReconciling" :disabled="isReconciling" />
+        @click="startReconciliation" :loading="isReconciling || isSingleLoading" :disabled="isReconciling || isSingleLoading" />
     </template>
   </RekonFormComponent>
 
   <!-- card info last screening -->
-  <LastScanInfo moduleName="rekon_virtual_mrg" :selectedCabang="formData.cab" v-if="!isReconciling" />
+  <LastScanInfo moduleName="rekon_virtual_mrg" :selectedCabang="formData.cab" v-if="!isReconciling && !isSingleLoading" />
 
   <!-- Processing Loading State -->
   <ProgressBar v-if="isReconciling" :visible="isReconciling" :percentage="progress.percentage" :info="progress.info">
@@ -53,6 +75,7 @@ import { useCabangStore } from '../../stores';
 import Dropdown from 'primevue/dropdown';
 import Calendar from 'primevue/calendar';
 import Button from 'primevue/button';
+import MultiSelect from 'primevue/multiselect';
 import rekonVirtualMrgService from '../../services/rekonVirtualMrg.service';
 import ProgressBar from "../../components/common/ProgressBar.vue";
 import RekonFormComponent from "../../components/common/RekonFormComponent.vue";
@@ -60,14 +83,18 @@ import progressService from "../../services/progress.service.js";
 import { useAuthStore } from '../../stores';
 import api from "../../services/api.js";
 import LastScanInfo from "@/components/common/LastScanInfo.vue";
+import StoreService from '@/services/store.service';
 
 const toast = useToastService();
 const loading = ref(false);
 const errors = reactive({});
 const cabangOptions = ref([]);
+const storeOptions = ref([]);
+const loadingStores = ref(false);
 const selectedDate = ref(null);
 const today = ref(new Date());
 const isReconciling = ref(false);
+const isSingleLoading = ref(false);
 const progress = ref({
   percentage: 0,
   info: "",
@@ -79,7 +106,8 @@ const strUsername = authStore.user.username;
 
 const formData = reactive({
   cab: '',
-  periode: ''
+  periode: '',
+  shops: []
 });
 
 const cabangStore = useCabangStore();
@@ -289,12 +317,77 @@ const emitViewResults = () => {
 
 // Handler untuk perubahan cabang
 const handleCabChange = () => {
+  formData.shops = [];
+  storeOptions.value = [];
+  
+  // Clear selected stores metadata
+  selectedStoresMetadata.value = [];
+
+  // Kita tidak lagi memanggil fetchStores() secara otomatis saat ganti cabang
+  // Toko akan di-load saat user mengetik di pencarian MultiSelect
+
   // Pastikan periode sudah ada sebelum emit event
   if (formData.periode) {
     // Berikan sedikit delay untuk memastikan komponen sudah terupdate
     setTimeout(() => {
       emitViewResults();
     }, 50);
+  }
+};
+
+const selectedStoresMetadata = ref([]);
+
+const fetchStores = async (search = '') => {
+  if (!formData.cab || formData.cab === 'All') return;
+
+  try {
+    loadingStores.value = true;
+    const response = await StoreService.getStoresByBranch(formData.cab, { 
+      limit: 20, 
+      onlyInduk: true,
+      search: search.trim()
+    });
+    
+    const stores = response.data?.stores || [];
+    const newOptions = stores.map(s => ({
+      kdtk: s.storeCode,
+      label: `${s.storeCode} - ${s.storeName}`
+    }));
+
+    // Simpan metadata toko yang baru ditemukan ke dalam cache lokal jika terpilih
+    // Agar label tidak hilang saat list berubah
+    
+    // Gabungkan dengan toko yang sedang terpilih agar label tetap muncul
+    const currentSelected = storeOptions.value.filter(opt => formData.shops.includes(opt.kdtk));
+    
+    // Gunakan Map untuk unikisasi berdasarkan kdtk
+    const uniqueOptionsMap = new Map();
+    [...currentSelected, ...newOptions].forEach(opt => {
+      uniqueOptionsMap.set(opt.kdtk, opt);
+    });
+
+    storeOptions.value = Array.from(uniqueOptionsMap.values());
+  } catch (error) {
+    console.error('Error fetching stores:', error);
+    toast.showError('Error', 'Gagal memuat data toko');
+  } finally {
+    loadingStores.value = false;
+  }
+};
+
+let filterTimeout = null;
+const onStoreFilter = (event) => {
+  const query = event.value;
+  
+  if (filterTimeout) clearTimeout(filterTimeout);
+  
+  if (query && query.length >= 2) {
+    filterTimeout = setTimeout(() => {
+      fetchStores(query);
+    }, 500);
+  } else if (!query) {
+    // Jika input dihapus, biarkan saja list yang ada atau kosongkan
+    // storeOptions.value = []; 
   }
 };
 
@@ -305,15 +398,22 @@ const emit = defineEmits(['view-results']);
 const startReconciliation = async () => {
   if (!validateForm()) return;
   
+  const isSingleStore = formData.shops && formData.shops.length === 1;
+  
   try {
-    isReconciling.value = true;
+    if (isSingleStore) {
+      isSingleLoading.value = true;
+    } else {
+      isReconciling.value = true;
+    }
     
     toast.showInfo('Info', 'Memulai proses rekonsiliasi...', 2000);
     
     // Call API to start reconciliation
     const response = await rekonVirtualMrgService.startReconciliation({
       cab: formData.cab,
-      periode: formData.periode
+      periode: formData.periode,
+      shops: formData.shops
     });
     
     toast.showSuccess('Sukses', 'Proses rekonsiliasi selesai');
@@ -325,6 +425,7 @@ const startReconciliation = async () => {
     toast.showError('Error', errorMessage);
   } finally {
     isReconciling.value = false;
+    isSingleLoading.value = false;
   }
 };
 </script>

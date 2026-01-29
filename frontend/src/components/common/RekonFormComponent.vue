@@ -72,6 +72,11 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Additional Fields Row -->
+                <div class="form-row-additional" v-if="$slots['additional-fields']" style="margin-top: 1.5rem; border-top: 1px solid rgba(226, 232, 240, 0.6); padding-top: 1.5rem;">
+                    <slot name="additional-fields"></slot>
+                </div>
             </form>
 
             <!-- Status Indicator -->
@@ -330,6 +335,7 @@ export default {
     line-height: 1.3;
     background: linear-gradient(135deg, #1e293b, #475569);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
     transition: all 0.4s ease;
 }
@@ -908,6 +914,7 @@ export default {
     .form-title {
         background: linear-gradient(135deg, #f1f5f9, #cbd5e1);
         -webkit-background-clip: text;
+        background-clip: text;
         -webkit-text-fill-color: transparent;
     }
 

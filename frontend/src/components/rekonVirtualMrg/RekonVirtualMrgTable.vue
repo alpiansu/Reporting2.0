@@ -79,7 +79,7 @@
         Last Catch
         <i v-if="sortColumn === 'LASTCATCH'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
-      <th class="sticky-col sticky-notes" :style="stickyNotesStyle">Notes</th>
+      <th class="sticky-col sticky-notes">Notes</th>
       <th class="sticky-col sticky-actions" v-if="isAdmin">Actions</th>
     </template>
 
@@ -102,7 +102,7 @@
           class="adjust-checkbox" />
       </td>
       <td class="text-center">{{ formatDateTime(item.LASTCATCH) }}</td>
-      <td class="text-center note-cell sticky-col sticky-notes" :style="stickyNotesStyle">
+      <td class="text-center note-cell sticky-col sticky-notes">
         <div class="note-display" v-if="!item.editingNote" @click="startEditingNote(item)">
           <div class="note-category" v-if="item.note && item.note.category"
             :class="getCategoryClass(item.note.category.name)">
@@ -168,12 +168,6 @@ const user = computed(() => authStore.user);
 
 const isAdmin = computed(() => {
   return user.value?.role === 'admin' || user.value?.role === 'superadmin';
-});
-
-const stickyNotesStyle = computed(() => {
-  return {
-    right: isAdmin.value ? '150px' : '0px'
-  };
 });
 
 const props = defineProps({

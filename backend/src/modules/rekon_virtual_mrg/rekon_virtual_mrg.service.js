@@ -209,6 +209,7 @@ class RekonVirtualService {
       ]);
     };
 
+    let skipProgress = true;
     try {
       // === STEP 1: Branches ===
       let branches = [];
@@ -230,8 +231,8 @@ class RekonVirtualService {
 
             // tambahkan info cabang ke tiap store
             return stores.map(s => ({ ...s, cab }));
-          })
-        )
+          }),
+        ),
       );
 
       let storesToProcess = storeGroups.flat();
@@ -239,15 +240,17 @@ class RekonVirtualService {
       // === NEW: Filter by specific shops if provided ===
       if (options.shops && options.shops.length > 0) {
         storesToProcess = storesToProcess.filter(s => {
-            const code = (s.storeCode || s.kdtk || "").toUpperCase();
-            return options.shops.some(target => target.toUpperCase() === code);
+          const code = (s.storeCode || s.kdtk || "").toUpperCase();
+          return options.shops.some(target => target.toUpperCase() === code);
         });
-        logger.info(`[rekon_virtual_mrg.service] Filtered to ${storesToProcess.length} specific stores: ${options.shops.join(", ")}`);
+        logger.info(
+          `[rekon_virtual_mrg.service] Filtered to ${storesToProcess.length} specific stores: ${options.shops.join(", ")}`,
+        );
       }
 
       logger.info(`[rekon_virtual_mrg.service] Total stores to process: ${storesToProcess.length}`);
 
-      const skipProgress = storesToProcess.length <= 1;
+      skipProgress = storesToProcess.length <= 1;
 
       // Register progress task if not skipping
       if (!skipProgress) {
@@ -314,8 +317,8 @@ class RekonVirtualService {
               // --- Store info --- //
               const storeInfo = await withTimeout(
                 storeService.getStoreIPHost(storeCode),
-                10000, 
-                `get store info ${storeCode}`
+                10000,
+                `get store info ${storeCode}`,
               );
 
               if (!storeInfo) {
@@ -323,7 +326,7 @@ class RekonVirtualService {
                   cab,
                   storeCode,
                   "rekon_virtual_mrg",
-                  `[${storeCode}] store info not found`
+                  `[${storeCode}] store info not found`,
                 );
                 await incrementProgress(storeCode, "Store info not found ❌");
                 return;
@@ -332,8 +335,8 @@ class RekonVirtualService {
               // --- Create DB connection --- //
               const storeConnection = await withTimeout(
                 dbStore.createDbStore(storeInfo.dbHost, config.connectionRetry.maxRetries),
-                10000, 
-                `connect ${storeCode}`
+                10000,
+                `connect ${storeCode}`,
               );
 
               if (!storeConnection) {
@@ -341,7 +344,7 @@ class RekonVirtualService {
                   cab,
                   storeCode,
                   "rekon_virtual_mrg",
-                  `[${storeCode}] failed to connect after ${config.connectionRetry.maxRetries} attempts`
+                  `[${storeCode}] failed to connect after ${config.connectionRetry.maxRetries} attempts`,
                 );
                 await incrementProgress(storeCode, "DB connection failed ❌");
                 return;
@@ -355,10 +358,8 @@ class RekonVirtualService {
                   cab,
                   storeCode,
                   "rekon_virtual_mrg",
-                  `[${storeCode}] query completed, got ${result.length} records`
+                  `[${storeCode}] query completed, got ${result.length} records`,
                 );
-
-                await this.deleteStorePeriod(cab, storeCode, strYear, strMonth);
 
                 if (result.length > 0) {
                   await SaldoVirtual.bulkCreate(result, {
@@ -366,6 +367,8 @@ class RekonVirtualService {
                   });
 
                   newRecords.push(...result);
+                } else {
+                  await this.deleteStorePeriod(cab, storeCode, strYear, strMonth);
                 }
 
                 await incrementProgress(storeCode, `Success ✅ (${result.length} rows)`);
@@ -377,17 +380,17 @@ class RekonVirtualService {
                 cab,
                 storeCode,
                 "rekon_virtual_mrg",
-                `[${storeCode}] ERROR: ${err.message}`
+                `[${storeCode}] ERROR: ${err.message}`,
               );
 
               await incrementProgress(storeCode, "Error ❌");
             }
-          })
-        )
+          }),
+        ),
       );
 
       logger.info(`[rekon_virtual_mrg.service] Screening process completed for periode ${options.periode}`);
-      
+
       //update status to progress service if not skipping
       if (!skipProgress) {
         await progressService.updateProgress(taskId, processedCount, {
@@ -450,7 +453,7 @@ class RekonVirtualService {
 
       // cari record lama dari memory
       const oldRecords = this.virtualData.filter(
-        item => item.CABANG === cabang && item.SHOP === shop && moment(item.TANGGAL).format("YYYY-MM") === ym
+        item => item.CABANG === cabang && item.SHOP === shop && moment(item.TANGGAL).format("YYYY-MM") === ym,
       );
 
       if (oldRecords.length === 0) {
@@ -474,14 +477,14 @@ class RekonVirtualService {
 
       // hapus dari memory
       this.virtualData = this.virtualData.filter(
-        item => !(item.CABANG === cabang && item.SHOP === shop && moment(item.TANGGAL).format("YYYY-MM") === ym)
+        item => !(item.CABANG === cabang && item.SHOP === shop && moment(item.TANGGAL).format("YYYY-MM") === ym),
       );
 
       // simpan ulang file JSON
       await this.saveToFile();
 
       logger.info(
-        `[rekon_virtual_mrg.service - deleteStorePeriod] Deleted ${oldRecords.length} records for SHOP=${shop} periode=${ym}`
+        `[rekon_virtual_mrg.service - deleteStorePeriod] Deleted ${oldRecords.length} records for SHOP=${shop} periode=${ym}`,
       );
 
       return oldRecords.length;
@@ -846,7 +849,7 @@ class RekonVirtualService {
       const categories = categoryResult.data || [];
 
       logger.info(
-        `[rekon_virtual_mrg.service] Notes & Categories loaded: ${notes.length} notes, ${categories.length} categories`
+        `[rekon_virtual_mrg.service] Notes & Categories loaded: ${notes.length} notes, ${categories.length} categories`,
       );
 
       // buat lookup map untuk kategori agar cepat

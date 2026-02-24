@@ -70,6 +70,9 @@ class SyncService {
         }
       }
 
+      // Run deduplication to be safe
+      await storeService.deduplicateStores();
+
       logger.info(`Synchronization completed: ${updated} records updated, ${created} records created`);
 
       return {

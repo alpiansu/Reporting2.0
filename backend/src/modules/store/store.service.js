@@ -190,6 +190,7 @@ class StoreService {
     try {
       await this.ensureInitialized();
 
+      // Return the first INDUK store found for this code
       return this.stores.find(s => s.storeCode === storeCode && s.notes === "INDUK") || null;
     } catch (error) {
       logger.error(`Failed to get store by code: ${error.message}`);
@@ -578,14 +579,22 @@ class StoreService {
     try {
       await this.ensureInitialized();
 
-      const { storeCode, station } = storeData;
+      const { storeCode, station, notes } = storeData;
 
       if (!storeCode || !station) {
         throw new Error("Store code and station are required");
       }
 
-      // Find existing store by code and station
-      const existingStore = await this.getStoreByCodeAndStation(storeCode, station);
+      const isInduk = notes === "INDUK";
+      let existingStore = null;
+
+      if (isInduk) {
+        // For INDUK, we only allow ONE per storeCode regardless of station name
+        existingStore = await this.getStoreByCode(storeCode);
+      } else {
+        // For STB or others, check by both code and station
+        existingStore = await this.getStoreByCodeAndStation(storeCode, station);
+      }
 
       if (existingStore) {
         // Update existing store
@@ -596,6 +605,60 @@ class StoreService {
       }
     } catch (error) {
       logger.error(`Failed to upsert store: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Remove duplicate entries from stores.json
+   * Keeps the most recently updated entry for each storeCode + notes combination
+   * @returns {Object} Cleanup results
+   */
+  async deduplicateStores() {
+    try {
+      await this.ensureInitialized();
+      const initialCount = this.stores.length;
+
+      // Group by storeCode and notes
+      const uniqueMap = new Map();
+      const duplicatesToRemove = [];
+
+      // Sort by updatedAt descending to keep the latest one easily
+      const sortedStores = [...this.stores].sort((a, b) => {
+        const dateA = new Date(a.updatedAt || a.updtime || 0);
+        const dateB = new Date(b.updatedAt || b.updtime || 0);
+        return dateB - dateA;
+      });
+
+      const cleanedStores = [];
+      const seen = new Set();
+
+      for (const store of sortedStores) {
+        const key = `${store.storeCode}_${store.notes}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          cleanedStores.push(store);
+        } else {
+          duplicatesToRemove.push(store);
+        }
+      }
+
+      // Restore original internal ID sorting if preferred, or keep as is
+      this.stores = cleanedStores.sort((a, b) => a.id - b.id);
+
+      await this.saveToFile();
+
+      const removedCount = initialCount - this.stores.length;
+      logger.info(`Deduplication completed: Removed ${removedCount} duplicate stores.`);
+
+      return {
+        success: true,
+        initialCount,
+        currentCount: this.stores.length,
+        removedCount
+      };
+    } catch (error) {
+      logger.error(`Failed to deduplicate stores: ${error.message}`);
       throw error;
     }
   }

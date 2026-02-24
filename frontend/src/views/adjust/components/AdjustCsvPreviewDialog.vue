@@ -60,7 +60,10 @@
                 </label>
               </div>
             </div>
-            <DataTable :value="previewRows" :scrollable="true" scrollHeight="300px" stripedRows class="preview-table">
+            <DataTable :value="previewRows" :scrollable="true" scrollHeight="300px" stripedRows class="preview-table"
+              :paginator="true" :rows="10" :rowsPerPageOptions="[10, 20, 50, 100]"
+              paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
+              currentPageReportTemplate="Showing {first} to {last} of {totalRecords} entries">
               <Column field="KDTK" header="KDTK" />
               <Column field="PRDCD" header="PRDCD" />
               <Column field="QTY_ADJ" header="QTY_ADJ" />
@@ -121,7 +124,7 @@ const blankCounts = computed(() => {
   return counts;
 });
 
-const previewRows = computed(() => props.rows.slice(0, 100));
+const previewRows = computed(() => props.rows);
 
 const handleCancel = () => emit('cancel');
 const handleConfirm = () => emit('confirm');

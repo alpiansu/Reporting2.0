@@ -1,0 +1,47 @@
+### Rekon Persediaan (HPP Reconciliation) Module Test Scenarios
+# This file can be used with the REST Client extension for VS Code.
+
+@baseUrl = http://localhost:3000/api
+@authToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NzQsInVzZXJuYW1lIjoiMjAxMjAyNTYzMSIsInJvbGUiOiJ1c2VyIiwiaWF0IjoxNzcwODYzNDAyLCJleHAiOjE3NzA5NDk4MDJ9.JKe7I9qu1k0wL7D5sq_X716Y2Z_8S08QgEoCW9cPVfw
+
+### 1. Authentication
+# Log in to get the JWT token for subsequent requests.
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+    "username": "2012025631",
+    "password": "123456"
+}
+
+### 2. Start Screening Process
+# Start the reconciliation process for a specific branch and period.
+# @name startScreening
+GET {{baseUrl}}/rekon-persediaan/screening?cabang=G033&periode=2602
+Authorization: Bearer {{authToken}}
+
+### 3. Start Screening - Use Default Cabang ("All")
+# Request without 'cabang' parameter should default to "All".
+GET {{baseUrl}}/rekon-persediaan/screening?periode=2412
+Authorization: Bearer {{authToken}}
+
+### 4. Start Screening - Error Case (Missing Periode)
+# This request should return a 400 Bad Request error.
+GET {{baseUrl}}/rekon-persediaan/screening?cabang=G001
+Authorization: Bearer {{authToken}}
+
+### 5. Get Summary
+# Fetch reconciliation summary statistics.
+GET {{baseUrl}}/rekon-persediaan/summary?cabang=G001&periode=2412
+Authorization: Bearer {{authToken}}
+
+### 6. Get All Records (Paginated)
+# Fetch reconciliation records with various filters and sorting.
+GET {{baseUrl}}/rekon-persediaan/records?page=1&limit=10&cabang=G001&periode=2412&sortColumn=KDTK&sortOrder=ASC
+Authorization: Bearer {{authToken}}
+
+### 7. Get All Records - With Search Query
+# Search for specific records (e.g., specific item code or store).
+GET {{baseUrl}}/rekon-persediaan/records?page=1&limit=10&searchQuery=A001
+Authorization: Bearer {{authToken}}

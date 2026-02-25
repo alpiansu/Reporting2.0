@@ -23,6 +23,8 @@ import notesModule from "./notes/index.js";
 import penyesuaianModule from "./penyesuaian/index.js";
 import rekonSalesModule from "./rekon_sales/index.js";
 import cetakBpbModule from "./cetak_bpb/index.js";
+import rekonPersediaanModule from "./rekon_persediaan/index.js";
+import dashboardModule from "./dashboard/index.js";
 
 export default {
   // Export all modules
@@ -46,6 +48,8 @@ export default {
   penyesuaianModule,
   rekonSalesModule,
   cetakBpbModule,
+  rekonPersediaanModule,
+  dashboardModule,
 
   // Initialize all modules
   initialize: app => {
@@ -69,6 +73,8 @@ export default {
     const penyesuaian = penyesuaianModule.initialize(app);
     const rekonSales = rekonSalesModule.initialize(app);
     const cetakBpb = cetakBpbModule.initialize(app);
+    const rekonPersediaan = rekonPersediaanModule.initialize(app);
+    const dashboard = dashboardModule.initialize(app);
 
     // Initialize menu manager module
     app.use("/api/menu-manager", menuManagerModule.routes);
@@ -93,6 +99,8 @@ export default {
       penyesuaian,
       rekonSales,
       cetakBpb,
+      rekonPersediaan,
+      dashboard,
       menuManager: true,
     };
   },

@@ -14,6 +14,7 @@ import RekapRemoteService from "../rekap_remote/rekap_remote.service.js";
 import notesService from "../notes/notes.service.js";
 import progressService from "../progress/progress.service.js";
 import { isNumericString, toNumber, formatNumber } from "../../utils/numberUtils.js";
+import { fileUtils } from "../../utils/index.js";
 
 // Path untuk file JSON penyesuaian
 const PENYESUAIAN_JSON_PATH = path.join(process.cwd(), "data/penyesuaian.json");
@@ -43,7 +44,7 @@ class PenyesuaianService {
       await fs.mkdir(dir, { recursive: true });
 
       try {
-        const data = await fs.readFile(PENYESUAIAN_JSON_PATH, "utf8");
+        const data = await fileUtils.readFileWithRetry(PENYESUAIAN_JSON_PATH);
         this.penyesuaianData = JSON.parse(data);
         logger.info(`Loaded ${this.penyesuaianData.length} penyesuaian records from JSON`);
       } catch (err) {
@@ -65,7 +66,7 @@ class PenyesuaianService {
    */
   async saveToFile() {
     try {
-      await fs.writeFile(PENYESUAIAN_JSON_PATH, JSON.stringify(this.penyesuaianData, null, 2));
+      await fileUtils.writeAtomicWithRetry(PENYESUAIAN_JSON_PATH, JSON.stringify(this.penyesuaianData, null, 2));
       logger.debug(`Saved ${this.penyesuaianData.length} penyesuaian records to JSON file`);
     } catch (error) {
       logger.error(`Failed to save penyesuaian to file: ${error.message}`);
@@ -711,28 +712,50 @@ class PenyesuaianService {
           return 0;
         }
 
-        query = `
-          UPDATE sesuai_toko 
-          SET RECID = '1' 
-          WHERE PERIODE = :periode 
-            AND CABANG = :cabang
-            AND RECID = '*'
-            AND KDTK IN (:screenedStores)
-        `;
-        replacements.cabang = cabang;
-        replacements.screenedStores = screenedStores;
+        // BATCHING: Split screenedStores into chunks to avoid "lock table size exceeded"
+        const BATCH_SIZE = 500;
+        let totalUpdated = 0;
 
-        // Exclude active stores (that still have issues)
-        if (activeStores && activeStores.length > 0) {
-          query += ` AND KDTK NOT IN (:activeStores)`;
-          replacements.activeStores = activeStores;
+        for (let i = 0; i < screenedStores.length; i += BATCH_SIZE) {
+          const chunk = screenedStores.slice(i, i + BATCH_SIZE);
+
+          let batchQuery = `
+            UPDATE sesuai_toko 
+            SET RECID = '1' 
+            WHERE PERIODE = :periode 
+              AND CABANG = :cabang
+              AND RECID = '*'
+              AND KDTK IN (:chunk)
+          `;
+
+          let batchReplacements = {
+            periode,
+            cabang,
+            chunk
+          };
+
+          // Exclude active stores from current chunk if applicable
+          if (activeStores && activeStores.length > 0) {
+            batchQuery += ` AND KDTK NOT IN (:activeStores)`;
+            batchReplacements.activeStores = activeStores;
+          }
+
+          const [results, metadata] = await sequelize.query(batchQuery, {
+            replacements: batchReplacements,
+            type: Sequelize.QueryTypes.UPDATE,
+          });
+
+          totalUpdated += metadata;
+          logger.debug(`[penyesuaian.service] Level 2: Updated batch ${Math.floor(i/BATCH_SIZE) + 1} (${metadata} records)`);
         }
 
         logger.info(
-          `[penyesuaian.service] Level 2: Updating RECID='1' for cabang ${cabang}, screened: ${
+          `[penyesuaian.service] Level 2: Total updated RECID='1' for cabang ${cabang}: ${totalUpdated}, screened: ${
             screenedStores.length
           }, active: ${activeStores?.length || 0}`
         );
+
+        return totalUpdated;
       }
       // LEVEL 1: All Branches
       else if (level === 1) {
@@ -741,37 +764,51 @@ class PenyesuaianService {
           return 0;
         }
 
-        query = `
-          UPDATE sesuai_toko 
-          SET RECID = '1' 
-          WHERE PERIODE = :periode 
-            AND RECID = '*'
-            AND KDTK IN (:screenedStores)
-        `;
-        replacements.screenedStores = screenedStores;
+        // BATCHING: Split screenedStores into chunks to avoid "lock table size exceeded"
+        const BATCH_SIZE = 500;
+        let totalUpdated = 0;
 
-        // Exclude active stores (that still have issues)
-        if (activeStores && activeStores.length > 0) {
-          query += ` AND KDTK NOT IN (:activeStores)`;
-          replacements.activeStores = activeStores;
+        for (let i = 0; i < screenedStores.length; i += BATCH_SIZE) {
+          const chunk = screenedStores.slice(i, i + BATCH_SIZE);
+          
+          let batchQuery = `
+            UPDATE sesuai_toko 
+            SET RECID = '1' 
+            WHERE PERIODE = :periode 
+              AND RECID = '*'
+              AND KDTK IN (:chunk)
+          `;
+          
+          let batchReplacements = { 
+            periode, 
+            chunk 
+          };
+
+          // Exclude active stores from current chunk if applicable
+          if (activeStores && activeStores.length > 0) {
+            batchQuery += ` AND KDTK NOT IN (:activeStores)`;
+            batchReplacements.activeStores = activeStores;
+          }
+
+          const [results, metadata] = await sequelize.query(batchQuery, {
+            replacements: batchReplacements,
+            type: Sequelize.QueryTypes.UPDATE,
+          });
+
+          totalUpdated += metadata;
+          logger.debug(`[penyesuaian.service] Level 1: Updated batch ${Math.floor(i/BATCH_SIZE) + 1} (${metadata} records)`);
         }
 
         logger.info(
-          `[penyesuaian.service] Level 1: Updating RECID='1' for all cabang, screened: ${
+          `[penyesuaian.service] Level 1: Total updated RECID='1' for all cabang: ${totalUpdated}, screened: ${
             screenedStores.length
           }, active: ${activeStores?.length || 0}`
         );
+        
+        return totalUpdated;
       }
 
-      // Execute query
-      const [results, metadata] = await sequelize.query(query, {
-        replacements,
-        type: Sequelize.QueryTypes.UPDATE,
-      });
-
-      logger.info(`[penyesuaian.service] Updated ${metadata} records to RECID='1'`);
-
-      return metadata;
+      // Default execution for Level 3 or original logic if no batching was applied (shouldn't reach here for Level 1)
     } catch (error) {
       logger.error(`[penyesuaian.service] Error updating resolved records: ${error.message}`);
       throw error;

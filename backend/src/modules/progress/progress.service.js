@@ -2,10 +2,12 @@
  * Service layer for managing progress tracking
  */
 import fs from "fs";
+import fsPromises from "fs/promises";
 import EventEmitter from "events";
 import config from "./progress.config.js";
 import path from "path";
 import { Mutex } from "async-mutex";
+import logger from "../../config/logger.js";
 
 class ProgressService extends EventEmitter {
   constructor() {
@@ -49,29 +51,64 @@ class ProgressService extends EventEmitter {
     }
   }
 
-  async _loadProgressData() {
-    try {
-      const data = fs.readFileSync(config.jsonPath, "utf-8");
-      const parsed = JSON.parse(data);
-      
-      // Replace the entire map to ensure consistency with disk
-      const newMap = new Map();
-      Object.entries(parsed).forEach(([taskId, task]) => {
-        newMap.set(taskId, task);
-      });
-      this.progressMap = newMap;
-    } catch (err) {
-      console.error("[ProgressService] Failed to load JSON:", err.message);
-      this.progressMap = new Map();
+  async _loadProgressData(maxRetries = 5) {
+    let lastError;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const data = await fsPromises.readFile(config.jsonPath, "utf-8");
+        const parsed = JSON.parse(data);
+        
+        // Replace the entire map to ensure consistency with disk
+        const newMap = new Map();
+        Object.entries(parsed).forEach(([taskId, task]) => {
+          newMap.set(taskId, task);
+        });
+        this.progressMap = newMap;
+        return;
+      } catch (err) {
+        lastError = err;
+        if (err.code === 'ENOENT') {
+          this.progressMap = new Map();
+          return;
+        }
+
+        if (attempt < maxRetries) {
+          const waitTime = Math.min(100 * Math.pow(2, attempt - 1), 1000);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          console.warn(`[ProgressService] Retry loading JSON (attempt ${attempt + 1}): ${err.message}`);
+        }
+      }
     }
+    console.error("[ProgressService] Failed to load JSON after retries:", lastError.message);
+    this.progressMap = new Map();
   }
 
-  async _saveProgressData() {
-    try {
-      const jsonData = Object.fromEntries(this.progressMap);
-      fs.writeFileSync(config.jsonPath, JSON.stringify(jsonData, null, 2));
-    } catch (error) {
-      console.error("[ProgressService] Failed to save progress data:", error.message);
+  async _saveProgressData(maxRetries = 5) {
+    const tempPath = `${config.jsonPath}.tmp`;
+    const jsonData = Object.fromEntries(this.progressMap);
+    const content = JSON.stringify(jsonData, null, 2);
+    let lastError;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // Atomic write approach
+        await fsPromises.writeFile(tempPath, content, "utf-8");
+        await fsPromises.rename(tempPath, config.jsonPath);
+        return;
+      } catch (error) {
+        lastError = error;
+        const isRetryable = error.code === 'EBUSY' || error.code === 'EPERM' || error.code === 'EEXIST';
+        
+        if (isRetryable && attempt < maxRetries) {
+          const waitTime = Math.min(100 * Math.pow(2, attempt - 1), 1000) + Math.random() * 50;
+          console.warn(`[ProgressService] File busy/locked during save (${error.code}), retrying attempt ${attempt + 1}/${maxRetries} in ${Math.round(waitTime)}ms...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        } else {
+          console.error("[ProgressService] Failed to save progress data:", error.message);
+          // Don't throw here to avoid crashing the whole operation, but log it
+          return;
+        }
+      }
     }
   }
 
@@ -125,85 +162,110 @@ class ProgressService extends EventEmitter {
    * Update progress
    */
   async updateProgress(taskId, completed, info = "") {
-    const task = this.progressMap.get(taskId);
-    if (!task) throw new Error(`Task ${taskId} not found`);
+    const release = await this.mutex.acquire();
+    try {
+      const task = this.progressMap.get(taskId);
+      if (!task) throw new Error(`Task ${taskId} not found`);
 
-    task.completed = Math.min(completed, task.total);
-    task.percentage = Math.round((task.completed / task.total) * 100);
-    task.info = info || task.info;
-    task.updatedAt = new Date().toISOString();
+      task.completed = Math.min(completed, task.total);
+      task.percentage = Math.round((task.completed / task.total) * 100);
+      task.info = info || task.info;
+      task.updatedAt = new Date().toISOString();
 
-    this.progressMap.set(taskId, task);
-    await this._saveProgressData();
+      this.progressMap.set(taskId, task);
+      await this._saveProgressData();
 
-    this.emit("progressUpdate", task);
-    return task;
+      this.emit("progressUpdate", task);
+      return task;
+    } finally {
+      release();
+    }
   }
 
   /**
    * Mark progress as completed
    */
   async completeProgress(taskId) {
-    const task = this.progressMap.get(taskId);
-    if (!task) throw new Error(`Task ${taskId} not found`);
+    const release = await this.mutex.acquire();
+    try {
+      const task = this.progressMap.get(taskId);
+      if (!task) throw new Error(`Task ${taskId} not found`);
 
-    task.completed = task.total;
-    task.percentage = 100;
-    task.status = "completed";
-    task.updatedAt = new Date().toISOString();
+      task.completed = task.total;
+      task.percentage = 100;
+      task.status = "completed";
+      task.updatedAt = new Date().toISOString();
 
-    this.progressMap.set(taskId, task);
-    await this._saveProgressData();
+      this.progressMap.set(taskId, task);
+      await this._saveProgressData();
 
-    this.emit("progressComplete", task);
+      this.emit("progressComplete", task);
 
-    // Auto remove after short delay
-    setTimeout(() => {
-      this.progressMap.delete(taskId);
-      this._saveProgressData();
-      this.emit("progressRemoved", taskId);
-    }, 2000);
+      // Auto remove after short delay - use separate release for the timeout
+      setTimeout(async () => {
+        const subRelease = await this.mutex.acquire();
+        try {
+          this.progressMap.delete(taskId);
+          await this._saveProgressData();
+          this.emit("progressRemoved", taskId);
+        } finally {
+          subRelease();
+        }
+      }, 2000);
 
-    return task;
+      return task;
+    } finally {
+      release();
+    }
   }
 
   /**
    * Fail a progress task
    */
   async failProgress(taskId, errorMessage) {
-    const task = this.progressMap.get(taskId);
-    if (!task) throw new Error(`Task ${taskId} not found`);
+    const release = await this.mutex.acquire();
+    try {
+      const task = this.progressMap.get(taskId);
+      if (!task) throw new Error(`Task ${taskId} not found`);
 
-    task.status = "failed";
-    task.error = errorMessage;
-    task.updatedAt = new Date().toISOString();
+      task.status = "failed";
+      task.error = errorMessage;
+      task.updatedAt = new Date().toISOString();
 
-    this.progressMap.set(taskId, task);
-    await this._saveProgressData();
+      this.progressMap.set(taskId, task);
+      await this._saveProgressData();
 
-    this.emit("progressFailed", task);
-    return task;
+      this.emit("progressFailed", task);
+      return task;
+    } finally {
+      release();
+    }
   }
 
   /**
    * Cleanup old tasks (older than maxAgeHours)
    */
   async cleanupOldTasks(maxAgeHours) {
-    const now = Date.now();
-    const threshold = maxAgeHours * 60 * 60 * 1000;
-    let removed = 0;
+    const release = await this.mutex.acquire();
+    try {
+      const now = Date.now();
+      const threshold = maxAgeHours * 60 * 60 * 1000;
+      let removed = 0;
 
-    for (const [id, task] of this.progressMap.entries()) {
-      const updated = new Date(task.updatedAt).getTime();
-      if (now - updated > threshold) {
-        this.progressMap.delete(id);
-        removed++;
+      for (const [id, task] of this.progressMap.entries()) {
+        const updated = new Date(task.updatedAt).getTime();
+        if (now - updated > threshold) {
+          this.progressMap.delete(id);
+          removed++;
+        }
       }
-    }
 
-    if (removed > 0) {
-      await this._saveProgressData();
-      console.log(`[ProgressService] Cleaned up ${removed} old tasks`);
+      if (removed > 0) {
+        await this._saveProgressData();
+        console.log(`[ProgressService] Cleaned up ${removed} old tasks`);
+      }
+    } finally {
+      release();
     }
   }
 

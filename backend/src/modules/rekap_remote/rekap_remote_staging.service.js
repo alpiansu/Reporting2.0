@@ -7,6 +7,7 @@ import path from "path";
 import logger from "../../config/logger.js";
 import RekapRemote from "../../models/rekap_remote.model.js";
 import moment from "moment-timezone";
+import { fileUtils } from "../../utils/index.js";
 
 // Path untuk file JSON rekap_remote
 const REKAP_REMOTE_JSON_PATH = path.join(process.cwd(), "data/rekap_remote.json");
@@ -34,7 +35,7 @@ class RekapRemoteStagingService {
 
       try {
         // Try to read the file
-        const data = await fs.readFile(REKAP_REMOTE_JSON_PATH, "utf8");
+        const data = await fileUtils.readFileWithRetry(REKAP_REMOTE_JSON_PATH);
         this.rekapData = JSON.parse(data);
         logger.info(`Loaded ${this.rekapData.length} rekap_remote records from JSON file`);
       } catch (error) {
@@ -72,7 +73,7 @@ class RekapRemoteStagingService {
    */
   async saveToFile() {
     try {
-      await fs.writeFile(REKAP_REMOTE_JSON_PATH, JSON.stringify(this.rekapData, null, 2));
+      await fileUtils.writeAtomicWithRetry(REKAP_REMOTE_JSON_PATH, JSON.stringify(this.rekapData, null, 2));
       logger.debug(`Saved ${this.rekapData.length} rekap_remote records to JSON file`);
     } catch (error) {
       logger.error(`Failed to save rekap_remote to file: ${error.message}`);

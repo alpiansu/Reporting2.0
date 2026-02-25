@@ -16,6 +16,7 @@ import { Mutex } from "async-mutex";
 import rekapRemoteStagingService from "./rekap_remote_staging.service.js";
 import { Op } from "sequelize";
 import resilientDb from "../../config/resilient-database.js";
+import { fileUtils } from "../../utils/index.js";
 
 class RekapRemoteService {
   constructor() {
@@ -29,34 +30,33 @@ class RekapRemoteService {
    * @param {number} maxRetries - Maximum number of retries
    * @returns {Promise<Object>} Parsed logs object
    */
-  async _readLogsWithRetry(maxRetries = 3) {
-    let lastError;
+  async _readLogsWithRetry() {
+    try {
+      const data = await fileUtils.readFileWithRetry(this.tempFilePath);
+      const parsedData = JSON.parse(data);
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const data = await fs.readFile(this.tempFilePath, "utf8");
-        const parsedData = JSON.parse(data);
-
-        // Validasi bahwa data adalah object
-        if (parsedData && typeof parsedData === "object" && !Array.isArray(parsedData)) {
-          return parsedData;
-        } else {
-          logger.warn(`Invalid JSON structure in temp file (attempt ${attempt})`);
-          return {};
-        }
-      } catch (error) {
-        lastError = error;
-        if (attempt < maxRetries) {
-          // Wait sebentar sebelum retry
-          await new Promise(resolve => setTimeout(resolve, 50 * attempt));
-          logger.debug(`Retry reading temp file (attempt ${attempt + 1}): ${error.message}`);
-        }
+      // Validasi bahwa data adalah object
+      if (parsedData && typeof parsedData === "object" && !Array.isArray(parsedData)) {
+        return parsedData;
+      } else {
+        logger.warn(`Invalid JSON structure in temp file`);
+        return {};
       }
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        return {};
+      }
+      logger.debug(`Failed to read temp file: ${error.message}`);
+      return {};
     }
+  }
 
-    // Jika semua attempt gagal
-    logger.debug(`Failed to read temp file after ${maxRetries} attempts: ${lastError.message}`);
-    return {};
+  /**
+   * Helper function untuk menulis file secara atomic dengan retry mechanism
+   * @param {Object} data - Data yang akan ditulis
+   */
+  async _writeAtomicWithRetry(data) {
+    await fileUtils.writeAtomicWithRetry(this.tempFilePath, JSON.stringify(data, null, 2));
   }
 
   /**
@@ -147,10 +147,8 @@ class RekapRemoteService {
         logger.debug(`Added rekap log: ${cab}-${kdtk} - ${moduleName} - ${status}`);
       }
 
-      // Save back to file dengan atomic write
-      const tempWritePath = `${this.tempFilePath}.tmp`;
-      await fs.writeFile(tempWritePath, JSON.stringify(logs, null, 2), "utf8");
-      await fs.rename(tempWritePath, this.tempFilePath);
+      // Save back to file dengan atomic write retry
+      await this._writeAtomicWithRetry(logs);
     } catch (error) {
       logger.error(`Error adding to temp file: ${error.message}`);
       throw error;

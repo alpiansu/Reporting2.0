@@ -96,4 +96,23 @@ export const clearLogs = async (req, res) => {
   }
 };
 
+export const syncAll = async (req, res) => {
+  try {
+    const result = await rekapRemoteStagingService.syncAllFromDatabase();
+
+    res.status(200).json({
+      success: true,
+      message: "Full synchronization completed successfully",
+      data: result,
+    });
+  } catch (error) {
+    logger.error(`Error in syncAll: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error during synchronization",
+      error: error.message,
+    });
+  }
+};
+
 // Removed default export - using named exports only

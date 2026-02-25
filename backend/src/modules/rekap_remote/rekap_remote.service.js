@@ -191,6 +191,9 @@ class RekapRemoteService {
 
       logger.info(`Saving ${logsToSave.length} rekap logs to database [REKAP REMOTE]`);
 
+      // Identify unique modules for sync
+      const updatedModules = [...new Set(logsToSave.map(log => log.module_name))];
+
       // Process in batches to avoid overwhelming the database
       const BATCH_SIZE = 100;
       let savedCount = 0;
@@ -219,7 +222,7 @@ class RekapRemoteService {
             // Use bulkCreate with updateOnDuplicate for upsert behavior
             const result = await Promise.race([
               RekapRemote.bulkCreate(batch, {
-                updateOnDuplicate: ["status", "updtime"],
+                updateOnDuplicate: ["status", "updtime", "message"], // Added message to update
                 validate: true,
               }),
               new Promise((_, reject) =>
@@ -273,13 +276,17 @@ class RekapRemoteService {
         }
       }
 
-      // Sync to JSON file after database operation
-      try {
-        await rekapRemoteStagingService.syncToJsonFile();
-        logger.info("Synced rekap data to JSON file [REKAP REMOTE]");
-      } catch (syncError) {
-        logger.error(`Error syncing to JSON file: ${syncError.message} [REKAP REMOTE]`);
-        errors.push(`JSON sync error: ${syncError.message}`);
+      // Sync detected modules to JSON files after database operation
+      if (updatedModules.length > 0) {
+        logger.info(`Syncing ${updatedModules.length} modules to JSON files: ${updatedModules.join(", ")} [REKAP REMOTE]`);
+        for (const moduleName of updatedModules) {
+          try {
+            await rekapRemoteStagingService.syncToJsonFile(moduleName);
+          } catch (syncError) {
+            logger.error(`Error syncing module ${moduleName} to JSON file: ${syncError.message} [REKAP REMOTE]`);
+            errors.push(`JSON sync error for ${moduleName}: ${syncError.message}`);
+          }
+        }
       }
 
       // Clean up temporary files after save attempt (without mutex since we're already in mutex)
@@ -302,7 +309,7 @@ class RekapRemoteService {
         errors: errors,
         message:
           errors.length === 0
-            ? `Successfully saved ${savedCount} rekap logs, synced to JSON, and cleaned up temp files [REKAP REMOTE]`
+            ? `Successfully saved ${savedCount} rekap logs, synced ${updatedModules.length} modules to JSON, and cleaned up temp files [REKAP REMOTE]`
             : `Saved ${savedCount} logs with ${errors.length} batch errors [REKAP REMOTE]`,
       };
 

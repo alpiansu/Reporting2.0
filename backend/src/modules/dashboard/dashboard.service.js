@@ -27,17 +27,22 @@ class DashboardService {
       
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-      const twentyFourHoursAgo = now.getTime() - (24 * 60 * 60 * 1000);
+
+      // Count unique INDUK stores by storeCode
+      const uniqueStoreCodes = new Set(
+        stores.filter(s => s.notes === "INDUK").map(s => s.storeCode)
+      );
+      const totalStores = uniqueStoreCodes.size;
 
       const syncedToday = stores.filter(s => {
         const upd = new Date(s.updtime || s.updatedAt).getTime();
-        return upd >= today;
+        return upd >= today && s.notes === "INDUK";
       }).length;
 
-      const needsAttention = stores.length - syncedToday;
+      const needsAttention = totalStores - syncedToday;
 
       return {
-        totalStores: stores.length,
+        totalStores,
         totalPenyesuaian: penyesuaian.length,
         totalRekonSales: rekonSales.length,
         syncedToday,

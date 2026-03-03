@@ -30,7 +30,7 @@ app.use(PrimeVue, {
   theme: {
     preset: Lara,
     options: {
-      colorScheme: 'light'
+      darkModeSelector: 'system'
     }
   }
 })

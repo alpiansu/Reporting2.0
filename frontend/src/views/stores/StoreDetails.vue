@@ -136,13 +136,14 @@ const formatDate = (dateString) => {
 }
 
 .dialog-content-modern {
-  background: white;
+  background: var(--surface-color);
   border-radius: 16px;
   width: 100%;
   max-width: 500px;
   max-height: 90vh;
   overflow: hidden;
   box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-color);
 }
 
 .dialog-header-modern {
@@ -150,8 +151,8 @@ const formatDate = (dateString) => {
   align-items: center;
   justify-content: space-between;
   padding: 1.5rem;
-  border-bottom: 1px solid #f1f5f9;
-  background: #fafbfc;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--background-color);
 }
 
 .dialog-title-section {
@@ -175,7 +176,7 @@ const formatDate = (dateString) => {
 .dialog-title {
   font-size: 1.25rem;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--text-color);
   margin: 0;
 }
 
@@ -185,10 +186,10 @@ const formatDate = (dateString) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f1f5f9;
+  background: var(--background-color);
   border: none;
   border-radius: 8px;
-  color: #64748b;
+  color: var(--text-color-secondary);
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -221,13 +222,13 @@ const formatDate = (dateString) => {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #64748b;
+  color: var(--text-color-secondary);
 }
 
 .detail-value {
   font-size: 1rem;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--text-color);
 }
 
 .detail-value-badge {
@@ -236,7 +237,7 @@ const formatDate = (dateString) => {
   font-size: 1rem;
   font-weight: 700;
   color: var(--primary-color, #0ea5e9);
-  background: #f0f9ff;
+  background: rgba(14, 165, 233, 0.1);
   padding: 0.25rem 0.75rem;
   border-radius: 6px;
   border: 1px solid rgba(14, 165, 233, 0.2);
@@ -248,11 +249,11 @@ const formatDate = (dateString) => {
   gap: 0.75rem;
   font-size: 1.125rem;
   font-weight: 700;
-  color: #1e293b;
-  background: #f8fafc;
+  color: var(--text-color);
+  background: var(--background-color);
   padding: 1rem;
   border-radius: 10px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
 }
 
 .detail-value-host i {
@@ -264,9 +265,9 @@ const formatDate = (dateString) => {
   flex-direction: column;
   gap: 0.5rem;
   padding: 1rem;
-  background: #fafbfc;
+  background: var(--background-color);
   border-radius: 10px;
-  border: 1px dashed #e2e8f0;
+  border: 1px dashed var(--border-color);
 }
 
 .timestamp-item {
@@ -280,7 +281,7 @@ const formatDate = (dateString) => {
 }
 
 .timestamp-value {
-  color: #374151;
+  color: var(--text-color);
   font-weight: 500;
 }
 

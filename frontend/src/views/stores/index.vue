@@ -619,7 +619,7 @@ const handlePageChange = async (page) => {
 /* Modern Store List Styles */
 .store-list-modern {
   padding: 2rem;
-  background: #f8fafc;
+  background: var(--background-color);
   min-height: calc(100vh - 60px);
 }
 
@@ -657,14 +657,14 @@ const handlePageChange = async (page) => {
 .header-title-content h1 {
   font-size: 2rem;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--text-color);
   margin: 0 0 0.5rem 0;
   line-height: 1.1;
 }
 
 .header-title-content p {
   font-size: 1rem;
-  color: #64748b;
+  color: var(--text-color-secondary);
   margin: 0;
   line-height: 1.5;
 }
@@ -697,12 +697,12 @@ const handlePageChange = async (page) => {
 
 /* Controls Section */
 .controls-section {
-  background: white;
+  background: var(--surface-color);
   border-radius: 12px;
   padding: 1.5rem;
   margin-bottom: 2rem;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
 }
 
 .search-controls {
@@ -722,17 +722,18 @@ const handlePageChange = async (page) => {
   left: 1rem;
   top: 50%;
   transform: translateY(-50%);
-  color: #64748b;
+  color: var(--text-color-secondary);
   font-size: 1.125rem;
 }
 
 .search-input {
   width: 100%;
   padding: 0.875rem 1rem 0.875rem 3rem;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   font-size: 1rem;
-  background: white;
+  background: var(--surface-color);
+  color: var(--text-color);
   transition: all 0.2s ease;
 }
 
@@ -747,12 +748,12 @@ const handlePageChange = async (page) => {
   right: 0.75rem;
   top: 50%;
   transform: translateY(-50%);
-  background: #f1f5f9;
+  background: var(--background-color);
   border: none;
   width: 28px;
   height: 28px;
   border-radius: 6px;
-  color: #64748b;
+  color: var(--text-color-secondary);
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -770,8 +771,9 @@ const handlePageChange = async (page) => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: white;
-  border: 1px solid #d1d5db;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
   padding: 0.875rem 1rem;
   border-radius: 10px;
   font-size: 1rem;
@@ -798,11 +800,12 @@ const handlePageChange = async (page) => {
   top: calc(100% + 0.5rem);
   right: 0;
   width: 320px;
-  background: white;
-  border: 1px solid #e2e8f0;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
+  z-index: 100;
+  overflow: hidden;
 }
 
 .filter-content {
@@ -816,7 +819,7 @@ const handlePageChange = async (page) => {
 .filter-title-modern {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #374151;
+  color: var(--text-color);
   margin: 0 0 0.75rem 0;
   text-transform: uppercase;
   letter-spacing: 0.025em;
@@ -945,6 +948,13 @@ const handlePageChange = async (page) => {
   margin: 0 0 0.5rem 0;
 }
 
+.store-name {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-color);
+  margin: 0 0 0.25rem 0;
+}
+
 .loading-text {
   color: #64748b;
   margin: 0;
@@ -959,12 +969,13 @@ const handlePageChange = async (page) => {
 }
 
 .store-card-modern {
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
   overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
-  transition: all 0.3s ease;
+  position: relative;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
@@ -1050,12 +1061,12 @@ const handlePageChange = async (page) => {
 
 .detail-icon {
   width: 16px;
-  color: #64748b;
+  color: var(--text-color-secondary);
   flex-shrink: 0;
 }
 
 .detail-text {
-  color: #374151;
+  color: var(--text-color);
   font-size: 0.875rem;
   line-height: 1.4;
   overflow: hidden;
@@ -1064,11 +1075,12 @@ const handlePageChange = async (page) => {
 }
 
 .store-footer {
+  padding: 1.25rem 1.5rem;
+  background: var(--background-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.5rem 1.5rem;
-  background: #fafbfc;
+  border-top: 1px solid var(--border-color);
 }
 
 .update-info {
@@ -1078,7 +1090,7 @@ const handlePageChange = async (page) => {
 }
 
 .update-icon {
-  color: #64748b;
+  color: var(--text-color-secondary);
   font-size: 0.875rem;
 }
 
@@ -1098,8 +1110,9 @@ const handlePageChange = async (page) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #e2e8f0;
-  background: white;
+  border: 1px solid var(--border-color);
+  background: var(--surface-color);
+  color: var(--text-color);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -1117,9 +1130,9 @@ const handlePageChange = async (page) => {
   justify-content: center;
   align-items: center;
   padding: 4rem 2rem;
-  background: white;
+  background: var(--surface-color);
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
 }
 
 .empty-content {
@@ -1136,12 +1149,12 @@ const handlePageChange = async (page) => {
 .empty-title {
   font-size: 1.5rem;
   font-weight: 600;
-  color: #374151;
+  color: var(--text-color);
   margin: 0 0 0.75rem 0;
 }
 
 .empty-text {
-  color: #64748b;
+  color: var(--text-color-secondary);
   margin: 0 0 2rem 0;
   line-height: 1.5;
 }
@@ -1152,9 +1165,9 @@ const handlePageChange = async (page) => {
   align-items: center;
   justify-content: space-between;
   padding: 1.5rem;
-  background: white;
+  background: var(--surface-color);
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
   margin-bottom: 2rem;
 }
 
@@ -1175,9 +1188,9 @@ const handlePageChange = async (page) => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
-  border: 1px solid #d1d5db;
-  background: white;
-  color: #374151;
+  border: 1px solid var(--border-color);
+  background: var(--background-color);
+  color: var(--text-color);
   border-radius: 8px;
   font-size: 0.875rem;
   font-weight: 500;
@@ -1194,7 +1207,8 @@ const handlePageChange = async (page) => {
 .pagination-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  background: #f3f4f6;
+  background: var(--background-color);
+  border-color: var(--border-color);
 }
 
 .page-info {
@@ -1219,13 +1233,14 @@ const handlePageChange = async (page) => {
 }
 
 .dialog-content-modern {
-  background: white;
+  background: var(--surface-color);
   border-radius: 16px;
   width: 100%;
   max-width: 500px;
   max-height: 90vh;
   overflow: hidden;
   box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-color);
 }
 
 .dialog-header-modern {
@@ -1233,8 +1248,8 @@ const handlePageChange = async (page) => {
   align-items: center;
   justify-content: space-between;
   padding: 1.5rem;
-  border-bottom: 1px solid #f1f5f9;
-  background: #fafbfc;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--background-color);
 }
 
 .dialog-title-section {
@@ -1258,7 +1273,7 @@ const handlePageChange = async (page) => {
 .dialog-title {
   font-size: 1.25rem;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--text-color);
   margin: 0;
 }
 

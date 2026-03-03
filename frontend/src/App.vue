@@ -52,6 +52,131 @@ onMounted(() => {
   --warning-color: #f59e0b;
   --info-color: #3b82f6;
   --success-color: #10b981;
+  
+  /* Global UI Variables */
+  --card-bg: var(--surface-color);
+  --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --input-bg: var(--surface-color);
+  --input-border: var(--border-color);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background-color: #0f172a;
+    --surface-color: #1e293b;
+    --text-color: #f1f5f9;
+    --text-color-secondary: #94a3b8;
+    --border-color: #334155;
+    
+    /* Overrides for common classes */
+    --card-bg: #1e293b;
+    --input-bg: #0f172a;
+  }
+}
+
+/* Global Dark Mode Helper Overrides */
+@media (prefers-color-scheme: dark) {
+  .card, 
+  [class*="card"],
+  .rekon-persediaan-table-container,
+  .controls-section {
+    background-color: var(--surface-color) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-color) !important;
+  }
+
+  .page-header h1,
+  .page-title,
+  .header-title-content h1,
+  .stat-value,
+  .dialog-title {
+    color: var(--text-color) !important;
+  }
+
+  .page-header p,
+  .stat-label,
+  .detail-label,
+  .update-text {
+    color: var(--text-color-secondary) !important;
+  }
+
+  input, select, textarea, .form-input, .p-inputtext {
+    background-color: var(--background-color) !important;
+    color: var(--text-color) !important;
+    border-color: var(--border-color) !important;
+  }
+
+  /* Specific fix for transparency/glassmorphism patterns */
+  [style*="background: rgba(255, 255, 255"],
+  [style*="background-color: rgba(255, 255, 255"] {
+    background-color: rgba(30, 41, 59, 0.7) !important;
+    backdrop-filter: blur(10px);
+  }
+
+  /* Specific Layout Overrides */
+  .app-bar, .dropdown, .user-dropdown, .notifications-dropdown {
+    background-color: var(--surface-color) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-color) !important;
+  }
+
+  .username, .dropdown-item span, .dropdown-header span {
+    color: var(--text-color) !important;
+  }
+
+  .menu-button:hover, 
+  .notification-button:hover, 
+  .user-menu:hover,
+  .dropdown-item:hover {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    color: var(--primary-color) !important;
+  }
+
+  .dropdown-divider {
+    background-color: var(--border-color) !important;
+  }
+
+  /* Force sidebar to match dark theme if needed */
+  .sidebar {
+    background-color: #0f172a !important; /* Slightly darker than surface */
+    border-right: 1px solid var(--border-color) !important;
+  }
+
+  /* PrimeVue specific global fixes */
+  .p-dialog, .p-confirm-dialog, .p-toast, .dialog-content {
+    background-color: var(--surface-color) !important;
+    color: var(--text-color) !important;
+    border-color: var(--border-color) !important;
+  }
+
+  /* Profile & Specialized Card Patterns */
+  .profile-card, .security-card, .activity-card, .detail-item, .activity-item, .two-factor-toggle, .backup-codes {
+    background-color: var(--surface-color) !important;
+    color: var(--text-color) !important;
+    border-color: var(--border-color) !important;
+  }
+
+  .profile-details {
+    background-color: var(--background-color) !important;
+  }
+
+  .profile-avatar {
+    border-color: var(--surface-color) !important;
+  }
+
+  .dialog-header, .profile-header, .card-title {
+    border-bottom: 1px solid var(--border-color) !important;
+  }
+
+  .setup-button, .upload-button, .remove-button, .cancel-button, .download-codes-button, .code-item {
+    background-color: var(--surface-color) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-color) !important;
+  }
+
+  .slider {
+    background-color: #334155 !important;
+  }
 }
 
 html, body {

@@ -97,6 +97,8 @@ class StoreService {
       // Filter stores based on search criteria
       let filteredStores = [...this.stores];
 
+      filteredStores = filteredStores.filter(store => store.notes === "INDUK");
+
       if (search) {
         const searchLower = search.toLowerCase();
         filteredStores = filteredStores.filter(
@@ -168,7 +170,8 @@ class StoreService {
     try {
       await this.ensureInitialized();
 
-      const store = this.stores.find(s => s.id === id);
+      const numericId = Number(id);
+      const store = this.stores.find(s => Number(s.id) === numericId);
 
       if (!store) {
         throw new Error("Store not found");
@@ -495,7 +498,14 @@ class StoreService {
     try {
       await this.ensureInitialized();
 
-      const index = this.stores.findIndex(s => s.id === id);
+      // Normalize id ke number untuk memastikan tipe data konsisten
+      const numericId = Number(id);
+
+      if (isNaN(numericId)) {
+        throw new Error("Invalid store ID");
+      }
+
+      const index = this.stores.findIndex(s => Number(s.id) === numericId);
 
       if (index === -1) {
         throw new Error("Store not found");
@@ -547,7 +557,8 @@ class StoreService {
     try {
       await this.ensureInitialized();
 
-      const index = this.stores.findIndex(s => s.id === id);
+      const numericId = Number(id);
+      const index = this.stores.findIndex(s => Number(s.id) === numericId);
 
       if (index === -1) {
         throw new Error("Store not found");

@@ -90,9 +90,9 @@ export const createStore = async (req, res, next) => {
   try {
     const storeData = req.body;
     
-    // Validate required fields
-    if (!storeData.storeCode || !storeData.storeName || !storeData.dbHost || !storeData.dbUser || !storeData.dbPassword || !storeData.dbName) {
-      return res.status(400).json({ message: 'Missing required store information' });
+    // Validate required fields - only essential ones
+    if (!storeData.storeCode || !storeData.storeName || !storeData.dbHost) {
+      return res.status(400).json({ message: 'Missing required store information (storeCode, storeName, dbHost)' });
     }
     
     const store = await storeService.createStore(storeData);

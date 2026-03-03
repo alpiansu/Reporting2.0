@@ -19,14 +19,14 @@ router.get("/branch/:branchCode", authenticateJWT, getStoresByBranch);
 // Get store by ID
 router.get("/:id", authenticateJWT, getStoreById);
 
-// Create a new store (Admin/Manager only)
-router.post("/", authenticateJWT, authorizeRole(["admin", "manager"]), createStore);
+// Create a new store (Superadmin only)
+router.post("/", authenticateJWT, authorizeRole("superadmin"), createStore);
 
-// Update store data (Admin/Manager only)
-router.put("/:id", authenticateJWT, authorizeRole(["admin", "manager"]), updateStore);
+// Update store data (Admin/Superadmin)
+router.put("/:id", authenticateJWT, authorizeRole(["admin", "superadmin"]), updateStore);
 
-// Delete a store (Admin only)
-router.delete("/:id", authenticateJWT, authorizeRole("admin"), deleteStore);
+// Delete a store (Superadmin only)
+router.delete("/:id", authenticateJWT, authorizeRole("superadmin"), deleteStore);
 
 // Test connection to a store database
 router.post("/test-connection", authenticateJWT, testConnection);

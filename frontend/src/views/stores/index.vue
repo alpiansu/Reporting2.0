@@ -10,7 +10,7 @@
             <p class="page-description-modern">Manage store data and branch information</p>
           </div>
         </div>
-        <div class="header-actions-modern">
+        <div class="header-actions-modern" v-if="isSuperAdmin">
           <button class="action-button-primary" @click="openAddStoreDialog">
             <i class="pi pi-plus"></i>
             <span>Add Store</span>
@@ -98,31 +98,31 @@
       <!-- Store Grid -->
       <div v-else-if="!loading && filteredStores.length > 0" class="store-grid-modern">
         <div v-for="store in filteredStores" :key="store.id" class="store-card-modern"
-          @click="navigateToStoreDetails(store.id)">
+          @click="viewStoreDetail(store)">
           <div class="store-card-header">
             <div class="store-identity">
               <h3 class="store-name">{{ store.storeName }}</h3>
-              <span class="store-code">{{ store.storeCode }}</span>
+              <span class="store-code">{{ store.storeCode }} - {{ store.station }}</span>
             </div>
             <div class="store-status">
-              <span class="status-badge" :class="getStatusClass('Active')">
-                {{ store.dbHost }}
+              <span class="status-badge" :class="getStatusClass(store.notes === 'INDUK' ? 'Active' : 'Pending')">
+                {{ store.notes }}
               </span>
             </div>
           </div>
 
           <div class="store-details">
+            <div class="detail-item">
+              <i class="pi pi-server detail-icon"></i>
+              <span class="detail-text">{{ store.dbHost }}</span>
+            </div>
+            <div class="detail-item">
+              <i class="pi pi-sitemap detail-icon"></i>
+              <span class="detail-text">Branch: {{ store.branch }}</span>
+            </div>
             <div class="detail-item" v-if="store.address">
               <i class="pi pi-map-marker detail-icon"></i>
               <span class="detail-text">{{ store.address }}</span>
-            </div>
-            <div class="detail-item" v-if="store.region">
-              <i class="pi pi-globe detail-icon"></i>
-              <span class="detail-text">{{ store.region }}</span>
-            </div>
-            <div class="detail-item" v-if="store.phone">
-              <i class="pi pi-phone detail-icon"></i>
-              <span class="detail-text">{{ store.phone }}</span>
             </div>
           </div>
 
@@ -131,8 +131,14 @@
               <i class="pi pi-clock update-icon"></i>
               <span class="update-text">Updated {{ formatDate(store.updatedAt) }}</span>
             </div>
-            <div class="store-actions">
-              <button class="action-btn view-btn">
+            <div class="store-actions" @click.stop>
+              <button v-if="canEdit" class="action-btn edit-btn" title="Edit Store" @click="openEditStoreDialog(store)">
+                <i class="pi pi-pencil"></i>
+              </button>
+              <button v-if="isSuperAdmin" class="action-btn delete-btn" title="Delete Store" @click="confirmDelete(store)">
+                <i class="pi pi-trash"></i>
+              </button>
+              <button class="action-btn view-btn" title="View Details" @click="viewStoreDetail(store)">
                 <i class="pi pi-arrow-right"></i>
               </button>
             </div>
@@ -148,7 +154,7 @@
           <p class="empty-text">
             {{ searchQuery ? 'Try adjusting your search terms or filters' : 'Get started by adding your first store' }}
           </p>
-          <button class="action-button-primary" @click="openAddStoreDialog">
+          <button v-if="isSuperAdmin" class="action-button-primary" @click="openAddStoreDialog">
             <i class="pi pi-plus"></i>
             <span>Add Store</span>
           </button>
@@ -186,8 +192,8 @@
       <div class="dialog-content-modern" @click.stop>
         <div class="dialog-header-modern">
           <div class="dialog-title-section">
-            <i class="pi pi-plus dialog-icon"></i>
-            <h2 class="dialog-title">Add New Store</h2>
+            <i class="pi dialog-icon" :class="isEditing ? 'pi-pencil' : 'pi-plus'"></i>
+            <h2 class="dialog-title">{{ isEditing ? 'Edit Store' : 'Add New Store' }}</h2>
           </div>
           <button class="dialog-close-btn" @click="closeAddStoreDialog">
             <i class="pi pi-times"></i>
@@ -195,42 +201,61 @@
         </div>
 
         <div class="dialog-body-modern">
-          <form @submit.prevent="handleAddStore" class="store-form-modern">
+          <form @submit.prevent="handleSubmit" class="store-form-modern">
             <div class="form-grid">
               <div class="form-group-modern">
-                <label for="storeName" class="form-label">Store Name</label>
-                <input id="storeName" v-model="newStore.storeName" type="text" placeholder="Enter store name" required
+                <label for="storeCode" class="form-label">Store Code</label>
+                <input id="storeCode" v-model="formStore.storeCode" type="text" placeholder="e.g. F001" required
                   class="form-input" />
               </div>
 
               <div class="form-group-modern">
-                <label for="storeRegion" class="form-label">Region</label>
-                <select id="storeRegion" v-model="newStore.region" required class="form-select">
-                  <option value="" disabled>Select a region</option>
-                  <option v-for="region in regions" :key="region.id" :value="region.id">{{ region.name }}</option>
+                <label for="station" class="form-label">Station</label>
+                <input id="station" v-model="formStore.station" type="text" placeholder="e.g. 01 or STB" required
+                  class="form-input" />
+              </div>
+
+              <div class="form-group-modern full-width">
+                <label for="storeName" class="form-label">Store Name</label>
+                <input id="storeName" v-model="formStore.storeName" type="text" placeholder="Enter store name" required
+                  class="form-input" />
+              </div>
+
+              <div class="form-group-modern">
+                <label for="branch" class="form-label">Branch Code</label>
+                <input id="branch" v-model="formStore.branch" type="text" placeholder="e.g. G001" required
+                  class="form-input" />
+              </div>
+
+              <div class="form-group-modern">
+                <label for="dbHost" class="form-label">DB Host IP</label>
+                <input id="dbHost" v-model="formStore.dbHost" type="text" placeholder="e.g. 10.x.x.x" required
+                  class="form-input" />
+              </div>
+
+              <div class="form-group-modern full-width">
+                <label for="notes" class="form-label">Store Type / Notes</label>
+                <select id="notes" v-model="formStore.notes" required class="form-select">
+                  <option value="INDUK">INDUK (Main Server)</option>
+                  <option value="STB">STB (Standby Server)</option>
+                  <option value="OTHER">OTHER</option>
                 </select>
               </div>
 
               <div class="form-group-modern full-width">
-                <label for="storeAddress" class="form-label">Address</label>
-                <input id="storeAddress" v-model="newStore.address" type="text" placeholder="Enter store address"
-                  required class="form-input" />
-              </div>
-
-              <div class="form-group-modern">
-                <label for="storePhone" class="form-label">Phone Number</label>
-                <input id="storePhone" v-model="newStore.phone" type="tel" placeholder="Enter phone number" required
+                <label for="storeAddress" class="form-label">Address (Optional)</label>
+                <input id="storeAddress" v-model="formStore.address" type="text" placeholder="Enter store address"
                   class="form-input" />
               </div>
             </div>
 
             <div class="form-actions-modern">
-              <button type="button" class="btn-secondary" @click="closeAddStoreDialog">Cancel</button>
-              <button type="submit" class="btn-primary" :disabled="addStoreLoading">
-                <span v-if="!addStoreLoading">Add Store</span>
+              <button type="button" class="btn-secondary" @click="closeStoreDialog">Cancel</button>
+              <button type="submit" class="btn-primary" :disabled="formLoading">
+                <span v-if="!formLoading">{{ isEditing ? 'Update Store' : 'Add Store' }}</span>
                 <div v-else class="loading-spinner">
                   <i class="pi pi-spin pi-spinner"></i>
-                  <span>Adding...</span>
+                  <span>{{ isEditing ? 'Updating...' : 'Adding...' }}</span>
                 </div>
               </button>
             </div>
@@ -238,18 +263,63 @@
         </div>
       </div>
     </div>
+
+    <!-- Delete Confirmation Dialog -->
+    <div v-if="showDeleteDialog" class="dialog-overlay-modern" @click="closeDeleteDialog">
+      <div class="dialog-content-modern sm" @click.stop>
+        <div class="dialog-header-modern danger">
+          <div class="dialog-title-section">
+            <i class="pi pi-exclamation-triangle dialog-icon danger"></i>
+            <h2 class="dialog-title">Delete Store</h2>
+          </div>
+          <button class="dialog-close-btn" @click="closeDeleteDialog">
+            <i class="pi pi-times"></i>
+          </button>
+        </div>
+        <div class="dialog-body-modern text-center">
+          <p class="delete-msg">Are you sure you want to delete <strong>{{ storeToDelete?.storeName }}</strong>?</p>
+          <p class="delete-sub-msg">This action cannot be undone and will remove all associated store record.</p>
+          
+          <div class="form-actions-modern mt-6">
+            <button class="btn-secondary" @click="closeDeleteDialog" :disabled="formLoading">Cancel</button>
+            <button class="btn-danger" @click="handleDeleteStore" :disabled="formLoading">
+              <span v-if="!formLoading">Delete Store</span>
+              <div v-else class="loading-spinner">
+                <i class="pi pi-spin pi-spinner"></i>
+                <span>Deleting...</span>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Store Detail Dialog Component -->
+    <StoreDetails 
+      :is-open="showDetailDialog" 
+      :store="selectedStore" 
+      @close="closeDetailDialog" 
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { useStoreStore } from '../../stores';
+import { useStoreStore, useAuthStore } from '../../stores';
 import { useToastService } from '../../utils/toast';
+import StoreDetails from './StoreDetails.vue';
 
 const router = useRouter();
 const storeStore = useStoreStore();
+const authStore = useAuthStore();
 const toast = useToastService();
+
+// Role Computeds
+const userRole = computed(() => authStore.user?.role || 'user');
+const isSuperAdmin = computed(() => userRole.value === 'superadmin');
+const isAdmin = computed(() => userRole.value === 'admin');
+const canEdit = computed(() => isSuperAdmin.value || isAdmin.value);
 
 // State
 const searchQuery = ref('');
@@ -258,12 +328,22 @@ const selectedRegions = ref([]);
 const selectedCities = ref([]);
 const selectedStatuses = ref([]);
 const showAddStoreDialog = ref(false);
-const addStoreLoading = ref(false);
-const newStore = ref({
+const showDeleteDialog = ref(false);
+const showDetailDialog = ref(false);
+const formLoading = ref(false);
+const isEditing = ref(false);
+const storeToDelete = ref(null);
+const selectedStore = ref(null);
+
+const formStore = ref({
+  id: null,
+  storeCode: '',
   storeName: '',
-  address: '',
-  region: '',
-  phone: ''
+  branch: '',
+  station: '01',
+  dbHost: '',
+  notes: 'INDUK',
+  address: ''
 });
 
 // Get data from store
@@ -413,53 +493,96 @@ const formatDate = (dateString) => {
   return new Date(dateString).toLocaleString(undefined, options);
 };
 
-const navigateToStoreDetails = (storeId) => {
-  router.push(`/stores/${storeId}`);
+const viewStoreDetail = (store) => {
+  selectedStore.value = store;
+  showDetailDialog.value = true;
+};
+
+const closeDetailDialog = () => {
+  showDetailDialog.value = false;
+  selectedStore.value = null;
 };
 
 const openAddStoreDialog = () => {
+  isEditing.value = false;
+  formStore.value = {
+    id: null,
+    storeCode: '',
+    storeName: '',
+    branch: '',
+    station: '01',
+    dbHost: '',
+    notes: 'INDUK',
+    address: ''
+  };
   showAddStoreDialog.value = true;
 };
 
-const closeAddStoreDialog = () => {
-  showAddStoreDialog.value = false;
-  // Reset form
-  newStore.value = {
-    storeName: '',
-    address: '',
-    region: '',
-    phone: ''
+const openEditStoreDialog = (store) => {
+  isEditing.value = true;
+  formStore.value = {
+    id: store.id,
+    storeCode: store.storeCode,
+    storeName: store.storeName,
+    branch: store.branch,
+    station: store.station,
+    dbHost: store.dbHost,
+    notes: store.notes || 'INDUK',
+    address: store.address || ''
   };
+  showAddStoreDialog.value = true;
 };
 
-const handleAddStore = async () => {
-  addStoreLoading.value = true;
+const closeStoreDialog = () => {
+  showAddStoreDialog.value = false;
+};
+
+const confirmDelete = (store) => {
+  storeToDelete.value = store;
+  showDeleteDialog.value = true;
+};
+
+const closeDeleteDialog = () => {
+  showDeleteDialog.value = false;
+  storeToDelete.value = null;
+};
+
+const handleSubmit = async () => {
+  formLoading.value = true;
   
   try {
-    // Create store data object
-    const storeData = {
-      storeCode: `ST${Date.now().toString().slice(-6)}`, // Generate a unique store code
-      storeName: newStore.value.storeName,
-      address: newStore.value.address,
-      region: newStore.value.region,
-      phone: newStore.value.phone,
-      isActive: true,
-      notes: 'INDUK' // Set as main store
-    };
+    const storeData = { ...formStore.value };
     
-    // Call the store service to create the store
-    await storeStore.createStore(storeData);
+    if (isEditing.value) {
+      await storeStore.updateStore(storeData.id, storeData);
+      toast.showSuccess('Success', 'Store updated successfully');
+    } else {
+      await storeStore.createStore(storeData);
+      toast.showSuccess('Success', 'Store created successfully');
+    }
     
-    // Show success message using toast service
-    toast.showSuccess('Success', 'Store created successfully');
-    
-    // Close the dialog
-    closeAddStoreDialog();
+    closeStoreDialog();
   } catch (error) {
-    console.error('Error adding store:', error);
-    toast.showError('Error', 'Failed to create store');
+    console.error('Error submitting store:', error);
+    toast.showError('Error', isEditing.value ? 'Failed to update store' : 'Failed to create store');
   } finally {
-    addStoreLoading.value = false;
+    formLoading.value = false;
+  }
+};
+
+const handleDeleteStore = async () => {
+  if (!storeToDelete.value) return;
+  
+  formLoading.value = true;
+  try {
+    await storeStore.deleteStore(storeToDelete.value.id);
+    toast.showSuccess('Success', 'Store deleted successfully');
+    closeDeleteDialog();
+  } catch (error) {
+    console.error('Error deleting store:', error);
+    toast.showError('Error', 'Failed to delete store');
+  } finally {
+    formLoading.value = false;
   }
 };
 
@@ -690,10 +813,6 @@ const handlePageChange = async (page) => {
   margin-bottom: 1.5rem;
 }
 
-.filter-group-modern:last-of-type {
-  margin-bottom: 0;
-}
-
 .filter-title-modern {
   font-size: 0.875rem;
   font-weight: 600;
@@ -908,6 +1027,12 @@ const handlePageChange = async (page) => {
   background: #fee2e2;
   color: #dc2626;
   border: 1px solid #fecaca;
+}
+
+.status-badge.status-pending {
+  background: #fef9c3;
+  color: #854d0e;
+  border: 1px solid #fef08a;
 }
 
 .store-details {
@@ -1153,7 +1278,7 @@ const handlePageChange = async (page) => {
 
 .dialog-close-btn:hover {
   background: #e2e8f0;
-  color: #374151;
+  color: #ef4444;
 }
 
 .dialog-body-modern {
@@ -1256,661 +1381,82 @@ const handlePageChange = async (page) => {
   gap: 0.5rem;
 }
 
-/* Responsive Design */
-@media (max-width: 768px) {
-  .store-list-modern {
-    padding: 1rem;
-  }
-  
-  .header-content-modern {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 1.5rem;
-  }
-  
-  .header-title-section {
-    justify-content: center;
-    text-align: center;
-  }
-  
-  .search-controls {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 1rem;
-  }
-  
-  .search-box-modern {
-    max-width: none;
-  }
-  
-  .store-grid-modern {
-    grid-template-columns: 1fr;
-  }
-  
-  .pagination-modern {
-    flex-direction: column;
-    gap: 1rem;
-    align-items: stretch;
-  }
-  
-  .pagination-controls-modern {
-    justify-content: center;
-  }
-  
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .form-actions-modern {
-    flex-direction: column;
-  }
+/* Delete Specific Styles */
+.dialog-header-modern.danger {
+  background: #fef2f2;
 }
 
-@media (max-width: 576px) {
-  .header-title-content h1 {
-    font-size: 1.75rem;
-  }
-  
-  .controls-section {
-    padding: 1rem;
-  }
-  
-  .filter-panel-modern {
-    width: calc(100vw - 2rem);
-    right: auto;
-    left: 0;
-  }
-  
-  .dialog-content-modern {
-    margin: 0;
-    border-radius: 12px;
-  }
+.delete-msg {
+  font-size: 1.125rem;
+  color: #1e293b;
+  margin-bottom: 0.5rem;
+}
+
+.delete-sub-msg {
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.btn-danger {
+  background: #ef4444;
+  border: 1px solid #ef4444;
+  color: white;
+  padding: 0.875rem 1.5rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-danger:hover {
+  background: #dc2626;
+}
+
+.edit-btn:hover {
+  border-color: #f59e0b;
+  background: #fffbeb;
+  color: #f59e0b;
+}
+
+.delete-btn:hover {
+  border-color: #ef4444;
+  background: #fef2f2;
+  color: #ef4444;
+}
+
+.dialog-content-modern.sm {
+  max-width: 400px;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.mt-6 {
+  margin-top: 1.5rem;
+}
+
+/* Consolidation of legacy styles */
+.store-list {
+  padding: 16px;
 }
 </style>
 
 <style scoped>
-.store-list {
-  padding: 16px;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 2rem;
-  background: linear-gradient(135deg, rgba(79, 70, 229, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%);
-  border-radius: 16px;
-  color: var(--text-color);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  margin-bottom: 2rem;
-  border: 1px solid rgba(79, 70, 229, 0.1);
-}
-
-.header-content h1 {
-  font-size: 2rem;
-  font-weight: 700;
-  margin: 0 0 0.5rem 0;
-  color: var(--primary-color);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-.header-content p {
-  font-size: 1rem;
-  color: var(--text-color-secondary);
-  margin: 0;
-  opacity: 0.9;
-}
-
-.page-title {
-  font-size: 2rem;
-  font-weight: 700;
-  margin: 0;
-  color: var(--primary-color);
-}
-
-.add-button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(255, 255, 255, 0.9);
-  color: var(--primary-color);
-  border: 2px solid rgba(79, 70, 229, 0.2);
-  border-radius: 12px;
-  padding: 12px 20px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 4px 15px rgba(79, 70, 229, 0.1);
-}
-
-.add-button:hover {
-  background: var(--primary-color);
-  color: white;
-  border-color: var(--primary-color);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(79, 70, 229, 0.2);
-}
-
-.search-filter-container {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.search-box {
-  flex: 1;
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.search-box i {
-  position: absolute;
-  left: 12px;
-  color: var(--text-color-secondary);
-}
-
-.search-box input {
-  width: 100%;
-  padding: 10px 40px 10px 36px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  transition: border-color 0.2s;
-}
-
-.search-box input:focus {
-  outline: none;
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.2);
-}
-
-.clear-search {
-  position: absolute;
-  right: 12px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-color-secondary);
-}
-
-.filter-box {
-  position: relative;
-}
-
-.filter-button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background-color: white;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 10px 16px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: border-color 0.2s;
-}
-
-.filter-button:hover {
-  border-color: var(--primary-color);
-}
-
-.filter-menu {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 8px;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  min-width: 240px;
-  z-index: 10;
-}
-
-.filter-group {
-  padding: 16px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-.filter-title {
-  font-size: 0.875rem;
-  font-weight: 600;
-  margin: 0 0 12px 0;
-  color: var(--text-color);
-}
-
-.filter-options {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.filter-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  font-size: 0.875rem;
-}
-
-.filter-actions {
-  display: flex;
-  justify-content: space-between;
-  padding: 16px;
-}
-
-.clear-filters {
-  background: none;
-  border: none;
-  color: var(--text-color-secondary);
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-
-.apply-filters {
-  background-color: var(--primary-color);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 6px 12px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.store-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 20px;
-}
-
-.store-card {
-  background-color: white;
-  border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  border: 1px solid rgba(79, 70, 229, 0.1);
-  overflow: hidden;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.store-card:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
-  border-color: rgba(79, 70, 229, 0.2);
-}
-
-.store-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-.store-name {
-  font-size: 1.125rem;
-  font-weight: 600;
-  margin: 0;
-  color: var(--text-color);
-}
-
-.store-status {
-  display: inline-block;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.status-active {
-  background-color: rgba(40, 167, 69, 0.1);
-  color: #28a745;
-}
-
-.status-inactive {
-  background-color: rgba(108, 117, 125, 0.1);
-  color: #6c757d;
-}
-
-.status-pending {
-  background-color: rgba(255, 193, 7, 0.1);
-  color: #ffc107;
-}
-
-.store-info {
-  padding: 16px;
-}
-
-.info-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.info-item:last-child {
-  margin-bottom: 0;
-}
-
-.info-item i {
-  color: var(--text-color-secondary);
-  margin-top: 3px;
-}
-
-.store-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  background-color: rgba(0, 0, 0, 0.02);
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-.screening-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.screening-label {
-  font-size: 0.75rem;
-  color: var(--text-color-secondary);
-}
-
-.screening-value {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--text-color);
-}
-
-.view-button {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background-color: rgba(var(--primary-color-rgb), 0.1);
-  color: var(--primary-color);
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.view-button:hover {
-  background-color: rgba(var(--primary-color-rgb), 0.2);
-}
-
-.loading-container, .empty-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 64px 0;
-  text-align: center;
-}
-
-.loading-container i, .empty-container i {
-  font-size: 3rem;
-  color: var(--text-color-secondary);
-  margin-bottom: 16px;
-  opacity: 0.5;
-}
-
-.empty-container h2 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin: 0 0 8px 0;
-  color: var(--text-color);
-}
-
-.empty-container p {
-  color: var(--text-color-secondary);
-  margin-bottom: 24px;
-}
-
-.dialog-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-
-.dialog-content {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
-  border-radius: 20px;
-  border: 1px solid rgba(79, 70, 229, 0.1);
-  width: 100%;
-  max-width: 500px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-}
-
-.dialog-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.5rem 2rem;
-  background: rgba(79, 70, 229, 0.05);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(79, 70, 229, 0.1);
-}
-
-.dialog-header h2 {
-  font-size: 1.375rem;
-  font-weight: 600;
-  margin: 0;
-  color: var(--primary-color);
-}
-
-.close-button {
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(79, 70, 229, 0.2);
-  cursor: pointer;
-  color: var(--primary-color);
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s ease;
-}
-
-.close-button:hover {
-  background: var(--primary-color);
-  color: white;
-  transform: scale(1.1);
-}
-
-.dialog-body {
-  padding: 2rem;
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(10px);
-}
-
-.store-form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-/* Pagination styles */
-.pagination-container {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 24px;
-  padding: 16px;
-  background-color: var(--surface-card, #ffffff);
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-
-.pagination-info {
-  font-size: 0.875rem;
-  color: var(--text-color-secondary, #6c757d);
-}
-
-.pagination-controls {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.pagination-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid var(--surface-border, #dee2e6);
-  border-radius: 4px;
-  background-color: var(--surface-card, #ffffff);
-  color: var(--text-color, #495057);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.pagination-button:hover:not(:disabled) {
-  background-color: var(--surface-hover, #f8f9fa);
-  border-color: var(--primary-color-lighter, #a7d8ff);
-}
-
-.pagination-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.pagination-pages {
-  font-size: 0.875rem;
-  color: var(--text-color, #495057);
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
-}
-
-.form-group label {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text-color);
-  margin-bottom: 0.25rem;
-}
-
-.form-group input, .form-group select {
-  padding: 0.875rem 1rem;
-  border: 2px solid rgba(79, 70, 229, 0.1);
-  border-radius: 12px;
-  font-size: 0.9rem;
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(10px);
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-
-.form-group input:focus, .form-group select:focus {
-  outline: none;
-  border-color: var(--primary-color);
-  background: white;
-  box-shadow: 0 4px 20px rgba(79, 70, 229, 0.15);
-  transform: translateY(-1px);
-}
-
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 8px;
-}
-
-.cancel-button {
-  background: rgba(255, 255, 255, 0.9);
-  border: 2px solid rgba(108, 117, 125, 0.2);
-  border-radius: 12px;
-  padding: 0.875rem 1.5rem;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-
-.cancel-button:hover {
-  border-color: #6c757d;
-  background: #6c757d;
-  color: white;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 15px rgba(108, 117, 125, 0.2);
-}
-
-.submit-button {
-  background: var(--primary-color);
-  color: white;
-  border: 2px solid var(--primary-color);
-  border-radius: 12px;
-  padding: 0.875rem 1.5rem;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 120px;
-  box-shadow: 0 4px 15px rgba(79, 70, 229, 0.2);
-}
-
-.submit-button:hover {
-  background: var(--primary-color-darken);
-  border-color: var(--primary-color-darken);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(79, 70, 229, 0.3);
-}
-
-.submit-button:disabled {
-  background: rgba(79, 70, 229, 0.5);
-  border-color: rgba(79, 70, 229, 0.5);
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
-
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .search-filter-container {
     flex-direction: column;
-  }
-  
-  .filter-menu {
-    width: 100%;
-    right: 0;
   }
 }
 
 @media (max-width: 480px) {
   .store-grid {
     grid-template-columns: 1fr;
-  }
-  
-  .dialog-content {
-    width: 90%;
   }
 }
 </style>

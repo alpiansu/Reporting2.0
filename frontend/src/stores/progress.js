@@ -85,10 +85,15 @@ export const useProgressStore = defineStore('progress', {
       if (!taskId) return;
       
       // Determine better title
-      let title = taskData.info?.title || taskData.processType || taskData.module;
+      let title = taskData.title || taskData.info?.title || taskData.module || taskData.processType;
+      
       if (!title && taskId) {
-        if (taskId.includes('rekonVirtualMargin')) title = 'Screening Virtual Margin';
-        else if (taskId.includes('adjustment')) title = 'Adjustment Process';
+        const lowerId = taskId.toLowerCase();
+        if (lowerId.includes('rekonvirtualmargin')) title = 'Screening Virtual Margin';
+        else if (lowerId.includes('adjustment')) title = 'Adjustment Process';
+        else if (lowerId.includes('penyesuaiantask')) title = 'Screening Penyesuaian';
+        else if (lowerId.includes('rekonsalestask')) title = 'Screening Rekon Sales';
+        else if (lowerId.includes('rekonpersediaantask')) title = 'Screening Rekon Persediaan';
         else title = 'System Process';
       }
 

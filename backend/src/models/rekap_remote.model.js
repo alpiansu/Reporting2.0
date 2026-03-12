@@ -161,7 +161,9 @@ class RekapRemoteWrapper extends BaseService {
 
     // Sync to JSON file after database operation
     try {
-      await rekapRemoteStagingService.syncToJsonFile();
+      if (data.module_name) {
+        await rekapRemoteStagingService.syncToJsonFile(data.module_name);
+      }
     } catch (syncError) {
       console.warn("Failed to sync to JSON after create:", syncError.message);
     }
@@ -177,7 +179,11 @@ class RekapRemoteWrapper extends BaseService {
 
     // Sync to JSON file after database operation
     try {
-      await rekapRemoteStagingService.syncToJsonFile();
+      const filters = this.extractFilters(options);
+      const mod = filters.moduleName || data.module_name;
+      if (mod) {
+        await rekapRemoteStagingService.syncToJsonFile(mod);
+      }
     } catch (syncError) {
       console.warn("Failed to sync to JSON after update:", syncError.message);
     }
@@ -193,7 +199,10 @@ class RekapRemoteWrapper extends BaseService {
 
     // Sync to JSON file after database operation
     try {
-      await rekapRemoteStagingService.syncToJsonFile();
+      const filters = this.extractFilters(options);
+      if (filters.moduleName) {
+        await rekapRemoteStagingService.syncToJsonFile(filters.moduleName);
+      }
     } catch (syncError) {
       console.warn("Failed to sync to JSON after destroy:", syncError.message);
     }
@@ -224,7 +233,9 @@ class RekapRemoteWrapper extends BaseService {
 
     // Sync to JSON file after database operation
     try {
-      await rekapRemoteStagingService.syncToJsonFile();
+      if (data.module_name) {
+        await rekapRemoteStagingService.syncToJsonFile(data.module_name);
+      }
     } catch (syncError) {
       console.warn("Failed to sync to JSON after upsert:", syncError.message);
     }
@@ -240,7 +251,8 @@ class RekapRemoteWrapper extends BaseService {
 
     // Sync to JSON file after database operation
     try {
-      await rekapRemoteStagingService.syncToJsonFile();
+      const [instance] = result;
+      await rekapRemoteStagingService.syncToJsonFile(instance.module_name);
     } catch (syncError) {
       console.warn("Failed to sync to JSON after findOrCreate:", syncError.message);
     }
@@ -256,7 +268,10 @@ class RekapRemoteWrapper extends BaseService {
 
     // Sync to JSON file after database operation
     try {
-      await rekapRemoteStagingService.syncToJsonFile();
+      const affectedModules = [...new Set(data.map(item => item.module_name))].filter(Boolean);
+      for (const mod of affectedModules) {
+        await rekapRemoteStagingService.syncToJsonFile(mod);
+      }
     } catch (syncError) {
       console.warn("Failed to sync to JSON after bulkCreate:", syncError.message);
     }

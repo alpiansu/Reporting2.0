@@ -190,7 +190,7 @@ class RekapRemoteStagingService {
    */
   async syncToJsonFile(moduleName) {
     if (!moduleName) {
-      logger.info("syncToJsonFile called without moduleName, performing full synchronization");
+      logger.info(`[REKAP REMOTE] syncToJsonFile called without specific moduleName, performing full synchronization from database to ensure JSON consistency`);
       return await this.syncAllFromDatabase();
     }
 
@@ -353,7 +353,6 @@ class RekapRemoteStagingService {
   async upsertRecord(data) {
     try {
       const [record, created] = await RekapRemote.upsert(data, { returning: true });
-      await this.syncToJsonFile(data.module_name);
 
       logger.info(`${created ? "Created" : "Updated"} rekap_remote record: ${data.cab}-${data.kdtk}-${data.module_name}`);
       return { record: record.get({ plain: true }), created };

@@ -164,35 +164,45 @@ class RekapRemoteService {
    * @returns {Promise<Object>} Save result
    */
   async saveToDatabase() {
-    // Gunakan mutex dengan timeout untuk mencegah hang
-    const release = await this.fileMutex.acquire();
-    const timeoutId = setTimeout(() => {
-      logger.error("saveToDatabase mutex acquisition timeout after 30 seconds [REKAP REMOTE]");
-      release();
-    }, 30000); // 30 second timeout
+    // Gunakan mutex dengan timeout untuk mencegah hang saat baca/hapus file
+    let logs = {};
+    let logsToSave = [];
+    let updatedModules = [];
+
+    const acquireMutex = async () => {
+      const release = await this.fileMutex.acquire();
+      const timeoutId = setTimeout(() => {
+        logger.error("saveToDatabase mutex acquisition timeout after 30 seconds [REKAP REMOTE]");
+        release();
+      }, 30000); 
+
+      try {
+        logs = await this._readLogsWithRetry();
+        if (Object.keys(logs).length > 0) {
+          logsToSave = Object.values(logs);
+          updatedModules = [...new Set(logsToSave.map(log => log.module_name).filter(m => !!m))];
+          // Hapus file segera setelah data di-load ke memory agar proses lain tidak bentrok
+          await fs.unlink(this.tempFilePath);
+          logger.info("Checked and unlinked rekap_remote temporary files [REKAP REMOTE]");
+        }
+      } catch (error) {
+        if (error.code !== "ENOENT") {
+          logger.error(`Error during rekap file extraction: ${error.message}`);
+        }
+      } finally {
+        clearTimeout(timeoutId);
+        release();
+      }
+    };
+
+    await acquireMutex();
+
+    if (logsToSave.length === 0) {
+      return { success: true, savedCount: 0, message: "No logs to save" };
+    }
 
     try {
-      // Load logs from temp file menggunakan helper function dengan retry
-      const logs = await this._readLogsWithRetry();
-
-      // Jika logs kosong, kemungkinan file tidak ada atau corrupted
-      if (Object.keys(logs).length === 0) {
-        logger.info("No rekap logs to save - temp file empty or not found [REKAP REMOTE]");
-        return { success: true, savedCount: 0, message: "No logs to save" };
-      }
-
-      const logsToSave = Object.values(logs);
-
-      if (logsToSave.length === 0) {
-        logger.info("No rekap logs to save - temp file empty [REKAP REMOTE]");
-        await this.cleanupTempFiles();
-        return { success: true, savedCount: 0, message: "No logs to save" };
-      }
-
       logger.info(`Saving ${logsToSave.length} rekap logs to database [REKAP REMOTE]`);
-
-      // Identify unique modules for sync
-      const updatedModules = [...new Set(logsToSave.map(log => log.module_name))];
 
       // Process in batches to avoid overwhelming the database
       const BATCH_SIZE = 100;
@@ -222,7 +232,7 @@ class RekapRemoteService {
             // Use bulkCreate with updateOnDuplicate for upsert behavior
             const result = await Promise.race([
               RekapRemote.bulkCreate(batch, {
-                updateOnDuplicate: ["status", "updtime", "message"], // Added message to update
+                updateOnDuplicate: ["status", "updtime", "message"],
                 validate: true,
               }),
               new Promise((_, reject) =>
@@ -318,9 +328,6 @@ class RekapRemoteService {
     } catch (error) {
       logger.error(`Error saving rekap logs to database: ${error.message} [REKAP REMOTE]`);
       throw error;
-    } finally {
-      // Selalu release mutex
-      release();
     }
   }
 

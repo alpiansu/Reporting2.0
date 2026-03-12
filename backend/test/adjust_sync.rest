@@ -1,0 +1,16 @@
+# Adjust History Sync Utility
+# Use this to migrate existing history or sync specific months
+
+@baseUrl = http://localhost:3000/api/adjust
+@authToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc3MzMwMTAwOSwiZXhwIjoxNzczMzg3NDA5fQ.LnZbdDF5geAkPFAuivux542TCbq9jkxaRf1zuUwmSxQ
+
+### Synchronize ALL history from Database to Monthly JSON Files
+# This will redistribute all existing records into their respective months
+GET {{baseUrl}}/sync-history
+Authorization: Bearer {{authToken}}
+
+### Synchronize Specific Month
+# Replace YYYYMM with the desired period (e.g., 202403)
+@periode = 202403
+GET {{baseUrl}}/sync-history?periode={{periode}}
+Authorization: Bearer {{authToken}}

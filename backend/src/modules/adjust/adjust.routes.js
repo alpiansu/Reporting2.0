@@ -12,5 +12,6 @@ router.get("/history", authenticateJWT, adjustController.getAdjustHistory);
 router.get("/statistics", authenticateJWT, adjustController.getAdjustStatistics);
 router.get("/history/filters", authenticateJWT, adjustController.getAdjustFilters);
 router.get("/history/export", authenticateJWT, adjustController.exportAdjustHistoryCsv);
+router.get("/sync-history", authenticateJWT, adjustController.syncHistory);
 
 export default router;

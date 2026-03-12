@@ -247,3 +247,29 @@ export const getAdjustStatistics = async (req, res) => {
     return apiResponse.error(res, error.message, 500);
   }
 };
+
+/**
+ * Sync adjustment history from database to JSON files
+ * @param {Request} req
+ * @param {Response} res
+ */
+export const syncHistory = async (req, res) => {
+  try {
+    const { periode } = req.query; // Optional: YYYYMM
+
+    let result;
+    if (periode) {
+      result = await histAdjustStagingService.syncToJson(periode);
+    } else {
+      result = await histAdjustStagingService.syncAllFromDatabase();
+    }
+
+    return apiResponse.success(res, {
+      message: periode ? `Synchronization for ${periode} completed` : "Full synchronization completed",
+      data: result,
+    });
+  } catch (error) {
+    logger.error(`Error syncing adjust history: ${error.message}`);
+    return apiResponse.error(res, error.message, 500);
+  }
+};

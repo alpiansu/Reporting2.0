@@ -3,10 +3,15 @@ export const formatCurrency = (value) => {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n);
 };
 
-export const formatNumber = (value) => {
+export const formatNumber = (value, decimals = 0) => {
   const n = Number(value || 0);
-  return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(n);
+  return new Intl.NumberFormat('id-ID', { 
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals 
+  }).format(n);
 };
+
+export const formatDecimal = (value) => formatNumber(value, 2);
 
 export const formatDateTime = (date) => {
   if (!date) return '-';

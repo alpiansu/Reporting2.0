@@ -11,6 +11,7 @@ import SaldoVirtual from "./saldovirtual.model.js";
 import NotesEdp from "./notes.model.js";
 import NoteCategories from "../modules/note_categories/noteCategories.model.js";
 import Penyesuaian from "../modules/penyesuaian/penyesuaian.model.js";
+import PenyesuaianSummary from "../modules/penyesuaian/penyesuaian_summary.model.js";
 import PrepClosing from "../modules/prep-closing/prep_closing.model.js";
 import DetailRekonSales from "../modules/rekon_sales/models/detail_rekon_sales.model.js";
 import MtranVsCd from "../modules/rekon_sales/models/mtran_vs_cd.model.js";
@@ -22,6 +23,7 @@ import modelRegistry from "./registry.js";
 // Priority: higher numbers are initialized first
 modelRegistry.register("PrepClosing", () => PrepClosing.getModel(), { priority: 15 });
 modelRegistry.register("Penyesuaian", () => Penyesuaian.getModel(), { priority: 14 });
+modelRegistry.register("PenyesuaianSummary", () => PenyesuaianSummary.getModel(), { priority: 13.5 });
 modelRegistry.register("NoteCategories", () => NoteCategories.getModel(), { priority: 13 });
 modelRegistry.register("NotesEdp", () => NotesEdp.getModel(), { priority: 12 });
 modelRegistry.register("SaldoVirtual", () => SaldoVirtual.getModel(), { priority: 11 });
@@ -65,6 +67,7 @@ export default {
   NoteCategories,
   modelRegistry,
   Penyesuaian,
+  PenyesuaianSummary,
   PrepClosing,
   DetailRekonSales,
   MtranVsCd,
@@ -85,6 +88,7 @@ export {
   NoteCategories,
   modelRegistry,
   Penyesuaian,
+  PenyesuaianSummary,
   PrepClosing,
   DetailRekonSales,
   MtranVsCd,

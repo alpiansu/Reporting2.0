@@ -3,6 +3,7 @@ import adjustService from "./adjust.service.js";
 import histAdjustStagingService from "./hist_adjust_staging.service.js";
 import HistAdjust from "../../models/hist_adjust.model.js";
 import { apiResponse } from "../../utils/index.js";
+import dayjs from "dayjs";
 
 /**
  * Upload and process CSV file for item adjustment with progress tracking
@@ -210,7 +211,8 @@ export const exportAdjustHistoryCsv = async (req, res) => {
     }
 
     const csvContent = csvLines.join("\n");
-    const filename = `adjust_history_${month || "all"}.csv`;
+    const timestamp = dayjs().format("YYYYMMDD_HHmmss");
+    const filename = `adjust_history_${month || "all"}_${timestamp}.csv`;
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);

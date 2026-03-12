@@ -40,7 +40,14 @@ export const exportToExcel = (data, columns, filename, sheetName = "Sheet1") => 
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
 
     // Generate filename with timestamp if not provided
-    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, "-");
+    const now = new Date();
+    const datePart = now.getFullYear() + 
+                     String(now.getMonth() + 1).padStart(2, '0') + 
+                     String(now.getDate()).padStart(2, '0');
+    const timePart = String(now.getHours()).padStart(2, '0') + 
+                     String(now.getMinutes()).padStart(2, '0') + 
+                     String(now.getSeconds()).padStart(2, '0');
+    const timestamp = `${datePart}_${timePart}`;
     const fullFilename = filename ? `${filename}_${timestamp}.xlsx` : `export_${timestamp}.xlsx`;
 
     // Write file
@@ -91,5 +98,23 @@ export const exportAdjustmentHistory = (historyRecords, filename = "adjustment_h
     { field: "pic", header: "PIC" },
   ];
 
-  return exportToExcel(historyRecords, columns, filename, "Adjustment History");
+  // Format data for export
+  const formattedRecords = historyRecords.map(record => {
+    let timeVal = record.updtime;
+    if (timeVal) {
+      const d = new Date(timeVal);
+      if (!isNaN(d.getTime())) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const h = String(d.getHours()).padStart(2, '0');
+        const min = String(d.getMinutes()).padStart(2, '0');
+        const s = String(d.getSeconds()).padStart(2, '0');
+        timeVal = `${y}-${m}-${day} ${h}:${min}:${s}`;
+      }
+    }
+    return { ...record, updtime: timeVal };
+  });
+
+  return exportToExcel(formattedRecords, columns, filename, "Adjustment History");
 };

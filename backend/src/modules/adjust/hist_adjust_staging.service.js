@@ -222,10 +222,7 @@ class HistAdjustStagingService {
         total += records.length;
         const mapped = records.map(record => ({
           ...record,
-          updtime:
-            record.updtime instanceof Date
-              ? dayjs(record.updtime).tz("Asia/Jakarta").format("YYYY-MM-DD HH:mm:ss")
-              : record.updtime,
+          updtime: dayjs(record.updtime).tz("Asia/Jakarta").format("YYYY-MM-DD HH:mm:ss"),
         }));
 
         for (const obj of mapped) {
@@ -320,7 +317,13 @@ class HistAdjustStagingService {
       return {
         success: true,
         insertedCount: insertedRecords.length,
-        records: insertedRecords,
+        records: insertedRecords.map(r => {
+          const data = r.get({ plain: true });
+          return {
+            ...data,
+            updtime: dayjs(data.updtime).tz("Asia/Jakarta").format("YYYY-MM-DD HH:mm:ss")
+          };
+        }),
       };
     } catch (error) {
       logger.error(`Error bulk inserting hist_adjust records: ${error.message}`);

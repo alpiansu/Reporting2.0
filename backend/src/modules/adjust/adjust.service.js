@@ -45,6 +45,8 @@ class AdjustService {
       try {
         const timeStart = moment().format("YYYY-MM-DD HH:mm:ss");
         await progressService.startProgress(taskId, selectedStores.length, {
+          module: "adjust",
+          title: "Adjustment Process",
           description: "registering task & file csv adjust being uploaded",
           startedBy: username,
           status: "registering",

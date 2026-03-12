@@ -257,6 +257,8 @@ class RekonVirtualService {
         try {
           const timeStart = moment().format("YYYY-MM-DD HH:mm:ss");
           await progressService.startProgress(taskId, storesToProcess.length, {
+            module: "rekon_virtual_mrg",
+            title: "Screening Virtual Margin",
             description: "registering task",
             startedBy: options.username,
             status: "registering",

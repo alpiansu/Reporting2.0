@@ -5,6 +5,7 @@ import fs from "fs/promises";
 import path from "path";
 import logger from "../../config/logger.js";
 import SesuaiToko from "./penyesuaian.model.js";
+import SesuaiTokoSummary from "./penyesuaian_summary.model.js";
 import dbStore from "../../config/db_store.js";
 import config from "./penyesuaian.config.js";
 import storeService from "../store/storeService.js";
@@ -235,23 +236,9 @@ class PenyesuaianService {
   async syncToJsonFile(periode) {
     if (!periode) throw new Error("Periode is required for sync");
     try {
-      const model = await SesuaiToko.getModel();
-      const sequelize = model.sequelize;
-
-      // Query agregasi langsung ke DB untuk periode tertentu
-      const rows = await sequelize.query(`
-        SELECT 
-          CABANG,
-          KDTK,
-          PERIODE,
-          SUM(SESUAI) AS SESUAI,
-          MAX(UPDTIME) AS UPDTIME
-        FROM sesuai_toko
-        WHERE RECID='*' AND PERIODE = :periode
-        GROUP BY CABANG, KDTK, PERIODE
-      `, {
-        replacements: { periode },
-        type: sequelize.QueryTypes.SELECT
+      // 🛠️ ALUR BARU: Ambil data resume langsung dari tabel summary
+      const rows = await SesuaiTokoSummary.findAll({
+        where: { PERIODE: periode }
       });
 
       this.penyesuaianData = rows.map(r => ({
@@ -260,16 +247,66 @@ class PenyesuaianService {
         PERIODE: r.PERIODE,
         SESUAI: Number(r.SESUAI) || 0,
         UPDTIME: r.UPDTIME,
+        RECID: r.RECID, // Simpan status RECID ke JSON
       }));
 
       await this.saveToFile(periode);
       this.loadedPeriod = periode;
       this.lastLoadTime = Date.now();
 
-      logger.info(`[penyesuaian.service] Synced ${this.penyesuaianData.length} records to JSON for period ${periode}`);
+      logger.info(`[penyesuaian.service] Synced ${this.penyesuaianData.length} records from Summary to JSON for period ${periode}`);
     } catch (error) {
       logger.error(`[penyesuaian.service] Failed to sync data for period ${periode}: ${error.message}`);
       throw error;
+    }
+  }
+
+  /**
+   * 🛠️ Fungsi baru untuk mengupdate tabel summary berdasarkan data detail (Upsert)
+   * Berfungsi sebagai "Single Source of Truth" untuk resume per toko.
+   */
+  async updateSummaryFromRecords(records) {
+    if (!records || records.length === 0) return;
+
+    try {
+      const { CABANG, KDTK, PERIODE } = records[0];
+      
+      // Hitung total SESUAI in-memory
+      const totalSesuai = records.reduce((sum, rec) => sum + (Number(rec.SESUAI) || 0), 0);
+      const maxUpdTime = records.reduce((max, rec) => {
+        const current = new Date(rec.UPDTIME);
+        return current > max ? current : max;
+      }, new Date(0));
+
+      await SesuaiTokoSummary.upsert({
+        CABANG,
+        KDTK,
+        PERIODE,
+        SESUAI: totalSesuai,
+        UPDTIME: maxUpdTime,
+        RECID: '*', // Jika ada records detail, berarti statusnya unresolved
+      });
+
+      logger.debug(`[penyesuaian.service] Summary updated for ${KDTK} (${PERIODE}): SESUAI=${totalSesuai}`);
+    } catch (error) {
+      logger.error(`[penyesuaian.service] Failed to update summary from records: ${error.message}`);
+    }
+  }
+
+  /**
+   * 🛠️ Fungsi baru untuk mengupdate status summary menjadi Resolved ('1')
+   * Aturan: RECID = '1', SESUAI dan UPDTIME tetap dipertahankan sebagai informasi historis.
+   */
+  async markSummaryAsResolved(params) {
+    const { periode, kdtk, cabang } = params;
+    try {
+      // Kita hanya update RECID menjadi '1'. SESUAI dan UPDTIME dibiarkan (Historical).
+      await SesuaiTokoSummary.update({ RECID: '1' }, {
+        where: { PERIODE: periode, KDTK: kdtk }
+      });
+      logger.debug(`[penyesuaian.service] Summary marked as RESOLVED for ${kdtk} (${periode})`);
+    } catch (error) {
+      logger.error(`[penyesuaian.service] Failed to mark summary as resolved: ${error.message}`);
     }
   }
 
@@ -344,6 +381,9 @@ class PenyesuaianService {
           `[${storeCode}] filter query completed, threshold check: ${filterResult.length > 0 ? "EXCEEDED" : "OK"}`
         );
 
+        // 🛑 ALUR BARU: Hapus data lama berdasarkan KDTK & PERIODE sebelum proses lebih lanjut
+        await SesuaiToko.destroy({ where: { KDTK: storeCode, PERIODE: strPeriode } });
+
         // STEP 2: If threshold exceeded, run detail query
         if (filterResult.length > 0) {
           const detailQuery = config.queries.detail(filetToko, strPeriode, strMonth, strYear);
@@ -355,9 +395,6 @@ class PenyesuaianService {
             "penyesuaian",
             `[${storeCode}] detail query completed, got ${detailResult.length} records`
           );
-
-          //UPDATE SEMUA DATA di database local MENJADI RECID 1 TERLEBIH DAHULU SEBELUM INSERT DAN DI BERIKAN RECID * YANG BARU
-          await SesuaiToko.update({ RECID: 1 }, { where: { KDTK: storeCode, PERIODE: strPeriode, RECID: "*" } });
 
           if (detailResult.length > 0) {
             // Normalize field names to match model (uppercase)
@@ -386,35 +423,22 @@ class PenyesuaianService {
               UPDTIME: new Date(),
             }));
 
-            // Bulk create/update records to database
-            await SesuaiToko.bulkCreate(normalizedRecords, {
-              updateOnDuplicate: [
-                "RECID",
-                "SINGKATAN",
-                "RECID_PRODMAST",
-                "PTAG",
-                "BEGBAL",
-                "TRFIN",
-                "TRFOUT",
-                "RP_SALES",
-                "RP_RETUR_SALES",
-                "ADJ",
-                "BA",
-                "BS",
-                "ACOST",
-                "LCOST",
-                "STOCK",
-                "RP_STOCK",
-                "SESUAI",
-                "UPDTIME",
-              ],
-            });
+            // Bulk create records to database (detail table)
+            await SesuaiToko.bulkCreate(normalizedRecords);
+
+            // 🛠️ ALUR BARU: Update Summary dari records (status '*')
+            await this.updateSummaryFromRecords(normalizedRecords);
 
             results.records = normalizedRecords;
             results.hasIssue = true; // Store has issues
             results.success = true;
           }
         } else {
+          // 🛠️ ALUR BARU: Toko dibawah threshold (Bersih)
+          // 1. Hapus data detail (sdh dilakukan diatas via SesuaiToko.destroy)
+          // 2. Mark status summary as Resolved ('1'), tapi nilai SEUSAI & UPDTIME lama tetap dipertahankan
+          await this.markSummaryAsResolved({ periode: strPeriode, kdtk: storeCode, cabang: cab });
+
           results.success = true; // Below threshold is still success
           results.hasIssue = false; // No issues
         }
@@ -707,133 +731,67 @@ class PenyesuaianService {
       const sequelize = model.sequelize;
       const { Sequelize } = await import("sequelize");
 
-      let query = "";
-      let replacements = { periode };
-
+      // 🛑 ALUR BARU: Hapus Detail & Update Status Summary
       // LEVEL 3: Single Store
       if (level === 3) {
         if (hasIssue) {
-          // Store has issues: Don't update anything
-          logger.info(`[penyesuaian.service] Level 3: Store ${kdtk} has issues, no RECID update needed`);
+          logger.info(`[penyesuaian.service] Level 3: Store ${kdtk} has issues, skip resolve update`);
           return 0;
         } else {
-          // Store has no issues: Update all its records to RECID='1'
-          query = `
-            UPDATE sesuai_toko 
-            SET RECID = '1' 
-            WHERE PERIODE = :periode 
-              AND KDTK = :kdtk
-              AND RECID = '*'
-          `;
-          replacements.kdtk = kdtk;
-
-          logger.info(`[penyesuaian.service] Level 3: Updating RECID='1' for store ${kdtk} (no issues)`);
+          // Hapus data detail
+          await SesuaiToko.destroy({ where: { PERIODE: periode, KDTK: kdtk } });
+          // Mark summary as resolved
+          await this.markSummaryAsResolved({ periode, kdtk });
+          logger.info(`[penyesuaian.service] Level 3: Resolved store ${kdtk} (details deleted, summary status '1')`);
+          return 1;
         }
       }
-      // LEVEL 2: Single Branch
-      else if (level === 2) {
-        if (!screenedStores || screenedStores.length === 0) {
-          logger.info(`[penyesuaian.service] Level 2: No stores were screened, skipping update`);
-          return 0;
-        }
-
-        // BATCHING: Split screenedStores into chunks to avoid "lock table size exceeded"
-        const BATCH_SIZE = 500;
-        let totalUpdated = 0;
-
-        for (let i = 0; i < screenedStores.length; i += BATCH_SIZE) {
-          const chunk = screenedStores.slice(i, i + BATCH_SIZE);
-
-          let batchQuery = `
-            UPDATE sesuai_toko 
-            SET RECID = '1' 
-            WHERE PERIODE = :periode 
-              AND CABANG = :cabang
-              AND RECID = '*'
-              AND KDTK IN (:chunk)
-          `;
-
-          let batchReplacements = {
-            periode,
-            cabang,
-            chunk
-          };
-
-          // Exclude active stores from current chunk if applicable
-          if (activeStores && activeStores.length > 0) {
-            batchQuery += ` AND KDTK NOT IN (:activeStores)`;
-            batchReplacements.activeStores = activeStores;
+      
+      // LEVEL 1 & 2: Multi Stores (Screened but no longer has issues)
+      const storesToResolve = [];
+      if (screenedStores && screenedStores.length > 0) {
+        for (const sCode of screenedStores) {
+          if (!activeStores || !activeStores.includes(sCode)) {
+            storesToResolve.push(sCode);
           }
-
-          const [results, metadata] = await sequelize.query(batchQuery, {
-            replacements: batchReplacements,
-            type: Sequelize.QueryTypes.UPDATE,
-          });
-
-          totalUpdated += metadata;
-          logger.debug(`[penyesuaian.service] Level 2: Updated batch ${Math.floor(i/BATCH_SIZE) + 1} (${metadata} records)`);
         }
-
-        logger.info(
-          `[penyesuaian.service] Level 2: Total updated RECID='1' for cabang ${cabang}: ${totalUpdated}, screened: ${
-            screenedStores.length
-          }, active: ${activeStores?.length || 0}`
-        );
-
-        return totalUpdated;
       }
-      // LEVEL 1: All Branches
-      else if (level === 1) {
-        if (!screenedStores || screenedStores.length === 0) {
-          logger.info(`[penyesuaian.service] Level 1: No stores were screened, skipping update`);
-          return 0;
-        }
 
-        // BATCHING: Split screenedStores into chunks to avoid "lock table size exceeded"
-        const BATCH_SIZE = 500;
-        let totalUpdated = 0;
+      if (storesToResolve.length === 0) {
+        logger.info(`[penyesuaian.service] No resolved stores to update`);
+        return 0;
+      }
 
-        for (let i = 0; i < screenedStores.length; i += BATCH_SIZE) {
-          const chunk = screenedStores.slice(i, i + BATCH_SIZE);
-          
-          let batchQuery = `
-            UPDATE sesuai_toko 
-            SET RECID = '1' 
-            WHERE PERIODE = :periode 
-              AND RECID = '*'
-              AND KDTK IN (:chunk)
-          `;
-          
-          let batchReplacements = { 
-            periode, 
-            chunk 
-          };
+      // BATCHING: Split storesToResolve into chunks to avoid database locks
+      const BATCH_SIZE = 500;
+      let totalUpdated = 0;
 
-          // Exclude active stores from current chunk if applicable
-          if (activeStores && activeStores.length > 0) {
-            batchQuery += ` AND KDTK NOT IN (:activeStores)`;
-            batchReplacements.activeStores = activeStores;
+      for (let i = 0; i < storesToResolve.length; i += BATCH_SIZE) {
+        const chunk = storesToResolve.slice(i, i + BATCH_SIZE);
+
+        // 1. Hapus dari tabel detail
+        const deleteCount = await SesuaiToko.destroy({
+          where: {
+            PERIODE: periode,
+            KDTK: { [Sequelize.Op.in]: chunk }
           }
+        });
 
-          const [results, metadata] = await sequelize.query(batchQuery, {
-            replacements: batchReplacements,
-            type: Sequelize.QueryTypes.UPDATE,
-          });
+        // 2. Update status Summary menjadi '1' (Resolved)
+        // Kita gunakan update langsung ke model SesuaiTokoSummary
+        const [summaryUpdateCount] = await SesuaiTokoSummary.update({ RECID: '1' }, {
+          where: {
+            PERIODE: periode,
+            KDTK: { [Sequelize.Op.in]: chunk }
+          }
+        });
 
-          totalUpdated += metadata;
-          logger.debug(`[penyesuaian.service] Level 1: Updated batch ${Math.floor(i/BATCH_SIZE) + 1} (${metadata} records)`);
-        }
-
-        logger.info(
-          `[penyesuaian.service] Level 1: Total updated RECID='1' for all cabang: ${totalUpdated}, screened: ${
-            screenedStores.length
-          }, active: ${activeStores?.length || 0}`
-        );
-        
-        return totalUpdated;
+        totalUpdated += summaryUpdateCount;
+        logger.debug(`[penyesuaian.service] Resolved batch ${Math.floor(i/BATCH_SIZE) + 1}: ${summaryUpdateCount} summary rows updated`);
       }
 
-      // Default execution for Level 3 or original logic if no batching was applied (shouldn't reach here for Level 1)
+      logger.info(`[penyesuaian.service] Total stores resolved: ${storesToResolve.length}, summary status updated: ${totalUpdated}`);
+      return totalUpdated;
     } catch (error) {
       logger.error(`[penyesuaian.service] Error updating resolved records: ${error.message}`);
       throw error;
@@ -954,10 +912,10 @@ class PenyesuaianService {
         });
       }
 
-      // Enrich with notes for tableName 'sesuai_toko' using unixKey KDTK+PERIODE
+      // Enrich with notes for tableName 'sesuai_toko_summary' using unixKey KDTK+PERIODE
       try {
         const notes = await notesService.getAll();
-        const notesByKey = new Map(notes.filter(n => n.tableName === "sesuai_toko").map(n => [n.unixKey, n]));
+        const notesByKey = new Map(notes.filter(n => n.tableName === "sesuai_toko_summary").map(n => [n.unixKey, n]));
 
         for (let i = 0; i < results.length; i++) {
           const key = `${results[i].KDTK}${results[i].PERIODE}`;
@@ -1069,10 +1027,10 @@ class PenyesuaianService {
         });
       }
 
-      // Enrich with notes for tableName 'sesuai_toko' using unixKey KDTK+PERIODE
+      // Enrich with notes for tableName 'sesuai_toko_summary' using unixKey KDTK+PERIODE
       try {
         const notes = await notesService.getAll();
-        const notesByKey = new Map(notes.filter(n => n.tableName === "sesuai_toko").map(n => [n.unixKey, n]));
+        const notesByKey = new Map(notes.filter(n => n.tableName === "sesuai_toko_summary").map(n => [n.unixKey, n]));
 
         for (let i = 0; i < results.length; i++) {
           const key = `${results[i].KDTK}${results[i].PERIODE}`;
@@ -1293,7 +1251,7 @@ class PenyesuaianService {
     try {
       const notes = await notesService.getAll();
 
-      const notesByKey = new Map(notes.filter(n => n.tableName === "sesuai_toko").map(n => [n.unixKey, n]));
+      const notesByKey = new Map(notes.filter(n => n.tableName === "sesuai_toko_summary").map(n => [n.unixKey, n]));
 
       return data.map(item => {
         const unixKey = `${item.KDTK}${item.PERIODE}`;

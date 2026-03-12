@@ -168,7 +168,7 @@ class PenyesuaianService {
     const response = await api.get(`${this.fixedPattern}/singleResumeShop`, {
       params: { periode, kdtk },
     });
-    return response;
+    return response.data;
   }
 }
 

@@ -16,60 +16,71 @@ import progressService from "../progress/progress.service.js";
 import { isNumericString, toNumber, formatNumber } from "../../utils/numberUtils.js";
 import { fileUtils } from "../../utils/index.js";
 
-// Path untuk file JSON penyesuaian
-const PENYESUAIAN_JSON_PATH = path.join(process.cwd(), "data/penyesuaian.json");
+// Path untuk folder JSON penyesuaian (akan di-split per periode)
+const PENYESUAIAN_DATA_DIR = path.join(process.cwd(), "data/penyesuaian");
 
 class PenyesuaianService {
   constructor() {
     this.penyesuaianData = [];
-    this.initialized = false;
+    this.loadedPeriod = null; // Menandakan periode mana yang sedang di-load di memory
 
     // TTL Cache Management
     this.lastLoadTime = null;
-    this.TTL = 60 * 60 * 1000; // 1 hour in milliseconds
+    this.TTL = 15 * 60 * 1000; // Dikurangi ke 15 menit agar lebih responsif terhadap update database
     this.isLoading = false; // Prevent concurrent loading
 
-    // 🔥 New multi-key cache for records
-    this.cacheDetailData = new Map(); // key: JSON.stringify({periode,cabang,kdtk})
+    // 🔥 New multi-key cache for database records (per kdtk/cabang)
+    this.cacheDetailData = new Map();
     this.cacheTTL = 5 * 60 * 1000; // 5 minutes
+  }
+
+  /**
+   * Mendapatkan path file JSON untuk periode tertentu
+   */
+  getJsonPath(periode) {
+    if (!periode) return null;
+    return path.join(PENYESUAIAN_DATA_DIR, `penyesuaian_${periode}.json`);
   }
 
   /**
    * Initialize the service by loading data from JSON file
    * Creates the file and directory if they don't exist
    */
-  async initialize() {
+  async initialize(periode) {
+    if (!periode) throw new Error("Periode is required for initialization");
     try {
-      const dir = path.dirname(PENYESUAIAN_JSON_PATH);
-      await fs.mkdir(dir, { recursive: true });
+      await fs.mkdir(PENYESUAIAN_DATA_DIR, { recursive: true });
 
+      const jsonPath = this.getJsonPath(periode);
       try {
-        const data = await fileUtils.readFileWithRetry(PENYESUAIAN_JSON_PATH);
+        const data = await fileUtils.readFileWithRetry(jsonPath);
         this.penyesuaianData = JSON.parse(data);
-        logger.info(`Loaded ${this.penyesuaianData.length} penyesuaian records from JSON`);
+        this.loadedPeriod = periode;
+        logger.info(`Loaded ${this.penyesuaianData.length} records for period ${periode} from JSON`);
       } catch (err) {
         if (err.code === "ENOENT") {
           this.penyesuaianData = [];
-          await this.saveToFile();
+          this.loadedPeriod = periode;
+          await this.saveToFile(periode);
         } else throw err;
       }
-
-      this.initialized = true;
     } catch (error) {
-      logger.error(`[penyesuaian.service] Failed to initialize: ${error.message}`);
+      logger.error(`[penyesuaian.service] Failed to initialize period ${periode}: ${error.message}`);
       throw error;
     }
   }
 
   /**
-   * Save penyesuaian data to JSON file
+   * Save penyesuaian data to JSON file for a specific period
    */
-  async saveToFile() {
+  async saveToFile(periode) {
+    if (!periode) throw new Error("Periode is required to save data");
     try {
-      await fileUtils.writeAtomicWithRetry(PENYESUAIAN_JSON_PATH, JSON.stringify(this.penyesuaianData, null, 2));
-      logger.debug(`Saved ${this.penyesuaianData.length} penyesuaian records to JSON file`);
+      const jsonPath = this.getJsonPath(periode);
+      await fileUtils.writeAtomicWithRetry(jsonPath, JSON.stringify(this.penyesuaianData, null, 2));
+      logger.debug(`Saved ${this.penyesuaianData.length} records to JSON file: ${jsonPath}`);
     } catch (error) {
-      logger.error(`Failed to save penyesuaian to file: ${error.message}`);
+      logger.error(`Failed to save penyesuaian period ${periode} to file: ${error.message}`);
       throw error;
     }
   }
@@ -160,8 +171,8 @@ class PenyesuaianService {
    * Check if cached data is still valid based on TTL
    * @returns {boolean} True if cache is valid, false if expired
    */
-  isCacheValid() {
-    if (!this.initialized || !this.lastLoadTime) {
+  isCacheValid(periode) {
+    if (!this.loadedPeriod || this.loadedPeriod !== periode || !this.lastLoadTime) {
       return false;
     }
 
@@ -175,9 +186,10 @@ class PenyesuaianService {
    */
   invalidateCache() {
     this.penyesuaianData = [];
-    this.initialized = false;
+    this.loadedPeriod = null;
     this.lastLoadTime = null;
     this.isLoading = false;
+    this.cacheDetailData.clear();
     logger.info("Penyesuaian cache invalidated manually");
   }
 
@@ -185,9 +197,11 @@ class PenyesuaianService {
    * Ensure data is loaded with TTL-based lazy loading
    * Only loads data when needed and cache is expired
    */
-  async ensureDataLoaded() {
-    // If cache is still valid, no need to reload
-    if (this.isCacheValid()) {
+  async ensureDataLoaded(periode) {
+    if (!periode) throw new Error("Periode is required to load data");
+
+    // If cache is still valid for this period, skip
+    if (this.isCacheValid(periode)) {
       return;
     }
 
@@ -202,27 +216,30 @@ class PenyesuaianService {
 
     try {
       this.isLoading = true;
-      logger.info("Loading penyesuaian data from JSON file (cache expired or empty)");
+      logger.info(`Loading penyesuaian data for period ${periode} (cache expired or wrong period)`);
 
-      await this.initialize();
+      await this.initialize(periode);
       this.lastLoadTime = Date.now();
 
-      logger.info(`Data loaded successfully. TTL expires at: ${new Date(this.lastLoadTime + this.TTL).toISOString()}`);
+      logger.info(
+        `Data loaded successfully for ${periode}. TTL expires at: ${new Date(this.lastLoadTime + this.TTL).toISOString()}`
+      );
     } finally {
       this.isLoading = false;
     }
   }
 
   /**
-   * 🔁 Sync data ke JSON file hanya berupa hasil agregasi SUM(SESUAI)
+   * 🔁 Sync data ke JSON file hanya berupa hasil agregasi SUM(SESUAI) untuk periode tertentu
    */
-  async syncToJsonFile() {
+  async syncToJsonFile(periode) {
+    if (!periode) throw new Error("Periode is required for sync");
     try {
       const model = await SesuaiToko.getModel();
       const sequelize = model.sequelize;
 
-      // Query agregasi langsung ke DB
-      const [rows] = await sequelize.query(`
+      // Query agregasi langsung ke DB untuk periode tertentu
+      const rows = await sequelize.query(`
         SELECT 
           CABANG,
           KDTK,
@@ -230,9 +247,12 @@ class PenyesuaianService {
           SUM(SESUAI) AS SESUAI,
           MAX(UPDTIME) AS UPDTIME
         FROM sesuai_toko
-        WHERE RECID='*'
+        WHERE RECID='*' AND PERIODE = :periode
         GROUP BY CABANG, KDTK, PERIODE
-      `);
+      `, {
+        replacements: { periode },
+        type: sequelize.QueryTypes.SELECT
+      });
 
       this.penyesuaianData = rows.map(r => ({
         CABANG: r.CABANG,
@@ -242,13 +262,13 @@ class PenyesuaianService {
         UPDTIME: r.UPDTIME,
       }));
 
-      await this.saveToFile();
+      await this.saveToFile(periode);
+      this.loadedPeriod = periode;
       this.lastLoadTime = Date.now();
-      this.initialized = true;
 
-      logger.info(`[penyesuaian.service] Synced ${this.penyesuaianData.length} aggregated records to JSON`);
+      logger.info(`[penyesuaian.service] Synced ${this.penyesuaianData.length} records to JSON for period ${periode}`);
     } catch (error) {
-      logger.error(`[penyesuaian.service] Failed to sync aggregated data: ${error.message}`);
+      logger.error(`[penyesuaian.service] Failed to sync data for period ${periode}: ${error.message}`);
       throw error;
     }
   }
@@ -447,8 +467,11 @@ class PenyesuaianService {
           hasIssue: result.hasIssue,
         });
 
+        // Invalidate cache to force reload from JSON file on next request
+        this.invalidateCache();
+
         // Sync to JSON file
-        await this.syncToJsonFile();
+        await this.syncToJsonFile(strPeriode);
 
         return {
           success: true,
@@ -505,6 +528,8 @@ class PenyesuaianService {
       try {
         const timeStart = moment().format("YYYY-MM-DD HH:mm:ss");
         await progressService.startProgress(taskId, storesToProcess.length, {
+          module: "penyesuaian",
+          title: "Screening Penyesuaian",
           description: "registering task",
           startedBy: username,
           status: "registering",
@@ -630,7 +655,7 @@ class PenyesuaianService {
       });
 
       // Sync database to JSON file after write operations
-      await this.syncToJsonFile();
+      await this.syncToJsonFile(strPeriode);
       logger.info(`Synchronized ${newRecords.length} new records from database to JSON file`);
 
       const timeCompleted = moment().format("YYYY-MM-DD HH:mm:ss");
@@ -859,8 +884,8 @@ class PenyesuaianService {
     const { cabang, periode } = options;
 
     try {
-      // Ensure data is loaded from JSON file
-      await this.ensureDataLoaded();
+      // Ensure data is loaded from JSON file for the requested period
+      await this.ensureDataLoaded(periode);
 
       // Build filter function (includes RECID='*' filter)
       const filterFn = this.buildFilterFunction({ cabang, periode });
@@ -902,7 +927,7 @@ class PenyesuaianService {
     if (!periode) throw new Error("Periode wajib diisi");
 
     try {
-      await this.ensureDataLoaded();
+      await this.ensureDataLoaded(periode);
       await storeService.ensureInitialized();
 
       let filtered = this.penyesuaianData.filter(
@@ -1019,7 +1044,7 @@ class PenyesuaianService {
     const { periode, kdtk } = options;
 
     try {
-      await this.ensureDataLoaded();
+      await this.ensureDataLoaded(periode);
       await storeService.ensureInitialized();
 
       let filtered = this.penyesuaianData.filter(i => i.PERIODE === periode && i.KDTK === kdtk);
@@ -1069,9 +1094,7 @@ class PenyesuaianService {
         logger.warn(`[penyesuaian.service] Failed to enrich resume with notes: ${err.message}`);
       }
 
-      return {
-        data: results,
-      };
+      return results;
     } catch (error) {
       logger.error(`[penyesuaian.service] Error getSingleResumeKdtk: ${error.message}`);
       throw error;
@@ -1088,8 +1111,8 @@ class PenyesuaianService {
     const { cabang, periode } = options;
 
     try {
-      // Ensure data is loaded from JSON file
-      await this.ensureDataLoaded();
+      // Ensure data is loaded from JSON file for requested period
+      await this.ensureDataLoaded(periode);
 
       // Build filter function (includes RECID='*' filter)
       const filterFn = this.buildFilterFunction({ cabang, periode });

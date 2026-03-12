@@ -145,6 +145,21 @@ watch(() => props.periode, (newPeriode) => {
   }
 }, { immediate: true });
 
+const handleShopUpdated = ({ cab, shop, updatedData }) => {
+  const index = results.value.findIndex(r => (r.CABANG === cab || r.cab === cab) && (r.KDTK === shop || r.shop === shop))
+  if (index !== -1) {
+    results.value[index] = { ...results.value[index], ...updatedData }
+  }
+}
+
+const handleShopRemoved = ({ cab, shop }) => {
+  const index = results.value.findIndex(r => (r.CABANG === cab || r.cab === cab) && (r.KDTK === shop || r.shop === shop))
+  if (index !== -1) {
+    results.value.splice(index, 1)
+    pagination.value.total = Math.max(0, (pagination.value.total || 0) - 1)
+  }
+}
+
 // Expose loadResults function to parent component
 defineExpose({
   loadResults
@@ -166,17 +181,3 @@ defineExpose({
   margin-top: 1rem;
 }
 </style>
-const handleShopUpdated = ({ cab, shop, updatedData }) => {
-  const index = results.value.findIndex(r => (r.CABANG === cab || r.cab === cab) && (r.KDTK === shop || r.shop === shop))
-  if (index !== -1) {
-    results.value[index] = { ...results.value[index], ...updatedData }
-  }
-}
-
-const handleShopRemoved = ({ cab, shop }) => {
-  const index = results.value.findIndex(r => (r.CABANG === cab || r.cab === cab) && (r.KDTK === shop || r.shop === shop))
-  if (index !== -1) {
-    results.value.splice(index, 1)
-    pagination.value.total = Math.max(0, (pagination.value.total || 0) - 1)
-  }
-}

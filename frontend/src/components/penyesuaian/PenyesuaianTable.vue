@@ -232,30 +232,31 @@ const handlingConfirmation = () => {
 
 //method for auto note
 const autoUpdateNote = async (item) => {
-  const itemKey = `${item.CABANG}_${item.SHOP}_${item.TANGGAL}_${item.PRDCD}`;
+  const itemKey = `${item.CABANG}_${item.KDTK}`;
   try {
     // Add item to loading set
     autoUpdatingItems.value.add(itemKey);
 
     toast.showInfo('Proses', 'Sedang memperbarui notes secara otomatis...');
-    const hasilAutoNote = await penyesuaianService.autoUpdateNote(
+    const response = await penyesuaianService.autoUpdateNote(
       item.CABANG,
-      item.SHOP,
-      item.TANGGAL,
-      item.PRDCD
+      item.KDTK,
+      item.PERIODE
     );
     
-    item.note = hasilAutoNote.data.data;
+    if (response?.data) {
+      item.note = response.data;
+    }
 
     highlightedItems.value.add(itemKey);
-    // Remove highlight after animation (2 detik)
+    // Remove highlight after animation (3 detik agar lebih terlihat)
     setTimeout(() => {
       highlightedItems.value.delete(itemKey);
-    }, 2000);
+    }, 3000);
   } catch (error) {
     console.error('Error auto updating notes:', error);
-    toast.showError('Error', `Gagal memperbarui notes kdtk ${item.SHOP} secara otomatis`);
-  }finally {
+    toast.showError('Error', `Gagal memperbarui notes kdtk ${item.KDTK} secara otomatis`);
+  } finally {
     autoUpdatingItems.value.delete(itemKey);
   }
 };
@@ -460,27 +461,34 @@ const refreshStoreData = async (item) => {
   const itemKey = `${item.CABANG}_${item.KDTK}`;
   try {
     autoUpdatingItems.value.add(itemKey);
+    
     await penyesuaianService.refreshStore(item.KDTK, props.periode);
-    autoUpdatingItems.value.delete(itemKey);
+    
     const res = await penyesuaianService.getSingleResumeKdtk(props.periode, item.KDTK);
+    const newDataArray = res?.data;
     
     // ➜ JIKA HASILNYA NULL / KOSONG → HAPUS ROW
-    if (!res.data.data.data || res.data.data.data.length === 0) {
-      const idx = data.value.findIndex(
-        d => d.CABANG === item.CABANG && d.KDTK === item.KDTK
-      );
-      if (idx !== -1) data.value.splice(idx, 1);
+    if (!newDataArray || newDataArray.length === 0) {
+      toast.showInfo('Info', `Toko ${item.KDTK} sudah sesuai, menghapus baris...`);
+      emit('refresh'); // Refresh parent to remove row
       return;
     }
 
     // ➜ JIKA ADA DATA BARU → UPDATE FIELD-NYA
-    const newData = res.data.data.data[0];
+    const newData = newDataArray[0];
     item.UPDTIME = newData.UPDTIME;
     item.SESUAI = newData.SESUAI;
+    if (newData.note) item.note = newData.note;
 
     highlightedItems.value.add(itemKey);
-    setTimeout(() => { highlightedItems.value.delete(itemKey); }, 2000);
+    toast.showSuccess('Sukses', `Data toko ${item.KDTK} berhasil diperbarui`);
+    
+    // Keep highlight for visual feedback (3 seconds)
+    setTimeout(() => { highlightedItems.value.delete(itemKey); }, 3000);
   } catch (error) {
+    console.error('Error refreshing store data:', error);
+    toast.showError('Error', `Gagal memperbarui data toko ${item.KDTK}`);
+  } finally {
     autoUpdatingItems.value.delete(itemKey);
   }
 };

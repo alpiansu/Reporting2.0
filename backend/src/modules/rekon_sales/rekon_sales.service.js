@@ -68,6 +68,8 @@ class RekonSalesService {
    */
   invalidateCache() {
     this.cacheManager.clear();
+    this.rekonSalesData = [];
+    this.loadedPeriod = null;
     logger.info("[rekon_sales.service] Cache invalidated");
   }
 
@@ -130,7 +132,7 @@ class RekonSalesService {
         NET_RETUR_ECOM: parseFloat(r.NET_RETUR_ECOM) || 0,
         PPN_RETUR_ECOM: parseFloat(r.PPN_RETUR_ECOM) || 0,
         RETUR_PPNJP_ISTORE: parseFloat(r.RETUR_PPNJP_ISTORE) || 0,
-        UPDTIME: r.UPDTIME,
+        UPDTIME: moment(r.UPDTIME).format("YYYY-MM-DD HH:mm:ss"),
       }));
 
       // Save to JSON file (per periode)
@@ -681,11 +683,12 @@ class RekonSalesService {
       try {
         const timeStart = moment().format("YYYY-MM-DD HH:mm:ss");
         await progressService.startProgress(taskId, storesToProcess.length, {
+          module: "rekon_sales",
+          title: "Screening Rekon Sales",
           description: "Registering task for rekon sales screening",
           startedBy: username,
           status: "registering",
           createdAt: timeStart,
-          module: "rekon_sales",
         });
 
         logger.info(`[rekon_sales.service] Progress task registered: ${taskId}`);
@@ -1109,20 +1112,28 @@ class RekonSalesService {
     const { cabang, month, year, kdtk } = params;
 
     return item => {
-      if (cabang && cabang !== "All" && item.CAB !== cabang) {
-        return false;
+      // Robust cabang check
+      if (cabang && cabang !== "All" && cabang !== "ALL") {
+        const itemCab = String(item.CAB || "").trim().toUpperCase();
+        const searchCab = String(cabang).trim().toUpperCase();
+        if (itemCab !== searchCab) return false;
       }
 
-      if (kdtk && item.KDTK !== kdtk) {
-        return false;
+      // Robust kdtk check
+      if (kdtk) {
+        const itemKdtk = String(item.KDTK || "").trim().toUpperCase();
+        const searchKdtk = String(kdtk).trim().toUpperCase();
+        if (itemKdtk !== searchKdtk) return false;
       }
 
+      // Avoid redundant month/year string comparison if possible
+      // But keep as fallback for specific queries
       if (month || year) {
         const itemDate = moment(item.TANGGAL);
-        if (month && itemDate.format("MM") !== month) {
+        if (month && itemDate.format("MM") !== String(month).padStart(2, "0")) {
           return false;
         }
-        if (year && itemDate.format("YYYY") !== year) {
+        if (year && itemDate.format("YYYY") !== String(year)) {
           return false;
         }
       }
@@ -1188,12 +1199,16 @@ class RekonSalesService {
       await this.ensureDataLoaded(year, month, cabang);
       await storeService.ensureInitialized();
 
-      let filtered = this.rekonSalesData.filter(
-        i =>
-          moment(i.TANGGAL).format("MM") === month &&
-          moment(i.TANGGAL).format("YYYY") === year &&
-          (cabang === "All" || i.CAB === cabang)
-      );
+      let filtered = this.rekonSalesData.filter(i => {
+        // Since ensureDataLoaded already filtered by year/month from the filename,
+        // we mainly need to filter by cabang here if NOT "All"
+        if (cabang && cabang !== "All" && cabang !== "ALL") {
+          const itemCab = String(i.CAB || i.CABANG || "").trim().toUpperCase();
+          const targetCab = String(cabang).trim().toUpperCase();
+          return itemCab === targetCab;
+        }
+        return true;
+      });
 
       // Aggregate by store
       const aggregated = {};
@@ -1378,10 +1393,10 @@ class RekonSalesService {
 
       return {
         CAB: record.CAB,
-        SHOP: record.SHOP,
-        KDTK: record.SHOP,
+        SHOP: record.KDTK,
+        KDTK: record.KDTK,
         NAMA: storeName,
-        TANGGAL: record.TANGGAL,
+        TANGGAL: record.TGL,
         NET_MTRAN: record.NET_TOKO,
         NET_GL: record.NET_GL,
         NET_CLOSINGDETAIL: record.NET_CLOSINGDETAIL,
@@ -1395,7 +1410,7 @@ class RekonSalesService {
         NET_RETUR_ECOM: record.NET_RETUR_ECOM,
         PPN_RETUR_ECOM: record.PPN_RETUR_ECOM,
         RETUR_PPNJP_ISTORE: record.RETUR_PPNJP_ISTORE,
-        UPDTIME: record.UPDTIME,
+        UPDTIME: moment(record.UPDTIME).format("YYYY-MM-DD HH:mm:ss"),
         note: note
           ? {
               unixKey: note.unixKey,
@@ -1494,15 +1509,15 @@ class RekonSalesService {
       const rows = await model.findAll({
         where: {
           KDTK: kdtk,
-          TANGGAL: { [Op.between]: [start.format("YYYY-MM-DD"), end.format("YYYY-MM-DD")] },
+          TGL: { [Op.between]: [start.format("YYYY-MM-DD"), end.format("YYYY-MM-DD")] },
           RECID: "*",
         },
-        order: [["TANGGAL", "ASC"]],
+        order: [["TGL", "ASC"]],
       });
 
       // Build daily array
       const daily = rows.map(r => ({
-        tanggal: r.TANGGAL,
+        tanggal: r.TGL,
         net_mtran: parseFloat(r.NET_TOKO) || 0,
         net_gl: parseFloat(r.NET_GL) || 0,
         net_cd: parseFloat(r.NET_CLOSINGDETAIL) || 0,
@@ -1513,7 +1528,7 @@ class RekonSalesService {
         ppn_cd: parseFloat(r.PPN_CD) || 0,
         sel_ppn_gl: parseFloat(r.SEL_PPN_GL) || 0,
         sel_ppn_cd: parseFloat(r.SEL_PPN_CD) || 0,
-        updatetime: r.UPDTIME || null,
+        updatetime: r.UPDTIME ? moment(r.UPDTIME).format("YYYY-MM-DD HH:mm:ss") : null,
       }));
 
       // Summary totals
@@ -1589,7 +1604,7 @@ class RekonSalesService {
 
       const rows = await model.findAll({
         where: {
-          SHOP: kdtk,
+          SHOP: kdtk.trim().toUpperCase(),
           TANGGAL: { [Op.between]: [start.format("YYYY-MM-DD"), end.format("YYYY-MM-DD")] },
         },
         order: [
@@ -1603,7 +1618,16 @@ class RekonSalesService {
       rows.forEach(r => {
         const tgl = r.TANGGAL;
         if (!grouped.has(tgl)) grouped.set(tgl, []);
-        grouped.get(tgl).push(r);
+
+        // Map fields for frontend
+        const mapped = {
+          ...r.toJSON(),
+          NET_MTRAN: parseFloat(r.GROSS) || 0,
+          NET_CD: (parseFloat(r.GROSS) || 0) + (parseFloat(r.SELISIH) || 0),
+          SEL_NET_CD: parseFloat(r.SELISIH) || 0,
+        };
+
+        grouped.get(tgl).push(mapped);
       });
 
       const daily = Array.from(grouped.entries()).map(([tanggal, rows]) => ({ tanggal, rows }));
@@ -1633,7 +1657,7 @@ class RekonSalesService {
 
       const records = await model.findAll({
         where: {
-          KDTK: kdtk,
+          KDTK: kdtk.trim().toUpperCase(),
           TGL: { [Op.between]: [start.format("YYYY-MM-DD"), end.format("YYYY-MM-DD")] },
           SUBKEY: "SEL_KODEPESANAN",
         },
@@ -1644,7 +1668,19 @@ class RekonSalesService {
       records.forEach(r => {
         const tgl = r.TGL;
         if (!grouped.has(tgl)) grouped.set(tgl, []);
-        grouped.get(tgl).push(r);
+
+        // Parse VALSUBKEY: TOKO|GL|DIFF
+        const valSubkey = r.VALSUBKEY || "";
+        const parts = valSubkey.split("|");
+
+        const mapped = {
+          ...r.toJSON(),
+          KODEPESANANTOKO: parts[0] || "",
+          KODEPSANANGL: parts[1] || "",
+          SELKODE: parts[2] || "",
+        };
+
+        grouped.get(tgl).push(mapped);
       });
 
       const daily = Array.from(grouped.entries()).map(([tanggal, issues]) => ({ tanggal, issues }));
@@ -1704,6 +1740,9 @@ class RekonSalesService {
     const data = await this.loadData(year, month, cabang);
     this.rekonSalesData = Array.isArray(data) ? data : [];
     this.loadedPeriod = { year, month, cabang };
+    logger.debug(
+      `[rekon_sales.service] Data loaded for ${year}-${month}: ${this.rekonSalesData.length} records found`
+    );
   }
 }
 

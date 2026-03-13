@@ -146,7 +146,7 @@ export const getStoreDetails = async (req, res) => {
 
     const result = await rekonSalesService.getStoreDetailsByMonth({ kdtk, month, year });
 
-    return apiResponse.success(res, { data: result || { summary: null, daily: [], notes: [] } });
+    return apiResponse.success(res, result || { summary: null, daily: [], notes: [] });
   } catch (error) {
     logger.error(`[rekon_sales.controller] Error getting store details: ${error.message}`);
     return apiResponse.error(res, error.message);
@@ -169,7 +169,7 @@ export const getDifferences = async (req, res) => {
 
     const result = await rekonSalesService.getDifferencesByMonth({ kdtk, month, year });
 
-    return apiResponse.success(res, { data: result || { daily: [] } });
+    return apiResponse.success(res, result || { daily: [] });
   } catch (error) {
     logger.error(`[rekon_sales.controller] Error getting differences: ${error.message}`);
     return apiResponse.error(res, error.message);
@@ -194,7 +194,7 @@ export const getKodePesananIssues = async (req, res) => {
 
     const result = await rekonSalesService.getKodePesananIssuesByMonth({ kdtk, month, year });
 
-    return apiResponse.success(res, { data: result || { daily: [] } });
+    return apiResponse.success(res, result || { daily: [] });
   } catch (error) {
     logger.error(`[rekon_sales.controller] Error getting kode pesanan issues: ${error.message}`);
     return apiResponse.error(res, error.message);

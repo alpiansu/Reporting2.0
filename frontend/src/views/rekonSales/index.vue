@@ -298,6 +298,8 @@ const handleReScreen = async (row) => {
   if (!tanggal) { toast.showInfo('Peringatan', 'Tidak ada tanggal tersedia untuk toko ini'); return; }
   const key = `${row.CABANG || row.CAB || 'Unknown'}_${row.KDTK || 'Unknown'}`;
   loadingStores.value.add(key);
+  highlightedItems.value.add(key);
+
   try {
     // console.log(`🔄 Re-screening store: ${row.KDTK}`);
     await screenStore({ kdtk: row.KDTK, periode: `${filters.year}-${filters.month}` });
@@ -309,6 +311,10 @@ const handleReScreen = async (row) => {
   }
   finally {
     loadingStores.value.delete(key);
+    // Keep it highlighted for a bit for visual feedback
+    setTimeout(() => {
+      highlightedItems.value.delete(key);
+    }, 3000);
   }
 };
 </script>

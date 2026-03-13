@@ -123,7 +123,13 @@ class RekonPersediaanService {
     const skipProgress = totalSteps <= 1;
 
     if (!skipProgress) {
-        await progressService.startProgress(taskId, totalSteps, { description: "registering task", startedBy: username, status: "registering" });
+        await progressService.startProgress(taskId, totalSteps, { 
+            module: "rekon_persediaan",
+            title: "Screening Rekon Persediaan",
+            description: "registering task", 
+            startedBy: username, 
+            status: "registering" 
+        });
     }
 
     const withTimeout = (promise, ms, label) => Promise.race([promise, new Promise((_, r) => setTimeout(() => r(new Error(`Timeout: ${label}`)), ms))]);

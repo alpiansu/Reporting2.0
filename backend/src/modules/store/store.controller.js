@@ -1,7 +1,5 @@
-import StoreService from './store.service.js';
+import storeService from './storeService.js';
 import logger from '../../config/logger.js';
-
-const storeService = new StoreService();
 
 /**
  * Get all stores with pagination

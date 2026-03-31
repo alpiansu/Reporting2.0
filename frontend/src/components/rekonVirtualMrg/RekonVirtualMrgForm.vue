@@ -23,6 +23,7 @@
         <label for="shops" class="font-bold block mb-2">Toko (Opsional)</label>
         <MultiSelect 
           id="shops" 
+          ref="storeSelect"
           v-model="formData.shops" 
           :options="storeOptions" 
           optionLabel="label" 
@@ -34,6 +35,8 @@
           filter
           :autoFilter="false"
           @filter="onStoreFilter"
+          @show="focusStoreFilter"
+          :showClear="true"
           :maxSelectedLabels="3"
         />
         <small class="text-gray-500 block mt-1">Cari berdasarkan kode atau nama toko. Kosongkan untuk semua toko di cabang.</small>
@@ -103,6 +106,19 @@ const progress = ref({
 let eventSource = null;
 const authStore = useAuthStore();
 const strUsername = authStore.user.username;
+
+const storeSelect = ref(null);
+
+const focusStoreFilter = () => {
+  setTimeout(() => {
+    if (storeSelect.value && storeSelect.value.$el) {
+      const filterInput = storeSelect.value.$el.querySelector('.p-multiselect-filter');
+      if (filterInput) {
+        filterInput.focus();
+      }
+    }
+  }, 100);
+};
 
 const formData = reactive({
   cab: '',

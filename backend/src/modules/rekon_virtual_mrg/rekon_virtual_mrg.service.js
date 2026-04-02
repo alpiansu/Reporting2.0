@@ -364,6 +364,49 @@ class RekonVirtualService {
                 );
 
                 if (result.length > 0) {
+                  const startDate = `${strYear}-${strMonth}-01`;
+                  const endDate = moment(`${strYear}-${strMonth}`, "YYYY-MM").endOf("month").format("YYYY-MM-DD");
+                  
+                  // 1. Fetch current local records for this shop & period to compare against
+                  const existingRecords = await SaldoVirtual.findAll({
+                    where: {
+                      CABANG: cab,
+                      SHOP: storeCode,
+                      TANGGAL: { [Op.between]: [startDate, endDate] }
+                    },
+                    attributes: ['TANGGAL', 'PRDCD']
+                  });
+
+                  // 2. Build reference set for incoming composite keys (TANGGAL + PRDCD)
+                  const incomingKeys = new Set();
+                  result.forEach(r => {
+                    const dateStr = moment(r.TANGGAL).format("YYYY-MM-DD");
+                    incomingKeys.add(`${dateStr}_${r.PRDCD}`);
+                  });
+
+                  // 3. Identify obsolete records (existing ones whose TANGGAL + PRDCD is not in incoming keys)
+                  const obsoleteRecords = existingRecords.filter(ex => {
+                    const dateStr = moment(ex.TANGGAL).format("YYYY-MM-DD");
+                    return !incomingKeys.has(`${dateStr}_${ex.PRDCD}`);
+                  });
+
+                  // 4. Safely destroy obsolete records in chunks to prevent SQL param exhaustion
+                  if (obsoleteRecords.length > 0) {
+                    for (let i = 0; i < obsoleteRecords.length; i += 100) {
+                      const chunk = obsoleteRecords.slice(i, i + 100);
+                      await SaldoVirtual.destroy({
+                        where: {
+                          CABANG: cab,
+                          SHOP: storeCode,
+                          [Op.or]: chunk.map(obs => ({
+                            TANGGAL: obs.TANGGAL,
+                            PRDCD: obs.PRDCD
+                          }))
+                        }
+                      });
+                    }
+                  }
+
                   await SaldoVirtual.bulkCreate(result, {
                     updateOnDuplicate: ["QTY_MSTRAN", "QTY_MTRAN", "SEL", "LASTCATCH"],
                   });

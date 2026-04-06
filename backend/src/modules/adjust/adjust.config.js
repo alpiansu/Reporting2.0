@@ -25,7 +25,7 @@ export default {
           (SELECT docno FROM const WHERE rkey = 'NKL')+1,
           CURRENT_DATE(),
           IFNULL(pm.supco,''),
-          CURRENT_DATE(),
+          COALESCE(NULLIF(?, ''), CURRENT_DATE()),
           ?,  -- prdcd from file
           ?,  -- plu_nas from file (same as prdcd)
           'SO',

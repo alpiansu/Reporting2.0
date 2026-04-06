@@ -325,8 +325,12 @@ class AdjustService {
       await (async () => {
         for (const record of records) {
           try {
+            // Build parameter array: jika tidak ada field ini, otomatis null
+            const tglSelisih = record.TGL_SELISIH || record.tgl_selisih || null;
+
             // Prepare parameters for insert query
             const params = [
+              tglSelisih, // inv_date
               record.PRDCD, // prdcd
               record.PRDCD, // plu_nas
               record.QTY_ADJ, // qty for gross

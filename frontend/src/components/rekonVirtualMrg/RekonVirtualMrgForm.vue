@@ -374,7 +374,7 @@ const fetchStores = async (search = '') => {
     // Agar label tidak hilang saat list berubah
     
     // Gabungkan dengan toko yang sedang terpilih agar label tetap muncul
-    const currentSelected = storeOptions.value.filter(opt => formData.shops.includes(opt.kdtk));
+    const currentSelected = storeOptions.value.filter(opt => (formData.shops || []).includes(opt.kdtk));
     
     // Gunakan Map untuk unikisasi berdasarkan kdtk
     const uniqueOptionsMap = new Map();

@@ -19,10 +19,28 @@
           <Calendar v-model="periodeDate" view="month" dateFormat="mm/yy" placeholder="Pilih Bulan/Tahun" :maxDate="today" showIcon class="w-full" @date-select="handlePeriodeSelect" />
         </template>
         <template #actions>
-          <Button icon="pi pi-refresh" label="Refresh" class="p-button-outlined" style="margin-right: 4px;" @click="handleRefresh" />
-          <Button icon="pi pi-bolt" label="Mulai Screening" class="p-button-primary" :disabled="!filters.periode" @click="handleStartScreening" />
+          <Button icon="pi pi-refresh" label="Refresh" class="p-button-outlined" style="margin-right: 4px;" :disabled="isScreening || loading" @click="handleRefresh" />
+          <Button icon="pi pi-bolt" label="Mulai Screening" class="p-button-primary" :disabled="!filters.periode || isScreening" :loading="isScreening" @click="handleStartScreening" />
         </template>
       </RekonFormComponent>
+
+      <!-- Processing Loading State -->
+      <ProgressBar v-if="isMassScreening" :visible="isScreening" :percentage="progressData?.percentage || 0" :info="currentInfo || 'Memproses...'">
+        <template #title>
+          Processing Screening...
+        </template>
+
+        <template #subtitle>
+          Connecting to stores and processing screening query.<br />
+          Please wait patiently...
+        </template>
+
+        <template #details>
+          <small>
+            <strong>{{ currentInfo || (isCompleted ? 'Processing completed' : (isFailed ? 'Processing failed' : 'Memproses...')) }}</strong>
+          </small>
+        </template>
+      </ProgressBar>
 
       <!-- Dashboard Summary -->
       <Dashboard v-if="summary" :summary="summary" :loading="loading" :rulesSummary="rulesSummary" :selectedRuleKeys="selectedRuleKeys" @rule-selected="handleRuleSelected" />
@@ -41,13 +59,7 @@
     <StoreDetailModal v-model:visible="detailModalVisible" :store="selectedStore" :periode="filters.periode"
       :loading="loading" @close="handleCloseDetail" @edit-note="handleEditNote" />
 
-    <!-- Screening Dialog -->
-    <ScreeningDialog v-model:visible="screeningDialogVisible" :periode="filters.periode" :cabang="filters.cabang"
-      :level="screeningLevel" @start="handleConfirmScreening" />
 
-    <!-- Progress Dialog -->
-    <ProgressDialog v-model:visible="progressDialogVisible" :progress="progressData" @complete="handleScreeningComplete"
-      @minimize="handleMinimizeProgress" />
 
     <!-- Note Dialog -->
     <NoteDialog v-model:visible="noteDialogVisible" :store="noteStore" :periode="filters.periode"
@@ -68,8 +80,7 @@ import { useCabangStore } from '@/stores';
 import Dashboard from './components/Dashboard.vue';
 import StoreListTable from './components/StoreListTable.vue';
 import StoreDetailModal from './components/StoreDetailModal.vue';
-import ScreeningDialog from './components/ScreeningDialog.vue';
-import ProgressDialog from './components/ProgressDialog.vue';
+import ProgressBar from '@/components/common/ProgressBar.vue';
 import NoteDialog from './components/NoteDialog.vue';
 import { usePrepClosing } from './composables/usePrepClosing';
 import { useScreening } from './composables/useScreening';
@@ -110,6 +121,8 @@ const {
 const username = authStore.user?.username || '';
 const {
   progress: progressData,
+  percentage,
+  currentInfo,
   isCompleted,
   isFailed,
   progressError,
@@ -130,10 +143,7 @@ const periodeDate = ref(null);
 const cabangOptions = ref([]);
 
 const detailModalVisible = ref(false);
-const screeningDialogVisible = ref(false);
-const progressDialogVisible = ref(false);
 const noteDialogVisible = ref(false);
-const screeningLevel = ref('all');
 const noteStore = ref(null);
 const isMassScreening = ref(false);
 
@@ -173,8 +183,7 @@ watch(isScreening, (newVal) => {
   }
 
   if (newVal) {
-    console.log('🎬 Mass screening started, showing progress dialog');
-    progressDialogVisible.value = true;
+    console.log('🎬 Mass screening started');
     startMonitoring();
   } else {
     console.log('🛑 Mass screening stopped');
@@ -208,7 +217,6 @@ watch(isFailed, (newVal) => {
     console.log('❌ Mass screening failed');
     toast.showError('Error', progressError.value || 'Screening gagal, silakan coba lagi');
     setTimeout(() => {
-      progressDialogVisible.value = false;
       stopMonitoring();
       resetProgress();
       isMassScreening.value = false;
@@ -355,44 +363,29 @@ const handleCloseDetail = () => {
   selectedStore.value = null;
 };
 
-const handleStartScreening = () => {
-  screeningDialogVisible.value = true;
-};
-
-const handleConfirmScreening = async (data) => {
-  screeningDialogVisible.value = false;
-
+const handleStartScreening = async () => {
   try {
     // Reset progress sebelum memulai screening baru
     resetProgress();
 
-    // Tentukan apakah ini mass screening atau single store
-    const isSingleStore = data.level === 'store' && data.kdtk;
-    isMassScreening.value = !isSingleStore;
+    // Pastikan ini mass screening
+    isMassScreening.value = true;
 
-    // Show progress dialog HANYA untuk mass screening
-    if (isMassScreening.value) {
-      progressDialogVisible.value = true;
-    }
-
-    // Start screening based on level
-    if (data.level === 'cabang') {
-      console.log(`🏢 Screening cabang: ${filters.cabang}`);
-      toast.showInfo('Info', `Memulai screening cabang ${filters.cabang}...`);
-      await screenCabang(filters.periode, filters.cabang);
-
-    } else {
+    // Start screening based on filters.cabang
+    if (filters.cabang === 'All') {
       console.log('🌍 Screening all cabang');
       toast.showInfo('Info', 'Memulai screening semua cabang...');
       await screenAllCabang(filters.periode);
+    } else {
+      console.log(`🏢 Screening cabang: ${filters.cabang}`);
+      toast.showInfo('Info', `Memulai screening cabang ${filters.cabang}...`);
+      await screenCabang(filters.periode, filters.cabang);
     }
 
-    // Progress monitoring akan dimulai otomatis oleh watch isScreening (jika mass screening)
-
+    // Progress monitoring akan dimulai otomatis oleh watch isScreening
   } catch (err) {
     console.error('❌ Error starting screening:', err);
     toast.showError('Error', err.message || 'Gagal memulai screening');
-    progressDialogVisible.value = false;
     stopMonitoring();
     resetProgress();
     isMassScreening.value = false;
@@ -460,9 +453,6 @@ const handleScreeningComplete = async () => {
   // Stop monitoring
   stopMonitoring();
 
-  // Close dialog
-  progressDialogVisible.value = false;
-
   // Show success message
   toast.showSuccess('Sukses', 'Screening selesai! Data sedang diperbarui...');
 
@@ -476,13 +466,6 @@ const handleScreeningComplete = async () => {
   isMassScreening.value = false;
 
   console.log('✅ Screening complete, data refreshed');
-};
-
-const handleMinimizeProgress = () => {
-  console.log('📦 Minimizing progress dialog, monitoring continues in background');
-  progressDialogVisible.value = false;
-  // Progress monitoring continues in background
-  toast.showInfo('Info', 'Progress monitoring berjalan di background');
 };
 
 const handleCategoryFilter = (category) => {

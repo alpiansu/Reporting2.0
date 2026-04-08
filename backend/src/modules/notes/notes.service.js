@@ -76,6 +76,12 @@ class NotesService {
     }));
   }
 
+  /** Get single note by key */
+  async getByKey(unixKey, tableName) {
+    const notes = await this.getAll();
+    return notes.find(n => n.unixKey === unixKey && n.tableName === tableName) || null;
+  }
+
   /** Create or update a note */
   async upsert(payload) {
     // Validate required fields

@@ -106,7 +106,7 @@ export const prepClosingApi = {
    */
   async updateNote(data) {
     const response = await api.put(`${BASE_URL}/note`, data);
-    return response.data;
+    return response.data.data;
   },
 
   // ==================== EXPORT ENDPOINT ====================

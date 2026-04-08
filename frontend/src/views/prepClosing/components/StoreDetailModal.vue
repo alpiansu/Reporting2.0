@@ -170,7 +170,7 @@ const handleClose = () => {
 };
 
 const handleEditNote = () => {
-    emit('edit-note');
+    emit('edit-note', props.store);
 };
 </script>
 

@@ -64,13 +64,17 @@
         <template #footer>
             <div class="footer-actions">
                 <Button label="Batal" icon="pi pi-times" class="p-button-outlined" @click="handleCancel" />
-                <Button v-if="noteText.trim()" label="Hapus" icon="pi pi-trash"
+                <Button v-if="store?.note" label="Hapus" icon="pi pi-trash"
                     class="p-button-danger p-button-outlined" @click="handleClear" />
                 <Button label="Simpan" icon="pi pi-save" class="p-button-primary" :disabled="!canSave"
                     @click="handleSave" />
             </div>
         </template>
     </Dialog>
+
+    <!-- Confirmation Dialog -->
+    <ConfirmDialog v-model="showConfirm" title="Konfirmasi Hapus" message="Apakah Anda yakin ingin menghapus catatan ini?"
+        confirm-text="Hapus" @confirm="handleConfirmDelete" />
 </template>
 
 <script setup>
@@ -79,6 +83,7 @@ import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import Textarea from 'primevue/textarea';
 import Message from 'primevue/message';
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue';
 import { formatDateTime, formatPeriode } from '../utils/formatters';
 
 const props = defineProps({
@@ -92,6 +97,7 @@ const emit = defineEmits(['update:visible', 'save']);
 const localVisible = ref(props.visible);
 const noteText = ref('');
 const maxLength = 500;
+const showConfirm = ref(false);
 
 watch(() => props.visible, (newVal) => {
     localVisible.value = newVal;
@@ -111,7 +117,8 @@ watch(localVisible, (newVal) => {
 
 const dialogTitle = computed(() => {
     if (!props.store) return 'Tambah Catatan';
-    return `Catatan untuk ${props.store.KDTK} - ${props.store.NAMA}`;
+    if (props.store.note) return `Edit Catatan untuk ${props.store.KDTK} - ${props.store.NAMA}`;
+    return `Tambah Catatan untuk ${props.store.KDTK} - ${props.store.NAMA}`;
 });
 
 const isOverLimit = computed(() => {
@@ -129,7 +136,12 @@ const handleSave = () => {
 };
 
 const handleClear = () => {
-    noteText.value = '';
+    showConfirm.value = true;
+};
+
+const handleConfirmDelete = () => {
+    emit('save', '');
+    showConfirm.value = false;
 };
 
 const handleCancel = () => {

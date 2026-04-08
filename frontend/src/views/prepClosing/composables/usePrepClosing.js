@@ -143,15 +143,18 @@ export function usePrepClosing() {
       // Update store in list
       const storeIndex = stores.value.findIndex(s => s.KDTK === kdtk);
       if (storeIndex !== -1) {
-        stores.value[storeIndex].note = response.data;
+        // Force fully reactive update via object spread
+        stores.value[storeIndex] = { ...stores.value[storeIndex], note: response };
+        // Create new array reference to guarantee data table reactivity
+        stores.value = [...stores.value];
       }
 
       // Update selected store if it's the same
       if (selectedStore.value && selectedStore.value.KDTK === kdtk) {
-        selectedStore.value.note = response.data;
+        selectedStore.value = { ...selectedStore.value, note: response };
       }
 
-      return response.data;
+      return response;
     } catch (err) {
       throw new Error(err.response?.data?.message || "Gagal menyimpan note");
     }

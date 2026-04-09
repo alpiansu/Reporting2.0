@@ -534,9 +534,9 @@ class PrepClosingService {
         logger.info(`[prep_closing.service] Fetching WRC data for single store ${kdtk}`);
         const dataSaldoWrc = await this.tarikSaldoFltWrc(storeCab, kdtk, prdFiletnya, strPrdStore);
 
-        if (!dataSaldoWrc || dataSaldoWrc.length === 0) {
-          throw new Error(`Failed to fetch WRC data for store ${kdtk}`);
-        }
+        // if (!dataSaldoWrc || dataSaldoWrc.length === 0) {
+        //   throw new Error(`Failed to fetch WRC data for store ${kdtk}`);
+        // }
 
         // Process single store
         const result = await this.processSingleStore(

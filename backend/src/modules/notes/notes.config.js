@@ -152,7 +152,7 @@ export default {
                     ', docno:', COALESCE(A.DOCNO, C.NOSTRUK), ', QtyMtran:', IFNULL(A.QTY, 0), ', QtyMstran:', IFNULL(B.QTY, 0)
                 )
 
-            WHEN C.STATUS != 1 AND C.KTART IS NOT NULL 
+            WHEN ((C.STATUS != 1 AND C.KTART IS NOT NULL) OR ( C.STATUS = 1 AND A.QTY > IFNULL(B.QTY,0) AND KTART != 'Y' ) ) 
                 AND GROUP_CONCAT(DISTINCT A.RTYPE) NOT LIKE '%D%' 
                 AND A.TTYPE <> 'BATV' 
                 AND (B.QTY IS NULL OR B.QTY = '') 

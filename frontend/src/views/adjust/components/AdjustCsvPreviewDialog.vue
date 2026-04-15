@@ -53,8 +53,12 @@
           <div class="table-section">
             <div class="table-header">
               <h6>Preview Data</h6>
-              <div class="table-actions" v-if="extraHeaders.length">
-                <label class="toggle-all">
+              <div class="table-actions">
+                <div class="search-wrapper">
+                  <i class="pi pi-search"></i>
+                  <input type="text" v-model="searchQuery" placeholder="Cari data..." class="search-input" />
+                </div>
+                <label class="toggle-all" v-if="extraHeaders.length">
                   <input type="checkbox" v-model="showAllColumns" />
                   <span>Lihat semua kolom</span>
                 </label>
@@ -112,6 +116,7 @@ const props = defineProps({
 const emit = defineEmits(['cancel','confirm']);
 
 const showAllColumns = ref(false);
+const searchQuery = ref('');
 
 const missingHeaders = computed(() => props.requiredHeaders.filter(h => !props.headers.includes(h)));
 const extraHeaders = computed(() => props.headers.filter(h => !props.requiredHeaders.includes(h)));
@@ -124,7 +129,20 @@ const blankCounts = computed(() => {
   return counts;
 });
 
-const previewRows = computed(() => props.rows);
+// Standalone function for live search
+const calculateFilteredRows = (rows, query) => {
+  if (!query) return rows;
+  const lowerQuery = query.toLowerCase();
+  return rows.filter(row => {
+    return Object.values(row).some(val => 
+      val !== null && val !== undefined && String(val).toLowerCase().includes(lowerQuery)
+    );
+  });
+};
+
+const previewRows = computed(() => {
+  return calculateFilteredRows(props.rows, searchQuery.value);
+});
 
 const handleCancel = () => emit('cancel');
 const handleConfirm = () => emit('confirm');
@@ -187,7 +205,11 @@ const handleConfirm = () => emit('confirm');
 
 .table-section { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; }
 .table-header { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid #e2e8f0; }
-.table-actions { display: flex; align-items: center; gap: 0.5rem; }
+.table-actions { display: flex; align-items: center; gap: 1rem; }
+.search-wrapper { position: relative; display: flex; align-items: center; }
+.search-wrapper i { position: absolute; left: 0.75rem; color: #64748b; font-size: 0.9rem; }
+.search-input { padding: 0.5rem 0.5rem 0.5rem 2rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; outline: none; transition: border-color 0.2s; width: 200px; }
+.search-input:focus { border-color: #0ea5e9; }
 .toggle-all { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; color: #334155; }
 .preview-table :deep(.p-datatable) { border-radius: 0 0 10px 10px; }
 .empty-state { display: flex; align-items: center; gap: 0.5rem; color: #64748b; padding: 1rem; }

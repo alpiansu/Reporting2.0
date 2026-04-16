@@ -1,9 +1,8 @@
 {
   "version": "1.0.0",
-  "lastUpdated": "2024-11-18T00:00:00Z",
-  "updatedBy": "system",
+  "lastUpdated": "2026-04-16T06:07:48.989Z",
+  "updatedBy": "2013076089",
   "description": "Aturan pengecekan kesiapan closing bulanan",
-  
   "rules": [
     {
       "key": "bln_sls_check",
@@ -398,7 +397,10 @@
       "validation": {
         "type": "in_list",
         "operator": "IN",
-        "expected": ["Y", ""],
+        "expected": [
+          "Y",
+          ""
+        ],
         "failMessage": "Status plastik berbayar tidak valid: {actual}",
         "passMessage": "Status plastik berbayar valid"
       },
@@ -552,7 +554,7 @@
       "enabled": true,
       "query": {
         "type": "calculation",
-        "sql": "SELECT COALESCE(SUM(rp_sld_akh), 0) as rp_sld FROM {tblFilet}",
+        "sql": "SELECT IFNULL(SUM(rp_sld_akh), 0) as rp_sld FROM {tblFilet}",
         "compareWith": "{saldoBlnRp}"
       },
       "validation": {
@@ -560,9 +562,10 @@
         "operator": "DELTA_WITHIN",
         "tolerance": 50,
         "failMessage": "Saldo Rp selisih > Rp 50 | Toko: Rp {actual} | WRC: Rp {expected} | Selisih: Rp {delta}",
-        "passMessage": "Saldo rupiah dalam batas toleransi (selisih Rp {delta})"
+        "passMessage": "Saldo rupiah dalam batas toleransi (selisih Rp {delta})",
+        "expected": "{saldo_akh_wrc_toko}"
       },
-      "severity": "high",
+      "severity": "critical",
       "ui": {
         "icon": "pi pi-money-bill",
         "color": "#f59e0b",
@@ -673,7 +676,6 @@
       }
     }
   ],
-  
   "categories": {
     "wrc_data": {
       "label": "Data WRC",
@@ -725,7 +727,6 @@
       "order": 7
     }
   },
-  
   "severityLevels": {
     "critical": {
       "label": "Kritis",
@@ -768,7 +769,6 @@
       "priority": 4
     }
   },
-  
   "operators": {
     "IS_NULL": {
       "label": "Harus Kosong",

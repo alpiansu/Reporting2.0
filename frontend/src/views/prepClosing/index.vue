@@ -24,6 +24,13 @@
         </template>
       </RekonFormComponent>
 
+      <!-- Advanced Config Toolbar -->
+      <div class="flex justify-content-end align-items-center mb-4">
+        <span class="text-color-secondary mr-3 text-sm"><i class="pi pi-info-circle mr-1"></i> Developer & Admin Only:</span>
+        <Button icon="pi pi-database" label="Config WRC Engine" class="p-button-outlined p-button-warning p-button-sm mr-2" :disabled="isScreening || loading" @click="showWrcConfig = true" />
+        <Button icon="pi pi-cog" label="Rule Management" class="p-button-outlined p-button-secondary p-button-sm" :disabled="isScreening || loading" @click="showRuleConfig = true" />
+      </div>
+
       <!-- Processing Loading State -->
       <ProgressBar v-if="isMassScreening" :visible="isScreening" :percentage="progressData?.percentage || 0" :info="currentInfo || 'Memproses...'">
         <template #title>
@@ -64,6 +71,16 @@
     <!-- Note Dialog -->
     <NoteDialog v-model:visible="noteDialogVisible" :store="noteStore" :periode="filters.periode"
       @save="handleSaveNote" />
+
+    <!-- Configuration Rules Dialog -->
+    <RuleConfigDialog v-model:visible="showRuleConfig" @rules-updated="handleRefresh" />
+
+    <!-- Configuration WRC Dialog -->
+    <WrcExtractConfigDialog 
+      v-model:visible="showWrcConfig" 
+      :selectedPeriode="filters.periode" 
+      :selectedCabang="filters.cabang" 
+    />
   </div>
 </template>
 
@@ -82,6 +99,8 @@ import StoreListTable from './components/StoreListTable.vue';
 import StoreDetailModal from './components/StoreDetailModal.vue';
 import ProgressBar from '@/components/common/ProgressBar.vue';
 import NoteDialog from './components/NoteDialog.vue';
+import RuleConfigDialog from '@/components/prepClosing/RuleConfigDialog.vue';
+import WrcExtractConfigDialog from '@/components/prepClosing/WrcExtractConfigDialog.vue';
 import { usePrepClosing } from './composables/usePrepClosing';
 import { useScreening } from './composables/useScreening';
 import { useProgress } from './composables/useProgress';
@@ -146,6 +165,8 @@ const detailModalVisible = ref(false);
 const noteDialogVisible = ref(false);
 const noteStore = ref(null);
 const isMassScreening = ref(false);
+const showRuleConfig = ref(false);
+const showWrcConfig = ref(false);
 
 // Initialize
 onMounted(async () => {

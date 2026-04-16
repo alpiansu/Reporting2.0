@@ -3,11 +3,8 @@ import path from "path";
 import logger from "../../../config/logger.js";
 import config from "../prep_closing.config.js";
 
-// Import validators
-import * as wrcValidator from "../validators/wrc.validator.js";
-import * as systemValidator from "../validators/system.validator.js";
-import * as databaseValidator from "../validators/database.validator.js";
-import * as saldoValidator from "../validators/saldo.validator.js";
+// Import only the Generic Validator (Single Source of Truth)
+import * as genericValidator from "../validators/generic.validator.js";
 
 class RuleEngine {
   constructor() {
@@ -16,19 +13,9 @@ class RuleEngine {
     this.severityLevels = {};
     this.operators = {};
     this.initialized = false;
+    this.initialized = false;
     this.lastLoaded = null;
     this.ttlMs = 5 * 60 * 1000; // 5 menit
-
-    // Map validator functions by category
-    this.validators = {
-      wrc_data: wrcValidator,
-      system_config: systemValidator,
-      database: databaseValidator,
-      saldo: saldoValidator,
-      inventory: systemValidator, // Reuse system validator
-      data_integrity: systemValidator,
-      tax: systemValidator,
-    };
   }
 
   /**
@@ -52,6 +39,14 @@ class RuleEngine {
       logger.error(`[RuleEngine] Failed to load rules: ${error.message}`);
       throw error;
     }
+  }
+
+  /**
+   * Force reload rules from JSON (called after UI config changes)
+   */
+  async forceReload() {
+    this.initialized = false;
+    await this.ensureInitialized();
   }
 
   /**
@@ -140,22 +135,15 @@ class RuleEngine {
   }
 
   /**
-   * Execute single rule
+   * Execute single rule (100% Generic Execution pipeline)
    */
   async executeRule(rule, storeConnection, context) {
-    const validator = this.validators[rule.category];
-    if (!validator) {
-      throw new Error(`No validator found for category: ${rule.category}`);
+    if (!rule.query || !rule.validation) {
+       throw new Error(`Rule ${rule.key} is malformed! Missing "query" or "validation" block for Generic Rule Execution.`);
     }
 
-    // Get the validator function for this rule
-    const validatorFn = validator[rule.key];
-    if (!validatorFn) {
-      throw new Error(`No validator function found for rule: ${rule.key}`);
-    }
-
-    // Execute validator
-    return await validatorFn(storeConnection, context, rule);
+    // Pass everything to generic_sql_check
+    return await genericValidator.generic_sql_check(storeConnection, context, rule);
   }
 
   /**

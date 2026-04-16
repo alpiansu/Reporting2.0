@@ -6,6 +6,7 @@ import { apiResponse } from "../../utils/index.js";
 import prepClosingService from "./prep_closing.service.js";
 import notesService from "../notes/notes.service.js";
 import UserService from "../user/user.service.js";
+import { wrcExtractorService } from "./wrc_extractor.service.js";
 
 /**
  * Start screening process
@@ -310,6 +311,94 @@ export const updateNote = async (req, res) => {
     return apiResponse.success(res, result);
   } catch (error) {
     logger.error(`[prep_closing.controller] Error updating note: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+/**
+ * Get full rules configure data
+ * GET /api/prep-closing/rules
+ */
+export const getRules = async (req, res) => {
+  try {
+    const rulesPath = prepClosingService.rulesPath || "src/modules/prep-closing/rules/rules.json";
+    const result = await prepClosingService.getRulesConfig();
+    return apiResponse.success(res, result);
+  } catch (error) {
+    logger.error(`[prep_closing.controller] Error getting rules config: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+/**
+ * Update full rules configure data
+ * PUT /api/prep-closing/rules
+ */
+export const updateRules = async (req, res) => {
+  try {
+    const rulesData = req.body;
+    if (!rulesData || !rulesData.rules) {
+      return apiResponse.badRequest(res, "Data rules tidak valid");
+    }
+    const pic = req.user?.username || "system";
+    const result = await prepClosingService.updateRulesConfig(rulesData, pic);
+    return apiResponse.success(res, result);
+  } catch (error) {
+    logger.error(`[prep_closing.controller] Error updating rules config: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+/**
+ * Get WRC Extract Rules
+ * GET /api/prep-closing/wrc-extract-rules
+ */
+export const getWrcExtractRules = async (req, res) => {
+  try {
+    const result = await wrcExtractorService.loadRules();
+    return apiResponse.success(res, result);
+  } catch (error) {
+    logger.error(`[prep_closing.controller] Error getting wrc extract rules: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+/**
+ * Update WRC Extract Rules
+ * PUT /api/prep-closing/wrc-extract-rules
+ */
+export const updateWrcExtractRules = async (req, res) => {
+  try {
+    const rulesData = req.body;
+    if (!Array.isArray(rulesData)) {
+      return apiResponse.badRequest(res, "Data rules WRC harus berupa array");
+    }
+    const result = await wrcExtractorService.updateRules(rulesData);
+    return apiResponse.success(res, result);
+  } catch (error) {
+    logger.error(`[prep_closing.controller] Error updating wrc extract rules: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+/**
+ * Trigger WRC Extraction logic
+ * POST /api/prep-closing/wrc-extract-trigger
+ */
+export const triggerWrcExtraction = async (req, res) => {
+  try {
+    const { cabang, periode, shops } = req.body;
+    if (!periode) {
+      return apiResponse.badRequest(res, "Periode is required to extract WRC data");
+    }
+    
+    // Asynchronous Execution inside
+    const cabParam = !cabang || cabang === "All" ? "All" : cabang;
+    const result = await wrcExtractorService.triggerExtraction(cabParam, periode, shops);
+    
+    return apiResponse.success(res, { message: "WRC extraction completed successfully", cache_manifest: result });
+  } catch (error) {
+    logger.error(`[prep_closing.controller] Error triggering wrc extract: ${error.message}`);
     return apiResponse.error(res, error.message);
   }
 };

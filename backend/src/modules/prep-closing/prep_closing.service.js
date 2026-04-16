@@ -7,7 +7,6 @@ import logger from "../../config/logger.js";
 import ScreeningPraClosing from "./prep_closing.model.js";
 import dbStore from "../../config/db_store.js";
 import config from "./prep_closing.config.js";
-import wrcQueries from "./queries/wrc.queries.js";
 import storeService from "../store/storeService.js";
 import ruleEngine from "./rules/rule.engine.js";
 import pLimit from "p-limit";
@@ -15,7 +14,7 @@ import moment from "moment-timezone";
 import RekapRemoteService from "../rekap_remote/rekap_remote.service.js";
 import notesService from "../notes/notes.service.js";
 import progressService from "../progress/progress.service.js";
-import wrcUtils from "../../utils/wrc.utils.js";
+import { wrcExtractorService } from "./wrc_extractor.service.js";
 
 // Path untuk file JSON
 const PREP_CLOSING_JSON_PATH = path.join(process.cwd(), "data/prep_closing.json");
@@ -213,74 +212,29 @@ class PrepClosingService {
   }
 
   /**
-   * Tarik saldo filet dari WRC menggunakan wrcUtils
-   * @param {string} cab - Branch code
-   * @param {string} kdtk - Store code (or 'ALL' for all stores)
-   * @param {string} prdFilet - Period filet format YYMM
-   * @param {string} strPrdStore - Store period format YYYY-MM-DD
-   * @returns {Promise<Array>} Array of saldo data from WRC
-   */
-  async tarikSaldoFltWrc(cab, kdtk, prdFilet, strPrdStore) {
-    try {
-      // Parse explicit format YYMM to avoid wrong parsing
-      const m = moment(prdFilet, "YYMM", true);
-
-      if (!m.isValid()) {
-        throw new Error(`Invalid period format: ${prdFilet} expected YYMM`);
-      }
-
-      const getMonth = moment(strPrdStore).format("MM");
-      const getYear = moment(strPrdStore).format("YYYY");
-      const getPeriod = m.format("YYMM");
-      // Query template from wrcQueries
-      let queryTemplate = wrcQueries.tarikSaldoFltWrc;
-
-      queryTemplate = queryTemplate
-        .replace(/{period}/g, getPeriod)
-        .replace(/{month}/g, getMonth)
-        .replace(/{year}/g, getYear);
-
-      const shops = kdtk !== "ALL" ? [kdtk] : null;
-
-      logger.info(
-        `[prep_closing.service] Fetching saldo from WRC - cab: ${cab}, kdtk: ${kdtk}, period: ${prdFilet}, tablePeriod: ${strPrdStore}`
-      );
-
-      const tempFilePath = await wrcUtils.getWrcData(cab, prdFilet, "kodetoko", queryTemplate, shops);
-
-      if (!tempFilePath) {
-        logger.warn(`[prep_closing.service] No WRC data returned for cab: ${cab}, period: ${prdFilet}`);
-        return [];
-      }
-
-      const fs = await import("fs/promises");
-      const fileContent = await fs.readFile(tempFilePath, "utf8");
-      const wrcData = JSON.parse(fileContent);
-
-      await fs.unlink(tempFilePath).catch(err => {
-        logger.warn(`[prep_closing.service] Failed to delete temp file ${tempFilePath}: ${err.message}`);
-      });
-
-      logger.info(`[prep_closing.service] Retrieved ${wrcData.length} saldo records from WRC`);
-
-      return wrcData;
-    } catch (error) {
-      logger.error(`[prep_closing.service] Error in tarikSaldoFltWrc: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Get saldo data from WRC for a store
+   * Get saldo data from WRC Cache for a store
    * @param {string} kdtk - Store code
-   * @param {Array} dataSaldoWrc - Array of saldo data from WRC
    * @returns {Object} Saldo data with fallback to default values
    */
-  async getSaldoFromWrc(kdtk, dataSaldoWrc) {
-    const saldoData = dataSaldoWrc.find(item => item.KODE_TOKO === kdtk);
+  async getSaldoFromWrc(kdtk, cab) {
+    try {
+      if (!wrcExtractorService.cacheData?.data_by_cabang) {
+        await wrcExtractorService.loadCache();
+      }
+      const globalData = wrcExtractorService.cacheData?.data_by_cabang?.[cab]?.branch_level_data || {};
+      const storeData = wrcExtractorService.cacheData?.data_by_cabang?.[cab]?.stores?.[kdtk] || {};
 
-    if (!saldoData) {
-      logger.warn(`[prep_closing.service] Saldo data not found for store ${kdtk}, using default values`);
+      const combinedWrcData = { ...globalData, ...storeData };
+
+      return {
+        saldoBlnQty: combinedWrcData.saldo_akh_wrc_toko ? parseFloat(combinedWrcData.saldo_akh_wrc_toko) : 0,
+        saldoBlnRp: 0,
+        strBlnSlsWrc: combinedWrcData.bln_sls_wrc || null,
+        strMaxBlnAktWrc: combinedWrcData.terakhir_bln_akt_wrc || null,
+        ...combinedWrcData
+      };
+    } catch (e) {
+      logger.warn(`[prep_closing.service] Legacy WRC mapping error proxy for ${kdtk}, using default values`);
       return {
         saldoBlnQty: 0,
         saldoBlnRp: 0,
@@ -288,19 +242,12 @@ class PrepClosingService {
         strMaxBlnAktWrc: null,
       };
     }
-
-    return {
-      saldoBlnQty: saldoData.SALDO_AKH_BLN || 0,
-      saldoBlnRp: saldoData.RP_SLD_AKH_BLN || 0,
-      strBlnSlsWrc: saldoData.bln_sls || null,
-      strMaxBlnAktWrc: saldoData.terakhir_bln_akt || null,
-    };
   }
 
   /**
    * Process single store screening
    */
-  async processSingleStore(store, strPeriode, strYear, strMonth, dataSaldoWrc) {
+  async processSingleStore(store, strPeriode, strYear, strMonth) {
     const { storeCode, cab } = store;
     const results = { success: false, records: null, hasIssue: false };
 
@@ -330,8 +277,8 @@ class PrepClosingService {
         // Generate table names
         const { tblFilet, tblFiletMaju } = this.getFiletTableNames(storeCode, strPeriode);
 
-        // Get saldo data from WRC
-        const saldoData = await this.getSaldoFromWrc(storeCode, dataSaldoWrc);
+        // Get saldo data from WRC directly from new Cache
+        const saldoData = await this.getSaldoFromWrc(storeCode, cab);
 
         // Prepare context for rule execution
         const context = {
@@ -527,24 +474,12 @@ class PrepClosingService {
         const strYear = moment(periode, "YYMM").format("YYYY");
         const strMonth = moment(periode, "YYMM").format("MM");
 
-        // Get WRC saldo data using new method
-        const prdFiletnya = moment(periode, "YYMM").subtract(1, "month").format("YYMM");
-        const strPrdStore = `${strYear}-${strMonth}-01`;
-
-        logger.info(`[prep_closing.service] Fetching WRC data for single store ${kdtk}`);
-        const dataSaldoWrc = await this.tarikSaldoFltWrc(storeCab, kdtk, prdFiletnya, strPrdStore);
-
-        // if (!dataSaldoWrc || dataSaldoWrc.length === 0) {
-        //   throw new Error(`Failed to fetch WRC data for store ${kdtk}`);
-        // }
-
         // Process single store
         const result = await this.processSingleStore(
           { storeCode: kdtk, cab: storeCab },
           strPeriode,
           strYear,
-          strMonth,
-          dataSaldoWrc
+          strMonth
         );
 
         // Save logs to database
@@ -653,26 +588,11 @@ class PrepClosingService {
       const strPeriode = periode;
       const strYear = moment(periode, "YYMM").format("YYYY");
       const strMonth = moment(periode, "YYMM").format("MM");
-      const strPrdStore = `${strYear}-${strMonth}-01`;
-      const prdFiletnya = moment(periode, "YYMM").subtract(1, "month").format("YYMM");
 
-      // Get WRC data for all branches using new method
-      logger.info(`[prep_closing.service] Fetching WRC data for branches: ${branches.join(", ")}`);
+      // Reload WRC Extractor Cache before massive screening loop
+      await wrcExtractorService.loadCache();
 
-      const wrcDataByBranch = {};
-      for (const cab of branches) {
-        logger.info(`[prep_closing.service] Fetching WRC data for branch: ${cab}`);
-
-        const wrcData = await this.tarikSaldoFltWrc(cab, "ALL", prdFiletnya, strPrdStore);
-
-        if (!wrcData || wrcData.length === 0) {
-          logger.warn(`[prep_closing.service] No WRC data returned for branch ${cab}`);
-          wrcDataByBranch[cab] = [];
-        } else {
-          wrcDataByBranch[cab] = wrcData;
-          logger.info(`[prep_closing.service] Branch ${cab}: ${wrcData.length} stores data fetched`);
-        }
-      }
+      // Skip manual WRC pulling loop (Moved to decoupled Cache System)
 
       // Track stores
       const screenedStores = new Set();
@@ -700,7 +620,7 @@ class PrepClosingService {
 
             try {
               const result = await withTimeout(
-                this.processSingleStore(store, strPeriode, strYear, strMonth, wrcDataByBranch[cab]),
+                this.processSingleStore(store, strPeriode, strYear, strMonth),
                 config.parallelProcessing.storeTimeoutMs,
                 `process store ${storeCode}`
               );
@@ -1365,6 +1285,41 @@ class PrepClosingService {
       };
     } catch (error) {
       logger.error(`[prep_closing.service] Error getExportData: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get Rules Configuration
+   */
+  async getRulesConfig() {
+    try {
+      const rulesPath = path.resolve(config.rulesPath);
+      const data = await fs.readFile(rulesPath, "utf8");
+      return JSON.parse(data);
+    } catch (error) {
+      logger.error(`[prep_closing.service] Failed to get rules config: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Update Rules Configuration
+   */
+  async updateRulesConfig(rulesData, username) {
+    try {
+      const rulesPath = path.resolve(config.rulesPath);
+      rulesData.lastUpdated = new Date().toISOString();
+      rulesData.updatedBy = username;
+      await fs.writeFile(rulesPath, JSON.stringify(rulesData, null, 2), "utf8");
+      
+      // Force reload the rule engine so the next execution picks up new rules
+      await ruleEngine.forceReload();
+      logger.info(`[prep_closing.service] Rules configuration updated by ${username}`);
+      
+      return rulesData;
+    } catch (error) {
+      logger.error(`[prep_closing.service] Failed to update rules config: ${error.message}`);
       throw error;
     }
   }

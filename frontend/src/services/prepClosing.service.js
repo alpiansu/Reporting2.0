@@ -109,6 +109,24 @@ export const prepClosingApi = {
     return response.data.data;
   },
 
+  // ==================== RULES CONFIG ENDPOINTS ====================
+
+  /**
+   * Get full rules configuration data
+   */
+  async getRulesConfig() {
+    const response = await api.get(`${BASE_URL}/rules`);
+    return response.data;
+  },
+
+  /**
+   * Update full rules configuration data
+   */
+  async updateRulesConfig(rulesData) {
+    const response = await api.put(`${BASE_URL}/rules`, rulesData);
+    return response.data;
+  },
+
   // ==================== EXPORT ENDPOINT ====================
   async getExportData(params) {
     const response = await api.get(`${BASE_URL}/export-data`, {
@@ -118,6 +136,26 @@ export const prepClosingApi = {
         searchQuery: params.searchQuery || "",
         ruleKeys: Array.isArray(params.ruleKeys) ? params.ruleKeys.join(",") : params.ruleKeys || undefined,
       },
+    });
+    return response.data;
+  },
+  
+  // ==================== WRC EXTRACTOR ENDPOINTS ====================
+  async getWrcExtractRules() {
+    const response = await api.get(`${BASE_URL}/wrc-extract-rules`);
+    return response.data;
+  },
+
+  async updateWrcExtractRules(rulesData) {
+    const response = await api.put(`${BASE_URL}/wrc-extract-rules`, rulesData);
+    return response.data;
+  },
+
+  async triggerWrcExtraction(periode, cabang = "All", shops = null) {
+    const response = await api.post(`${BASE_URL}/wrc-extract-trigger`, {
+      periode,
+      cabang,
+      shops
     });
     return response.data;
   },

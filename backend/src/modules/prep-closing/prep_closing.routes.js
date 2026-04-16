@@ -16,6 +16,12 @@ router.get("/summary", prepClosingController.getSummary);
 // Get rules summary
 router.get("/rules-summary", prepClosingController.getRulesSummary);
 
+// Get rules data
+router.get("/rules", prepClosingController.getRules);
+
+// Update rules data
+router.put("/rules", prepClosingController.updateRules);
+
 // Get resume per store (paginated)
 router.get("/resumePerShop", prepClosingController.getResumeByKdtk);
 
@@ -30,5 +36,14 @@ router.get("/export-data", prepClosingController.getExportData);
 
 // Update or create note for a specific store and periode
 router.put("/note", prepClosingController.updateNote);
+
+// WRC Extractor - Get Rules
+router.get("/wrc-extract-rules", prepClosingController.getWrcExtractRules);
+
+// WRC Extractor - Update Rules
+router.put("/wrc-extract-rules", prepClosingController.updateWrcExtractRules);
+
+// WRC Extractor - Trigger Sync Data
+router.post("/wrc-extract-trigger", prepClosingController.triggerWrcExtraction);
 
 export default router;

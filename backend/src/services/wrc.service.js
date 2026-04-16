@@ -57,6 +57,32 @@ class wrcBulananService {
       if (conDBEdp) await conDBEdp.end();
     }
   }
+
+  /**
+   * Get all active branches that have WRC connection strings
+   * @returns {Promise<Array<string>>} Array of branch codes
+   */
+  async getAllCabangWrc() {
+    let conDBEdp;
+    try {
+      conDBEdp = await mysql.createConnection({
+        host: this.config.host,
+        user: this.config.user,
+        password: this.config.password,
+        database: this.config.database,
+      });
+      const [rows] = await conDBEdp.execute(
+        `SELECT DISTINCT kode_cab FROM config_cabang WHERE rkey IN('constringwrc')`
+      );
+      return rows.map(r => r.kode_cab);
+    } catch (error) {
+      logger.error(`getAllCabangWrc error: ${error.message}`);
+      throw error;
+    } finally {
+      if (conDBEdp) await conDBEdp.end();
+    }
+  }
+
   constructor() {
     this.config = syncConfig.externalDbEDP;
     this.connection = null;

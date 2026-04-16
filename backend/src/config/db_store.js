@@ -98,6 +98,10 @@ class DbStoreService {
       // Database configurations to try - expanded array for multiple options
       const dbConfigurations = [
         {
+          user: "kasir",
+          password: "ZjHPhpS3T4+YFNh3F94EWJn4m/TeNsBFE=DS0J/Y7Vu4",
+        },
+        {
           user: "root",
           password: "phha8KKaFMraZOx7X4WYkJRJE6nlIrREM=XeAb9A5JTq",
         },

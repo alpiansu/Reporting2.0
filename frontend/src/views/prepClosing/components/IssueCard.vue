@@ -27,7 +27,7 @@
                     <span class="value-label">Actual:</span>
                     <span class="value-content actual">{{ formatValue(issue.actual) }}</span>
                 </div>
-                <div v-if="issue.delta !== undefined && issue.ui.showDelta" class="value-item">
+                <div v-if="issue.delta !== undefined && issue.delta !== null && issue.ui.showDelta" class="value-item">
                     <span class="value-label">Delta:</span>
                     <span class="value-content delta" :class="getDeltaClass(issue.delta)">
                         {{ formatDelta(issue.delta, issue.ui.formatDelta) }}
@@ -112,14 +112,16 @@ const formatValue = (value) => {
 };
 
 const formatDelta = (delta, format) => {
+    if (delta === null || delta === undefined) return '-';
     const prefix = delta > 0 ? '+' : '';
     if (format === 'currency') {
         return prefix + formatCurrency(delta);
     }
-    return prefix + delta.toLocaleString('id-ID');
+    return prefix + Number(delta).toLocaleString('id-ID');
 };
 
 const getDeltaClass = (delta) => {
+    if (delta === null || delta === undefined) return 'neutral';
     if (delta > 0) return 'positive';
     if (delta < 0) return 'negative';
     return 'neutral';

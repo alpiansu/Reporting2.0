@@ -221,7 +221,12 @@ class RekapRemoteService {
             if (!resilientDb.isDatabaseAvailable()) {
               logger.info(`Database not available, attempting force reconnect... [REKAP REMOTE]`);
               try {
-                await resilientDb.forceReconnect();
+                await Promise.race([
+                  resilientDb.forceReconnect(),
+                  new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error("forceReconnect timeout after 15 seconds")), 15000)
+                  ),
+                ]);
                 logger.info(`Database reconnection successful [REKAP REMOTE]`);
               } catch (reconnectError) {
                 logger.error(`Force reconnect failed: ${reconnectError.message} [REKAP REMOTE]`);
@@ -256,7 +261,12 @@ class RekapRemoteService {
               // Attempt force reconnect on database unavailable error
               try {
                 logger.info(`Attempting force reconnect due to database error [REKAP REMOTE]`);
-                await resilientDb.forceReconnect();
+                await Promise.race([
+                  resilientDb.forceReconnect(),
+                  new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error("forceReconnect timeout after 15 seconds")), 15000)
+                  ),
+                ]);
                 logger.info(`Database reconnection successful, retrying operation [REKAP REMOTE]`);
                 // Don't increment retry count for reconnect attempts
                 retryCount--;

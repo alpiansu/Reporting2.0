@@ -176,13 +176,18 @@ class RekonVirtualService {
       const endDate = moment(`${year}-${month}`, "YYYY-MM").endOf("month").format("YYYY-MM-DD");
 
       // Get data from database specifically for this period
-      const dbData = await SaldoVirtual.findAll({
-        where: {
-          TANGGAL: {
-            [Op.between]: [startDate, endDate],
+      const dbData = await Promise.race([
+        SaldoVirtual.findAll({
+          where: {
+            TANGGAL: {
+              [Op.between]: [startDate, endDate],
+            },
           },
-        },
-      });
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("syncToJsonFile findAll timeout after 60 seconds")), 60000)
+        ),
+      ]);
 
       // Convert to plain objects and ensure numeric fields are numbers
       this.virtualData = dbData.map(item => {
@@ -519,8 +524,22 @@ class RekonVirtualService {
         });
       }
 
-      // Save logs to database
-      await RekapRemoteService.saveLogsToDatabase();
+      // Save logs to database - dengan global timeout agar tidak hang selamanya
+      const FINALIZE_TIMEOUT_MS = 2 * 60 * 1000; // 2 menit
+      try {
+        await Promise.race([
+          RekapRemoteService.saveLogsToDatabase(),
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error("saveLogsToDatabase timeout after 2 minutes")),
+              FINALIZE_TIMEOUT_MS
+            )
+          ),
+        ]);
+      } catch (saveErr) {
+        logger.error(`[rekon_virtual_mrg.service] saveLogsToDatabase error/timeout: ${saveErr.message}`);
+        // Tidak throw - lanjut agar completeProgress tetap terpanggil
+      }
 
       //update status to progress service if not skipping
       if (!skipProgress) {
@@ -530,10 +549,32 @@ class RekonVirtualService {
         });
       }
 
-      // Sync database to JSON file after write operations
+      // Sync database to JSON file - langsung merge ke memory
       if (newRecords.length > 0) {
-        await this.syncToJsonFile(options.periode);
-        logger.info(`Synchronized ${newRecords.length} new records from database to JSON file for periode ${options.periode}`);
+        try {
+          await this.ensureDataLoaded(options.periode);
+          
+          // Merge newRecords ke virtualData di memory
+          for (const record of newRecords) {
+            const idx = this.virtualData.findIndex(
+              v => v.CABANG === record.CABANG &&
+                   v.SHOP === record.SHOP &&
+                   v.TANGGAL === record.TANGGAL &&
+                   v.PRDCD === record.PRDCD
+            );
+            if (idx >= 0) {
+              this.virtualData[idx] = record; // update
+            } else {
+              this.virtualData.push(record);  // insert
+            }
+          }
+          
+          await this.saveToFile(options.periode);
+          this.lastLoadTime = Date.now();
+          logger.info(`[FINALIZE] JSON synced from memory, ${newRecords.length} records merged`);
+        } catch (syncErr) {
+          logger.error(`[rekon_virtual_mrg.service] syncToJsonFile error: ${syncErr.message}`);
+        }
       }
 
       const timeCompleted = moment().format("YYYY-MM-DD HH:mm:ss");

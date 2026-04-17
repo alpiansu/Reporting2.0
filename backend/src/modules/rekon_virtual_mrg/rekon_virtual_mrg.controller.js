@@ -249,6 +249,19 @@ export const insertFromStore = async (req, res) => {
 };
 
 /**
+ * Sync all data from database to period-based JSON files (Migration)
+ */
+export const syncAllData = async (req, res) => {
+  try {
+    const result = await rekonVirtualService.syncAllData();
+    return apiResponse.success(res, { message: "Migration completed successfully", data: result });
+  } catch (error) {
+    logger.error(`Error in syncAllData: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+/**
  * Update or create note for a specific record
  * PUT /api/rekon-virtual-mrg/note/:cabang/:shop/:tanggal/:prdcd
  */

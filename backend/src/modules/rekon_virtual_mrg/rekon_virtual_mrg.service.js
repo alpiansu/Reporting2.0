@@ -16,12 +16,13 @@ import notesService from "../notes/notes.service.js";
 import progressService from "../progress/progress.service.js";
 import { Op } from "sequelize";
 
-// Path untuk file JSON rekon_virtual_mrg
-const REKON_VIRTUAL_MRG_JSON_PATH = path.join(process.cwd(), "data/rekon_virtual_mrg.json");
+// Path untuk folder JSON rekon_virtual_mrg_based (akan di-split per periode)
+const VIRTUAL_MRG_DATA_DIR = path.join(process.cwd(), "data/virtual_mrg_based");
 
 class RekonVirtualService {
   constructor() {
     this.virtualData = [];
+    this.loadedPeriod = null; // Menandakan periode mana yang sedang di-load di memory
     this.initialized = false;
 
     // TTL Cache Management
@@ -31,18 +32,28 @@ class RekonVirtualService {
   }
 
   /**
-   * Initialize the service by loading data from JSON file
+   * Get JSON file path for a specific period
+   * @param {string} periode - Period in YYMM format
+   */
+  getJsonPath(periode) {
+    if (!periode) return null;
+    return path.join(VIRTUAL_MRG_DATA_DIR, `rekon_virtual_mrg_${periode}.json`);
+  }
+
+  /**
+   * Initialize the service by loading data from JSON file for specific period
    * Creates the file and directory if they don't exist
    */
-  async initialize() {
+  async initialize(periode) {
+    if (!periode) return;
     try {
       // Create directory if it doesn't exist
-      const dir = path.dirname(REKON_VIRTUAL_MRG_JSON_PATH);
-      await fs.mkdir(dir, { recursive: true });
+      await fs.mkdir(VIRTUAL_MRG_DATA_DIR, { recursive: true });
 
+      const jsonPath = this.getJsonPath(periode);
       try {
         // Try to read the file
-        const data = await fs.readFile(REKON_VIRTUAL_MRG_JSON_PATH, "utf8");
+        const data = await fs.readFile(jsonPath, "utf8");
         const rawData = JSON.parse(data);
 
         // Ensure numeric fields are numbers when loading from JSON
@@ -55,18 +66,20 @@ class RekonVirtualService {
           SEL: Number(item.SEL) || 0,
         }));
 
-        logger.info(`Loaded ${this.virtualData.length} rekon_virtual_mrg records from JSON file`);
+        logger.info(`Loaded ${this.virtualData.length} rekon_virtual_mrg records for periode ${periode} from JSON`);
       } catch (error) {
         // If file doesn't exist or is invalid, create an empty file
         if (error.code === "ENOENT" || error instanceof SyntaxError) {
           this.virtualData = [];
-          await this.saveToFile();
-          logger.info("Created new rekon_virtual_mrg.json file");
+          this.loadedPeriod = periode;
+          await this.saveToFile(periode);
+          logger.info(`Created new rekon_virtual_mrg_${periode}.json file`);
         } else {
           throw error;
         }
       }
 
+      this.loadedPeriod = periode;
       this.initialized = true;
     } catch (error) {
       logger.error(`Failed to initialize rekon_virtual_mrg service: ${error.message}`);
@@ -77,10 +90,13 @@ class RekonVirtualService {
   /**
    * Save rekon_virtual_mrg data to JSON file
    */
-  async saveToFile() {
+  async saveToFile(periode) {
+    if (!periode) return;
     try {
-      await fs.writeFile(REKON_VIRTUAL_MRG_JSON_PATH, JSON.stringify(this.virtualData, null, 2));
-      logger.debug(`Saved ${this.virtualData.length} rekon_virtual_mrg records to JSON file`);
+      const jsonPath = this.getJsonPath(periode);
+      if (!jsonPath) return;
+      await fs.writeFile(jsonPath, JSON.stringify(this.virtualData, null, 2));
+      logger.debug(`Saved ${this.virtualData.length} rekon_virtual_mrg records to JSON file: ${jsonPath}`);
     } catch (error) {
       logger.error(`Failed to save rekon_virtual_mrg to file: ${error.message}`);
       throw error;
@@ -88,11 +104,11 @@ class RekonVirtualService {
   }
 
   /**
-   * Check if cached data is still valid based on TTL
-   * @returns {boolean} True if cache is valid, false if expired
+   * Check if cached data is still valid based on TTL and period
+   * @returns {boolean} True if cache is valid, false if expired or period changed
    */
-  isCacheValid() {
-    if (!this.initialized || !this.lastLoadTime) {
+  isCacheValid(periode) {
+    if (!this.initialized || !this.lastLoadTime || this.loadedPeriod !== periode) {
       return false;
     }
 
@@ -107,6 +123,7 @@ class RekonVirtualService {
   invalidateCache() {
     this.virtualData = [];
     this.initialized = false;
+    this.loadedPeriod = null;
     this.lastLoadTime = null;
     this.isLoading = false;
     logger.info("Rekon Virtual MRG cache invalidated manually");
@@ -114,15 +131,13 @@ class RekonVirtualService {
 
   /**
    * Ensure data is loaded with TTL-based lazy loading
-   * Only loads data when needed and cache is expired
+   * Only loads data when needed, cache is expired, or period changed
    */
-  /**
-   * Ensure data is loaded with TTL-based lazy loading
-   * Only loads data when needed and cache is expired
-   */
-  async ensureDataLoaded() {
+  async ensureDataLoaded(periode) {
+    if (!periode) return;
+
     // If cache is still valid, no need to reload
-    if (this.isCacheValid()) {
+    if (this.isCacheValid(periode)) {
       return;
     }
 
@@ -132,14 +147,14 @@ class RekonVirtualService {
       while (this.isLoading) {
         await new Promise(resolve => setTimeout(resolve, 100));
       }
-      return;
+      if (this.isCacheValid(periode)) return;
     }
 
     try {
       this.isLoading = true;
-      logger.info("Loading rekon_virtual_mrg data from JSON file (cache expired or empty)");
+      logger.info(`Loading rekon_virtual_mrg data from JSON file for periode ${periode} (cache expired or empty)`);
 
-      await this.initialize();
+      await this.initialize(periode);
       this.lastLoadTime = Date.now();
 
       logger.info(`Data loaded successfully. TTL expires at: ${new Date(this.lastLoadTime + this.TTL).toISOString()}`);
@@ -149,13 +164,25 @@ class RekonVirtualService {
   }
 
   /**
-   * Synchronize data from database to JSON file
+   * Synchronize data from database to JSON file for a specific period
    * Call this after any write operation to keep JSON in sync
    */
-  async syncToJsonFile() {
+  async syncToJsonFile(periode) {
+    if (!periode) return 0;
     try {
-      // Get all data from database
-      const dbData = await SaldoVirtual.findAll();
+      const year = "20" + periode.substring(0, 2);
+      const month = periode.substring(2, 4);
+      const startDate = `${year}-${month}-01`;
+      const endDate = moment(`${year}-${month}`, "YYYY-MM").endOf("month").format("YYYY-MM-DD");
+
+      // Get data from database specifically for this period
+      const dbData = await SaldoVirtual.findAll({
+        where: {
+          TANGGAL: {
+            [Op.between]: [startDate, endDate],
+          },
+        },
+      });
 
       // Convert to plain objects and ensure numeric fields are numbers
       this.virtualData = dbData.map(item => {
@@ -171,19 +198,71 @@ class RekonVirtualService {
         };
       });
 
+      this.loadedPeriod = periode;
+
       // Save to file
-      await this.saveToFile();
+      await this.saveToFile(periode);
 
       // Update cache timestamp since we just loaded fresh data
       this.lastLoadTime = Date.now();
       this.initialized = true;
 
-      logger.info(`Synchronized ${this.virtualData.length} rekon_virtual_mrg records to JSON file`);
+      logger.info(`Synchronized ${this.virtualData.length} rekon_virtual_mrg records to JSON file for periode ${periode}`);
       logger.info(`Cache refreshed. TTL expires at: ${new Date(this.lastLoadTime + this.TTL).toISOString()}`);
 
       return this.virtualData.length;
     } catch (error) {
       logger.error(`Failed to synchronize rekon_virtual_mrg data: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Sync all data from database to period-based JSON files (Migration)
+   */
+  async syncAllData() {
+    try {
+      logger.info("Starting sync all data (Migration) to period-based JSON files...");
+      const dbData = await SaldoVirtual.findAll();
+      
+      // Group by periode
+      const groupedData = {};
+      
+      for (const item of dbData) {
+        const plainItem = item.get({ plain: true });
+        const record = {
+          ...plainItem,
+          ACOST: Number(plainItem.ACOST) || 0,
+          PRICE: Number(plainItem.PRICE) || 0,
+          QTY_MSTRAN: Number(plainItem.QTY_MSTRAN) || 0,
+          QTY_MTRAN: Number(plainItem.QTY_MTRAN) || 0,
+          SEL: Number(plainItem.SEL) || 0,
+        };
+        
+        const periode = moment(record.TANGGAL).format("YYMM");
+        if (!groupedData[periode]) {
+          groupedData[periode] = [];
+        }
+        groupedData[periode].push(record);
+      }
+      
+      // Save each group to its file
+      let totalFiles = 0;
+      let totalRecords = 0;
+      
+      await fs.mkdir(VIRTUAL_MRG_DATA_DIR, { recursive: true });
+      for (const [periode, records] of Object.entries(groupedData)) {
+        const jsonPath = this.getJsonPath(periode);
+        await fs.writeFile(jsonPath, JSON.stringify(records, null, 2));
+        logger.info(`Saved ${records.length} records to ${jsonPath}`);
+        totalFiles++;
+        totalRecords += records.length;
+      }
+      
+      logger.info(`Migration complete: Saved ${totalRecords} records across ${totalFiles} period files`);
+      return { totalFiles, totalRecords };
+    } catch (error) {
+      logger.error(`Error in syncAllData: ${error.message}`);
       throw error;
     }
   }
@@ -335,11 +414,7 @@ class RekonVirtualService {
               }
 
               // --- Create DB connection --- //
-              const storeConnection = await withTimeout(
-                dbStore.createDbStore(storeInfo.dbHost, config.connectionRetry.maxRetries),
-                10000,
-                `connect ${storeCode}`,
-              );
+              const storeConnection = await dbStore.createDbStore(storeInfo.dbHost, config.connectionRetry.maxRetries);
 
               if (!storeConnection) {
                 await RekapRemoteService.addToTemp(
@@ -354,7 +429,7 @@ class RekonVirtualService {
 
               try {
                 const params = `${strYear}-${strMonth}`;
-                const [result] = await storeConnection.query(config.queries.store, [params, params, params, params]);
+                const [result] = await storeConnection.query({ sql: config.queries.store, timeout: config.parallelProcessing.queryTimeoutMs }, [params, params, params, params]);
 
                 await RekapRemoteService.addToTemp(
                   cab,
@@ -457,8 +532,8 @@ class RekonVirtualService {
 
       // Sync database to JSON file after write operations
       if (newRecords.length > 0) {
-        await this.syncToJsonFile();
-        logger.info(`Synchronized ${newRecords.length} new records from database to JSON file`);
+        await this.syncToJsonFile(options.periode);
+        logger.info(`Synchronized ${newRecords.length} new records from database to JSON file for periode ${options.periode}`);
       }
 
       const timeCompleted = moment().format("YYYY-MM-DD HH:mm:ss");
@@ -491,8 +566,9 @@ class RekonVirtualService {
 
   async deleteStorePeriod(cabang, shop, year, month) {
     try {
+      const periode = year.substring(2) + month;
       // pastikan cache memory terload
-      await this.ensureDataLoaded();
+      await this.ensureDataLoaded(periode);
 
       const ym = `${year}-${month}`;
 
@@ -585,7 +661,7 @@ class RekonVirtualService {
 
     try {
       // Ensure data is loaded from JSON file
-      await this.ensureDataLoaded();
+      await this.ensureDataLoaded(periode);
 
       // Build filter function
       const filterFn = this.buildFilterFunction({ cabang, periode });
@@ -620,7 +696,7 @@ class RekonVirtualService {
 
     try {
       // Ensure data is loaded from JSON file
-      await this.ensureDataLoaded();
+      await this.ensureDataLoaded(periode);
 
       // Build filter function
       const filterFn = this.buildFilterFunction({ cabang, periode });
@@ -658,7 +734,7 @@ class RekonVirtualService {
 
     try {
       // Ensure data is loaded from JSON file
-      await this.ensureDataLoaded();
+      await this.ensureDataLoaded(periode);
 
       // Build filter function
       const filterFn = this.buildFilterFunction({ cabang, periode, shop });
@@ -773,7 +849,8 @@ class RekonVirtualService {
       });
 
       // Sync to JSON file after write operation
-      await this.syncToJsonFile();
+      const periode = moment(data.TANGGAL).format("YYMM");
+      await this.syncToJsonFile(periode);
 
       return record;
     } catch (error) {
@@ -801,7 +878,8 @@ class RekonVirtualService {
       }
 
       // Sync to JSON file after write operation
-      await this.syncToJsonFile();
+      const periode = moment(tanggal).format("YYMM");
+      await this.syncToJsonFile(periode);
 
       return this.getRecord(cabang, shop, tanggal, prdcd);
     } catch (error) {
@@ -829,7 +907,8 @@ class RekonVirtualService {
       }
 
       // Sync to JSON file after write operation
-      await this.syncToJsonFile();
+      const periode = moment(tanggal).format("YYMM");
+      await this.syncToJsonFile(periode);
 
       return true;
     } catch (error) {
@@ -854,7 +933,7 @@ class RekonVirtualService {
       storeConnection = await dbStore.createDbStore(storeInfo.dbHost, 2);
 
       // Execute store query
-      const [results] = await storeConnection.query(config.queries.store, [month, year]);
+      const [results] = await storeConnection.query({ sql: config.queries.store, timeout: config.parallelProcessing.queryTimeoutMs }, [month, year]);
 
       // Bulk create records to database
       if (results.length > 0) {
@@ -863,7 +942,8 @@ class RekonVirtualService {
         });
 
         // Sync to JSON file after write operation
-        await this.syncToJsonFile();
+        const periode = year.toString().slice(-2) + month.toString().padStart(2, '0');
+        await this.syncToJsonFile(periode);
       }
 
       return {

@@ -127,15 +127,20 @@ class WrcExtractorService {
          // Merge logic
          for (const row of returnedRows) {
            const code = row.KODE_TOKO || row.kode_toko || row.KDTK;
-           const val = row[rule.valueField];
+           
+           // Temukan nama property yang cocok tak peduli kecil / kapital
+           const ignoreCaseKey = Object.keys(row).find(k => k.toLowerCase() === rule.valueField.toLowerCase());
+           const val = ignoreCaseKey ? row[ignoreCaseKey] : undefined;
 
-           if (code) {
-             // Specific store code exists
-             if (!targetFolder.stores[code]) targetFolder.stores[code] = {};
-             targetFolder.stores[code][rule.valueField] = val;
-           } else {
-             // Branch level scalar data
-             targetFolder.branch_level_data[rule.valueField] = val;
+           if (val !== undefined) {
+             if (code && code.toString().toUpperCase() !== 'GLOBAL') {
+               // Specific store code exists
+               if (!targetFolder.stores[code]) targetFolder.stores[code] = {};
+               targetFolder.stores[code][rule.key] = val;
+             } else {
+               // Branch level scalar data
+               targetFolder.branch_level_data[rule.key] = val;
+             }
            }
          }
 

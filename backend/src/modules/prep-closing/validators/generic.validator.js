@@ -31,15 +31,25 @@ export async function generic_sql_check(connection, context, rule) {
   }
 
   // Parse expected value if there's any dynamic context variable in it
-  let processedExpected = expected;
-  if (typeof expected === "string") {
+  // Gunakan rule.validation.expected, jika tak ada, gunakan cadangan rule.query.compareWith
+  let rawExpected = expected !== undefined && expected !== null ? expected : (rule.query?.compareWith ?? null);
+  let processedExpected = rawExpected;
+
+  if (typeof rawExpected === "string") {
     for (const [key, value] of Object.entries(context)) {
       const regex = new RegExp(`\\{${key}\\}`, "g");
       processedExpected = processedExpected.replace(regex, value ?? "");
     }
+    // Cleanup tak tersisa: Apabila ada tag {...} yang datanya gaib/hilang dari WRC Server (e.g gara-gara store tak ada data), ganti ke 0
+    processedExpected = processedExpected.replace(/\{[a-zA-Z0-9_]+\}/g, "0");
   }
 
   let passed = false;
+  
+  // Perhitungan Delta (kalkulasi simpangan selisih numerik)
+  let numericActual = Number(actualValue);
+  let numericExpected = Number(processedExpected);
+  let deltaValue = (isNaN(numericActual) || isNaN(numericExpected)) ? null : Math.abs(numericActual - numericExpected);
 
   // Execute Dynamic Operator Evaluation
   switch (operator) {
@@ -74,6 +84,19 @@ export async function generic_sql_check(connection, context, rule) {
         passed = String(processedExpected).split(",").map(i => i.trim()).includes(String(actualValue));
       }
       break;
+    case "DELTA_EQUALS":
+      // Toleransi harus sama persis dengan angka yang tertera di JSON (default: 0)
+      passed = deltaValue !== null && deltaValue === (rule.validation.tolerance || 0);
+      break;
+    case "DELTA_WITHIN":
+      // Hasil selisih tidak boleh melebihi batas toleransi maksimal di JSON
+      passed = deltaValue !== null && deltaValue <= (rule.validation.tolerance || 0);
+      break;
+    case "CUSTOM":
+      // Trigger logik manual (secara default di-fail-kan ke issues karena selalu butuh visualisasi manual stmast dsb)
+      // Namun karena rata-rata tingkat errornya severity: "low", tidak menghalangi status isReady = true
+      passed = false;
+      break;
     default:
       logger.warn(`[GenericValidator] Unsupported operator '${operator}' in rule '${rule.key}'`);
       passed = false;
@@ -83,13 +106,15 @@ export async function generic_sql_check(connection, context, rule) {
   const message = passed 
     ? (passMessage || "Validation passed") 
     : (failMessage || "Validation failed")
-        .replace("{actual}", actualValue !== null ? actualValue : "NULL")
-        .replace("{expected}", processedExpected !== null ? processedExpected : "NULL");
+        .replace(/{actual}/g, actualValue !== null ? actualValue : "NULL")
+        .replace(/{expected}/g, processedExpected !== null ? processedExpected : "NULL")
+        .replace(/{delta}/g, deltaValue !== null ? deltaValue : "NULL");
 
   return {
     passed,
     expected: processedExpected,
     actual: actualValue,
+    delta: deltaValue,
     message,
   };
 }

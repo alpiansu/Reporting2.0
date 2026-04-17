@@ -218,17 +218,18 @@ class PrepClosingService {
    */
   async getSaldoFromWrc(kdtk, cab) {
     try {
-      if (!wrcExtractorService.cacheData?.data_by_cabang) {
+      if (!wrcExtractorService.cacheData?.last_extracted_at) {
         await wrcExtractorService.loadCache();
       }
       const globalData = wrcExtractorService.cacheData?.data_by_cabang?.[cab]?.branch_level_data || {};
+      const globalStoreFallback = wrcExtractorService.cacheData?.data_by_cabang?.[cab]?.stores?.['GLOBAL'] || {};
       const storeData = wrcExtractorService.cacheData?.data_by_cabang?.[cab]?.stores?.[kdtk] || {};
 
-      const combinedWrcData = { ...globalData, ...storeData };
+      const combinedWrcData = { ...globalData, ...globalStoreFallback, ...storeData };
 
       return {
         saldoBlnQty: combinedWrcData.saldo_akh_wrc_toko ? parseFloat(combinedWrcData.saldo_akh_wrc_toko) : 0,
-        saldoBlnRp: 0,
+        saldoBlnRp: combinedWrcData.rp_saldo_akh_wrc_toko ? parseFloat(combinedWrcData.rp_saldo_akh_wrc_toko) : 0,
         strBlnSlsWrc: combinedWrcData.bln_sls_wrc || null,
         strMaxBlnAktWrc: combinedWrcData.terakhir_bln_akt_wrc || null,
         ...combinedWrcData
@@ -285,8 +286,11 @@ class PrepClosingService {
           cab,
           kdtk: storeCode,
           periode: strPeriode,
+          period: strPeriode, // alias untuk mempermudah user config
           strYear,
+          year: strYear, // alias untuk konsistensi dengan WRC
           strMonth,
+          month: strMonth, // alias sinkronisasi WRC Extractor
           strPrd: moment(`${strYear}-${strMonth}-01`).subtract(1, "month").format("YYYYMM"),
           tblFilet,
           tblFiletMaju,

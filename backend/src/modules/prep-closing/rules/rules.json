@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastUpdated": "2026-04-16T06:07:48.989Z",
+  "lastUpdated": "2026-04-17T09:24:50.111Z",
   "updatedBy": "2013076089",
   "description": "Aturan pengecekan kesiapan closing bulanan",
   "rules": [
@@ -13,12 +13,12 @@
       "enabled": true,
       "query": {
         "type": "existence_check",
-        "sql": "SELECT bln_sls FROM bln_akt WHERE tahun='{year}' AND bulan='{month}' AND bln_sls!='{strBlnSlsWrc}'"
+        "sql": "SELECT bln_sls FROM bln_akt WHERE tahun='{year}' AND bulan='{month}'"
       },
       "validation": {
         "type": "null_check",
-        "operator": "IS_NULL",
-        "expected": null,
+        "operator": "EQUALS",
+        "expected": "{bln_sls_wrc}",
         "failMessage": "Bulan sales WRC tidak sesuai dengan periode closing (Ada data: {actual})",
         "passMessage": "Periode sales WRC sudah sesuai"
       },
@@ -49,7 +49,7 @@
       "validation": {
         "type": "comparison",
         "operator": "GREATER_THAN",
-        "expected": 0,
+        "expected": "0",
         "failMessage": "Tidak ada data bulan aktif untuk periode ini",
         "passMessage": "Data bulan aktif tersedia"
       },
@@ -81,7 +81,7 @@
       "validation": {
         "type": "equals",
         "operator": "EQUALS",
-        "expected": "{strMaxBlnAktWrc}",
+        "expected": "{terakhir_bln_akt_wrc}",
         "failMessage": "Periode terakhir bln_akt ({actual}) tidak sesuai dengan WRC ({expected})",
         "passMessage": "Periode terakhir bln_akt sudah sesuai"
       },
@@ -529,7 +529,8 @@
         "operator": "DELTA_EQUALS",
         "tolerance": 0,
         "failMessage": "Saldo qty tidak cocok | Toko: {actual} | WRC: {expected} | Selisih: {delta}",
-        "passMessage": "Saldo quantity cocok dengan WRC"
+        "passMessage": "Saldo quantity cocok dengan WRC",
+        "expected": "{saldo_akh_wrc_toko}"
       },
       "severity": "critical",
       "ui": {
@@ -563,7 +564,7 @@
         "tolerance": 50,
         "failMessage": "Saldo Rp selisih > Rp 50 | Toko: Rp {actual} | WRC: Rp {expected} | Selisih: Rp {delta}",
         "passMessage": "Saldo rupiah dalam batas toleransi (selisih Rp {delta})",
-        "expected": "{saldo_akh_wrc_toko}"
+        "expected": "{rp_saldo_akh_wrc_toko}"
       },
       "severity": "critical",
       "ui": {
@@ -593,16 +594,16 @@
       },
       "validation": {
         "type": "manual_check",
-        "operator": "CUSTOM",
-        "expected": "match_with_filet",
+        "operator": "DELTA_EQUALS",
+        "expected": "{saldo_akh_wrc_toko}",
         "failMessage": "Perlu pengecekan manual: Bandingkan saldo stmast dengan filet",
         "passMessage": "Data stmast tersedia untuk pengecekan"
       },
-      "severity": "low",
+      "severity": "critical",
       "ui": {
         "icon": "pi pi-sync",
         "color": "#6b7280",
-        "helpText": "Saldo di stmast sebaiknya konsisten dengan filet",
+        "helpText": "Saldo di stmast sebaiknya konsisten dengan filet di wrc",
         "fixable": false,
         "expandable": true
       },

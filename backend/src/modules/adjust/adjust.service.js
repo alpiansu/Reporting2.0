@@ -308,7 +308,7 @@ class AdjustService {
       // Execute init queries
       await (async () => {
         for (const query of config.queries.store.init) {
-          await storeConnection.query(query);
+          await storeConnection.query({ sql: query, timeout: config.parallelProcessing.queryTimeoutMs });
         }
       })();
 
@@ -340,7 +340,7 @@ class AdjustService {
               record.PRDCD, // prdcd for WHERE clause
             ];
 
-            await storeConnection.query(config.queries.store.insertPlu, params);
+            await storeConnection.query({ sql: config.queries.store.insertPlu, timeout: config.parallelProcessing.queryTimeoutMs }, params);
           } catch (recordError) {
             logger.error(
               `Error processing record ${record.PRDCD} for store ${store.storeCode}: ${recordError.message}`
@@ -350,12 +350,12 @@ class AdjustService {
       })();
 
       // Execute safety check
-      await storeConnection.query(config.queries.store.safetyCek, [FILET]);
+      await storeConnection.query({ sql: config.queries.store.safetyCek, timeout: config.parallelProcessing.queryTimeoutMs }, [FILET]);
 
       // Execute finalize queries
       await (async () => {
         for (const query of config.queries.store.finalize) {
-          await storeConnection.query(query);
+          await storeConnection.query({ sql: query, timeout: config.parallelProcessing.queryTimeoutMs });
         }
       })();
 
@@ -368,18 +368,18 @@ class AdjustService {
               record.PRDCD, // prdcd
             ];
 
-            const [result] = await storeConnection.query(config.queries.store.insertTran, params);
+            const [result] = await storeConnection.query({ sql: config.queries.store.insertTran, timeout: config.parallelProcessing.queryTimeoutMs }, params);
 
             if (result.affectedRows > 0) {
               result.processed++;
 
               // Query untuk mendapatkan detail row yang baru diinsert
               const [insertedRows] = await storeConnection.query(
-                `SELECT rtype, bukti_no, prdcd, qty, price, gross, gross_jual 
+                { sql: `SELECT rtype, bukti_no, prdcd, qty, price, gross, gross_jual 
                 FROM mstadj 
                 WHERE prdcd = ? 
                 ORDER BY recid DESC 
-                LIMIT ?`,
+                LIMIT ?`, timeout: config.parallelProcessing.queryTimeoutMs },
                 [record.PRDCD, result.affectedRows]
               );
 

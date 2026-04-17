@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastUpdated": "2026-04-17T09:24:50.111Z",
+  "lastUpdated": "2026-04-17T11:24:33.097Z",
   "updatedBy": "2013076089",
   "description": "Aturan pengecekan kesiapan closing bulanan",
   "rules": [
@@ -238,8 +238,8 @@
       },
       "validation": {
         "type": "not_null_and_valid_date",
-        "operator": "IS_NOT_NULL",
-        "expected": "valid_date",
+        "operator": "VALID_DATE",
+        "expected": "",
         "failMessage": "Konstanta CPI tidak valid atau kosong: {actual}",
         "passMessage": "Konstanta CPI sudah valid"
       },
@@ -778,6 +778,10 @@
     "IS_NOT_NULL": {
       "label": "Harus Ada",
       "description": "Value tidak boleh null atau undefined"
+    },
+    "VALID_DATE": {
+      "label": "Harus Tanggal Valid",
+      "description": "Value harus berformat Date/Datetime asli dan tidak boleh 0000-00-00"
     },
     "EQUALS": {
       "label": "Harus Sama Dengan",

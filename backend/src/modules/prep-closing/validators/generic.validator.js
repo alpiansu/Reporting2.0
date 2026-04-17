@@ -62,8 +62,26 @@ export async function generic_sql_check(connection, context, rule) {
     case "IS_NULL":
       passed = actualValue === null || actualValue === undefined || actualValue === "";
       break;
+    case "NOT_NULL":
     case "IS_NOT_NULL":
-      passed = actualValue !== null && actualValue !== undefined && actualValue !== "";
+      // Dukungan Backward Compatibility untuk rule lama yang mensyaratkan "expected": "valid_date" di bawah bendera NOT_NULL
+      if (String(processedExpected).toLowerCase() === "valid_date") {
+        passed = actualValue !== null && 
+                 actualValue !== undefined && 
+                 actualValue !== "" && 
+                 String(actualValue) !== "0000-00-00" && 
+                 String(actualValue) !== "0000-00-00 00:00:00";
+      } else {
+        passed = actualValue !== null && actualValue !== undefined && actualValue !== "";
+      }
+      break;
+    case "VALID_DATE":
+      // Validasi Tanggal Khusus: Tolak null, undefined, string kosong, dan format tanggal invalid bawaan MySQL.
+      passed = actualValue !== null && 
+               actualValue !== undefined && 
+               actualValue !== "" && 
+               String(actualValue) !== "0000-00-00" && 
+               String(actualValue) !== "0000-00-00 00:00:00";
       break;
     case "GREATER_THAN":
       passed = Number(actualValue) > Number(processedExpected);

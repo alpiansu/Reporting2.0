@@ -17,6 +17,11 @@ class NotesService {
     this.cache = null;
     this.cacheTimer = null;
     this.lastLoaded = 0;
+
+    this.userMap = null;
+    this.userMapLoadedAt = 0;
+    this.userMapTTL = 10 * 60 * 1000; // 10 menit
+    this.userMapPromise = null;
   }
 
   /** Ensure JSON file exists */
@@ -60,19 +65,42 @@ class NotesService {
   // CORE OPERATIONS
   // -----------------------------------------------------
 
+  async ensureUserMap() {
+    const now = Date.now();
+    if (this.userMap && now - this.userMapLoadedAt < this.userMapTTL) {
+      return this.userMap;
+    }
+
+    if (this.userMapPromise) {
+      return await this.userMapPromise;
+    }
+
+    this.userMapPromise = (async () => {
+      try {
+        const users = await userService.getAllUsers();
+        this.userMap = new Map(users.map(u => [u.username, u.fullName]));
+        this.userMapLoadedAt = Date.now();
+      } catch (err) {
+        logger.warn(`[Notes] Failed to fetch users for map: ${err.message}`);
+        if (!this.userMap) this.userMap = new Map();
+      } finally {
+        this.userMapPromise = null;
+      }
+      return this.userMap;
+    })();
+
+    return await this.userMapPromise;
+  }
+
   /** Get all notes (cached) */
   async getAll() {
     const notes = await this.readJson();
-    // Ambil semua user dari user service
-    const users = await userService.getAllUsers();
-
-    // Bikin map username -> fullName biar akses cepat
-    const userMap = new Map(users.map(u => [u.username, u.fullName]));
+    const userMap = await this.ensureUserMap();
 
     // Enrich each note
     return notes.map(note => ({
       ...note,
-      fullName: userMap.get(note.pic) || null, // jika user tidak ditemukan -> null
+      fullName: userMap.get(note.pic) || null,
     }));
   }
 

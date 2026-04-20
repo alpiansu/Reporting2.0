@@ -306,6 +306,8 @@ export const updateNote = async (req, res) => {
 
     const note = await notesService.upsert(noteData);
 
+    prepClosingService.notesCache = null;
+
     const result = { ...note.toJSON(), fullName: user?.fullName || null };
 
     return apiResponse.success(res, result);

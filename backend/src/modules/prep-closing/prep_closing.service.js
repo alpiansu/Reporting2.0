@@ -32,6 +32,21 @@ class PrepClosingService {
     // Multi-key cache for detailed records
     this.cacheDetailData = new Map();
     this.cacheTTL = 5 * 60 * 1000; // 5 minutes
+
+    // Task 1: issuesCache in-process
+    this.issuesCache = new Map();
+    this.issuesCachePeriode = null;
+    this.issuesCacheTTL = 30 * 60 * 1000; // 30 menit
+    this.issuesCachePromise = null;
+
+    // Task 2: storeNameMap sync lookup
+    this.storeNameMap = null;
+
+    // Task 3: notesCache
+    this.notesCache = null;
+    this.notesCacheTime = 0;
+    this.notesCacheTTL = 5 * 60 * 1000; // 5 menit
+    this.notesCachePromise = null;
   }
 
   /**
@@ -109,6 +124,13 @@ class PrepClosingService {
     this.lastLoadTime = null;
     this.isLoading = false;
     this.cacheDetailData.clear();
+
+    this.issuesCache.clear();
+    this.issuesCachePeriode = null;
+    this.storeNameMap = null;
+    this.notesCache = null;
+    this.notesCacheTime = 0;
+
     logger.info("[prep_closing.service] Cache invalidated");
   }
 
@@ -141,6 +163,84 @@ class PrepClosingService {
       this.isLoading = false;
     }
   }
+
+  // --- TASK 1: issuesCache ---
+  isIssuesCacheValid(periode) {
+    return this.issuesCachePeriode === periode && this.issuesCache.size > 0;
+  }
+
+  async loadIssuesCache(periode) {
+    if (this.isIssuesCacheValid(periode)) {
+      return;
+    }
+
+    if (this.issuesCachePromise) {
+      await this.issuesCachePromise;
+      return;
+    }
+
+    this.issuesCachePromise = (async () => {
+      try {
+        const model = await ScreeningPraClosing.getModel();
+        const records = await model.findAll({
+          where: { PRD_CLOSING: periode, RECID: "*" },
+          attributes: ["KDTK", "ISSUES"],
+        });
+
+        this.issuesCache.clear();
+        this.issuesCachePeriode = periode;
+
+        for (const rec of records) {
+          this.issuesCache.set(rec.KDTK, Array.isArray(rec.ISSUES) ? rec.ISSUES : []);
+        }
+
+        logger.info(`[prep_closing.service] issuesCache loaded for periode ${periode}. Stores cached: ${this.issuesCache.size}`);
+      } catch (error) {
+        logger.error(`[prep_closing.service] Error in loadIssuesCache: ${error.message}`);
+      } finally {
+        this.issuesCachePromise = null;
+      }
+    })();
+
+    await this.issuesCachePromise;
+  }
+
+  // --- TASK 2: storeNameMap ---
+  ensureStoreNameMap() {
+    if (!this.storeNameMap) {
+      this.storeNameMap = new Map();
+      if (storeService.stores && Array.isArray(storeService.stores)) {
+        for (const s of storeService.stores) {
+          this.storeNameMap.set(s.storeCode || s.kdtk, s.storeName || s.namaToko || "-");
+        }
+      }
+    }
+  }
+
+  // --- TASK 3: notesCache ---
+  async getCachedNotes() {
+    const now = Date.now();
+    if (this.notesCache && now - this.notesCacheTime < this.notesCacheTTL) {
+      return this.notesCache;
+    }
+
+    if (this.notesCachePromise) {
+      return await this.notesCachePromise;
+    }
+
+    this.notesCachePromise = (async () => {
+      try {
+        this.notesCache = await notesService.getAll();
+        this.notesCacheTime = Date.now();
+        return this.notesCache;
+      } finally {
+        this.notesCachePromise = null;
+      }
+    })();
+
+    return await this.notesCachePromise;
+  }
+
 
   /**
    * Sync aggregated data to JSON file
@@ -186,6 +286,12 @@ class PrepClosingService {
       this.initialized = true;
 
       logger.info(`[prep_closing.service] Synced ${this.prepClosingData.length} records to JSON`);
+
+      // TASK 1: Auto sync issues cache if there are records
+      if (rows.length > 0 && rows[0].PRD_CLOSING) {
+        await this.loadIssuesCache(rows[0].PRD_CLOSING);
+      }
+
     } catch (error) {
       logger.error(`[prep_closing.service] Failed to sync: ${error.message}`);
       throw error;
@@ -500,6 +606,9 @@ class PrepClosingService {
         // Sync to JSON file
         await this.syncToJsonFile();
 
+        const cacheKey = `detail_${strPeriode}_${kdtk}`;
+        this.cacheDetailData.delete(cacheKey);
+
         return {
           success: true,
           message: `Single store screening completed for ${kdtk}`,
@@ -775,21 +884,17 @@ class PrepClosingService {
 
     try {
       await ruleEngine.ensureInitialized();
+      await this.ensureDataLoaded();
+      await this.loadIssuesCache(periode);
 
-      const model = await ScreeningPraClosing.getModel();
-
-      const where = {
-        PRD_CLOSING: periode,
-        RECID: "*",
-      };
+      let eligibleKdtk = new Set();
       if (cabang && cabang !== "All") {
-        where.CAB = cabang;
+        for (const pd of this.prepClosingData) {
+          if (pd.PRD_CLOSING === periode && pd.CAB === cabang) {
+            eligibleKdtk.add(pd.KDTK);
+          }
+        }
       }
-
-      const records = await model.findAll({
-        where,
-        attributes: ["KDTK", "ISSUES"],
-      });
 
       const rules = ruleEngine.rules;
       const aggMap = new Map();
@@ -812,9 +917,11 @@ class PrepClosingService {
 
       const storeSets = new Map();
 
-      for (const rec of records) {
-        const kdtk = rec.KDTK;
-        const issues = Array.isArray(rec.ISSUES) ? rec.ISSUES : [];
+      for (const [kdtk, issues] of this.issuesCache.entries()) {
+        if (cabang && cabang !== "All" && !eligibleKdtk.has(kdtk)) {
+          continue;
+        }
+
         for (const issue of issues) {
           const entry = aggMap.get(issue.ruleKey);
           if (!entry) continue;
@@ -873,32 +980,20 @@ class PrepClosingService {
       );
 
       if (Array.isArray(ruleKeys) && ruleKeys.length > 0) {
-        const model = await ScreeningPraClosing.getModel();
-        const where = {
-          PRD_CLOSING: periode,
-          RECID: "*",
-        };
-        if (cabang && cabang !== "All") where.CAB = cabang;
-        const issueRecords = await model.findAll({ where, attributes: ["KDTK", "ISSUES"] });
+        await this.loadIssuesCache(periode);
         const includeSet = new Set();
-        for (const rec of issueRecords) {
-          const issues = Array.isArray(rec.ISSUES) ? rec.ISSUES : [];
+        for (const [kdtk, issues] of this.issuesCache.entries()) {
           const hasAny = issues.some(iss => ruleKeys.includes(iss.ruleKey));
-          if (hasAny) includeSet.add(rec.KDTK);
+          if (hasAny) includeSet.add(kdtk);
         }
         filtered = filtered.filter(i => includeSet.has(i.KDTK));
       }
 
       // Enrich with store name
       let results = [];
+      this.ensureStoreNameMap();
       for (const item of filtered) {
-        let storeName = "-";
-        try {
-          const storeInfo = await storeService.getStoreByCode(item.KDTK);
-          if (storeInfo?.storeName) storeName = storeInfo.storeName;
-        } catch {
-          logger.warn(`[prep_closing.service] Store name not found for ${item.KDTK}`);
-        }
+        const storeName = this.storeNameMap.get(item.KDTK) || "-";
         results.push({
           RECID: item.RECID,
           CAB: item.CAB,
@@ -917,7 +1012,7 @@ class PrepClosingService {
 
       // Enrich with notes
       try {
-        const notes = await notesService.getAll();
+        const notes = await this.getCachedNotes();
         const notesByKey = new Map(notes.filter(n => n.tableName === "screening_praclosing").map(n => [n.unixKey, n]));
 
         for (let i = 0; i < results.length; i++) {
@@ -943,13 +1038,8 @@ class PrepClosingService {
       // Preload issues map for search and rule filter
       let issuesByStore = new Map();
       try {
-        const model = await ScreeningPraClosing.getModel();
-        const whereIssues = { PRD_CLOSING: periode };
-        if (cabang && cabang !== "All") whereIssues.CAB = cabang;
-        const recs = await model.findAll({ where: whereIssues, attributes: ["KDTK", "ISSUES"] });
-        for (const r of recs) {
-          issuesByStore.set(r.KDTK, Array.isArray(r.ISSUES) ? r.ISSUES : []);
-        }
+        await this.loadIssuesCache(periode);
+        issuesByStore = this.issuesCache;
       } catch (err) {
         logger.warn(`[prep_closing.service] Unable to preload issues for search: ${err.message}`);
       }
@@ -1040,6 +1130,12 @@ class PrepClosingService {
       throw new Error("kdtk and periode are required");
     }
 
+    const cacheKey = `detail_${periode}_${kdtk}`;
+    const cachedEntry = this.cacheDetailData.get(cacheKey);
+    if (this.isCacheFromDbValid(cachedEntry)) {
+      return cachedEntry.data;
+    }
+
     try {
       const model = await ScreeningPraClosing.getModel();
 
@@ -1055,24 +1151,20 @@ class PrepClosingService {
       }
 
       // Get store name
-      let storeName = "-";
-      try {
-        const storeInfo = await storeService.getStoreByCode(kdtk);
-        if (storeInfo?.storeName) storeName = storeInfo.storeName;
-      } catch {
-        logger.warn(`[prep_closing.service] Store name not found for ${kdtk}`);
-      }
+      this.ensureStoreNameMap();
+      let storeName = this.storeNameMap.get(kdtk) || "-";
 
       // Get note
       let note = null;
       try {
         const unixKey = `${kdtk}${periode}`;
-        note = await notesService.getByKey(unixKey, "screening_praclosing");
+        const notes = await this.getCachedNotes();
+        note = notes.find(n => n.unixKey === unixKey && n.tableName === "screening_praclosing") || null;
       } catch {
         // Note not found
       }
 
-      return {
+      const result = {
         CAB: record.CAB,
         KDTK: record.KDTK,
         NAMA: storeName,
@@ -1095,6 +1187,13 @@ class PrepClosingService {
             }
           : null,
       };
+
+      this.cacheDetailData.set(cacheKey, {
+        lastAccessTime: Date.now(),
+        data: result,
+      });
+
+      return result;
     } catch (error) {
       logger.error(`[prep_closing.service] Error getStoreDetails: ${error.message}`);
       throw error;
@@ -1169,30 +1268,14 @@ class PrepClosingService {
 
       const summary = await this.getSummary({ cabang, periode });
 
-      const model = await ScreeningPraClosing.getModel();
-      const where = { PRD_CLOSING: periode };
-      if (cabang && cabang !== "All") where.CAB = cabang;
+      await this.loadIssuesCache(periode);
+      this.ensureStoreNameMap();
 
-      const dbRecords = await model.findAll({
-        where,
-        attributes: ["CAB", "KDTK", "PRD_CLOSING", "ISSUES", "LAST_SCREENED", "UPDTIME"],
-      });
-
-      const nameCache = new Map();
-      const getName = async k => {
-        if (nameCache.has(k)) return nameCache.get(k);
-        try {
-          const info = await storeService.getStoreByCode(k);
-          const nm = info?.storeName || "-";
-          nameCache.set(k, nm);
-          return nm;
-        } catch {
-          nameCache.set(k, "-");
-          return "-";
-        }
+      const getName = k => {
+        return this.storeNameMap.get(k) || "-";
       };
 
-      const notes = await notesService.getAll().catch(() => []);
+      const notes = await this.getCachedNotes().catch(() => []);
       const notesByKey = new Map(notes.filter(n => n.tableName === "screening_praclosing").map(n => [n.unixKey, n]));
 
       const allStores = this.prepClosingData.filter(
@@ -1205,14 +1288,23 @@ class PrepClosingService {
       const issuesBreakdown = [];
 
       const issuesMapByStore = new Map();
-      for (const rec of dbRecords) {
-        const issues = Array.isArray(rec.ISSUES) ? rec.ISSUES : [];
+
+      // Map CAB based on valid scope
+      const storeCabMap = new Map();
+      for (const s of allStores) {
+        storeCabMap.set(s.KDTK, s.CAB);
+      }
+
+      for (const [kdtk, issues] of this.issuesCache.entries()) {
+        const cab = storeCabMap.get(kdtk);
+        if (!cab) continue; // Skip if no cab mapped (meaning out of loop/cabang filter scope)
+
         const filteredIssues = ruleKeySet ? issues.filter(iss => ruleKeySet.has(iss.ruleKey)) : issues;
-        issuesMapByStore.set(rec.KDTK, filteredIssues);
+        issuesMapByStore.set(kdtk, filteredIssues);
         for (const iss of filteredIssues) {
           issuesBreakdown.push({
-            CAB: rec.CAB,
-            KDTK: rec.KDTK,
+            CAB: cab,
+            KDTK: kdtk,
             ruleKey: iss.ruleKey,
             ruleName: iss.ruleName,
             category: iss.category,
@@ -1223,7 +1315,7 @@ class PrepClosingService {
       }
 
       for (const item of allStores) {
-        const nm = await getName(item.KDTK);
+        const nm = getName(item.KDTK);
         const unixKey = `${item.KDTK}${item.PRD_CLOSING}`;
         const note = notesByKey.get(unixKey) || null;
         const storeIssues = issuesMapByStore.get(item.KDTK) || [];

@@ -250,7 +250,14 @@ async function saveMenuItem(menuItemData) {
   try {
     if (menuItemData.id) {
       // Update existing menu item
-      await menuStore.updateMenuItem(selectedCategory.value.id, menuItemData.id, menuItemData);
+      if (selectedCategory.value.id !== menuItemData.categoryId) {
+        // First move the item to the new category
+        await menuStore.moveMenuItem(selectedCategory.value.id, menuItemData.categoryId, menuItemData.id);
+        // Then update the item's data within the new category
+        await menuStore.updateMenuItem(menuItemData.categoryId, menuItemData.id, menuItemData);
+      } else {
+        await menuStore.updateMenuItem(selectedCategory.value.id, menuItemData.id, menuItemData);
+      }
       toast.showSuccess('Success', 'Menu item updated successfully');
     } else {
       // Add new menu item

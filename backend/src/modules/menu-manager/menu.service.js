@@ -5,6 +5,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { generateVueComponentIfNeeded } from '../../utils/index.js';
 
 class MenuService {
   constructor() {
@@ -272,6 +273,15 @@ class MenuService {
 
     await this.saveMenus();
 
+    try {
+      // Create missing vue files for this menu item's path (if not exists)
+      if (newItem.path) {
+        await generateVueComponentIfNeeded(newItem.path);
+      }
+    } catch (err) {
+      console.error('Failed to auto-generate vue component for', newItem.path, 'err:', err);
+    }
+
     return newItem;
   }
 
@@ -313,6 +323,14 @@ class MenuService {
     this.menus[categoryIndex].updatedAt = new Date().toISOString();
 
     await this.saveMenus();
+
+    try {
+      if (updatedItem.path) {
+        await generateVueComponentIfNeeded(updatedItem.path);
+      }
+    } catch (err) {
+      console.error('Failed to auto-generate vue component for update', updatedItem.path, 'err:', err);
+    }
 
     return updatedItem;
   }

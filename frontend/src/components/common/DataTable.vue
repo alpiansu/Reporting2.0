@@ -3,9 +3,7 @@
     <!-- Filters -->
     <div v-if="showFilters" class="filters-container">
       <div class="filters-header">
-        <h3 class="filters-title">
-          <i class="pi pi-filter"></i> Filter Data
-        </h3>
+        <h3 class="filters-title"><i class="pi pi-filter"></i> Filter Data</h3>
         <button @click.prevent="$emit('reset-filters')" class="btn btn-reset">
           <i class="pi pi-filter-slash"></i> Reset
         </button>
@@ -35,15 +33,13 @@
     </div>
 
     <div v-else-if="error" class="error-state">
-      <i class="pi pi-exclamation-triangle" style="font-size: 2rem; color: #e74c3c;"></i>
+      <i class="pi pi-exclamation-triangle" style="font-size: 2rem; color: #e74c3c"></i>
       <p>{{ error }}</p>
-      <button @click="handleRefreshClick" class="btn btn-refresh">
-        <i class="pi pi-refresh"></i> Coba Lagi
-      </button>
+      <button @click="handleRefreshClick" class="btn btn-refresh"><i class="pi pi-refresh"></i> Coba Lagi</button>
     </div>
 
     <div v-else-if="!data.length && !loading" class="empty-state">
-      <i class="pi pi-info-circle" style="font-size: 2rem; color: #3498db;"></i>
+      <i class="pi pi-info-circle" style="font-size: 2rem; color: #3498db"></i>
       <p>{{ emptyMessage }}</p>
       <p class="help-text">{{ emptyHelpText }}</p>
     </div>
@@ -61,8 +57,12 @@
           </div>
           <div class="table-actions">
             <slot name="table-actions">
-              <button v-if="showExportButton" class="btn btn-export" @click.prevent="$emit('export')"
-                title="Ekspor ke Excel">
+              <button
+                v-if="showExportButton"
+                class="btn btn-export"
+                @click.prevent="$emit('export')"
+                title="Ekspor ke Excel"
+              >
                 <i class="pi pi-file-excel"></i> Ekspor
               </button>
             </slot>
@@ -74,8 +74,12 @@
             <thead>
               <tr>
                 <th v-if="showRowNumbers" class="text-center">No</th>
-                <slot name="table-header-sortable" :sort-column="sortColumn" :sort-order="sortOrder"
-                  :handle-sort="handleSort"></slot>
+                <slot
+                  name="table-header-sortable"
+                  :sort-column="sortColumn"
+                  :sort-order="sortOrder"
+                  :handle-sort="handleSort"
+                ></slot>
               </tr>
             </thead>
             <tbody>
@@ -98,8 +102,12 @@
         </div>
 
         <div class="pagination-controls">
-          <button @click.prevent="goToFirstPage" :disabled="currentPage === 1" class="btn btn-nav"
-            title="Halaman pertama">
+          <button
+            @click.prevent="goToFirstPage"
+            :disabled="currentPage === 1"
+            class="btn btn-nav"
+            title="Halaman pertama"
+          >
             <i class="pi pi-angle-double-left"></i>
           </button>
           <button @click.prevent="prevPage" :disabled="currentPage === 1" class="btn btn-nav" title="Sebelumnya">
@@ -108,28 +116,43 @@
 
           <div class="page-numbers">
             <template v-for="pageNum in displayedPageNumbers" :key="pageNum">
-              <button v-if="pageNum !== '...'" @click.prevent="goToPage(pageNum)"
-                :class="['btn', 'btn-page', currentPage === pageNum ? 'btn-page-active' : '']">
+              <button
+                v-if="pageNum !== '...'"
+                @click.prevent="goToPage(pageNum)"
+                :class="['btn', 'btn-page', currentPage === pageNum ? 'btn-page-active' : '']"
+              >
                 {{ pageNum }}
               </button>
               <span v-else class="ellipsis">...</span>
             </template>
           </div>
 
-          <button @click.prevent="nextPage" :disabled="currentPage === totalPages" class="btn btn-nav"
-            title="Berikutnya">
+          <button
+            @click.prevent="nextPage"
+            :disabled="currentPage === totalPages"
+            class="btn btn-nav"
+            title="Berikutnya"
+          >
             <i class="pi pi-angle-right"></i>
           </button>
-          <button @click.prevent="goToLastPage" :disabled="currentPage === totalPages" class="btn btn-nav"
-            title="Terakhir">
+          <button
+            @click.prevent="goToLastPage"
+            :disabled="currentPage === totalPages"
+            class="btn btn-nav"
+            title="Terakhir"
+          >
             <i class="pi pi-angle-double-right"></i>
           </button>
         </div>
 
         <div class="items-per-page">
           <label for="items-per-page-select">Per halaman:</label>
-          <select id="items-per-page-select" v-model="itemsPerPage" @change="handleItemsPerPageChange"
-            class="items-select">
+          <select
+            id="items-per-page-select"
+            v-model="itemsPerPage"
+            @change="handleItemsPerPageChange"
+            class="items-select"
+          >
             <option v-for="option in itemsPerPageOptions" :key="option" :value="option">{{ option }}</option>
           </select>
         </div>
@@ -138,92 +161,90 @@
 
     <!-- Refresh Button -->
     <div v-if="showRefreshButton" class="actions-section">
-      <button @click="handleRefreshClick" class="btn btn-refresh">
-        <i class="pi pi-refresh"></i> Refresh Data
-      </button>
+      <button @click="handleRefreshClick" class="btn btn-refresh"><i class="pi pi-refresh"></i> Refresh Data</button>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch } from "vue";
 
 const props = defineProps({
   data: {
     type: Array,
-    required: true
+    required: true,
   },
   filteredData: {
     type: Array,
-    default: () => []
+    default: () => [],
   },
   loading: {
     type: Boolean,
-    default: false
+    default: false,
   },
   error: {
     type: String,
-    default: null
+    default: null,
   },
   loadingMessage: {
     type: String,
-    default: 'Memuat data...'
+    default: "Memuat data...",
   },
   loadingHelpText: {
     type: String,
-    default: 'Mohon tunggu sebentar...'
+    default: "Mohon tunggu sebentar...",
   },
   emptyMessage: {
     type: String,
-    default: 'Tidak ada data untuk ditampilkan.'
+    default: "Tidak ada data untuk ditampilkan.",
   },
   emptyHelpText: {
     type: String,
-    default: 'Tidak ditemukan data untuk kriteria yang dipilih.'
+    default: "Tidak ditemukan data untuk kriteria yang dipilih.",
   },
   tableTitle: {
     type: String,
-    default: 'Data'
+    default: "Data",
   },
   showFilters: {
     type: Boolean,
-    default: true
+    default: true,
   },
   showRowNumbers: {
     type: Boolean,
-    default: true
+    default: true,
   },
   showPagination: {
     type: Boolean,
-    default: true
+    default: true,
   },
   showExportButton: {
     type: Boolean,
-    default: true
+    default: true,
   },
   showPrintButton: {
     type: Boolean,
-    default: true
+    default: true,
   },
   showSorting: {
     type: Boolean,
-    default: true
+    default: true,
   },
   showRefreshButton: {
     type: Boolean,
-    default: true
+    default: true,
   },
   itemsPerPageOptions: {
     type: Array,
-    default: () => [5, 10, 25, 50, 100]
+    default: () => [5, 10, 25, 50, 100],
   },
   defaultItemsPerPage: {
     type: Number,
-    default: 10
+    default: 10,
   },
   rowClass: {
     type: Function,
-    default: () => ''
+    default: () => "",
   },
   pagination: {
     type: Object,
@@ -231,25 +252,25 @@ const props = defineProps({
       currentPage: 1,
       itemsPerPage: 10,
       total: 0,
-      totalPages: 0
-    })
-  }
+      totalPages: 0,
+    }),
+  },
 });
 
 const emit = defineEmits([
-  'refresh', 
-  'reset-filters', 
-  'export', 
-  'print', 
-  'page-change', 
-  'items-per-page-change',
-  'sort-change'
+  "refresh",
+  "reset-filters",
+  "export",
+  "print",
+  "page-change",
+  "items-per-page-change",
+  "sort-change",
 ]);
 
 // State
 const currentPage = ref(props.pagination?.currentPage || 1);
 const sortColumn = ref(null);
-const sortOrder = ref('asc'); // 'asc' or 'desc'
+const sortOrder = ref("asc"); // 'asc' or 'desc'
 const itemsPerPage = ref(props.pagination?.itemsPerPage || props.defaultItemsPerPage);
 
 // Computed properties
@@ -306,77 +327,85 @@ const paginatedData = computed(() => {
   if (props.data && Array.isArray(props.data.data)) {
     return props.data.data;
   }
-  
+
   // If filteredData is provided, use it directly as it's already processed
   if (props.filteredData && Array.isArray(props.filteredData)) {
     return props.filteredData;
   }
-  
+
   // Otherwise, paginate on the client side
   return props.data.slice(startIndex.value, endIndex.value);
 });
 
 // Sync currentPage and itemsPerPage with backend pagination if available
-watch(() => props.data, (newData) => {
-  // console.log('DataTable watch props.data:', newData);
-  if (newData && newData.page !== undefined) {
-    currentPage.value = newData.page;
-  }
-  if (newData && newData.limit !== undefined) {
-    itemsPerPage.value = newData.limit;
-  }
-}, { immediate: true, deep: true });
+watch(
+  () => props.data,
+  newData => {
+    // console.log('DataTable watch props.data:', newData);
+    if (newData && newData.page !== undefined) {
+      currentPage.value = newData.page;
+    }
+    if (newData && newData.limit !== undefined) {
+      itemsPerPage.value = newData.limit;
+    }
+  },
+  { immediate: true, deep: true },
+);
 
 // Sync with props.pagination when it changes
-watch(() => props.pagination, (newPagination) => {
-  // console.log('DataTable watch props.pagination:', newPagination);
-  if (newPagination) {
-    if (newPagination.currentPage !== undefined) {
-      currentPage.value = newPagination.currentPage;
+watch(
+  () => props.pagination,
+  newPagination => {
+    // console.log('DataTable watch props.pagination:', newPagination);
+    if (newPagination) {
+      if (newPagination.currentPage !== undefined) {
+        currentPage.value = newPagination.currentPage;
+      }
+      if (newPagination.itemsPerPage !== undefined) {
+        itemsPerPage.value = newPagination.itemsPerPage;
+      }
     }
-    if (newPagination.itemsPerPage !== undefined) {
-      itemsPerPage.value = newPagination.itemsPerPage;
-    }
-  }
-}, { immediate: true, deep: true });
+  },
+  { immediate: true, deep: true },
+);
 
 const displayedPageNumbers = computed(() => {
   const total = totalPages.value;
   const current = currentPage.value;
   const delta = 2; // Number of pages to show before and after current page
-  
+
   if (total <= 7) {
     // If we have 7 or fewer pages, show all
     return Array.from({ length: total }, (_, i) => i + 1);
   }
-  
+
   // Always include first and last page
   let pages = [1];
-  
+
   // Calculate start and end of the displayed range
   const rangeStart = Math.max(2, current - delta);
   const rangeEnd = Math.min(total - 1, current + delta);
-  
+
   // Add ellipsis if needed before the range
   if (rangeStart > 2) {
-    pages.push('...');
+    pages.push("...");
   }
-  
+
   // Add all pages in the range
   for (let i = rangeStart; i <= rangeEnd; i++) {
     pages.push(i);
   }
-  
+
   // Add ellipsis if needed after the range
   if (rangeEnd < total - 1) {
-    pages.push('...');
+    pages.push("...");
   }
-  
+
   // Add the last page
   if (total > 1) {
     pages.push(total);
   }
-  
+
   return pages;
 });
 
@@ -385,14 +414,14 @@ const getRowClass = (item, index) => {
   return props.rowClass(item, index);
 };
 
-const prevPage = (event) => {
+const prevPage = event => {
   if (event) event.preventDefault();
   if (currentPage.value > 1) {
     goToPage(currentPage.value - 1);
   }
 };
 
-const nextPage = (event) => {
+const nextPage = event => {
   if (event) event.preventDefault();
   if (currentPage.value < totalPages.value) {
     goToPage(currentPage.value + 1);
@@ -402,96 +431,104 @@ const nextPage = (event) => {
 const goToPage = (page, event) => {
   if (event) event.preventDefault();
   currentPage.value = page;
-  emit('page-change', { page: page, itemsPerPage: itemsPerPage.value });
+  emit("page-change", { page: page, itemsPerPage: itemsPerPage.value });
 };
 
-const goToFirstPage = (event) => {
+const goToFirstPage = event => {
   if (event) event.preventDefault();
   goToPage(1);
 };
 
-const goToLastPage = (event) => {
+const goToLastPage = event => {
   if (event) event.preventDefault();
   goToPage(totalPages.value);
 };
 
 const handleItemsPerPageChange = () => {
   currentPage.value = 1; // Reset to first page
-  emit('items-per-page-change', { page: 1, itemsPerPage: itemsPerPage.value });
+  emit("items-per-page-change", { page: 1, itemsPerPage: itemsPerPage.value });
 };
 
 // Handle refresh button click without causing full page refresh
-const handleRefreshClick = (event) => {
+const handleRefreshClick = event => {
   // Prevent default browser behavior to avoid page refresh
   if (event) event.preventDefault();
-  
+
   // Emit refresh event with current pagination state
-  emit('refresh', { 
-    page: currentPage.value, 
+  emit("refresh", {
+    page: currentPage.value,
     itemsPerPage: itemsPerPage.value,
     sortColumn: sortColumn.value,
-    sortOrder: sortOrder.value
+    sortOrder: sortOrder.value,
   });
 };
 
 // Handle sorting when a column header is clicked
-const handleSort = (column) => {
+const handleSort = column => {
   // If clicking the same column, toggle sort order
   if (sortColumn.value === column) {
-    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc';
+    sortOrder.value = sortOrder.value === "asc" ? "desc" : "asc";
   } else {
     // If clicking a new column, set it as sort column and default to ascending
     sortColumn.value = column;
-    sortOrder.value = 'asc';
+    sortOrder.value = "asc";
   }
-  
+
   // Emit sort-change event with sort parameters
-  emit('sort-change', { 
-    sortColumn: sortColumn.value, 
+  emit("sort-change", {
+    sortColumn: sortColumn.value,
     sortOrder: sortOrder.value,
     page: currentPage.value,
-    itemsPerPage: itemsPerPage.value
+    itemsPerPage: itemsPerPage.value,
   });
 };
 
 // Watch for data changes to reset pagination if needed
-watch(() => props.data, (newData) => {
-  // If we have backend pagination data, use it
-  if (newData && newData.totalPages !== undefined) {
-    // Sync pagination with backend data
-    if (newData.page !== undefined) {
-      currentPage.value = newData.page;
-    }
-    if (newData.limit !== undefined) {
-      itemsPerPage.value = newData.limit;
-    }
-    
-    // Check if current page exceeds total pages
-    if (currentPage.value > newData.totalPages && newData.totalPages > 0) {
-      currentPage.value = newData.totalPages;
-      emit('page-change', { page: currentPage.value, itemsPerPage: itemsPerPage.value });
-    }
-  } else {
-    // Client-side pagination
-    if (currentPage.value > totalPages.value && totalPages.value > 0) {
-      currentPage.value = totalPages.value;
-      emit('page-change', { page: currentPage.value, itemsPerPage: itemsPerPage.value });
-    }
-  }
-}, { deep: true });
+watch(
+  () => props.data,
+  newData => {
+    // If we have backend pagination data, use it
+    if (newData && newData.totalPages !== undefined) {
+      // Sync pagination with backend data
+      if (newData.page !== undefined) {
+        currentPage.value = newData.page;
+      }
+      if (newData.limit !== undefined) {
+        itemsPerPage.value = newData.limit;
+      }
 
-watch(() => props.filteredData, (newData) => {
-  // Periksa jika props.pagination tersedia dan memiliki totalPages
-  if (props.pagination && props.pagination.totalPages !== undefined) {
-    if (currentPage.value > props.pagination.totalPages && props.pagination.totalPages > 0) {
-      currentPage.value = props.pagination.totalPages;
-      emit('page-change', { page: currentPage.value, itemsPerPage: itemsPerPage.value });
+      // Check if current page exceeds total pages
+      if (currentPage.value > newData.totalPages && newData.totalPages > 0) {
+        currentPage.value = newData.totalPages;
+        emit("page-change", { page: currentPage.value, itemsPerPage: itemsPerPage.value });
+      }
+    } else {
+      // Client-side pagination
+      if (currentPage.value > totalPages.value && totalPages.value > 0) {
+        currentPage.value = totalPages.value;
+        emit("page-change", { page: currentPage.value, itemsPerPage: itemsPerPage.value });
+      }
     }
-  } else if (currentPage.value > totalPages.value && totalPages.value > 0) {
-    currentPage.value = totalPages.value;
-    emit('page-change', { page: currentPage.value, itemsPerPage: itemsPerPage.value });
-  }
-}, { deep: true });
+  },
+  { deep: true },
+);
+
+watch(
+  () => props.filteredData,
+  newData => {
+    // Periksa jika props.pagination tersedia dan memiliki totalPages
+    if (props.pagination && props.pagination.totalPages !== undefined) {
+      if (currentPage.value > props.pagination.totalPages && props.pagination.totalPages > 0) {
+        currentPage.value = props.pagination.totalPages;
+        emit("page-change", { page: currentPage.value, itemsPerPage: itemsPerPage.value });
+      }
+    } else if (currentPage.value > totalPages.value && totalPages.value > 0) {
+      currentPage.value = totalPages.value;
+      emit("page-change", { page: currentPage.value, itemsPerPage: itemsPerPage.value });
+    }
+  },
+  { deep: true },
+);
 </script>
 
 <style scoped>
@@ -569,7 +606,6 @@ watch(() => props.filteredData, (newData) => {
   font-weight: 500;
   padding: 0.5rem 1rem;
 }
-
 
 .data-table-container {
   background-color: #fff;
@@ -760,14 +796,16 @@ watch(() => props.filteredData, (newData) => {
   table-layout: auto;
 }
 
-.header-table, .body-table {
+.header-table,
+.body-table {
   width: 100%;
   table-layout: fixed;
   border-collapse: collapse;
   border-spacing: 0;
 }
 
-.header-table th, .body-table td {
+.header-table th,
+.body-table td {
   box-sizing: border-box;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -807,7 +845,9 @@ watch(() => props.filteredData, (newData) => {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   box-sizing: border-box;
   overflow: visible;
-  transition: width 0.3s ease, padding 0.3s ease;
+  transition:
+    width 0.3s ease,
+    padding 0.3s ease;
 }
 
 .results-table tr {
@@ -876,6 +916,7 @@ watch(() => props.filteredData, (newData) => {
   min-width: 2rem;
   height: 2rem;
   padding: 0;
+  cursor: pointer;
 }
 
 .btn-active {
@@ -926,7 +967,11 @@ watch(() => props.filteredData, (newData) => {
 }
 
 /* Styled buttons for refresh, reset, export, print, and navigation */
-.btn-refresh, .btn-reset, .btn-export, .btn-print, .btn-nav {
+.btn-refresh,
+.btn-reset,
+.btn-export,
+.btn-print,
+.btn-nav {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1031,7 +1076,11 @@ watch(() => props.filteredData, (newData) => {
   background: linear-gradient(135deg, #2563eb, #1d4ed8);
 }
 
-.btn-refresh i, .btn-reset i, .btn-export i, .btn-print i, .btn-nav i {
+.btn-refresh i,
+.btn-reset i,
+.btn-export i,
+.btn-print i,
+.btn-nav i {
   font-size: 1rem;
 }
 
@@ -1042,7 +1091,7 @@ watch(() => props.filteredData, (newData) => {
     align-items: center;
     gap: 1rem;
   }
-  
+
   .pagination-info,
   .pagination-controls,
   .items-per-page {
@@ -1051,19 +1100,19 @@ watch(() => props.filteredData, (newData) => {
     justify-content: center;
     text-align: center;
   }
-  
+
   .pagination-info {
     order: 1;
   }
-  
+
   .pagination-controls {
     order: 2;
   }
-  
+
   .items-per-page {
     order: 3;
   }
-  
+
   .btn-page {
     min-width: 1.75rem;
     height: 1.75rem;
@@ -1075,38 +1124,38 @@ watch(() => props.filteredData, (newData) => {
   .page-numbers {
     gap: 0.15rem;
   }
-  
+
   .btn-page {
     min-width: 1.5rem;
     height: 1.5rem;
     font-size: 0.7rem;
   }
-  
+
   .btn-icon {
     padding: 0.15rem 0.35rem;
   }
-  
+
   .ellipsis {
     padding: 0 0.25rem;
   }
-  
+
   .results-table th,
   .results-table td {
     padding: 0.6rem 0.5rem;
     font-size: 0.8rem;
   }
-  
+
   .results-table th {
     font-size: 0.7rem;
   }
-  
+
   .table-responsive {
     max-height: 60vh;
   }
-  
-.results-table {
-  min-width: 1200px;
-}
+
+  .results-table {
+    min-width: 1200px;
+  }
 }
 
 .row-updated {

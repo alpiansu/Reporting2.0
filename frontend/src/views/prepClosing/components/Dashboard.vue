@@ -79,7 +79,14 @@
         </div>
 
         <!-- Rules Grid -->
-        <RulesGrid :rules="rulesSummary || []" :selected-keys="selectedRuleKeys || []" @rule-selected="onRuleSelected" />
+        <div class="dashboard-grid">
+            <div class="grid-item">
+                <RulesGrid :rules="rulesSummary || []" :selected-keys="selectedRuleKeys || []" @rule-selected="onRuleSelected" />
+            </div>
+            <div class="grid-item">
+                <StatusPieChart :summary="summary" :loading="loading" />
+            </div>
+        </div>
     </div>
 </template>
 
@@ -89,6 +96,7 @@ import Card from 'primevue/card';
 import Skeleton from 'primevue/skeleton';
 import { formatNumber } from '../utils/formatters';
 import RulesGrid from './RulesGrid.vue';
+import StatusPieChart from './StatusPieChart.vue';
 
 const props = defineProps({
     summary: Object,
@@ -282,6 +290,22 @@ const readyPercentage = computed(() => {
 
     .category-grid {
         grid-template-columns: 1fr;
+    }
+
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (min-width: 1025px) {
+    .dashboard-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+    }
+
+    .grid-item {
+        min-width: 0; /* Allow grid items to shrink */
     }
 }
 

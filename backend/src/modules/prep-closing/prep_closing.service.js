@@ -1232,16 +1232,13 @@ class PrepClosingService {
       const filterFn = this.buildFilterFunction({ cabang, periode });
       const filteredData = this.prepClosingData.filter(filterFn);
 
-      // Get all issues from database
-      const model = await ScreeningPraClosing.getModel();
-      const records = await model.findAll({
-        where: {
-          PRD_CLOSING: periode,
-          RECID: "*",
-          ...(cabang && cabang !== "All" ? { CAB: cabang } : {}),
-        },
-        attributes: ["KDTK", "ISSUES"],
-      });
+      // Get all issues from cache instead of DB
+      await this.loadIssuesCache(periode);
+
+      let eligibleKdtk = null;
+      if (cabang && cabang !== "All") {
+        eligibleKdtk = new Set(filteredData.map(d => d.KDTK));
+      }
 
       // Group issues by category
       const categories = ruleEngine.getCategories();
@@ -1255,17 +1252,18 @@ class PrepClosingService {
         };
       });
 
-      records.forEach(record => {
-        const issues = record.ISSUES || [];
+      for (const [kdtk, issues] of this.issuesCache.entries()) {
+        if (eligibleKdtk && !eligibleKdtk.has(kdtk)) continue;
+
         issues.forEach(issue => {
           if (issuesByCategory[issue.category]) {
             issuesByCategory[issue.category].count++;
-            if (!issuesByCategory[issue.category].stores.includes(record.KDTK)) {
-              issuesByCategory[issue.category].stores.push(record.KDTK);
+            if (!issuesByCategory[issue.category].stores.includes(kdtk)) {
+              issuesByCategory[issue.category].stores.push(kdtk);
             }
           }
         });
-      });
+      }
 
       return {
         data: Object.values(issuesByCategory).sort((a, b) => a.order - b.order),

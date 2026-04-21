@@ -20,7 +20,7 @@
         </template>
         <template #actions>
           <Button icon="pi pi-refresh" label="Refresh" class="p-button-outlined" style="margin-right: 4px;" :disabled="isScreening || loading" @click="handleRefresh" />
-          <Button icon="pi pi-bolt" label="Mulai Screening" class="p-button-primary" :disabled="!filters.periode || isScreening" :loading="isScreening" @click="handleStartScreening" />
+          <Button icon="pi pi-bolt" label="Mulai Screening" class="p-button-primary" :disabled="!filters.periode || isScreening || !isCurrentPeriod" :loading="isScreening" @click="handleStartScreening" />
         </template>
       </RekonFormComponent>
 
@@ -89,7 +89,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch } from 'vue';
+import { ref, reactive, onMounted, watch, computed } from 'vue';
 import { useToastService } from '@/utils/toast';
 import { useAuthStore } from '@/stores';
 import PageHeader from '@/components/PageHeader.vue';
@@ -108,6 +108,12 @@ import WrcExtractConfigDialog from '@/components/prepClosing/WrcExtractConfigDia
 import { usePrepClosing } from './composables/usePrepClosing';
 import { useScreening } from './composables/useScreening';
 import { useProgress } from './composables/useProgress';
+import dayjs from 'dayjs';
+import timezone from 'dayjs/plugin/timezone';
+import utc from 'dayjs/plugin/utc';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 const toast = useToastService();
 const cabangStore = useCabangStore();
@@ -144,7 +150,6 @@ const {
 const username = authStore.user?.username || '';
 const {
   progress: progressData,
-  percentage,
   currentInfo,
   isCompleted,
   isFailed,
@@ -159,6 +164,15 @@ const filters = reactive({
   periode: '',
   cabang: 'All',
   search: ''
+});
+
+const isCurrentPeriod = computed(() => {
+  if (!filters.periode) return false;
+
+  const now = dayjs().tz('Asia/Jakarta');
+  const currentPeriode = now.format('YYMM');
+
+  return filters.periode === currentPeriode;
 });
 
 const today = ref(new Date());

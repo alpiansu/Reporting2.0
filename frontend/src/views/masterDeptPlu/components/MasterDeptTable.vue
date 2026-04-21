@@ -11,6 +11,7 @@
       :emptyHelpText="'Tidak ditemukan departemen untuk kriteria yang dipilih.'"
       :pagination="pagination"
       :tableTitle="'Daftar Departemen'"
+      :showRowNumbers="false"
       @refresh="$emit('refresh')" 
       @page-change="$emit('page-change', $event)"
       @items-per-page-change="$emit('items-per-page-change', $event)"

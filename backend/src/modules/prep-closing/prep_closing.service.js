@@ -17,12 +17,13 @@ import progressService from "../progress/progress.service.js";
 import { wrcExtractorService } from "./wrc_extractor.service.js";
 
 // Path untuk file JSON
-const PREP_CLOSING_JSON_PATH = path.join(process.cwd(), "data/prep_closing.json");
+const PREP_CLOSING_DATA_DIR = path.join(process.cwd(), "data/prep_closing");
 
 class PrepClosingService {
   constructor() {
     this.prepClosingData = [];
     this.initialized = false;
+    this.loadedPeriod = null;
 
     // TTL Cache Management
     this.lastLoadTime = null;
@@ -49,22 +50,33 @@ class PrepClosingService {
     this.notesCachePromise = null;
   }
 
+  getJsonPath(periode) {
+    return path.join(PREP_CLOSING_DATA_DIR, `prep_closing_${periode}.json`);
+  }
+
+  async ensureDataDir() {
+    await fs.mkdir(PREP_CLOSING_DATA_DIR, { recursive: true });
+  }
+
   /**
    * Initialize the service by loading data from JSON file
    */
-  async initialize() {
+  async initialize(periode) {
+    if (!periode) throw new Error('periode is required for initialize');
     try {
-      const dir = path.dirname(PREP_CLOSING_JSON_PATH);
-      await fs.mkdir(dir, { recursive: true });
+      await this.ensureDataDir();
+      const jsonPath = this.getJsonPath(periode);
 
       try {
-        const data = await fs.readFile(PREP_CLOSING_JSON_PATH, "utf8");
+        const data = await fs.readFile(jsonPath, "utf8");
         this.prepClosingData = JSON.parse(data);
-        logger.info(`[prep_closing.service] Loaded ${this.prepClosingData.length} records from JSON`);
+        this.loadedPeriod = periode;
+        logger.info(`[prep_closing.service] Loaded ${this.prepClosingData.length} records from ${jsonPath}`);
       } catch (err) {
         if (err.code === "ENOENT") {
           this.prepClosingData = [];
-          await this.saveToFile();
+          this.loadedPeriod = periode;
+          await this.saveToFile(periode);
         } else throw err;
       }
 
@@ -78,10 +90,11 @@ class PrepClosingService {
   /**
    * Save data to JSON file
    */
-  async saveToFile() {
+  async saveToFile(periode) {
     try {
-      await fs.writeFile(PREP_CLOSING_JSON_PATH, JSON.stringify(this.prepClosingData, null, 2));
-      logger.debug(`[prep_closing.service] Saved ${this.prepClosingData.length} records to JSON`);
+      const jsonPath = this.getJsonPath(periode);
+      await fs.writeFile(jsonPath, JSON.stringify(this.prepClosingData, null, 2));
+      logger.debug(`[prep_closing.service] Saved ${this.prepClosingData.length} records to ${jsonPath}`);
     } catch (error) {
       logger.error(`[prep_closing.service] Failed to save to file: ${error.message}`);
       throw error;
@@ -107,8 +120,8 @@ class PrepClosingService {
   /**
    * Check if summary cache is valid
    */
-  isCacheValid() {
-    if (!this.initialized || !this.lastLoadTime) {
+  isCacheValid(periode) {
+    if (!this.initialized || !this.lastLoadTime || this.loadedPeriod !== periode) {
       return false;
     }
     const now = Date.now();
@@ -121,6 +134,7 @@ class PrepClosingService {
   invalidateCache() {
     this.prepClosingData = [];
     this.initialized = false;
+    this.loadedPeriod = null;
     this.lastLoadTime = null;
     this.isLoading = false;
     this.cacheDetailData.clear();
@@ -137,8 +151,10 @@ class PrepClosingService {
   /**
    * Ensure data is loaded with TTL-based lazy loading
    */
-  async ensureDataLoaded() {
-    if (this.isCacheValid()) {
+  async ensureDataLoaded(periode) {
+    if (!periode) throw new Error('periode is required for ensureDataLoaded');
+
+    if (this.isCacheValid(periode)) {
       return;
     }
 
@@ -146,14 +162,14 @@ class PrepClosingService {
       while (this.isLoading) {
         await new Promise(resolve => setTimeout(resolve, 100));
       }
-      return;
+      if (this.isCacheValid(periode)) return;
     }
 
     try {
       this.isLoading = true;
-      logger.info("[prep_closing.service] Loading data from JSON (cache expired)");
+      logger.info(`[prep_closing.service] Loading data for periode ${periode} (cache expired or period changed)`);
 
-      await this.initialize();
+      await this.initialize(periode);
       this.lastLoadTime = Date.now();
 
       logger.info(
@@ -245,7 +261,8 @@ class PrepClosingService {
   /**
    * Sync aggregated data to JSON file
    */
-  async syncToJsonFile() {
+  async syncToJsonFile(periode) {
+    if (!periode) throw new Error('periode is required for syncToJsonFile');
     try {
       const model = await ScreeningPraClosing.getModel();
       const sequelize = model.sequelize;
@@ -265,7 +282,8 @@ class PrepClosingService {
           LAST_SCREENED,
           UPDTIME
         FROM screening_praclosing
-      `);
+        WHERE PRD_CLOSING = :periode
+      `, { replacements: { periode } });
 
       this.prepClosingData = rows.map(r => ({
         RECID: r.RECID,
@@ -281,8 +299,9 @@ class PrepClosingService {
         UPDTIME: r.UPDTIME,
       }));
 
-      await this.saveToFile();
+      await this.saveToFile(periode);
       this.lastLoadTime = Date.now();
+      this.loadedPeriod = periode;
       this.initialized = true;
 
       logger.info(`[prep_closing.service] Synced ${this.prepClosingData.length} records to JSON`);
@@ -604,7 +623,7 @@ class PrepClosingService {
         });
 
         // Sync to JSON file
-        await this.syncToJsonFile();
+        await this.syncToJsonFile(strPeriode);
 
         const cacheKey = `detail_${strPeriode}_${kdtk}`;
         this.cacheDetailData.delete(cacheKey);
@@ -796,7 +815,7 @@ class PrepClosingService {
         status: "finalizing",
       });
 
-      await this.syncToJsonFile();
+      await this.syncToJsonFile(strPeriode);
       logger.info(`[prep_closing.service] Synchronized data to JSON file`);
 
       // === STEP 9: Complete progress ===
@@ -856,7 +875,7 @@ class PrepClosingService {
     const { cabang, periode } = options;
 
     try {
-      await this.ensureDataLoaded();
+      await this.ensureDataLoaded(periode);
 
       const filterFn = this.buildFilterFunction({ cabang, periode });
       const filteredData = this.prepClosingData.filter(filterFn);
@@ -884,7 +903,7 @@ class PrepClosingService {
 
     try {
       await ruleEngine.ensureInitialized();
-      await this.ensureDataLoaded();
+      await this.ensureDataLoaded(periode);
       await this.loadIssuesCache(periode);
 
       let eligibleKdtk = new Set();
@@ -972,7 +991,7 @@ class PrepClosingService {
     if (!periode) throw new Error("Periode wajib diisi");
 
     try {
-      await this.ensureDataLoaded();
+      await this.ensureDataLoaded(periode);
       await storeService.ensureInitialized();
 
       let filtered = this.prepClosingData.filter(
@@ -1207,7 +1226,7 @@ class PrepClosingService {
     const { cabang, periode } = options;
 
     try {
-      await this.ensureDataLoaded();
+      await this.ensureDataLoaded(periode);
       await ruleEngine.ensureInitialized();
 
       const filterFn = this.buildFilterFunction({ cabang, periode });
@@ -1262,7 +1281,7 @@ class PrepClosingService {
     if (!periode) throw new Error("Periode wajib diisi");
 
     try {
-      await this.ensureDataLoaded();
+      await this.ensureDataLoaded(periode);
       await storeService.ensureInitialized();
       await ruleEngine.ensureInitialized();
 

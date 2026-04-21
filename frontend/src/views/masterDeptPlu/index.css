@@ -1,0 +1,19 @@
+/* Shared container logic */
+.master-dept-view {
+    padding: 1.25rem;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e4e7eb 100%);
+    min-height: 100vh;
+}
+
+.content-container {
+    margin-top: 1.25rem;
+    background-color: transparent;
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+@media (max-width: 768px) {
+    .master-dept-view {
+        padding: 1rem;
+    }
+}

@@ -186,6 +186,30 @@ class MDeptService {
   }
 
   /**
+   * Delete a department
+   * @param {string} dep_kd - Department code
+   * @returns {Promise<boolean>} True if deleted, false if not found
+   */
+  async deleteDepartment(dep_kd) {
+    try {
+      await this.ensureInitialized();
+
+      const initialLength = this.deptList.length;
+      this.deptList = this.deptList.filter(dept => dept.dep_kd !== dep_kd);
+      
+      if (this.deptList.length === initialLength) {
+        return false; // Not found
+      }
+
+      await this.saveToFile();
+      return true;
+    } catch (error) {
+      logger.error(`Error in deleteDepartment: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * Process departments from uploaded CSV file
    * @param {Object} file - Uploaded file object
    * @returns {Promise<Object>} Processing results

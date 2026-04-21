@@ -1,0 +1,13 @@
+@import './MasterDeptDialog.css';
+/* Reuse modal overlay and modal styles */
+
+.warning-text {
+    color: #e53e3e;
+    font-weight: 500;
+    margin: 1rem 0;
+    font-size: 0.875rem;
+}
+
+.confirm-dialog .modal-body p {
+    margin: 0 0 1rem 0;
+}

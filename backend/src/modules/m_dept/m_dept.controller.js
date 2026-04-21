@@ -111,4 +111,41 @@ export const uploadDepartments = async (req, res, next) => {
   }
 };
 
+/**
+ * Delete a department
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+export const deleteDepartment = async (req, res, next) => {
+  try {
+    const { kddept } = req.params;
+    
+    if (!kddept) {
+      return res.status(400).json({
+        success: false,
+        message: "Department code (kddept) is required"
+      });
+    }
+    
+    const result = await service.deleteDepartment(kddept);
+    
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        message: `Department with code ${kddept} not found`
+      });
+    }
+    
+    return res.status(200).json({
+      success: true,
+      data: { kddept },
+      message: `Department ${kddept} deleted successfully`
+    });
+  } catch (error) {
+    logger.error(`Error in deleteDepartment: ${error.message}`);
+    next(error);
+  }
+};
+
 // Removed default export - using named exports only

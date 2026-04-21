@@ -995,7 +995,7 @@ class PrepClosingService {
       await storeService.ensureInitialized();
 
       let filtered = this.prepClosingData.filter(
-        i => i.PRD_CLOSING === periode && (cabang === "All" || i.CAB === cabang)
+        i => i.PRD_CLOSING === periode && (cabang === "All" || i.CAB === cabang) && i.IS_READY == false
       );
 
       if (Array.isArray(ruleKeys) && ruleKeys.length > 0) {

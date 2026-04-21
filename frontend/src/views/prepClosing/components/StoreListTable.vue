@@ -115,7 +115,7 @@
                         <div class="action-buttons">
                             <Button icon="pi pi-eye" label="Detail" class="p-button-info p-button-sm"
                                 @click="$emit('view-details', item)" />
-                            <Button :icon="isStoreLoading(item.KDTK) ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'"
+                            <Button v-if="isCurrentPeriod" :icon="isStoreLoading(item.KDTK) ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'"
                                 class="p-button-outlined p-button-sm" :disabled="isStoreLoading(item.KDTK)"
                                 v-tooltip.top="'Re-screen'" @click="handleReScreen(item)" />
                         </div>
@@ -127,7 +127,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, watch, computed } from 'vue';
 import Card from 'primevue/card';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
@@ -138,6 +138,12 @@ import ProgressSpinner from 'primevue/progressspinner';
 import * as XLSX from 'xlsx';
 import { formatDateTime, formatRelativeTime } from '../utils/formatters';
 import prepClosingApi from '@/services/prepClosing.service.js';
+import dayjs from 'dayjs';
+import timezone from 'dayjs/plugin/timezone';
+import utc from 'dayjs/plugin/utc';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 const props = defineProps({
     data: {
@@ -188,6 +194,15 @@ const emit = defineEmits([
     're-screen',
     'edit-note'
 ]);
+
+const isCurrentPeriod = computed(() => {
+  if (!props.periode) return false;
+
+  const now = dayjs().tz('Asia/Jakarta');
+  const currentPeriode = now.format('YYMM');
+
+  return props.periode === currentPeriode;
+});
 
 // State untuk tracking loading per toko
 const loadingStores = ref(new Set());

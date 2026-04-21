@@ -39,6 +39,5 @@ defineProps({
 defineEmits(['close', 'confirm']);
 </script>
 
-<style scoped>
-@import './MasterDeptConfirmDialog.css';
-</style>
+<style src="./MasterDeptConfirmDialog.css" scoped />
+<style src="@/views/common-button.css" scoped />

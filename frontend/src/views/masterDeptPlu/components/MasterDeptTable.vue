@@ -168,6 +168,5 @@ const clearSearch = () => {
 };
 </script>
 
-<style scoped>
-@import './MasterDeptTable.css';
-</style>
+<style src="./MasterDeptTable.css" scoped />
+<style src="@/views/common-button.css" scoped />

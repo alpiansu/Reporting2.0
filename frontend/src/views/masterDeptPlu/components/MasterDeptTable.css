@@ -109,49 +109,40 @@
     text-align: center;
 }
 
-::v-deep .data-table-container {
-    background-color: #fff;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-    margin-bottom: 1.5rem;
-    overflow: hidden;
-    border: 1px solid #e2e8f0;
-}
+/* ✅ GANTI DENGAN — :deep() syntax Vue 3, nth-child mapping yang benar */
 
-::v-deep .table-responsive {
+:deep(.table-responsive) {
+    overflow-x: auto;
+    max-height: 70vh;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-    overflow-x: auto;
-    max-height: 70vh;
-    width: 100%;
 }
 
-::v-deep .results-table {
+:deep(.results-table) {
     width: 100%;
     border-collapse: separate;
     border-spacing: 0;
     font-size: 0.875rem;
     border-radius: 8px;
     overflow: hidden;
-    box-shadow: none;
     margin-bottom: 0;
     table-layout: fixed;
-    min-width: 600px !important;
+    min-width: 680px;
+    /* pastikan scroll horizontal terpicu di layar kecil */
 }
 
-::v-deep .results-table th,
-::v-deep .results-table td {
+:deep(.results-table) th,
+:deep(.results-table) td {
     padding: 0.875rem 1rem;
     border-bottom: 1px solid #e2e8f0;
     vertical-align: middle;
-    position: relative;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-::v-deep .results-table th {
+:deep(.results-table) th {
     background: linear-gradient(to bottom, #f8fafc, #f1f5f9);
     color: #4a5568;
     font-weight: 600;
@@ -163,53 +154,57 @@
     position: sticky;
     top: 0;
     z-index: 10;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-::v-deep .results-table tr:last-child td {
+:deep(.results-table) tr:last-child td {
     border-bottom: none;
 }
 
-::v-deep .results-table tr:hover {
+:deep(.results-table) tr:hover {
     background-color: #f8fafc;
-    transition: all 0.2s ease;
 }
 
-::v-deep .results-table tr:nth-child(even) {
+:deep(.results-table) tr:nth-child(even) {
     background-color: #ffffff;
 }
 
-::v-deep .results-table tr:nth-child(even):hover {
+:deep(.results-table) tr:nth-child(even):hover {
     background-color: #f8fafc;
 }
 
-::v-deep .results-table th:nth-child(1),
-::v-deep .results-table td:nth-child(1) {
+/* ── Kolom widths — 6 kolom, total 100% ── */
+
+/* nth-child(2) = Dept Code */
+:deep(.results-table) th:nth-child(1),
+:deep(.results-table) td:nth-child(1) {
+    width: 12%;
     text-align: center;
     font-weight: 500;
-    color: #718096;
-    width: 15%;
 }
 
-::v-deep .results-table th:nth-child(2),
-::v-deep .results-table td:nth-child(2) {
+/* nth-child(3) = Department Name — kolom terpanjang */
+:deep(.results-table) th:nth-child(2),
+:deep(.results-table) td:nth-child(2) {
+    width: 38%;
     font-weight: 500;
-    width: 35%;
 }
 
-::v-deep .results-table th:nth-child(3),
-::v-deep .results-table td:nth-child(3) {
-    width: 15%;
+/* nth-child(4) = Div Code */
+:deep(.results-table) th:nth-child(3),
+:deep(.results-table) td:nth-child(3) {
+    width: 12%;
 }
 
-::v-deep .results-table th:nth-child(4),
-::v-deep .results-table td:nth-child(4) {
+/* nth-child(5) = Manager */
+:deep(.results-table) th:nth-child(4),
+:deep(.results-table) td:nth-child(4) {
     width: 20%;
 }
 
-::v-deep .results-table th:nth-child(5),
-::v-deep .results-table td:nth-child(5) {
-    width: 15%;
+/* nth-child(6) = Actions — sebelumnya tidak ada, ini penyebab tombol hilang */
+:deep(.results-table) th:nth-child(5),
+:deep(.results-table) td:nth-child(5) {
+    width: 13%;
     text-align: center;
 }
 

@@ -123,6 +123,5 @@ const submit = () => {
 };
 </script>
 
-<style scoped>
-@import './MasterDeptDialog.css';
-</style>
+<style src="./MasterDeptDialog.css" scoped />
+<style src="@/views/common-button.css" scoped />

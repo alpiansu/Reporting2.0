@@ -26,3 +26,8 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hb
   "shop": "TVHV",
   "tanggal": "2025-10-01"
 }
+
+### sync all
+POST http://localhost:3000/api/rekon-virtual-mrg/sync-all
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc3NjkzMDIxMCwiZXhwIjoxNzc3MDE2NjEwfQ.lz7qyRU0r2E_WrUkjE-2U07FqjvIor91DcHRL2jW1us

@@ -912,10 +912,10 @@ class PenyesuaianService {
         });
       }
 
-      // Enrich with notes for tableName 'sesuai_toko_summary' using unixKey KDTK+PERIODE
+      // Enrich with notes for tableName 'sesuai_toko' using unixKey KDTK+PERIODE
       try {
         const notes = await notesService.getAll();
-        const notesByKey = new Map(notes.filter(n => n.tableName === "sesuai_toko_summary").map(n => [n.unixKey, n]));
+        const notesByKey = new Map(notes.filter(n => n.tableName === "sesuai_toko").map(n => [n.unixKey, n]));
 
         for (let i = 0; i < results.length; i++) {
           const key = `${results[i].KDTK}${results[i].PERIODE}`;

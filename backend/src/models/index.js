@@ -7,6 +7,7 @@ import MDept from "./m_dept.model.js";
 import RekonWtHarian from "./rekon_wt_harian.model.js";
 import RekapRemote from "./rekap_remote.model.js";
 import HistAdjust from "./hist_adjust.model.js";
+import HistBuatRmb from "./hist_buat_rmb.js";
 import SaldoVirtual from "./saldovirtual.model.js";
 import NotesEdp from "./notes.model.js";
 import NoteCategories from "../modules/note_categories/noteCategories.model.js";
@@ -32,6 +33,7 @@ modelRegistry.register("RekapRemote", () => RekapRemote.getModel(), { priority: 
 modelRegistry.register("SalesPerDept", () => SalesPerDept.getModel(), { priority: 8 });
 modelRegistry.register("MDept", () => MDept.getModel(), { priority: 7 });
 modelRegistry.register("HistAdjust", () => HistAdjust.getModel(), { priority: 6 });
+modelRegistry.register("HistBuatRmb", () => HistBuatRmb.getModel(), { priority: 5.5 });
 modelRegistry.register("DetailRekonSales", () => DetailRekonSales.getModel(), { priority: 5 });
 modelRegistry.register("MtranVsCd", () => MtranVsCd.getModel(), { priority: 4 });
 modelRegistry.register("RekonSales", () => RekonSales.getModel(), { priority: 3 });
@@ -62,6 +64,7 @@ export default {
   RekonWtHarian,
   RekapRemote,
   HistAdjust,
+  HistBuatRmb,
   SaldoVirtual,
   NotesEdp,
   NoteCategories,
@@ -83,6 +86,7 @@ export {
   RekonWtHarian,
   RekapRemote,
   HistAdjust,
+  HistBuatRmb,
   SaldoVirtual,
   NotesEdp,
   NoteCategories,

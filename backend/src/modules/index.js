@@ -25,6 +25,7 @@ import rekonSalesModule from "./rekon_sales/index.js";
 import cetakBpbModule from "./cetak_bpb/index.js";
 import rekonPersediaanModule from "./rekon_persediaan/index.js";
 import dashboardModule from "./dashboard/index.js";
+import buatRmbModule from "./buat_rmb/index.js";
 
 export default {
   // Export all modules
@@ -50,6 +51,7 @@ export default {
   cetakBpbModule,
   rekonPersediaanModule,
   dashboardModule,
+  buatRmbModule,
 
   // Initialize all modules
   initialize: app => {
@@ -75,6 +77,7 @@ export default {
     const cetakBpb = cetakBpbModule.initialize(app);
     const rekonPersediaan = rekonPersediaanModule.initialize(app);
     const dashboard = dashboardModule.initialize(app);
+    const buatRmb = buatRmbModule.initialize(app);
 
     // Initialize menu manager module
     app.use("/api/menu-manager", menuManagerModule.routes);
@@ -101,6 +104,7 @@ export default {
       cetakBpb,
       rekonPersediaan,
       dashboard,
+      buatRmb,
       menuManager: true,
     };
   },

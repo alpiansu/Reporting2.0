@@ -554,7 +554,8 @@ class RekonVirtualService {
         try {
           await this.ensureDataLoaded(options.periode);
           
-          // Merge newRecords ke virtualData di memory
+          // Merge newRecords ke virtualData di memory (partial merge)
+          // Field yang tidak ada di data store (seperti RECID) dipertahankan dari data lama di JSON
           for (const record of newRecords) {
             const idx = this.virtualData.findIndex(
               v => v.CABANG === record.CABANG &&
@@ -563,9 +564,11 @@ class RekonVirtualService {
                    v.PRDCD === record.PRDCD
             );
             if (idx >= 0) {
-              this.virtualData[idx] = record; // update
+              // Pertahankan field lama (misal RECID), timpa dengan data baru
+              this.virtualData[idx] = { ...this.virtualData[idx], ...record };
             } else {
-              this.virtualData.push(record);  // insert
+              // Record baru: tambahkan default RECID sesuai model (defaultValue: '*')
+              this.virtualData.push({ RECID: '*', ...record });
             }
           }
           

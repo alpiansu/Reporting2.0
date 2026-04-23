@@ -126,7 +126,7 @@ const addDynamicRoutes = async () => {
         const component = getComponent(item.path);
 
         const route = {
-          path: item.path.startsWith("/") ? item.path.substring(1) : item.path,
+          path: item.path.replace(/^\/|\/$/, ""), // strip leading & trailing slash
           name: routeName,
           component: component,
           meta: {
@@ -180,11 +180,11 @@ const addDynamicRoutes = async () => {
  * - /admin/menu-manager -> views/admin/menuManager/index.vue
  */
 const getComponent = path => {
-  // Remove leading slash
-  const cleanPath = path.startsWith("/") ? path.substring(1) : path;
+  // Remove leading and trailing slashes
+  const cleanPath = path.replace(/^\/|\/$/, "");
 
   // Split path into segments (e.g., "admin/menu-manager" -> ["admin", "menu-manager"])
-  const segments = cleanPath.split("/");
+  const segments = cleanPath.split("/").filter(Boolean); // filter(Boolean) removes empty strings
 
   // Convert kebab-case to camelCase for folder names
   // e.g., "menu-manager" -> "menuManager", "prep-closing" -> "prepClosing"

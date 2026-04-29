@@ -18,6 +18,7 @@ import DetailRekonSales from "../modules/rekon_sales/models/detail_rekon_sales.m
 import MtranVsCd from "../modules/rekon_sales/models/mtran_vs_cd.model.js";
 import RekonSales from "../modules/rekon_sales/models/rekon_sales.model.js";
 import SaldoRekonPersediaan from "./saldorekonpersediaan.model.js";
+import { CeklistSpaceHddWrapper, CeklistSpaceTampungWrapper, CeklistImportIdtWrapper } from "../modules/ceklist-prep-closing/ceklist_prep_closing.model.js";
 import modelRegistry from "./registry.js";
 
 // Register all Sequelize models with the registry
@@ -38,6 +39,9 @@ modelRegistry.register("DetailRekonSales", () => DetailRekonSales.getModel(), { 
 modelRegistry.register("MtranVsCd", () => MtranVsCd.getModel(), { priority: 4 });
 modelRegistry.register("RekonSales", () => RekonSales.getModel(), { priority: 3 });
 modelRegistry.register("SaldoRekonPersediaan", () => SaldoRekonPersediaan.getModel(), { priority: 2 });
+modelRegistry.register("CeklistSpaceHdd", () => CeklistSpaceHddWrapper.getModel(), { priority: 1.5 });
+modelRegistry.register("CeklistSpaceTampung", () => CeklistSpaceTampungWrapper.getModel(), { priority: 1.4 });
+modelRegistry.register("CeklistImportIdt", () => CeklistImportIdtWrapper.getModel(), { priority: 1.3 });
 
 // Note: User and Store are JSON-based models, not Sequelize models
 // They don't need to be registered for database sync

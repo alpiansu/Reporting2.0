@@ -11,7 +11,7 @@ import histBuatRmbStagingService from "./hist_buat_rmb_staging.service.js";
 import os from "os";
 import pLimit from "p-limit";
 import progressService from "../progress/progress.service.js";
-import apiResponse from "../../utils/apiResponse.js";
+
 
 class BuatRmbService {
   async processCsvBuatRmb(fileBuffer, username) {
@@ -248,58 +248,142 @@ class BuatRmbService {
       };
 
       // Execute init queries sequentially
-      for (const query of config.queries.store.init) {
-        await storeConnection.query({ sql: query, timeout: config.parallelProcessing.queryTimeoutMs });
-      }
-
-      for (const record of records) {
-        try {
-          const params = [
-            record.KDTK,
-            record.TANGGAL,
-            record.PRDCD,
-            record.NOHP,
-            record.TRXID
-          ];
-
-          // Jika ada query insert khusus, jalankan di sini
-          if (config.queries.store.insertTran && config.queries.store.insertTran.trim() !== '') {
-            // Uncomment baris di bawah jika backend sudah ada query aslinya
-            // const [dbResult] = await storeConnection.query({ sql: config.queries.store.insertTran, timeout: config.parallelProcessing.queryTimeoutMs }, params);
-          }
-
-          historyRecords.push({
-            kdtk: record.KDTK,
-            tgl: record.TANGGAL,
-            prdcd: record.PRDCD,
-            trxid: record.TRXID || "",
-            keter: "",
-            note: "Successfully sent command to branch",
-            pic: username,
-            updtime: executedAt,
-            status: "SUCCESS",
-          });
-          result.processed++;
-        } catch (recordError) {
-          logger.error(`Error processing record ${record.PRDCD} for store ${store.storeCode}: ${recordError.message}`);
-          historyRecords.push({
-            kdtk: record.KDTK,
-            tgl: record.TANGGAL,
-            prdcd: record.PRDCD,
-            trxid: record.TRXID || "",
-            keter: "",
-            note: `Operation failed: ${recordError.message}`,
-            pic: username,
-            updtime: executedAt,
-            status: "FAILED",
-          });
+      await (async () => {
+        for (const query of config.queries.store.prep) {
+          await storeConnection.query({ sql: query, timeout: config.parallelProcessing.queryTimeoutMs });
         }
-      }
+      })();
 
-      // Execute finalize queries sequentially
-      for (const query of config.queries.store.finalize) {
-        await storeConnection.query({ sql: query, timeout: config.parallelProcessing.queryTimeoutMs });
-      }
+      await (async () => {
+        for (const record of records) {
+          try {
+            const paramsSafety = [
+              record.TANGGAL,
+              record.TANGGAL,
+              record.TANGGAL,
+              record.PRDCD
+            ];
+
+            const params = [
+              record.TANGGAL,
+              record.TANGGAL,
+              record.PRDCD,
+              record.PRDCD,
+              record.QTY,
+              record.QTY,
+              record.QTY,
+              record.NOHP,
+              record.KDTK,
+              record.PRDCD
+            ];
+
+            //insert safety check
+            await storeConnection.query({ sql: config.queries.store.safetyCek, timeout: config.parallelProcessing.queryTimeoutMs }, paramsSafety);
+
+            //insert plu ke mstrmb
+            await storeConnection.query({ sql: config.queries.store.init, timeout: config.parallelProcessing.queryTimeoutMs }, params);
+
+            // Execute finalize queries sequentially
+            await (async () => {
+              for (const query of config.queries.store.finalize) {
+                await storeConnection.query({ sql: query, timeout: config.parallelProcessing.queryTimeoutMs });
+              }
+            })();
+
+            historyRecords.push({
+              kdtk: record.KDTK,
+              tgl: record.TANGGAL,
+              prdcd: record.PRDCD,
+              qty: parseInt(record.QTY) || 0,
+              trxid: record.TRXID || "",
+              keter: record.NOHP || "",
+              note: "Successfully sent command to store",
+              pic: username,
+              updtime: executedAt,
+              status: "SUCCESS",
+            });
+            result.processed++;
+          } catch (recordError) {
+            logger.error(`Error processing record ${record.PRDCD} for store ${store.storeCode}: ${recordError.message}`);
+            historyRecords.push({
+              kdtk: record.KDTK,
+              tgl: record.TANGGAL,
+              prdcd: record.PRDCD,
+              qty: parseInt(record.QTY) || 0,
+              trxid: record.TRXID || "",
+              keter: record.NOHP || "",
+              note: `Operation failed: ${recordError.message}`,
+              pic: username,
+              updtime: executedAt,
+              status: "FAILED",
+            });
+          }
+        }
+      })();
+
+      /*
+      await (async () => {
+        for (const record of records ) {
+          //insert ke mstran
+            const [resultInsertTran] = await storeConnection.query({ sql: config.queries.store.insertTran, timeout: config.parallelProcessing.queryTimeoutMs }, [record.PRDCD]);
+
+            if (resultInsertTran.affectedRows > 0) {
+              resultInsertTran.processed++;
+
+              // Query untuk mendapatkan detail row yang baru diinsert
+              const [insertedRows] = await storeConnection.query(
+                { sql: `SELECT rtype, bukti_no, prdcd, qty, price, gross, gross_jual 
+                FROM mstrmb 
+                WHERE prdcd = ? 
+                ORDER BY recid DESC 
+                LIMIT ?`, timeout: config.parallelProcessing.queryTimeoutMs },
+                [record.PRDCD, result.affectedRows]
+              );
+
+              // Format detail informasi
+              let detailInfo = "";
+              if (insertedRows && insertedRows.length > 0) {
+                const details = insertedRows
+                  .map(
+                    row =>
+                      `Rtype: ${row.rtype}, Docno: ${row.bukti_no}, Qty: ${row.qty}, Gross: ${row.gross}, Gross_jual: ${row.gross_jual}`
+                  )
+                  .join(" | ");
+                detailInfo = ` - Details: ${details}`;
+              }
+
+              // Create success history record
+              historyRecords.push({
+                kdtk: record.KDTK,
+                tgl: record.TANGGAL,
+                prdcd: record.PRDCD,
+                qty: parseInt(record.QTY) || 0,
+                trxid: record.TRXID || "",
+                keter: record.NOHP || "",
+                note: `Successfully processed adjustment - ${result.affectedRows} rows affected${detailInfo}`,
+                pic: username,
+                updtime: executedAt,
+                status: "SUCCESS",
+              });
+            } else {
+              // Insert gagal - tidak ada rows yang terpengaruh
+              historyRecords.push({
+                kdtk: record.KDTK,
+                tgl: record.TANGGAL,
+                prdcd: record.PRDCD,
+                qty: parseInt(record.QTY) || 0,
+                trxid: record.TRXID || "",
+                keter: record.NOHP || "",
+                note: "Insert failed - no rows affected (terkena jagaan saldo sudah 0 sebelum di adjust / tidak ada di prodmast)",
+                pic: username,
+                updtime: executedAt,
+                status: "FAILED",
+              });
+            }
+
+        }
+      })();
+      */
 
       result.success = true;
       result.historyRecords = historyRecords;

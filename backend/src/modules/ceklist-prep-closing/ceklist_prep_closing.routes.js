@@ -9,16 +9,18 @@ const router = express.Router();
 router.use(authenticateJWT);
 
 // ─── Space HDD Bulanan ────────────────────────────────────────────────────────
-router.get("/space-hdd",    ceklistController.getSpaceHdd);
-router.post("/space-hdd",   ceklistController.upsertSpaceHdd);
-router.put("/space-hdd",    ceklistController.upsertSpaceHdd);
-router.delete("/space-hdd", ceklistController.deleteSpaceHdd);
+router.get("/space-hdd",         ceklistController.getSpaceHdd);
+router.post("/space-hdd",        ceklistController.upsertSpaceHdd);
+router.put("/space-hdd",         ceklistController.upsertSpaceHdd);
+router.delete("/space-hdd",      ceklistController.deleteSpaceHdd);
+router.post("/space-hdd/init",   ceklistController.initSpaceHdd);
 
 // ─── Space HDD Tampung ────────────────────────────────────────────────────────
-router.get("/space-tampung",    ceklistController.getSpaceTampung);
-router.post("/space-tampung",   ceklistController.upsertSpaceTampung);
-router.put("/space-tampung",    ceklistController.upsertSpaceTampung);
-router.delete("/space-tampung", ceklistController.deleteSpaceTampung);
+router.get("/space-tampung",         ceklistController.getSpaceTampung);
+router.post("/space-tampung",        ceklistController.upsertSpaceTampung);
+router.put("/space-tampung",         ceklistController.upsertSpaceTampung);
+router.delete("/space-tampung",      ceklistController.deleteSpaceTampung);
+router.post("/space-tampung/init",   ceklistController.initSpaceTampung);
 
 // ─── Import IDT ───────────────────────────────────────────────────────────────
 router.get("/import-idt",           ceklistController.getImportIdt);

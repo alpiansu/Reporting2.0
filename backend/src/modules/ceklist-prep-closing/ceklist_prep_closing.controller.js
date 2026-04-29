@@ -63,6 +63,24 @@ export const deleteSpaceHdd = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/ceklist-prep-closing/space-hdd/init?periode=
+ * Generate skeleton entries for all INDUK branches
+ */
+export const initSpaceHdd = async (req, res) => {
+  try {
+    const { periode } = req.query;
+    if (!periode) return apiResponse.badRequest(res, "periode wajib diisi");
+
+    logger.info(`[ceklist_prep_closing.controller] initSpaceHdd periode=${periode}`);
+    const result = await ceklistPrepClosingService.initSpaceHdd(periode);
+    return apiResponse.success(res, result);
+  } catch (error) {
+    logger.error(`[ceklist_prep_closing.controller] initSpaceHdd error: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
 // ─── Space HDD Tampung ────────────────────────────────────────────────────────
 
 /**
@@ -114,6 +132,24 @@ export const deleteSpaceTampung = async (req, res) => {
     return apiResponse.success(res, result);
   } catch (error) {
     logger.error(`[ceklist_prep_closing.controller] deleteSpaceTampung error: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+/**
+ * POST /api/ceklist-prep-closing/space-tampung/init?periode=
+ * Generate skeleton entries for all INDUK branches
+ */
+export const initSpaceTampung = async (req, res) => {
+  try {
+    const { periode } = req.query;
+    if (!periode) return apiResponse.badRequest(res, "periode wajib diisi");
+
+    logger.info(`[ceklist_prep_closing.controller] initSpaceTampung periode=${periode}`);
+    const result = await ceklistPrepClosingService.initSpaceTampung(periode);
+    return apiResponse.success(res, result);
+  } catch (error) {
+    logger.error(`[ceklist_prep_closing.controller] initSpaceTampung error: ${error.message}`);
     return apiResponse.error(res, error.message);
   }
 };

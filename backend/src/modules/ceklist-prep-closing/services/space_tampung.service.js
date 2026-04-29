@@ -2,8 +2,10 @@
  * Space HDD Tampung Service
  * Simple CRUD — no computed fields, full manual input
  */
+import { Op } from "sequelize";
 import logger from "../../../config/logger.js";
 import { CeklistSpaceTampungWrapper } from "../ceklist_prep_closing.model.js";
+import storeService from "../../store/storeService.js";
 
 class SpaceTampungService {
   /**
@@ -67,6 +69,38 @@ class SpaceTampungService {
       where: { CAB: cab, PERIODE: periode },
     });
     return { deleted };
+  }
+  /**
+   * Generate skeleton records for all INDUK branches missing in the given periode.
+   * @param {string} periode  YYMM
+   */
+  async getBulkTemplate(periode) {
+    logger.info(`[space_tampung.service] getBulkTemplate periode=${periode}`);
+
+    await storeService.ensureInitialized();
+
+    const indukStores = storeService.stores.filter(s => s.notes === "INDUK");
+    const cabSet = new Set(indukStores.map(s => s.branch || s.storeCode?.substring(0, 4)));
+    const allCabs = [...cabSet].filter(Boolean);
+
+    if (allCabs.length === 0) return { created: 0, existing: 0, total: 0 };
+
+    const existing = await CeklistSpaceTampungWrapper.findAll({
+      where: { PERIODE: periode, CAB: { [Op.in]: allCabs } },
+      attributes: ["CAB"],
+    });
+    const existingSet = new Set(existing.map(r => r.CAB));
+
+    const toCreate = allCabs
+      .filter(c => !existingSet.has(c))
+      .map(c => ({ ID: `${c}${periode}`, CAB: c, PERIODE: periode }));
+
+    if (toCreate.length > 0) {
+      await CeklistSpaceTampungWrapper.bulkCreate(toCreate, { ignoreDuplicates: true });
+    }
+
+    logger.info(`[space_tampung.service] getBulkTemplate: created=${toCreate.length} existing=${existingSet.size}`);
+    return { created: toCreate.length, existing: existingSet.size, total: allCabs.length };
   }
 }
 

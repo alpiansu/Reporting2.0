@@ -5,6 +5,7 @@
 import { Op } from "sequelize";
 import logger from "../../../config/logger.js";
 import { CeklistSpaceHddWrapper } from "../ceklist_prep_closing.model.js";
+import storeService from "../../store/storeService.js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -156,6 +157,40 @@ class SpaceHddService {
       order: [["PERIODE", "DESC"]],
     });
     return records.map(r => r.dataValues ?? r);
+  }
+  /**
+   * Generate skeleton records for all INDUK branches missing in the given periode.
+   * IP is pre-filled with placeholder so user knows to fill it.
+   * @param {string} periode  YYMM
+   * @returns {{ created: number, existing: number, total: number }}
+   */
+  async getBulkTemplate(periode) {
+    logger.info(`[space_hdd.service] getBulkTemplate periode=${periode}`);
+
+    await storeService.ensureInitialized();
+
+    const indukStores = storeService.stores.filter(s => s.notes === "INDUK");
+    const kdcabSet = new Set(indukStores.map(s => s.branch || s.storeCode?.substring(0, 4)));
+    const allKdcabs = [...kdcabSet].filter(Boolean);
+
+    if (allKdcabs.length === 0) return { created: 0, existing: 0, total: 0 };
+
+    const existing = await CeklistSpaceHddWrapper.findAll({
+      where: { PERIODE: periode, KDCAB: { [Op.in]: allKdcabs } },
+      attributes: ["KDCAB"],
+    });
+    const existingSet = new Set(existing.map(r => r.KDCAB));
+
+    const toCreate = allKdcabs
+      .filter(k => !existingSet.has(k))
+      .map(k => ({ ID: `${k}${periode}`, KDCAB: k, IP: "(isi IP)", PERIODE: periode }));
+
+    if (toCreate.length > 0) {
+      await CeklistSpaceHddWrapper.bulkCreate(toCreate, { ignoreDuplicates: true });
+    }
+
+    logger.info(`[space_hdd.service] getBulkTemplate: created=${toCreate.length} existing=${existingSet.size}`);
+    return { created: toCreate.length, existing: existingSet.size, total: allKdcabs.length };
   }
 }
 

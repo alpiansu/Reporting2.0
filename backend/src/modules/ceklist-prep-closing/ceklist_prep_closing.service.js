@@ -24,6 +24,10 @@ class CeklistPrepClosingService {
     return spaceHddService.delete(kdcab, periode);
   }
 
+  async initSpaceHdd(periode) {
+    return spaceHddService.getBulkTemplate(periode);
+  }
+
   async getSpaceHddHistory(kdcab) {
     return spaceHddService.getHistory(kdcab);
   }
@@ -40,6 +44,10 @@ class CeklistPrepClosingService {
 
   async deleteSpaceTampung(cab, periode) {
     return spaceTampungService.delete(cab, periode);
+  }
+
+  async initSpaceTampung(periode) {
+    return spaceTampungService.getBulkTemplate(periode);
   }
 
   // ─── Import IDT ──────────────────────────────────────────────────────────

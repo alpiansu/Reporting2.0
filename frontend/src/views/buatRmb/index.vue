@@ -426,9 +426,9 @@ const csvFields = [
   },
   {
     name: 'NOHP',
-    description: 'Nomor Handphone',
+    description: 'Nomor Handphone (opsional)',
     example: '081234567890',
-    required: true
+    required: false
   },
   {
     name: 'TRXID',

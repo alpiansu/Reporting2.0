@@ -23,7 +23,7 @@ if (!fs.existsSync(BASE_UPLOAD_DIR)) {
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     // Subfolder per KDCAB for easier management
-    const kdcab = req.body?.kdcab || req.query?.kdcab || "unknown";
+    const kdcab = req.query?.kdcab || req.body?.kdcab || "unknown";
     const dir = path.join(BASE_UPLOAD_DIR, kdcab);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -31,8 +31,8 @@ const storage = multer.diskStorage({
     cb(null, dir);
   },
   filename: function (req, file, cb) {
-    const kdcab  = req.body?.kdcab  || req.query?.kdcab  || "unknown";
-    const periode = req.body?.periode || req.query?.periode || "0000";
+    const kdcab  = req.query?.kdcab  || req.body?.kdcab  || "unknown";
+    const periode = req.query?.periode || req.body?.periode || "0000";
     const ts  = Date.now();
     const ext = path.extname(file.originalname).toLowerCase();
     // e.g. G033_2410_1714385600123.jpg
@@ -63,6 +63,6 @@ export default upload;
  */
 export function getCaptureUrl(req) {
   if (!req.file) return null;
-  const kdcab   = req.body?.kdcab  || req.query?.kdcab  || "unknown";
+  const kdcab   = req.query?.kdcab  || req.body?.kdcab  || "unknown";
   return `/uploads/ceklist-capture/${kdcab}/${req.file.filename}`;
 }

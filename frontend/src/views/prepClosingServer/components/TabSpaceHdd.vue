@@ -5,7 +5,7 @@
         :loading="initLoading" :disabled="!periode" @click="handleInit"
         v-tooltip.top="'Generate skeleton record untuk semua INDUK cabang'" />
       <Button icon="pi pi-plus" label="Tambah Data" class="p-button-primary p-button-sm"
-        :disabled="!periode" @click="$emit('add')" />
+        :disabled="!periode" @click="openDialog(null)" />
     </div>
 
     <DataTable :value="rows" :loading="loading" class="ceklist-table" stripedRows
@@ -70,7 +70,7 @@
         <template #body="{ data }">
           <div class="row-actions">
             <Button icon="pi pi-pencil" class="p-button-text p-button-sm p-button-info"
-              v-tooltip.top="'Edit'" @click="$emit('edit', data)" />
+              v-tooltip.top="'Edit'" @click="openDialog(data)" />
             <Button icon="pi pi-trash" class="p-button-text p-button-sm p-button-danger"
               v-tooltip.top="'Hapus'" @click="$emit('delete', data)" />
           </div>
@@ -138,7 +138,7 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   periode: { type: String, default: '' },
 });
-const emit = defineEmits(['add', 'edit', 'delete', 'refresh']);
+const emit = defineEmits(['delete', 'refresh']);
 
 const toast = useToast();
 const saving = ref(false);

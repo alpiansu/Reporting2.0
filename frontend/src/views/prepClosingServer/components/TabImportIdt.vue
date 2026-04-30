@@ -179,7 +179,7 @@ async function doUpload() {
     fd.append('capture', uploadFile.value);
     fd.append('kdcab', uploadTarget.value.KDCAB);
     fd.append('periode', props.periode);
-    await api.uploadCapture(fd);
+    await api.uploadCapture(fd, uploadTarget.value.KDCAB, props.periode);
     closeUpload();
     toast.add({ severity: 'success', summary: 'Upload Berhasil', detail: 'Gambar capture disimpan', life: 3000 });
     emit('refresh');

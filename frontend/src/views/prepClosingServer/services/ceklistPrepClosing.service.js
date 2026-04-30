@@ -51,7 +51,7 @@ export const getImportIdt    = (p)    => request(`/import-idt?${p}`);
 export const upsertImportIdt = (body) => request('/import-idt', { method: 'POST', body: JSON.stringify(body) });
 export const deleteImportIdt = (kdcab, periode) => request(`/import-idt?kdcab=${kdcab}&periode=${periode}`, { method: 'DELETE' });
 export const initImportIdt   = (periode) => request(`/import-idt/init?periode=${periode}`, { method: 'POST' });
-export const uploadCapture   = (fd)  => upload('/import-idt/upload', fd);
+export const uploadCapture   = (fd, kdcab, periode) => upload(`/import-idt/upload?kdcab=${kdcab}&periode=${periode}`, fd);
 
 // ─── Rekap Screening ──────────────────────────────────────────────────────────
 export const getRekapScreening = (p) => request(`/rekap-screening?${p}`);

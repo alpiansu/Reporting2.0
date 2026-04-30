@@ -114,8 +114,11 @@ async function buildSpaceHddSheet(sheet, workbook, rows, periode) {
           const { width: embedW, height: embedH } = scaleWithConstraints(dims?.width, dims?.height);
           dataRow.height = embedH + 6;
           const imgId = workbook.addImage({ buffer: imgBuf, extension: extMap[ext] || "png" });
+          // Calculate centered position: (columnWidth - imageWidth) / 2
+          const colWidthPx = 85 * 7; // ~7px per Excel char width
+          const centeredDx = Math.max(0, (colWidthPx - embedW) / 2);
           sheet.addImage(imgId, {
-            tl: { col: CAPTURE_COL - 1, row: excelRowNum - 1, dx: 10, dy: 3 },
+            tl: { col: CAPTURE_COL - 1, row: excelRowNum - 1, dx: centeredDx, dy: 3 },
             ext: { width: embedW, height: embedH },
             editAs: "oneCell",
           });
@@ -126,8 +129,19 @@ async function buildSpaceHddSheet(sheet, workbook, rows, periode) {
     }
   }
 
-  // Set Capture column width to match max embed width
-  sheet.getColumn(CAPTURE_COL).width = 34;
+  // Set column widths appropriately
+  sheet.getColumn(1).width = 14; // KDCAB - fit for data like "G033"
+  sheet.getColumn(2).width = 18; // IP address
+  sheet.getColumn(3).width = 15; // FREE SPACE
+  sheet.getColumn(4).width = 22; // Free Space Last Month
+  sheet.getColumn(5).width = 22; // Usage Disk Space
+  sheet.getColumn(6).width = 24; // Predicted Usage
+  sheet.getColumn(7).width = 14; // TGL CHECK
+  sheet.getColumn(8).width = 10; // OS
+  sheet.getColumn(9).width = 25; // FU
+  sheet.getColumn(10).width = 14; // Free After
+  // Set Capture column width wider for better image display
+  sheet.getColumn(CAPTURE_COL).width = 85;
 
   // Spacer + historical reference table
   sheet.addRow([]);
@@ -151,8 +165,6 @@ async function buildSpaceHddSheet(sheet, workbook, rows, periode) {
       styleDataRow(refRow, idx % 2 === 1);
     }
   });
-
-  autoWidth(sheet, 10, 35);
 }
 
 async function buildSpaceTampungSheet(sheet, workbook, rows, periode) {
@@ -191,8 +203,11 @@ async function buildSpaceTampungSheet(sheet, workbook, rows, periode) {
           const { width: embedW, height: embedH } = scaleWithConstraints(dims?.width, dims?.height);
           dataRow.height = embedH + 6;
           const imgId = workbook.addImage({ buffer: imgBuf, extension: extMap[ext] || "png" });
+          // Center image in capture column
+          const colWidthPx = 85 * 7;
+          const centeredDx = Math.max(0, (colWidthPx - embedW) / 2);
           sheet.addImage(imgId, {
-            tl: { col: CAPTURE_COL - 1, row: excelRowNum - 1, dx: 10, dy: 3 },
+            tl: { col: CAPTURE_COL - 1, row: excelRowNum - 1, dx: centeredDx, dy: 3 },
             ext: { width: embedW, height: embedH },
             editAs: "oneCell",
           });
@@ -203,8 +218,14 @@ async function buildSpaceTampungSheet(sheet, workbook, rows, periode) {
     }
   }
 
-  sheet.getColumn(CAPTURE_COL).width = 34;
-  autoWidth(sheet, 10, 35);
+  // Set column widths appropriately
+  sheet.getColumn(1).width = 14; // CAB - fit for data like "G033"
+  sheet.getColumn(2).width = 28; // PATH
+  sheet.getColumn(3).width = 14; // CAPACITY
+  sheet.getColumn(4).width = 14; // FREE SPACE
+  sheet.getColumn(5).width = 14; // TGL CHECK
+  // Set Capture column wider for better image display
+  sheet.getColumn(CAPTURE_COL).width = 85;
 }
 
 /**
@@ -271,10 +292,10 @@ async function buildImportIdtSheet(sheet, workbook, rows, periode) {
   const hRow = sheet.addRow(["KDCAB", "Status", "Capture / Keterangan", "Update"]);
   styleHeader(hRow);
 
-  sheet.getColumn(1).width = 12;
-  sheet.getColumn(2).width = 12;
-  sheet.getColumn(3).width = 70;
-  sheet.getColumn(4).width = 18;
+  sheet.getColumn(1).width = 14; // KDCAB - fit for data
+  sheet.getColumn(2).width = 12; // Status
+  sheet.getColumn(3).width = 85; // Capture column wider for images
+  sheet.getColumn(4).width = 18; // Update
 
   const IMAGE_EXTENSIONS = /\.(jpg|jpeg|png|gif|webp)$/i;
   const TEXT_ROW_HEIGHT   = 20;
@@ -304,8 +325,11 @@ async function buildImportIdtSheet(sheet, workbook, rows, periode) {
           styleDataRow(dataRow, isAlt);
 
           const imgId = workbook.addImage({ buffer: imgBuf, extension: imgType });
+          // Center image in capture column (column 3)
+          const colWidthPx = 85 * 7; // ~7px per Excel char width
+          const centeredDx = Math.max(0, (colWidthPx - embedW) / 2);
           sheet.addImage(imgId, {
-            tl: { col: 2, row: excelRowNum - 1, dx: 20, dy: 3 },  // 0-based with left padding
+            tl: { col: 2, row: excelRowNum - 1, dx: centeredDx, dy: 3 },  // 0-based, centered
             ext: { width: embedW, height: embedH }, // exact px — no stretching
             editAs: "oneCell",
           });

@@ -178,8 +178,8 @@ function getImageDimensions(buf, ext) {
  * Falls back to 160×120 when original dimensions unknown.
  */
 function scaleWithConstraints(origW, origH,
-  { minW = 80, maxW = 220, minH = 60, maxH = 165 } = {}) {
-  if (!origW || !origH) return { width: 160, height: 120 };
+  { minW = 160, maxW = 440, minH = 120, maxH = 330 } = {}) {
+  if (!origW || !origH) return { width: 320, height: 240 };
   const aspect = origW / origH;
   let w = origW, h = origH;
   if (w > maxW) { w = maxW; h = w / aspect; }
@@ -207,7 +207,7 @@ async function buildImportIdtSheet(sheet, workbook, rows, periode) {
 
   sheet.getColumn(1).width = 12;
   sheet.getColumn(2).width = 12;
-  sheet.getColumn(3).width = 32;
+  sheet.getColumn(3).width = 70;
   sheet.getColumn(4).width = 18;
 
   const IMAGE_EXTENSIONS = /\.(jpg|jpeg|png|gif|webp)$/i;
@@ -239,7 +239,7 @@ async function buildImportIdtSheet(sheet, workbook, rows, periode) {
 
           const imgId = workbook.addImage({ buffer: imgBuf, extension: imgType });
           sheet.addImage(imgId, {
-            tl: { col: 2, row: excelRowNum - 1 },  // 0-based top-left corner
+            tl: { col: 2, row: excelRowNum - 1, dx: 20, dy: 3 },  // 0-based with left padding
             ext: { width: embedW, height: embedH }, // exact px — no stretching
             editAs: "oneCell",
           });

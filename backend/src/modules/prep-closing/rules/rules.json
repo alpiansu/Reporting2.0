@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastUpdated": "2026-04-17T11:24:33.097Z",
+  "lastUpdated": "2026-04-30T11:02:10.670Z",
   "updatedBy": "2013076089",
   "description": "Aturan pengecekan kesiapan closing bulanan",
   "rules": [
@@ -85,7 +85,7 @@
         "failMessage": "Periode terakhir bln_akt ({actual}) tidak sesuai dengan WRC ({expected})",
         "passMessage": "Periode terakhir bln_akt sudah sesuai"
       },
-      "severity": "high",
+      "severity": "critical",
       "ui": {
         "icon": "pi pi-history",
         "color": "#f59e0b",
@@ -365,7 +365,7 @@
       "validation": {
         "type": "comparison",
         "operator": "GREATER_THAN",
-        "expected": 0,
+        "expected": "0",
         "failMessage": "Belum ada data produk khusus di SO (Jumlah: {actual})",
         "passMessage": "Data produk khusus sudah tersedia ({actual} items)"
       },
@@ -674,6 +674,37 @@
       "metadata": {
         "impactArea": "Tax Compliance",
         "estimatedFixTime": "5 minutes"
+      }
+    },
+    {
+      "key": "CEK_TRX_COMMIT",
+      "name": "CEK TRX COMMIT TOKO",
+      "description": "Memastikan trx_commit toko sesuai standard yang telah di tentukan",
+      "category": "system_config",
+      "priority": 99,
+      "enabled": true,
+      "query": {
+        "type": "calculation",
+        "sql": "SELECT @@innodb_flush_log_at_trx_commit AS trx_commit;"
+      },
+      "validation": {
+        "type": "equals",
+        "operator": "EQUALS",
+        "expected": "2",
+        "passMessage": "Trx Commit Toko Sesuai",
+        "failMessage": "Nilai trx commit toko harus 2"
+      },
+      "severity": "critical",
+      "ui": {
+        "icon": "pi pi-cog",
+        "color": "#3b82f6",
+        "helpText": "bisa jalankan dengan helper \"rndagent myini\" dari d:/idm/",
+        "fixable": false,
+        "expandable": true
+      },
+      "metadata": {
+        "impactArea": "General",
+        "estimatedFixTime": "Manual Check"
       }
     }
   ],

@@ -66,22 +66,30 @@ function autoWidth(sheet, minWidth = 10, maxWidth = 40) {
 
 // ─── Sheet builders ───────────────────────────────────────────────────────────
 
-function buildSpaceHddSheet(sheet, rows, periode) {
+async function buildSpaceHddSheet(sheet, workbook, rows, periode) {
   sheet.addRow([]); // spacer
   const titleRow = sheet.addRow([`Space HDD Bulanan — Periode ${periode}`]);
   titleRow.font = { bold: true, size: 13 };
   sheet.addRow([]);
 
-  // Main table headers
   const mainHeaders = [
     "KDCAB", "IP", "FREE SPACE", "Free Space Last Month (GB)",
     "Usage Disk Space (GB)", "Predicted HDD Usage (GB)",
-    "TGL CHECK", "OS", "FU (Follow Up)", "Free After",
+    "TGL CHECK", "OS", "FU (Follow Up)", "Free After", "Capture",
   ];
   const hRow = sheet.addRow(mainHeaders);
   styleHeader(hRow);
 
-  rows.forEach((r, idx) => {
+  const IMAGE_EXTENSIONS = /\.(jpg|jpeg|png|gif|webp)$/i;
+  const DATA_START_ROW   = sheet.rowCount + 1;
+  const TEXT_ROW_HEIGHT  = 18;
+  const CAPTURE_COL      = 11; // 1-based column index for Capture
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const excelRowNum = DATA_START_ROW + i;
+    const isAlt = i % 2 === 1;
+
     const dataRow = sheet.addRow([
       r.KDCAB, r.IP, r.FREE_SPACE,
       r.freeSpaceLastMonthGb ?? "",
@@ -91,9 +99,35 @@ function buildSpaceHddSheet(sheet, rows, periode) {
       r.OS ?? "",
       r.FU ?? "",
       r.FREE_AFTER ?? "",
+      "", // Capture cell — left empty; image placed on top
     ]);
-    styleDataRow(dataRow, idx % 2 === 1);
-  });
+    styleDataRow(dataRow, isAlt);
+
+    if (r.CAPTURE_PATH && IMAGE_EXTENSIONS.test(r.CAPTURE_PATH)) {
+      const absPath = path.join(PUBLIC_DIR, r.CAPTURE_PATH);
+      if (fs.existsSync(absPath)) {
+        try {
+          const ext     = path.extname(absPath).slice(1).toLowerCase();
+          const extMap  = { jpg: "jpeg", jpeg: "jpeg", png: "png", gif: "gif", webp: "png" };
+          const imgBuf  = fs.readFileSync(absPath);
+          const dims    = getImageDimensions(imgBuf, ext);
+          const { width: embedW, height: embedH } = scaleWithConstraints(dims?.width, dims?.height);
+          dataRow.height = embedH + 6;
+          const imgId = workbook.addImage({ buffer: imgBuf, extension: extMap[ext] || "png" });
+          sheet.addImage(imgId, {
+            tl: { col: CAPTURE_COL - 1, row: excelRowNum - 1, dx: 10, dy: 3 },
+            ext: { width: embedW, height: embedH },
+            editAs: "oneCell",
+          });
+        } catch (_) { dataRow.getCell(CAPTURE_COL).value = r.CAPTURE_PATH; }
+      }
+    } else {
+      dataRow.height = TEXT_ROW_HEIGHT;
+    }
+  }
+
+  // Set Capture column width to match max embed width
+  sheet.getColumn(CAPTURE_COL).width = 34;
 
   // Spacer + historical reference table
   sheet.addRow([]);
@@ -118,27 +152,59 @@ function buildSpaceHddSheet(sheet, rows, periode) {
     }
   });
 
-  autoWidth(sheet);
+  autoWidth(sheet, 10, 35);
 }
 
-function buildSpaceTampungSheet(sheet, rows, periode) {
+async function buildSpaceTampungSheet(sheet, workbook, rows, periode) {
   sheet.addRow([]);
   const titleRow = sheet.addRow([`Space HDD Tampung — Periode ${periode}`]);
   titleRow.font = { bold: true, size: 13 };
   sheet.addRow([]);
 
-  const hRow = sheet.addRow(["CAB", "PATH", "CAPACITY", "FREE SPACE", "TGL CHECK"]);
+  const hRow = sheet.addRow(["CAB", "PATH", "CAPACITY", "FREE SPACE", "TGL CHECK", "Capture"]);
   styleHeader(hRow);
 
-  rows.forEach((r, idx) => {
+  const IMAGE_EXTENSIONS = /\.(jpg|jpeg|png|gif|webp)$/i;
+  const DATA_START_ROW   = sheet.rowCount + 1;
+  const TEXT_ROW_HEIGHT  = 18;
+  const CAPTURE_COL      = 6; // 1-based
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const excelRowNum = DATA_START_ROW + i;
+    const isAlt = i % 2 === 1;
+
     const dataRow = sheet.addRow([
       r.CAB, r.PATH ?? "", r.CAPACITY ?? "",
-      r.FREE_SPACE ?? "", r.TGL_CHECK ?? "",
+      r.FREE_SPACE ?? "", r.TGL_CHECK ?? "", "",
     ]);
-    styleDataRow(dataRow, idx % 2 === 1);
-  });
+    styleDataRow(dataRow, isAlt);
 
-  autoWidth(sheet);
+    if (r.CAPTURE_PATH && IMAGE_EXTENSIONS.test(r.CAPTURE_PATH)) {
+      const absPath = path.join(PUBLIC_DIR, r.CAPTURE_PATH);
+      if (fs.existsSync(absPath)) {
+        try {
+          const ext     = path.extname(absPath).slice(1).toLowerCase();
+          const extMap  = { jpg: "jpeg", jpeg: "jpeg", png: "png", gif: "gif", webp: "png" };
+          const imgBuf  = fs.readFileSync(absPath);
+          const dims    = getImageDimensions(imgBuf, ext);
+          const { width: embedW, height: embedH } = scaleWithConstraints(dims?.width, dims?.height);
+          dataRow.height = embedH + 6;
+          const imgId = workbook.addImage({ buffer: imgBuf, extension: extMap[ext] || "png" });
+          sheet.addImage(imgId, {
+            tl: { col: CAPTURE_COL - 1, row: excelRowNum - 1, dx: 10, dy: 3 },
+            ext: { width: embedW, height: embedH },
+            editAs: "oneCell",
+          });
+        } catch (_) { dataRow.getCell(CAPTURE_COL).value = r.CAPTURE_PATH; }
+      }
+    } else {
+      dataRow.height = TEXT_ROW_HEIGHT;
+    }
+  }
+
+  sheet.getColumn(CAPTURE_COL).width = 34;
+  autoWidth(sheet, 10, 35);
 }
 
 /**
@@ -312,8 +378,8 @@ class ExcelExportService {
     workbook.created  = new Date();
     workbook.modified = new Date();
 
-    buildSpaceHddSheet(workbook.addWorksheet("Space HDD Bulanan"), hddRows, periode);
-    buildSpaceTampungSheet(workbook.addWorksheet("Space Hdd Tampung"), tampungRows, periode);
+    await buildSpaceHddSheet(workbook.addWorksheet("Space HDD Bulanan"), workbook, hddRows, periode);
+    await buildSpaceTampungSheet(workbook.addWorksheet("Space Hdd Tampung"), workbook, tampungRows, periode);
     await buildImportIdtSheet(workbook.addWorksheet("Import IDT"), workbook, idtRows, periode);
     buildRekapScreeningSheet(workbook.addWorksheet("Rekap Screening Toko"), rekapResult, periode);
 

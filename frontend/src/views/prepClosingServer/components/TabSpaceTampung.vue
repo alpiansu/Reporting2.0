@@ -23,6 +23,15 @@
       <Column field="TGL_CHECK" header="Tgl Check" style="width:110px">
         <template #body="{ data }">{{ data.TGL_CHECK || '—' }}</template>
       </Column>
+      <Column header="Capture" style="width:90px">
+        <template #body="{ data }">
+          <a v-if="data.CAPTURE_PATH" :href="baseUrl + data.CAPTURE_PATH" target="_blank">
+            <img :src="baseUrl + data.CAPTURE_PATH" alt="capture"
+              style="max-width:80px;max-height:56px;width:auto;height:auto;object-fit:contain;border-radius:3px;display:block" />
+          </a>
+          <i v-else class="pi pi-image" style="font-size:1.4rem;color:var(--text-color-secondary)" />
+        </template>
+      </Column>
       <Column header="Aksi" style="width:90px">
         <template #body="{ data }">
           <div class="row-actions">
@@ -59,6 +68,26 @@
           <label>Tgl Check</label>
           <Calendar v-model="form.tglCheck" dateFormat="yy-mm-dd" class="w-full" showIcon />
         </div>
+
+        <!-- ─── Compact Capture Upload ─── -->
+        <div class="form-field form-field-full capture-section">
+          <label>Capture <span style="color:var(--text-color-secondary);font-weight:400;font-size:0.8rem">(opsional)</span></label>
+          <div class="capture-upload-row">
+            <div class="capture-preview-box">
+              <img v-if="capturePath" :src="baseUrl + capturePath" alt="capture"
+                style="max-width:120px;max-height:80px;width:auto;height:auto;object-fit:contain;border-radius:4px" />
+              <i v-else class="pi pi-image" style="font-size:2rem;color:var(--text-color-secondary)" />
+            </div>
+            <div class="capture-upload-actions">
+              <input ref="fileInput" type="file" accept="image/*" style="display:none" @change="onFileChange" />
+              <Button :label="capturePath ? 'Ganti' : 'Pilih File'" icon="pi pi-upload"
+                class="p-button-outlined p-button-sm" @click="fileInput.click()" />
+              <span v-if="captureFile" class="capture-filename">{{ captureFile.name }}</span>
+              <Button v-if="captureFile" label="Upload" icon="pi pi-check" class="p-button-success p-button-sm"
+                :loading="uploading" @click="doUpload" />
+            </div>
+          </div>
+        </div>
       </div>
       <template #footer>
         <Button label="Batal" icon="pi pi-times" class="p-button-text" @click="dlgVisible = false" />
@@ -90,7 +119,31 @@ const saving = ref(false);
 const initLoading = ref(false);
 const dlgVisible = ref(false);
 const isEdit = ref(false);
+const uploading = ref(false);
+const captureFile = ref(null);
+const capturePath = ref(null);
+const fileInput = ref(null);
 const form = reactive({ cab: '', path: '', capacity: '', freeSpace: '', tglCheck: null });
+
+const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:3000';
+
+function onFileChange(e) { captureFile.value = e.target.files[0] || null; }
+
+async function doUpload() {
+  if (!captureFile.value || !form.cab || !props.periode) return;
+  uploading.value = true;
+  try {
+    const fd = new FormData();
+    fd.append('capture', captureFile.value);
+    const res = await api.uploadCaptureTampung(fd, form.cab, props.periode);
+    capturePath.value = res.captureUrl;
+    captureFile.value = null;
+    toast.add({ severity: 'success', summary: 'Upload Berhasil', detail: 'Gambar capture disimpan', life: 3000 });
+    emit('refresh');
+  } catch (e) {
+    toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 4000 });
+  } finally { uploading.value = false; }
+}
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 async function handleInit() {
@@ -110,6 +163,8 @@ defineExpose({ openDialog });
 
 function openDialog(row = null) {
   isEdit.value = !!row;
+  captureFile.value = null;
+  capturePath.value = row?.CAPTURE_PATH || null;
   Object.assign(form, {
     cab: row?.CAB || '', path: row?.PATH || '', capacity: row?.CAPACITY || '',
     freeSpace: row?.FREE_SPACE || '', tglCheck: row?.TGL_CHECK ? new Date(row.TGL_CHECK) : null,
@@ -153,3 +208,15 @@ function spaceClass(gb) {
   return gb < 10 ? 'space-critical' : gb < 30 ? 'space-warning' : 'space-ok';
 }
 </script>
+
+<style scoped>
+.capture-section { border-top: 1px solid var(--surface-border); padding-top: 0.75rem; margin-top: 0.25rem; }
+.capture-upload-row { display: flex; align-items: center; gap: 0.75rem; }
+.capture-preview-box {
+  width: 128px; height: 88px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-section); border: 1px solid var(--surface-border); border-radius: 6px; overflow: hidden;
+}
+.capture-upload-actions { display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start; }
+.capture-filename { font-size: 0.78rem; color: var(--text-color-secondary); word-break: break-all; max-width: 200px; }
+</style>

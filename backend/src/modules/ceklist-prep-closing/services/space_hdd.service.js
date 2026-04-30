@@ -6,6 +6,7 @@ import { Op } from "sequelize";
 import logger from "../../../config/logger.js";
 import { CeklistSpaceHddWrapper } from "../ceklist_prep_closing.model.js";
 import storeService from "../../store/storeService.js";
+import { findCaptureFile } from "../ceklist_capture.middleware.js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -93,7 +94,11 @@ class SpaceHddService {
       prevRecords.forEach(r => { prevRecordsMap[r.KDCAB] = r; });
     }
 
-    return records.map(r => attachComputedFields(r, prevRecordsMap[r.KDCAB] || null));
+    return records.map(r => {
+      const raw = attachComputedFields(r, prevRecordsMap[r.KDCAB] || null);
+      raw.CAPTURE_PATH = findCaptureFile("space-hdd", raw.KDCAB, periode);
+      return raw;
+    });
   }
 
   /**

@@ -2,11 +2,16 @@ import express from "express";
 import * as ceklistController from "./ceklist_prep_closing.controller.js";
 import { authenticateJWT } from "../../middlewares/index.js";
 import captureUpload from "./ceklist_capture.middleware.js";
+import { createCaptureUpload } from "./ceklist_capture.middleware.js";
 
 const router = express.Router();
 
 // Apply auth middleware to all routes
 router.use(authenticateJWT);
+
+// Multer instances for each section
+const hddUpload     = createCaptureUpload("space-hdd");
+const tampungUpload = createCaptureUpload("space-tampung");
 
 // ─── Space HDD Bulanan ────────────────────────────────────────────────────────
 router.get("/space-hdd",         ceklistController.getSpaceHdd);
@@ -14,6 +19,7 @@ router.post("/space-hdd",        ceklistController.upsertSpaceHdd);
 router.put("/space-hdd",         ceklistController.upsertSpaceHdd);
 router.delete("/space-hdd",      ceklistController.deleteSpaceHdd);
 router.post("/space-hdd/init",   ceklistController.initSpaceHdd);
+router.post("/space-hdd/upload", hddUpload.single("capture"), ceklistController.uploadCaptureSpaceHdd);
 
 // ─── Space HDD Tampung ────────────────────────────────────────────────────────
 router.get("/space-tampung",         ceklistController.getSpaceTampung);
@@ -21,6 +27,7 @@ router.post("/space-tampung",        ceklistController.upsertSpaceTampung);
 router.put("/space-tampung",         ceklistController.upsertSpaceTampung);
 router.delete("/space-tampung",      ceklistController.deleteSpaceTampung);
 router.post("/space-tampung/init",   ceklistController.initSpaceTampung);
+router.post("/space-tampung/upload", tampungUpload.single("capture"), ceklistController.uploadCaptureSpaceTampung);
 
 // ─── Import IDT ───────────────────────────────────────────────────────────────
 router.get("/import-idt",           ceklistController.getImportIdt);

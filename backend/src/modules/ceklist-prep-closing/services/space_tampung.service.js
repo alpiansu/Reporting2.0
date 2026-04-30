@@ -6,6 +6,7 @@ import { Op } from "sequelize";
 import logger from "../../../config/logger.js";
 import { CeklistSpaceTampungWrapper } from "../ceklist_prep_closing.model.js";
 import storeService from "../../store/storeService.js";
+import { findCaptureFile } from "../ceklist_capture.middleware.js";
 
 class SpaceTampungService {
   /**
@@ -24,7 +25,11 @@ class SpaceTampungService {
       order: [["CAB", "ASC"]],
     });
 
-    return records.map(r => r.dataValues ?? r);
+    return records.map(r => {
+      const raw = r.dataValues ?? r;
+      raw.CAPTURE_PATH = findCaptureFile("space-tampung", raw.CAB, periode);
+      return raw;
+    });
   }
 
   /**

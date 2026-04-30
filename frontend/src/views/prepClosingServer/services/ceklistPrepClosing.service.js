@@ -39,12 +39,14 @@ export const getSpaceHdd      = (p)   => request(`/space-hdd?${p}`);
 export const upsertSpaceHdd   = (body) => request('/space-hdd', { method: 'POST', body: JSON.stringify(body) });
 export const deleteSpaceHdd   = (kdcab, periode) => request(`/space-hdd?kdcab=${kdcab}&periode=${periode}`, { method: 'DELETE' });
 export const initSpaceHdd     = (periode) => request(`/space-hdd/init?periode=${periode}`, { method: 'POST' });
+export const uploadCaptureHdd = (fd, kdcab, periode) => upload(`/space-hdd/upload?kdcab=${kdcab}&periode=${periode}`, fd);
 
 // ─── Space HDD Tampung ────────────────────────────────────────────────────────
-export const getSpaceTampung   = (p)   => request(`/space-tampung?${p}`);
-export const upsertSpaceTampung = (body) => request('/space-tampung', { method: 'POST', body: JSON.stringify(body) });
-export const deleteSpaceTampung = (cab, periode) => request(`/space-tampung?cab=${cab}&periode=${periode}`, { method: 'DELETE' });
-export const initSpaceTampung   = (periode) => request(`/space-tampung/init?periode=${periode}`, { method: 'POST' });
+export const getSpaceTampung      = (p)   => request(`/space-tampung?${p}`);
+export const upsertSpaceTampung   = (body) => request('/space-tampung', { method: 'POST', body: JSON.stringify(body) });
+export const deleteSpaceTampung   = (cab, periode) => request(`/space-tampung?cab=${cab}&periode=${periode}`, { method: 'DELETE' });
+export const initSpaceTampung     = (periode) => request(`/space-tampung/init?periode=${periode}`, { method: 'POST' });
+export const uploadCaptureTampung = (fd, kdcab, periode) => upload(`/space-tampung/upload?kdcab=${kdcab}&periode=${periode}`, fd);
 
 // ─── Import IDT ───────────────────────────────────────────────────────────────
 export const getImportIdt    = (p)    => request(`/import-idt?${p}`);

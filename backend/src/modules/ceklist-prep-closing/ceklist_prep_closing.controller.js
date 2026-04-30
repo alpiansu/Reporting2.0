@@ -78,6 +78,24 @@ export const initSpaceHdd = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/ceklist-prep-closing/space-hdd/upload
+ * Multipart form-data: kdcab, periode + file field "capture"
+ */
+export const uploadCaptureSpaceHdd = async (req, res) => {
+  try {
+    const { kdcab, periode } = req.query;
+    if (!kdcab || !periode) return apiResponse.badRequest(res, "kdcab dan periode wajib diisi");
+    if (!req.file) return apiResponse.badRequest(res, "File capture tidak ditemukan.");
+    const captureUrl = `/uploads/ceklist-capture/space-hdd/${kdcab}/${req.file.filename}`;
+    logger.info(`[ceklist_prep_closing.controller] uploadCaptureSpaceHdd kdcab=${kdcab} file=${req.file.filename}`);
+    return apiResponse.success(res, { captureUrl });
+  } catch (error) {
+    logger.error(`[ceklist_prep_closing.controller] uploadCaptureSpaceHdd error: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
 // ─── Space HDD Tampung ────────────────────────────────────────────────────────
 
 /**
@@ -147,6 +165,24 @@ export const initSpaceTampung = async (req, res) => {
     return apiResponse.success(res, result);
   } catch (error) {
     logger.error(`[ceklist_prep_closing.controller] initSpaceTampung error: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+/**
+ * POST /api/ceklist-prep-closing/space-tampung/upload
+ * Multipart form-data: kdcab, periode + file field "capture"
+ */
+export const uploadCaptureSpaceTampung = async (req, res) => {
+  try {
+    const { kdcab, periode } = req.query;
+    if (!kdcab || !periode) return apiResponse.badRequest(res, "kdcab dan periode wajib diisi");
+    if (!req.file) return apiResponse.badRequest(res, "File capture tidak ditemukan.");
+    const captureUrl = `/uploads/ceklist-capture/space-tampung/${kdcab}/${req.file.filename}`;
+    logger.info(`[ceklist_prep_closing.controller] uploadCaptureSpaceTampung kdcab=${kdcab} file=${req.file.filename}`);
+    return apiResponse.success(res, { captureUrl });
+  } catch (error) {
+    logger.error(`[ceklist_prep_closing.controller] uploadCaptureSpaceTampung error: ${error.message}`);
     return apiResponse.error(res, error.message);
   }
 };

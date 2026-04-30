@@ -7,12 +7,21 @@
  *   Sheet 4: Rekap Screening Toko
  */
 import ExcelJS from "exceljs";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
 import logger from "../../../config/logger.js";
 import spaceHddService from "./space_hdd.service.js";
 import spaceTampungService from "./space_tampung.service.js";
 import importIdtService from "./import_idt.service.js";
 import rekapScreeningService from "./rekap_screening.service.js";
 import { getPreviousPeriode } from "./space_hdd.service.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = dirname(__filename);
+// public/ is at: backend/public/ → relative to this file: ../../../../public
+const PUBLIC_DIR = path.join(__dirname, "../../../../public");
 
 // ─── Style helpers ────────────────────────────────────────────────────────────
 
@@ -132,21 +141,125 @@ function buildSpaceTampungSheet(sheet, rows, periode) {
   autoWidth(sheet);
 }
 
-function buildImportIdtSheet(sheet, rows, periode) {
+/**
+ * Read actual image dimensions from a Buffer — pure Node, no extra deps.
+ * Supports PNG, JPEG, GIF. Returns null for unknown/invalid.
+ */
+function getImageDimensions(buf, ext) {
+  try {
+    if (ext === "png") {
+      if (buf.length < 24) return null;
+      return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+    }
+    if (ext === "jpeg" || ext === "jpg") {
+      if (buf[0] !== 0xff || buf[1] !== 0xd8) return null;
+      let i = 2;
+      while (i < buf.length - 1) {
+        if (buf[i] !== 0xff) break;
+        const marker = buf[i + 1];
+        if ([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7].includes(marker)) {
+          return { width: buf.readUInt16BE(i + 7), height: buf.readUInt16BE(i + 5) };
+        }
+        if (marker === 0xd9) break;
+        i += 2 + buf.readUInt16BE(i + 2);
+      }
+      return null;
+    }
+    if (ext === "gif") {
+      if (buf.length < 10) return null;
+      return { width: buf.readUInt16LE(6), height: buf.readUInt16LE(8) };
+    }
+  } catch (_) { /* ignore */ }
+  return null;
+}
+
+/**
+ * Scale w×h to fit inside [minW,maxW]×[minH,maxH] preserving aspect ratio.
+ * Falls back to 160×120 when original dimensions unknown.
+ */
+function scaleWithConstraints(origW, origH,
+  { minW = 80, maxW = 220, minH = 60, maxH = 165 } = {}) {
+  if (!origW || !origH) return { width: 160, height: 120 };
+  const aspect = origW / origH;
+  let w = origW, h = origH;
+  if (w > maxW) { w = maxW; h = w / aspect; }
+  if (h > maxH) { h = maxH; w = h * aspect; }
+  if (w < minW) { w = minW; h = w / aspect; }
+  if (h < minH) { h = minH; w = h * aspect; }
+  if (w > maxW) { w = maxW; h = w / aspect; }
+  if (h > maxH) { h = maxH; w = h * aspect; }
+  return { width: Math.round(w), height: Math.round(h) };
+}
+
+/**
+ * Build the Import IDT sheet.
+ * Embeds images with exact pixel sizing (ext) to preserve aspect ratio.
+ * Falls back to text for non-image CAPTURE values.
+ */
+async function buildImportIdtSheet(sheet, workbook, rows, periode) {
   sheet.addRow([]);
   const titleRow = sheet.addRow([`Import IDT — Periode ${periode}`]);
   titleRow.font = { bold: true, size: 13 };
   sheet.addRow([]);
 
-  const hRow = sheet.addRow(["KDCAB", "CAPTURE"]);
+  const hRow = sheet.addRow(["KDCAB", "Status", "Capture / Keterangan", "Update"]);
   styleHeader(hRow);
 
-  rows.forEach((r, idx) => {
-    const dataRow = sheet.addRow([r.KDCAB, r.CAPTURE ?? ""]);
-    styleDataRow(dataRow, idx % 2 === 1);
-  });
+  sheet.getColumn(1).width = 12;
+  sheet.getColumn(2).width = 12;
+  sheet.getColumn(3).width = 32;
+  sheet.getColumn(4).width = 18;
 
-  autoWidth(sheet);
+  const IMAGE_EXTENSIONS = /\.(jpg|jpeg|png|gif|webp)$/i;
+  const TEXT_ROW_HEIGHT   = 20;
+  const DATA_START_ROW    = sheet.rowCount + 1;
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const excelRowNum = DATA_START_ROW + i;
+    const isAlt  = i % 2 === 1;
+    const status = r.CAPTURE ? "Done" : "Pending";
+
+    if (r.CAPTURE && IMAGE_EXTENSIONS.test(r.CAPTURE)) {
+      const absPath = path.join(PUBLIC_DIR, r.CAPTURE);
+
+      if (fs.existsSync(absPath)) {
+        const ext     = path.extname(absPath).slice(1).toLowerCase();
+        const extMap  = { jpg: "jpeg", jpeg: "jpeg", png: "png", gif: "gif", webp: "png" };
+        const imgType = extMap[ext] || "png";
+
+        try {
+          const imgBuf = fs.readFileSync(absPath);
+          const dims   = getImageDimensions(imgBuf, ext);
+          const { width: embedW, height: embedH } = scaleWithConstraints(dims?.width, dims?.height);
+
+          const dataRow = sheet.addRow([r.KDCAB, status, "", r.UPDTIME ?? ""]);
+          dataRow.height = embedH + 6;   // row height matches image + small padding
+          styleDataRow(dataRow, isAlt);
+
+          const imgId = workbook.addImage({ buffer: imgBuf, extension: imgType });
+          sheet.addImage(imgId, {
+            tl: { col: 2, row: excelRowNum - 1 },  // 0-based top-left corner
+            ext: { width: embedW, height: embedH }, // exact px — no stretching
+            editAs: "oneCell",
+          });
+        } catch (imgErr) {
+          logger.warn(`[excel_export] image embed failed for ${absPath}: ${imgErr.message}`);
+          const dataRow = sheet.addRow([r.KDCAB, status, r.CAPTURE, r.UPDTIME ?? ""]);
+          dataRow.height = TEXT_ROW_HEIGHT;
+          styleDataRow(dataRow, isAlt);
+        }
+      } else {
+        const dataRow = sheet.addRow([r.KDCAB, status, r.CAPTURE, r.UPDTIME ?? ""]);
+        dataRow.height = TEXT_ROW_HEIGHT;
+        styleDataRow(dataRow, isAlt);
+      }
+    } else {
+      const dataRow = sheet.addRow([r.KDCAB, status, r.CAPTURE ?? "", r.UPDTIME ?? ""]);
+      dataRow.height = TEXT_ROW_HEIGHT;
+      styleDataRow(dataRow, isAlt);
+    }
+  }
 }
 
 function buildRekapScreeningSheet(sheet, { data, ruleKeys }, periode) {
@@ -201,7 +314,7 @@ class ExcelExportService {
 
     buildSpaceHddSheet(workbook.addWorksheet("Space HDD Bulanan"), hddRows, periode);
     buildSpaceTampungSheet(workbook.addWorksheet("Space Hdd Tampung"), tampungRows, periode);
-    buildImportIdtSheet(workbook.addWorksheet("Import IDT"), idtRows, periode);
+    await buildImportIdtSheet(workbook.addWorksheet("Import IDT"), workbook, idtRows, periode);
     buildRekapScreeningSheet(workbook.addWorksheet("Rekap Screening Toko"), rekapResult, periode);
 
     const filename = `Cek_list_Prepare_Closing_${periode}.xlsx`;

@@ -34,9 +34,6 @@ export const upsertSpaceHdd = async (req, res) => {
     if (!data.kdcab || !data.periode) {
       return apiResponse.badRequest(res, "kdcab dan periode wajib diisi");
     }
-    if (!data.ip) {
-      return apiResponse.badRequest(res, "ip wajib diisi");
-    }
     logger.info(`[ceklist_prep_closing.controller] upsertSpaceHdd kdcab=${data.kdcab} periode=${data.periode}`);
     const result = await ceklistPrepClosingService.upsertSpaceHdd(data);
     return apiResponse.success(res, result);

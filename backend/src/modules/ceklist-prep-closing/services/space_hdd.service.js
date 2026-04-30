@@ -116,7 +116,7 @@ class SpaceHddService {
     const { kdcab, ip, periode, freeSpace, tglCheck, os, fu, freeAfter } = data;
 
     if (!kdcab || !periode) throw new Error("kdcab dan periode wajib diisi");
-    if (!ip) throw new Error("ip wajib diisi");
+    // ip is optional — allows editing init-skeleton records without forcing IP entry
 
     const id = `${kdcab}${periode}`;
     logger.info(`[space_hdd.service] upsert id=${id}`);

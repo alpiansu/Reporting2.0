@@ -195,3 +195,96 @@ function formatDate(v) {
   return isNaN(d.getTime()) ? v : d.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'2-digit' });
 }
 </script>
+
+<style scoped>
+.capture-thumb {
+  max-width: 200px;
+  max-height: 150px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease;
+}
+
+.capture-thumb:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.capture-link {
+  display: inline-block;
+}
+
+.capture-text {
+  font-size: 0.875rem;
+  color: var(--text-color);
+}
+
+.upload-zone {
+  text-align: center;
+  padding: 2rem 1rem;
+  border: 2px dashed var(--surface-border);
+  border-radius: 8px;
+  background: var(--surface-section);
+}
+
+.upload-icon {
+  font-size: 3rem;
+  color: var(--text-color-secondary);
+  margin-bottom: 1rem;
+}
+
+.upload-hint {
+  color: var(--text-color-secondary);
+  margin-bottom: 1rem;
+}
+
+.upload-preview {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.preview-img {
+  max-width: 100%;
+  max-height: 200px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.preview-name {
+  font-size: 0.875rem;
+  color: var(--text-color-secondary);
+  word-break: break-word;
+}
+
+.row-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.table-empty {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-color-secondary);
+}
+
+.table-empty i {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .capture-thumb {
+    max-width: 150px;
+    max-height: 100px;
+  }
+}
+</style>

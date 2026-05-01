@@ -25,10 +25,9 @@
       </Column>
       <Column header="Capture" style="width:90px">
         <template #body="{ data }">
-          <a v-if="data.CAPTURE_PATH" :href="baseUrl + data.CAPTURE_PATH" target="_blank">
-            <img :src="baseUrl + data.CAPTURE_PATH" alt="capture"
-              style="max-width:80px;max-height:56px;width:auto;height:auto;object-fit:contain;border-radius:3px;display:block" />
-          </a>
+          <img v-if="data.CAPTURE_PATH" :src="baseUrl + data.CAPTURE_PATH" alt="capture"
+            style="max-width:80px;max-height:56px;width:auto;height:auto;object-fit:contain;border-radius:3px;display:block;cursor:pointer"
+            @click="openPreview(baseUrl + data.CAPTURE_PATH)" />
           <i v-else class="pi pi-image" style="font-size:1.4rem;color:var(--text-color-secondary)" />
         </template>
       </Column>
@@ -94,12 +93,16 @@
         <Button label="Simpan" icon="pi pi-save" class="p-button-primary" :loading="saving" @click="save" />
       </template>
     </Dialog>
+
+    <!-- Image Preview Dialog -->
+    <ImagePreviewDialog v-model:visible="previewVisible" :src="previewSrc" title="Capture" />
   </div>
 </template>
 
 <script setup>
 import { ref, reactive } from 'vue';
 import { useToast } from 'primevue/usetoast';
+import ImagePreviewDialog from '@/components/common/ImagePreviewDialog.vue';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Button from 'primevue/button';
@@ -123,9 +126,13 @@ const uploading = ref(false);
 const captureFile = ref(null);
 const capturePath = ref(null);
 const fileInput = ref(null);
+const previewVisible = ref(false);
+const previewSrc = ref('');
 const form = reactive({ cab: '', path: '', capacity: '', freeSpace: '', tglCheck: null });
 
 const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:3000';
+
+function openPreview(url) { previewSrc.value = url; previewVisible.value = true; }
 
 function onFileChange(e) { captureFile.value = e.target.files[0] || null; }
 

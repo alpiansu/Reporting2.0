@@ -1,0 +1,25 @@
+.monthly-reports-view {
+  padding: 1.5rem;
+}
+
+.content-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-top: 0.5rem;
+}
+
+.delete-confirm-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.5rem;
+  padding: 1rem 0;
+}
+
+@media (max-width: 768px) {
+  .monthly-reports-view {
+    padding: 1rem;
+  }
+}

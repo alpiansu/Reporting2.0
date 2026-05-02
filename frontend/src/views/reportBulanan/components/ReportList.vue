@@ -14,7 +14,16 @@
           class="ml-2"
         />
       </div>
-      <small class="text-color-secondary">Centang laporan yang ingin diekspor ke Excel</small>
+      <div class="report-list__header-right">
+        <small class="text-color-secondary">Centang laporan yang ingin diekspor ke Excel</small>
+        <Button
+          icon="pi pi-refresh"
+          :class="['p-button-text p-button-sm p-button-secondary refresh-btn', { 'spinning': loading }]"
+          v-tooltip.top="'Muat ulang daftar laporan'"
+          :disabled="loading"
+          @click="$emit('refresh')"
+        />
+      </div>
     </div>
 
     <!-- Loading skeleton -->
@@ -94,7 +103,7 @@ const props = defineProps({
   selectedIds: { type: Array,   default: () => [] },
 });
 
-const emit = defineEmits(['update:selectedIds']);
+const emit = defineEmits(['update:selectedIds', 'refresh']);
 
 const isSelected = (id) => props.selectedIds.includes(id);
 
@@ -128,7 +137,29 @@ const clearAll = () => {
 }
 
 .report-list__header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
   margin-bottom: 1rem;
+}
+
+.report-list__header-right {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.refresh-btn {
+  transition: transform 0.5s ease;
+}
+
+.refresh-btn.spinning :deep(.p-button-icon) {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
 .report-list__title-wrap {

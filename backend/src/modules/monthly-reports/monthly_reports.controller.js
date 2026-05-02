@@ -31,7 +31,8 @@ export const listReports = async (req, res) => {
   try {
     logger.info("[monthly_reports.controller] listReports");
     const data = await configLoader.listReports();
-    return apiResponse.success(res, { data, total: data.length });
+    // Kirim array langsung → frontend akses via res.data.data (array)
+    return apiResponse.success(res, data);
   } catch (err) {
     logger.error(`[monthly_reports.controller] listReports error: ${err.message}`);
     return apiResponse.error(res, err.message);

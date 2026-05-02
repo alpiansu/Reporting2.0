@@ -23,6 +23,7 @@
         :reports="reportList"
         :loading="loadingReports"
         v-model:selected-ids="selectedIds"
+        @refresh="loadReports"
       />
     </div>
 

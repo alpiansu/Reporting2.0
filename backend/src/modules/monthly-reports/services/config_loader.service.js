@@ -39,6 +39,11 @@ function getLocalDatetime() {
 }
 
 // Helper: baca file JSON config
+// ─── CATATAN: Tidak ada in-memory cache di sini. ───────────────────────────
+// Setiap call readConfig() langsung membaca dari disk (fs.readFile).
+// Ini disengaja agar data selalu fresh tanpa perlu TTL / cache invalidation.
+// Trade-off: sedikit I/O disk per request config, tapi file kecil (<100KB)
+// sehingga tidak ada dampak performa yang signifikan.
 async function readConfig() {
   try {
     logger.debug("[config_loader] Membaca file config JSON...");
@@ -85,7 +90,17 @@ async function writeConfig(data) {
  */
 export async function listReports() {
   logger.info("[config_loader] listReports()");
-  return await readConfig();
+  const config = await readConfig();
+  return config.map(r => ({
+    "id-reports":     r["id-reports"],
+    "name-reports":   r["name-reports"],
+    "queries-wrc":    r["queries-wrc"]    || [],
+    "queries-export": r["queries-export"] || [],
+    "addtime":        r["addtime"]        || "-",
+    "addid":          r["addid"]          || "-",
+    "updtime":        r["updtime"]        || "-",
+    "updid":          r["updid"]          || "-",
+  }));
 }
 
 /**

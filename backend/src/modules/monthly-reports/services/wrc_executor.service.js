@@ -17,7 +17,7 @@
  *
  * ─── Catatan Query ──────────────────────────────────────────────────────────
  *   - TIDAK ADA timeout pada eksekusi query WRC (proses WRC memang lama)
- *   - Placeholder {userId} dan {cab} otomatis disubstitusi sebelum eksekusi
+ *   - Placeholder {userId}, {cab}, {prd}, {prdPrev}, {prdYear}, {prdMonth} disubstitusi otomatis
  *   - Nilai placeholder di-sanitize: hanya [a-zA-Z0-9_] agar aman di nama table
  * ────────────────────────────────────────────────────────────────────────────
  */
@@ -71,13 +71,30 @@ export async function executeReport({ reportConfig, cab, userId, prd = "", prdYe
   const queriesWrc    = reportConfig["queries-wrc"]    || [];
   const queriesExport = reportConfig["queries-export"] || [];
 
+  // ─── Hitung prdPrev (bulan sebelumnya) ──────────────────────────────────
+  // Contoh: prd="2604" (April 2026) → prdPrev="2603" (Maret 2026)
+  //         prd="2601" (Jan 2026)   → prdPrev="2512" (Des 2025)
+  let prdPrev = "";
+  if (prd && /^\d{4}$/.test(prd)) {
+    const yy  = parseInt(prd.substring(0, 2), 10);
+    const mm  = parseInt(prd.substring(2, 4), 10);
+    let prevYY = yy;
+    let prevMM = mm - 1;
+    if (prevMM === 0) {
+      prevMM = 12;
+      prevYY = yy - 1;
+    }
+    prdPrev = `${String(prevYY).padStart(2, "0")}${String(prevMM).padStart(2, "0")}`;
+  }
+
   // Parameter untuk substitusi placeholder
   // {userId}   → username aktif (aman untuk nama table)
   // {cab}      → kode cabang    (aman untuk nama table)
-  // {prd}      → periode YYMM   (contoh: 2501)
-  // {prdYear}  → tahun 4 digit  (contoh: 2025)
-  // {prdMonth} → bulan 2 digit  (contoh: 01)
-  const params = { userId, cab, prd, prdYear, prdMonth };
+  // {prd}      → periode YYMM   (contoh: 2604)
+  // {prdPrev}  → periode YYMM bulan sebelumnya (contoh: 2603)
+  // {prdYear}  → tahun 4 digit  (contoh: 2026)
+  // {prdMonth} → bulan 2 digit  (contoh: 04)
+  const params = { userId, cab, prd, prdPrev, prdYear, prdMonth };
 
   logger.info(`[wrc_executor][${reportId}] ═══ Mulai eksekusi laporan: "${reportName}" | cab=${cab} | user=${userId} ═══`);
 

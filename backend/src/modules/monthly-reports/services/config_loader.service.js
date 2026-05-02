@@ -18,10 +18,12 @@ import logger from "../../../config/logger.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Path ke file JSON config, relatif dari root project
+// Path ke file JSON config → backend/data/monthly-reports/monthly_reports_config.json
+// __dirname = .../backend/src/modules/monthly-reports/services  (5 segmen dari backend/)
+// ../../../../  → naik 4 level → .../backend/
 const CONFIG_PATH = path.join(
   __dirname,
-  "../../../../../data/monthly-reports/monthly_reports_config.json"
+  "../../../../data/monthly-reports/monthly_reports_config.json"
 );
 
 // Helper: format waktu lokal server → "YYYY-MM-DD HH:mm:ss"

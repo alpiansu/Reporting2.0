@@ -76,7 +76,7 @@
             </span>
             <small class="text-color-secondary ml-2">
               Dieksekusi <strong>sequential</strong> ke WRC sebelum export.
-              Placeholder tersedia: <code>{userId}</code> <code>{cab}</code> <code>{prd}</code> <code>{prdYear}</code> <code>{prdMonth}</code>
+              Gunakan placeholder dari panduan di atas.
             </small>
           </div>
           <Button
@@ -205,11 +205,12 @@ import Message   from 'primevue/message';
 // ─── Placeholder guide data ───────────────────────────────────────────────────
 const showPlaceholderGuide = ref(false);
 const placeholders = [
-  { key: '{userId}',   desc: 'Username / PIC user yang sedang login',   example: 'admin',  usage: 'tmp_lap_{userId}_{cab}' },
-  { key: '{cab}',     desc: 'Kode cabang yang dipilih saat export',     example: 'G001',   usage: 'tmp_lap_{userId}_{cab}' },
-  { key: '{prd}',     desc: 'Periode YYMM (tahun 2 digit + bulan)',     example: '2501',   usage: 'WHERE periode = \'{prd}\'' },
-  { key: '{prdYear}', desc: 'Tahun penuh 4 digit dari periode',         example: '2025',   usage: 'WHERE YEAR(tgl) = {prdYear}' },
-  { key: '{prdMonth}',desc: 'Bulan 2 digit dari periode',               example: '01',     usage: 'WHERE MONTH(tgl) = {prdMonth}' },
+  { key: '{userId}',   desc: 'Username / PIC user yang sedang login',              example: 'admin',  usage: 'tmp_lap_{userId}_{cab}' },
+  { key: '{cab}',     desc: 'Kode cabang yang dipilih saat export',                example: 'G001',   usage: 'tmp_lap_{userId}_{cab}' },
+  { key: '{prd}',     desc: 'Periode YYMM (tahun 2 digit + bulan)',                example: '2604',   usage: "WHERE periode = '{prd}'" },
+  { key: '{prdPrev}', desc: 'Periode bulan sebelumnya — otomatis dihitung sistem',  example: '2603',   usage: 'kodetoko_{prdPrev}' },
+  { key: '{prdYear}', desc: 'Tahun penuh 4 digit dari periode',                    example: '2026',   usage: 'WHERE YEAR(tgl) = {prdYear}' },
+  { key: '{prdMonth}',desc: 'Bulan 2 digit dari periode',                          example: '04',     usage: 'WHERE MONTH(tgl) = {prdMonth}' },
 ];
 
 const props = defineProps({

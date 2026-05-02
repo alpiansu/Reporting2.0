@@ -27,6 +27,7 @@ import rekonPersediaanModule from "./rekon_persediaan/index.js";
 import dashboardModule from "./dashboard/index.js";
 import buatRmbModule from "./buat_rmb/index.js";
 import ceklistPrepClosingModule from "./ceklist-prep-closing/index.js";
+import monthlyReportsModule from "./monthly-reports/index.js";
 
 export default {
   // Export all modules
@@ -54,6 +55,7 @@ export default {
   dashboardModule,
   buatRmbModule,
   ceklistPrepClosingModule,
+  monthlyReportsModule,
 
   // Initialize all modules
   initialize: app => {
@@ -81,6 +83,7 @@ export default {
     const dashboard = dashboardModule.initialize(app);
     const buatRmb = buatRmbModule.initialize(app);
     const ceklistPrepClosing = ceklistPrepClosingModule.initialize(app);
+    const monthlyReports     = monthlyReportsModule.initialize(app);
 
     // Initialize menu manager module
     app.use("/api/menu-manager", menuManagerModule.routes);
@@ -109,6 +112,7 @@ export default {
       dashboard,
       buatRmb,
       ceklistPrepClosing,
+      monthlyReports,
       menuManager: true,
     };
   },

@@ -120,24 +120,40 @@ export const deleteReport = async (req, res) => {
 // ─── Run Report ───────────────────────────────────────────────────────────────
 
 /**
- * POST /api/monthly-reports/:id/run
+ * POST /api/monthly-reports/:id/export
  * Jalankan laporan: WRC → Excel → stream ke response
- * Body: { cab: "G001" }
+ * Body: { cab: "G001", prd: "2501" }
+ *   - cab : kode cabang
+ *   - prd : periode format YYMM (contoh: 2501 = Januari 2025)
  *
  * Setiap request ini berjalan INDEPENDEN — tidak menunggu request lain.
  * Queries-wrc di dalam 1 request dieksekusi SEQUENTIAL.
+ * Placeholder yang tersedia di queries: {userId}, {cab}, {prd}, {prdYear}, {prdMonth}
  */
-export const runReport = async (req, res) => {
+export const exportReport = async (req, res) => {
   const { id } = req.params;
   const userId = getUserId(req);
   let wrcResults = null;
 
   try {
-    const { cab } = req.body;
+    const { cab, prd } = req.body;
     if (!cab) return apiResponse.badRequest(res, "cab (kode cabang) wajib diisi di body");
+    if (!prd)  return apiResponse.badRequest(res, "prd (periode) wajib diisi di body");
+
+    // Validasi format YYMM — 4 digit angka
+    if (!/^\d{4}$/.test(prd)) {
+      return apiResponse.badRequest(
+        res,
+        "Format prd tidak valid. Gunakan format YYMM (contoh: 2501 untuk Januari 2025)"
+      );
+    }
+
+    // Ekstrak tahun dan bulan dari prd (YYMM)
+    const prdYear  = `20${prd.substring(0, 2)}`; // "25" → "2025"
+    const prdMonth = prd.substring(2, 4);          // "01"
 
     // ── 1. Load config laporan
-    logger.info(`[monthly_reports.controller] runReport id=${id} | cab=${cab} | user=${userId}`);
+    logger.info(`[monthly_reports.controller] exportReport id=${id} | cab=${cab} | prd=${prd} | user=${userId}`);
     const reportConfig = await configLoader.getReportById(id);
     if (!reportConfig) {
       return apiResponse.notFound(res, `Report id="${id}" tidak ditemukan`);
@@ -150,22 +166,22 @@ export const runReport = async (req, res) => {
     }
 
     // ── 3. Eksekusi WRC (sequential per-report, paralel antar-report)
-    wrcResults = await executeReport({ reportConfig, cab, userId });
+    wrcResults = await executeReport({ reportConfig, cab, userId, prd, prdYear, prdMonth });
 
     // ── 4. Export ke Excel dan stream ke response
-    await exportToResponse({ reportConfig, results: wrcResults, res });
+    await exportToResponse({ reportConfig, results: wrcResults, res, prd });
 
-    logger.info(`[monthly_reports.controller] runReport selesai: id=${id} | cab=${cab} | user=${userId}`);
+    logger.info(`[monthly_reports.controller] exportReport selesai: id=${id} | cab=${cab} | prd=${prd} | user=${userId}`);
 
   } catch (err) {
-    logger.error(`[monthly_reports.controller] runReport error: ${err.message}`);
+    logger.error(`[monthly_reports.controller] exportReport error: ${err.message}`);
     if (!res.headersSent) {
       return apiResponse.error(res, `Gagal menjalankan laporan: ${err.message}`);
     }
   } finally {
     // ── 5. Cleanup reference data besar setelah selesai
     if (wrcResults) {
-      wrcResults = null; // lepas reference, bantu GC
+      wrcResults = null;
       logger.debug(`[monthly_reports.controller] wrcResults reference dibersihkan (user=${userId})`);
     }
   }

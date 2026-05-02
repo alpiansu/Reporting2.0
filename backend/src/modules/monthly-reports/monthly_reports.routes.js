@@ -6,7 +6,7 @@ import {
   createReport,
   updateReport,
   deleteReport,
-  runReport,
+  exportReport,
 } from "./monthly_reports.controller.js";
 
 const router = express.Router();
@@ -26,9 +26,9 @@ router.put("/:id",  updateReport); // Update query/nama/sheet laporan tertentu
 router.delete("/:id", deleteReport); // Hapus laporan dari JSON
 
 // ─── Eksekusi Laporan ─────────────────────────────────────────────────────────
-// POST body: { cab: "G001" }
+// POST body: { cab: "G001", prd: "2501" }  (prd format YYMM)
 // Response : stream file .xlsx
 
-router.post("/:id/run", runReport);
+router.post("/:id/export", exportReport);
 
 export default router;

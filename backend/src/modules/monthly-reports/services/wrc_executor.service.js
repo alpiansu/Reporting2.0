@@ -60,16 +60,24 @@ function injectParams(sql, params = {}) {
  * @param {Object} options.reportConfig  - Satu entry dari monthly_reports_config.json
  * @param {string} options.cab           - Kode cabang (contoh: "G001")
  * @param {string} options.userId        - Username user aktif (dari JWT)
+ * @param {string} options.prd           - Periode format YYMM (contoh: "2501")
+ * @param {string} options.prdYear       - Tahun lengkap (contoh: "2025")
+ * @param {string} options.prdMonth      - Bulan 2 digit (contoh: "01")
  * @returns {Promise<Object>}            - { [sheetKey]: rows[] }
  */
-export async function executeReport({ reportConfig, cab, userId }) {
+export async function executeReport({ reportConfig, cab, userId, prd = "", prdYear = "", prdMonth = "" }) {
   const reportName = reportConfig["name-reports"];
   const reportId   = reportConfig["id-reports"];
   const queriesWrc    = reportConfig["queries-wrc"]    || [];
   const queriesExport = reportConfig["queries-export"] || [];
 
   // Parameter untuk substitusi placeholder
-  const params = { userId, cab };
+  // {userId}   → username aktif (aman untuk nama table)
+  // {cab}      → kode cabang    (aman untuk nama table)
+  // {prd}      → periode YYMM   (contoh: 2501)
+  // {prdYear}  → tahun 4 digit  (contoh: 2025)
+  // {prdMonth} → bulan 2 digit  (contoh: 01)
+  const params = { userId, cab, prd, prdYear, prdMonth };
 
   logger.info(`[wrc_executor][${reportId}] ═══ Mulai eksekusi laporan: "${reportName}" | cab=${cab} | user=${userId} ═══`);
 

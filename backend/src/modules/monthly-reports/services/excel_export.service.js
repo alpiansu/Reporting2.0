@@ -171,8 +171,9 @@ function buildSheet(sheet, rows, sheetKey, style) {
  * @param {Object} options.reportConfig  - Config laporan dari JSON
  * @param {Object} options.results       - { [sheetKey]: rows[] } dari wrc_executor
  * @param {import('express').Response} options.res
+ * @param {string} [options.prd]         - Periode YYMM (contoh: "2501") — disertakan ke nama file
  */
-export async function exportToResponse({ reportConfig, results, res }) {
+export async function exportToResponse({ reportConfig, results, res, prd = "" }) {
   const reportId   = reportConfig["id-reports"];
   const reportName = reportConfig["name-reports"];
   const queriesExport = reportConfig["queries-export"] || [];
@@ -196,11 +197,14 @@ export async function exportToResponse({ reportConfig, results, res }) {
     buildSheet(sheet, rows, sheetKey, style);
   }
 
-  // ─── Nama file output ────────────────────────────────────────────────────
+  // ─── Nama file output ──────────────────────────────────────────────
   const now = new Date();
   const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}`;
   const safeName = String(reportName).replace(/[^a-zA-Z0-9_\-\u00C0-\u024F]/g, "_");
-  const filename = `${safeName}_${dateStr}.xlsx`;
+  // Format: {NamaLaporan}_{prd}_{tanggalGenerate}.xlsx
+  // Contoh: Laporan_Penjualan_Bulanan_2501_20260502.xlsx
+  const prdSuffix = prd ? `_${prd}` : "";
+  const filename = `${safeName}${prdSuffix}_${dateStr}.xlsx`;
 
   logger.info(`[excel_export] Streaming file: ${filename}`);
 

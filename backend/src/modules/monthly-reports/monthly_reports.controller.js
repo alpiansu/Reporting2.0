@@ -65,10 +65,11 @@ export const createReport = async (req, res) => {
     const userId = getUserId(req);
     logger.info(`[monthly_reports.controller] createReport oleh user=${userId}`);
 
-    const { "name-reports": name, "queries-wrc": qWrc, "queries-export": qExp } = req.body;
+    const { "name-reports": name, "queries-wrc": qWrc, "queries-export": qExp, "queries-cleanup": qClean } = req.body;
     if (!name) return apiResponse.badRequest(res, "name-reports wajib diisi");
     if (!Array.isArray(qWrc))    return apiResponse.badRequest(res, "queries-wrc harus berupa array");
     if (!Array.isArray(qExp))    return apiResponse.badRequest(res, "queries-export harus berupa array");
+    if (qClean && !Array.isArray(qClean)) return apiResponse.badRequest(res, "queries-cleanup harus berupa array");
 
     const data = await configLoader.createReport(req.body, userId);
     return apiResponse.success(res, { data, message: "Laporan berhasil dibuat" });

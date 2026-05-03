@@ -70,6 +70,7 @@ export async function executeReport({ reportConfig, cab, userId, prd = "", prdYe
   const reportId   = reportConfig["id-reports"];
   const queriesWrc    = reportConfig["queries-wrc"]    || [];
   const queriesExport = reportConfig["queries-export"] || [];
+  const queriesCleanup = reportConfig["queries-cleanup"] || [];
 
   // ─── Hitung prdPrev (bulan sebelumnya) ──────────────────────────────────
   // Contoh: prd="2604" (April 2026) → prdPrev="2603" (Maret 2026)
@@ -189,6 +190,33 @@ export async function executeReport({ reportConfig, cab, userId, prd = "", prdYe
 
       results[sheetKey] = rows;
       logger.info(`[wrc_executor][${cab}] Sheet "${sheetKey}": ${rows.length} baris (${duration}ms)`);
+    }
+
+    // ─── Step 5: Eksekusi queries-cleanup PARALEL ─────────────────────────
+    const totalCleanup = queriesCleanup.length;
+    if (totalCleanup > 0) {
+      logger.info(`[wrc_executor][${cab}] Mulai eksekusi ${totalCleanup} query CLEANUP secara paralel...`);
+      
+      const cleanupPromises = queriesCleanup.map(async (rawSql, idx) => {
+        const queryNum = idx + 1;
+        const finalSql = injectParams(rawSql, params);
+        const preview  = finalSql.replace(/\s+/g, " ").trim().substring(0, 120);
+        
+        logger.info(`[wrc_executor][${cab}] ─── Mulai Cleanup query ke-${queryNum} dari ${totalCleanup} ───`);
+        logger.debug(`[wrc_executor][${cab}] Cleanup query preview: ${preview}${finalSql.length > 120 ? "..." : ""}`);
+        
+        const startTime = Date.now();
+        // Gunakan pool.query (jika conn dari pool dikembalikan setelah ini)
+        // Atau buat koneksi baru dari pool khusus untuk tiap query agar paralel optimal di db level
+        // Karena kita punya pool dengan limit 3, mari kita pinjam koneksi baru / pakai langsung pool.query
+        await pool.query(finalSql); 
+        const duration = Date.now() - startTime;
+        
+        logger.info(`[wrc_executor][${cab}] Cleanup query ke-${queryNum} SELESAI (${duration}ms)`);
+      });
+
+      await Promise.all(cleanupPromises);
+      logger.info(`[wrc_executor][${cab}] Semua ${totalCleanup} queries-cleanup selesai dieksekusi`);
     }
 
     logger.info(`[wrc_executor][${reportId}] ═══ Eksekusi laporan "${reportName}" selesai ═══`);

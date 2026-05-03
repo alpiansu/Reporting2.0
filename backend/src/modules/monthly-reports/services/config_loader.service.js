@@ -116,6 +116,7 @@ export async function listReports() {
     "name-reports":   r["name-reports"],
     "queries-wrc":    r["queries-wrc"]    || [],
     "queries-export": r["queries-export"] || [],
+    "queries-cleanup": r["queries-cleanup"] || [],
     "addtime":        r["addtime"]        || "-",
     "addid":          r["addid"]          || "-",
     "addname":        r["addid"] && r["addid"] !== "-" ? (userMap[r["addid"]] || r["addid"]) : "-",
@@ -198,6 +199,7 @@ export async function createReport(data, userId) {
     "name-reports":   data["name-reports"] || "Laporan Baru",
     "queries-wrc":    Array.isArray(data["queries-wrc"])    ? data["queries-wrc"]    : [],
     "queries-export": Array.isArray(data["queries-export"]) ? data["queries-export"] : [],
+    "queries-cleanup": Array.isArray(data["queries-cleanup"]) ? data["queries-cleanup"] : [],
     "addtime": now,
     "addid":   userId,
     "updtime": now,
@@ -246,6 +248,7 @@ export async function updateReport(id, data, userId) {
     "name-reports":   data["name-reports"]   !== undefined ? data["name-reports"]   : existing["name-reports"],
     "queries-wrc":    data["queries-wrc"]    !== undefined ? data["queries-wrc"]    : existing["queries-wrc"],
     "queries-export": data["queries-export"] !== undefined ? data["queries-export"] : existing["queries-export"],
+    "queries-cleanup": data["queries-cleanup"] !== undefined ? data["queries-cleanup"] : existing["queries-cleanup"],
     // Audit: addtime & addid TIDAK diubah
     "addtime": existing["addtime"],
     "addid":   existing["addid"],

@@ -172,6 +172,54 @@
         </div>
       </div>
 
+      <!-- ─── Queries Cleanup ─────────────────────────────────────── -->
+      <div class="section mb-4">
+        <div class="section__header">
+          <div>
+            <span class="section__title">
+              <i class="pi pi-trash mr-2 text-orange-500" />
+              Queries Cleanup
+            </span>
+            <small class="text-color-secondary ml-2">
+              Dieksekusi <strong>secara paralel</strong> setelah proses export selesai.
+              Digunakan untuk menghapus temporary table (Drop Table).
+            </small>
+          </div>
+          <Button
+            label="+ Tambah Query"
+            icon="pi pi-plus"
+            class="p-button-outlined p-button-sm p-button-warning"
+            @click="addCleanupQuery"
+          />
+        </div>
+
+        <div v-if="form.queriesCleanup.length === 0" class="section__empty">
+          <i class="pi pi-info-circle mr-1" />
+          Kosong — query cleanup opsional.
+        </div>
+
+        <div
+          v-for="(q, idx) in form.queriesCleanup"
+          :key="idx"
+          class="query-row"
+        >
+          <div class="query-row__num" style="background-color: var(--orange-500);">{{ idx + 1 }}</div>
+          <Textarea
+            v-model="form.queriesCleanup[idx]"
+            :rows="3"
+            :placeholder="`Query Cleanup ke-${idx + 1}\nContoh: DROP TEMPORARY TABLE IF EXISTS tmp_lap_{userId}_{cab}_{prd};`"
+            class="query-row__textarea font-mono"
+            auto-resize
+          />
+          <Button
+            icon="pi pi-times"
+            class="p-button-rounded p-button-text p-button-danger p-0 w-2rem h-2rem flex-shrink-0"
+            v-tooltip.top="'Hapus query ini'"
+            @click="removeCleanupQuery(idx)"
+          />
+        </div>
+      </div>
+
     </div>
 
     <template #footer>
@@ -226,6 +274,7 @@ const form = ref({
   name:          '',
   queriesWrc:    [],
   queriesExport: [],
+  queriesCleanup: [],
 });
 
 const errors          = ref({});
@@ -246,12 +295,14 @@ watch(
         name:          props.editData['name-reports'] || '',
         queriesWrc:    [...(props.editData['queries-wrc'] || [])],
         queriesExport: (props.editData['queries-export'] || []).map(q => ({ ...q })),
+        queriesCleanup: [...(props.editData['queries-cleanup'] || [])],
       };
     } else {
       form.value = {
         name:          '',
         queriesWrc:    [],
         queriesExport: [{ key: '', query: '' }], // mulai dengan 1 sheet kosong
+        queriesCleanup: [],
       };
     }
   },
@@ -265,6 +316,10 @@ const removeWrcQuery = (idx) => form.value.queriesWrc.splice(idx, 1);
 // ─── Query Export builders ────────────────────────────────────────────────────
 const addExportQuery    = () => form.value.queriesExport.push({ key: '', query: '' });
 const removeExportQuery = (idx) => form.value.queriesExport.splice(idx, 1);
+
+// ─── Query Cleanup builders ───────────────────────────────────────────────────
+const addCleanupQuery    = () => form.value.queriesCleanup.push('');
+const removeCleanupQuery = (idx) => form.value.queriesCleanup.splice(idx, 1);
 
 // ─── Validation ───────────────────────────────────────────────────────────────
 const validate = () => {
@@ -304,6 +359,7 @@ const handleSave = () => {
     'name-reports':   form.value.name.trim(),
     'queries-wrc':    form.value.queriesWrc.filter(q => q.trim() !== ''),
     'queries-export': form.value.queriesExport.filter(q => q.key.trim() !== ''),
+    'queries-cleanup': form.value.queriesCleanup.filter(q => q.trim() !== ''),
   };
 
   emit('save', payload);

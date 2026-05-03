@@ -13,3 +13,6 @@
 /backend/data/
 /backend/public/uploads/
 /backend/src/output/
+
+# Ignore reference folder
+/reference_template/

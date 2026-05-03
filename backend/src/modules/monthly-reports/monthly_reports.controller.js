@@ -14,7 +14,6 @@ import logger from "../../config/logger.js";
 import { apiResponse } from "../../utils/index.js";
 import * as configLoader from "./services/config_loader.service.js";
 import { executeReport }  from "./services/wrc_executor.service.js";
-import { exportToResponse } from "./services/excel_export.service.js";
 
 // ─── Helper: ambil userId dari JWT ────────────────────────────────────────────
 function getUserId(req) {
@@ -120,6 +119,8 @@ export const deleteReport = async (req, res) => {
 
 // ─── Run Report ───────────────────────────────────────────────────────────────
 
+import { resolveExporter } from "./services/exporter_resolver.service.js";
+
 /**
  * POST /api/monthly-reports/:id/export
  * Jalankan laporan: WRC → Excel → stream ke response
@@ -169,8 +170,9 @@ export const exportReport = async (req, res) => {
     // ── 3. Eksekusi WRC (sequential per-report, paralel antar-report)
     wrcResults = await executeReport({ reportConfig, cab, userId, prd, prdYear, prdMonth });
 
-    // ── 4. Export ke Excel dan stream ke response
-    await exportToResponse({ reportConfig, results: wrcResults, res, prd });
+    // ── 4. Resolve exporter & Export ke Excel dan stream ke response
+    const exporter = await resolveExporter(reportConfig["id-reports"]);
+    await exporter.exportToResponse({ reportConfig, results: wrcResults, res, prd, cab });
 
     logger.info(`[monthly_reports.controller] exportReport selesai: id=${id} | cab=${cab} | prd=${prd} | user=${userId}`);
 

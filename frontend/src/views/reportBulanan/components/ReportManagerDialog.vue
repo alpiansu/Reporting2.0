@@ -75,7 +75,7 @@
             </div>
             <div class="audit-user">
               <i class="pi pi-user audit-icon" />
-              <span class="audit-user-label">{{ data['addid'] }}</span>
+              <span class="audit-user-label">{{ data['addname'] }}</span>
             </div>
           </div>
         </template>
@@ -91,7 +91,7 @@
             </div>
             <div class="audit-user">
               <i class="pi pi-user audit-icon" />
-              <span class="audit-user-label">{{ data['updid'] }}</span>
+              <span class="audit-user-label">{{ data['updname'] }}</span>
             </div>
           </div>
         </template>
@@ -146,8 +146,8 @@ defineEmits(['update:visible', 'open-form', 'delete-report', 'refresh']);
 const filters = ref({
     'global': { value: null, matchMode: 'contains' },
     'name-reports': { value: null, matchMode: 'contains' },
-    'addid': { value: null, matchMode: 'contains' },
-    'updid': { value: null, matchMode: 'contains' },
+    'addname': { value: null, matchMode: 'contains' },
+    'updname': { value: null, matchMode: 'contains' },
 });
 </script>
 

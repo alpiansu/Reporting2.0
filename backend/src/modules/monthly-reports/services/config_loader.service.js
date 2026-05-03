@@ -14,6 +14,9 @@ import { fileURLToPath } from "url";
 import { dirname } from "path";
 import crypto from "crypto";
 import logger from "../../../config/logger.js";
+import UserService from "../../user/user.service.js";
+
+const userService = new UserService();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -91,16 +94,41 @@ async function writeConfig(data) {
 export async function listReports() {
   logger.info("[config_loader] listReports()");
   const config = await readConfig();
-  return config.map(r => ({
+
+  let uniqueIds = new Set();
+  for (let i = 0; i < config.length; i++) {
+    if (config[i]["addid"] && config[i]["addid"] !== "-") uniqueIds.add(config[i]["addid"]);
+    if (config[i]["updid"] && config[i]["updid"] !== "-") uniqueIds.add(config[i]["updid"]);
+  }
+
+  let userMap = {};
+  for (const id of uniqueIds) {
+    let user = await userService.findByCredentials(id);
+    userMap[id] = user ? user.fullName : id;
+    user = null; // Bersihkan referensi dari memori
+  }
+  
+  uniqueIds.clear();
+  uniqueIds = null;
+
+  const result = config.map(r => ({
     "id-reports":     r["id-reports"],
     "name-reports":   r["name-reports"],
     "queries-wrc":    r["queries-wrc"]    || [],
     "queries-export": r["queries-export"] || [],
     "addtime":        r["addtime"]        || "-",
     "addid":          r["addid"]          || "-",
+    "addname":        r["addid"] && r["addid"] !== "-" ? (userMap[r["addid"]] || r["addid"]) : "-",
     "updtime":        r["updtime"]        || "-",
     "updid":          r["updid"]          || "-",
+    "updname":        r["updid"] && r["updid"] !== "-" ? (userMap[r["updid"]] || r["updid"]) : "-",
   }));
+
+  // Clean up cache variabel
+  for (let key in userMap) delete userMap[key];
+  userMap = null;
+
+  return result;
 }
 
 /**
@@ -114,8 +142,38 @@ export async function getReportById(id) {
   const found = config.find(r => r["id-reports"] === id);
   if (!found) {
     logger.warn(`[config_loader] Report id=${id} tidak ditemukan`);
+    return null;
   }
-  return found || null;
+
+  let addName = found["addid"];
+  let updName = found["updid"];
+
+  if (found["addid"] && found["addid"] !== "-") {
+    let user = await userService.findByCredentials(found["addid"]);
+    addName = user ? user.fullName : found["addid"];
+    user = null; // Clean up memori
+  }
+
+  if (found["updid"] && found["updid"] !== "-") {
+    if (found["updid"] === found["addid"]) {
+      updName = addName;
+    } else {
+      let user = await userService.findByCredentials(found["updid"]);
+      updName = user ? user.fullName : found["updid"];
+      user = null; // Clean up memori
+    }
+  }
+
+  const result = {
+    ...found,
+    "addname": addName,
+    "updname": updName
+  };
+
+  addName = null;
+  updName = null;
+
+  return result;
 }
 
 /**
@@ -149,8 +207,19 @@ export async function createReport(data, userId) {
   config.push(newReport);
   await writeConfig(config);
 
+  let user = await userService.findByCredentials(userId);
+  let fullName = user ? user.fullName : userId;
+  user = null; // Clean up dari memori
+
+  const result = {
+    ...newReport,
+    "addname": fullName,
+    "updname": fullName
+  };
+  fullName = null;
+
   logger.info(`[config_loader] Report baru dibuat: id=${newId}, name="${newReport["name-reports"]}"`);
-  return newReport;
+  return result;
 }
 
 /**
@@ -188,8 +257,36 @@ export async function updateReport(id, data, userId) {
   config[idx] = updated;
   await writeConfig(config);
 
+  let addName = updated["addid"];
+  let updName = updated["updid"];
+
+  if (updated["addid"] && updated["addid"] !== "-") {
+    let user = await userService.findByCredentials(updated["addid"]);
+    addName = user ? user.fullName : updated["addid"];
+    user = null;
+  }
+
+  if (updated["updid"] && updated["updid"] !== "-") {
+    if (updated["updid"] === updated["addid"]) {
+      updName = addName;
+    } else {
+      let user = await userService.findByCredentials(updated["updid"]);
+      updName = user ? user.fullName : updated["updid"];
+      user = null;
+    }
+  }
+
+  const result = {
+    ...updated,
+    "addname": addName,
+    "updname": updName
+  };
+
+  addName = null;
+  updName = null;
+
   logger.info(`[config_loader] Report id=${id} berhasil diupdate oleh ${userId}`);
-  return updated;
+  return result;
 }
 
 /**

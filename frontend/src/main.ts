@@ -14,6 +14,10 @@ import 'primeicons/primeicons.css'
 import ToastService from 'primevue/toastservice'
 import Button from 'primevue/button'
 import Tooltip from 'primevue/tooltip';
+import Badge from 'primevue/badge';
+import InputText from 'primevue/inputtext';
+import IconField from 'primevue/iconfield';
+import InputIcon from 'primevue/inputicon';
 
 // Import transitions
 import TransitionComponents from '@/components/transitions'
@@ -39,6 +43,10 @@ app.use(ToastService)
 
 // Register global components
 app.component('Button', Button)
+app.component('Badge', Badge)
+app.component('InputText', InputText)
+app.component('IconField', IconField)
+app.component('InputIcon', InputIcon)
 app.directive('tooltip', Tooltip);
 
 // Use transition components

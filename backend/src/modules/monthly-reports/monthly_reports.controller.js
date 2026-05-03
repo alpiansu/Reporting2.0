@@ -167,7 +167,44 @@ export const exportReport = async (req, res) => {
       return apiResponse.badRequest(res, "Laporan tidak memiliki query yang dikonfigurasi");
     }
 
-    // ── 3. Eksekusi WRC (sequential per-report, paralel antar-report)
+    // ── 3. Substitusi Placeholder pada Config (Title, Sheet Key, Caption)
+    let prdPrev = "";
+    if (prd) {
+      const yy  = parseInt(prd.substring(0, 2), 10);
+      const mm  = parseInt(prd.substring(2, 4), 10);
+      let prevYY = yy;
+      let prevMM = mm - 1;
+      if (prevMM === 0) {
+        prevMM = 12;
+        prevYY = yy - 1;
+      }
+      prdPrev = `${String(prevYY).padStart(2, "0")}${String(prevMM).padStart(2, "0")}`;
+    }
+
+    const templateParams = { userId, cab, prd, prdPrev, prdYear, prdMonth };
+
+    // Helper substitusi (tanpa sanitize karena untuk judul/nama sheet)
+    const replacePlaceholders = (str) => {
+      if (!str) return str;
+      let result = str;
+      for (const [k, v] of Object.entries(templateParams)) {
+        result = result.replaceAll(`{${k}}`, v || "");
+      }
+      return result;
+    };
+
+    if (reportConfig["name-reports"]) {
+      reportConfig["name-reports"] = replacePlaceholders(reportConfig["name-reports"]);
+    }
+    if (reportConfig["queries-export"]) {
+      reportConfig["queries-export"] = reportConfig["queries-export"].map(item => ({
+        ...item,
+        key: replacePlaceholders(item.key),
+        caption: replacePlaceholders(item.caption)
+      }));
+    }
+
+    // ── 4. Eksekusi WRC (sequential per-report, paralel antar-report)
     wrcResults = await executeReport({ reportConfig, cab, userId, prd, prdYear, prdMonth });
 
     // ── 4. Resolve exporter & Export ke Excel dan stream ke response

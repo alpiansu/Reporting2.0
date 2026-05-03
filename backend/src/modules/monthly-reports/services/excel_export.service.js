@@ -106,8 +106,9 @@ function autoWidth(sheet, columns, rows, style) {
  * @param {Array}    rows      - Array of row objects dari WRC
  * @param {string}   sheetKey  - Nama sheet (untuk log)
  * @param {Object}   style     - Resolved style
+ * @param {string}   caption   - Teks caption untuk judul di atas tabel (fallback ke sheetKey)
  */
-function buildSheet(sheet, rows, sheetKey, style) {
+function buildSheet(sheet, rows, sheetKey, style, caption = "") {
   const columns = extractColumns(rows);
 
   if (columns.length === 0) {
@@ -117,8 +118,9 @@ function buildSheet(sheet, rows, sheetKey, style) {
   }
 
   // ─── Title Row ────────────────────────────────────────────────────────────
+  const titleText = caption || sheetKey;
   sheet.addRow([]);
-  const titleRow = sheet.addRow([sheetKey]);
+  const titleRow = sheet.addRow([titleText]);
   titleRow.font   = style.titleFont;
   titleRow.height = (style.titleFont?.size || 13) * 2;
   sheet.addRow([]);
@@ -194,7 +196,7 @@ export async function exportToResponse({ reportConfig, results, res, prd = "" })
 
     const style = await resolveStyle(reportId, sheetKey);
     const sheet = workbook.addWorksheet(sheetKey);
-    buildSheet(sheet, rows, sheetKey, style);
+    buildSheet(sheet, rows, sheetKey, style, item.caption);
   }
 
   // ─── Nama file output ──────────────────────────────────────────────

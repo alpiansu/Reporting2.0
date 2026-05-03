@@ -123,7 +123,7 @@ export async function executeReport({ reportConfig, cab, userId, prd = "", prdYe
       waitForConnections: true,
       connectionLimit:    3,    // cukup untuk 1 laporan per request
       maxIdle:            1,
-      idleTimeout:        30000,
+      idleTimeout:        7200000,
       connectTimeout:     10000,
     });
     // Test koneksi awal

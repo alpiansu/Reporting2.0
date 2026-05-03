@@ -15,7 +15,7 @@
         </p>
       </div>
       <Button
-        label="+ Tambah Laporan Baru"
+        label="Tambah Laporan Baru"
         icon="pi pi-plus"
         class="p-button-success p-button-sm"
         @click="$emit('open-form', null)"
@@ -30,53 +30,75 @@
       class="p-datatable-sm manager-table"
       empty-message="Belum ada laporan yang terdaftar."
       striped-rows
+      v-model:filters="filters"
+      :globalFilterFields="['name-reports', 'addid', 'updid']"
     >
-      <!-- ID -->
-      <Column header="ID Laporan" style="width: 22%; min-width: 180px">
-        <template #body="{ data }">
-          <code class="id-badge">{{ data['id-reports'] }}</code>
-        </template>
-      </Column>
 
+      <template #header>
+        <div class="flex justify-content-end">
+          <IconField>
+            <InputIcon>
+              <i class="pi pi-search" />
+            </InputIcon>
+            <InputText v-model="filters['global'].value" placeholder="Cari Laporan" />
+          </IconField>
+        </div>
+      </template>
       <!-- Nama -->
-      <Column field="name-reports" header="Nama Laporan" style="width: 25%" />
+      <Column field="name-reports" header="Nama Laporan" sortable style="width: 30%; min-width: 200px" />
 
       <!-- Query WRC -->
-      <Column header="Query WRC" style="width: 10%; text-align: center">
+      <Column header="Query WRC" style="width: 12%; min-width: 100px; text-align: center">
         <template #body="{ data }">
-          <Badge :value="String(data['queries-wrc']?.length || 0)" severity="info" />
+          <div class="badge-center">
+            <Badge :value="String(data['queries-wrc']?.length || 0)" severity="info" />
+          </div>
         </template>
       </Column>
 
       <!-- Sheet Export -->
-      <Column header="Sheet Export" style="width: 10%; text-align: center">
+      <Column header="Sheet Export" style="width: 12%; min-width: 110px; text-align: center">
         <template #body="{ data }">
-          <Badge :value="String(data['queries-export']?.length || 0)" severity="warning" />
+          <div class="badge-center">
+            <Badge :value="String(data['queries-export']?.length || 0)" severity="warning" />
+          </div>
         </template>
       </Column>
 
       <!-- Dibuat -->
-      <Column header="Dibuat" style="width: 16%">
+      <Column header="Dibuat" style="width: 20%; min-width: 160px">
         <template #body="{ data }">
-          <div class="audit-info">
-            <span>{{ data['addtime'] }}</span>
-            <small class="text-color-secondary">{{ data['addid'] }}</small>
+          <div class="audit-card">
+            <div class="audit-date">
+              <i class="pi pi-calendar audit-icon" />
+              <span>{{ data['addtime'] }}</span>
+            </div>
+            <div class="audit-user">
+              <i class="pi pi-user audit-icon" />
+              <span class="audit-user-label">{{ data['addid'] }}</span>
+            </div>
           </div>
         </template>
       </Column>
 
       <!-- Diperbarui -->
-      <Column header="Diperbarui" style="width: 16%">
+      <Column header="Diperbarui" style="width: 20%; min-width: 160px">
         <template #body="{ data }">
-          <div class="audit-info">
-            <span>{{ data['updtime'] }}</span>
-            <small class="text-color-secondary">{{ data['updid'] }}</small>
+          <div class="audit-card audit-card--update">
+            <div class="audit-date">
+              <i class="pi pi-refresh audit-icon" />
+              <span>{{ data['updtime'] }}</span>
+            </div>
+            <div class="audit-user">
+              <i class="pi pi-user audit-icon" />
+              <span class="audit-user-label">{{ data['updid'] }}</span>
+            </div>
           </div>
         </template>
       </Column>
 
       <!-- Aksi -->
-      <Column header="Aksi" style="width: 100px" :exportable="false">
+      <Column header="Aksi" style="width: 6%; min-width: 80px" :exportable="false">
         <template #body="{ data }">
           <div class="action-btns">
             <Button
@@ -108,11 +130,10 @@
 </template>
 
 <script setup>
+import { ref } from 'vue';
 import Dialog    from 'primevue/dialog';
 import DataTable from 'primevue/datatable';
 import Column    from 'primevue/column';
-import Button    from 'primevue/button';
-import Badge     from 'primevue/badge';
 
 defineProps({
   visible:  { type: Boolean, default: false },
@@ -121,6 +142,13 @@ defineProps({
 });
 
 defineEmits(['update:visible', 'open-form', 'delete-report', 'refresh']);
+
+const filters = ref({
+    'global': { value: null, matchMode: 'contains' },
+    'name-reports': { value: null, matchMode: 'contains' },
+    'addid': { value: null, matchMode: 'contains' },
+    'updid': { value: null, matchMode: 'contains' },
+});
 </script>
 
 <style scoped>
@@ -132,31 +160,79 @@ defineEmits(['update:visible', 'open-form', 'delete-report', 'refresh']);
   gap: 1rem;
 }
 
-.id-badge {
-  font-size: 0.78rem;
-  background: var(--surface-100, #f8f9fa);
-  border: 1px solid var(--surface-border, #dee2e6);
-  border-radius: 4px;
-  padding: 2px 6px;
-  color: var(--primary-color, #4472c4);
-  word-break: break-all;
-  display: block;
-  max-width: 200px;
-}
-
-.audit-info {
+/* ── Badge center alignment ── */
+.badge-center {
   display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  font-size: 0.82rem;
+  justify-content: center;
 }
 
+/* ── Audit card (Dibuat & Diperbarui) ── */
+.audit-card {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.78rem;
+  min-width: 140px;
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.audit-card:hover {
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.18);
+  transform: translateY(-1px);
+}
+
+/* Diperbarui pakai palet hijau agar mudah dibedakan */
+.audit-card--update {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border-color: #bbf7d0;
+}
+
+.audit-card--update:hover {
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.18);
+}
+
+.audit-date,
+.audit-user {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #374151;
+  line-height: 1.3;
+}
+
+.audit-icon {
+  font-size: 0.72rem;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+.audit-date span {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.audit-user-label {
+  font-size: 0.72rem;
+  color: #6b7280;
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 110px;
+}
+
+/* ── Aksi ── */
 .action-btns {
   display: flex;
   gap: 0.25rem;
   justify-content: flex-end;
 }
 
+/* ── Table header ── */
 :deep(.manager-table .p-datatable-thead th) {
   font-size: 0.82rem;
   font-weight: 700;

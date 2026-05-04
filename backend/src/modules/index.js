@@ -28,6 +28,7 @@ import dashboardModule from "./dashboard/index.js";
 import buatRmbModule from "./buat_rmb/index.js";
 import ceklistPrepClosingModule from "./ceklist-prep-closing/index.js";
 import monthlyReportsModule from "./monthly-reports/index.js";
+import rekapBackupModule from "./rekap_backup/index.js";
 
 export default {
   // Export all modules
@@ -56,6 +57,7 @@ export default {
   buatRmbModule,
   ceklistPrepClosingModule,
   monthlyReportsModule,
+  rekapBackupModule,
 
   // Initialize all modules
   initialize: app => {
@@ -84,6 +86,7 @@ export default {
     const buatRmb = buatRmbModule.initialize(app);
     const ceklistPrepClosing = ceklistPrepClosingModule.initialize(app);
     const monthlyReports     = monthlyReportsModule.initialize(app);
+    const rekapBackup        = rekapBackupModule.initialize(app);
 
     // Initialize menu manager module
     app.use("/api/menu-manager", menuManagerModule.routes);
@@ -113,6 +116,7 @@ export default {
       buatRmb,
       ceklistPrepClosing,
       monthlyReports,
+      rekapBackup,
       menuManager: true,
     };
   },

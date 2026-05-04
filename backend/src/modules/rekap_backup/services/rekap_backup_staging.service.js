@@ -13,6 +13,25 @@ import timezone from "dayjs/plugin/timezone.js";
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
+/**
+ * Konversi semua field bertipe Date pada satu record
+ * ke format string YYYY-MM-DD HH:mm:ss.
+ * Sequelize secara default mengembalikan kolom DATETIME/TIMESTAMP
+ * sebagai JavaScript Date object, yang akan di-serialize JSON.stringify
+ * menjadi format Zulu (ISO 8601 dengan suffix Z). Fungsi ini mencegah hal itu.
+ */
+function normalizeRecord(record) {
+  const result = {};
+  for (const [key, val] of Object.entries(record)) {
+    if (val instanceof Date) {
+      result[key] = dayjs(val).format("YYYY-MM-DD HH:mm:ss");
+    } else {
+      result[key] = val;
+    }
+  }
+  return result;
+}
+
 class RekapBackupStagingService {
   constructor() {
     this.dataDir = path.join(process.cwd(), "data", "rekap_backup");
@@ -124,8 +143,12 @@ class RekapBackupStagingService {
       const queryStr = `SELECT * FROM ${tableName} WHERE LEFT(cabang,1)='G' AND REPLACE(periode, '-', '') LIKE '${periode}%'`;
       const [records] = await sequelize.query(queryStr);
 
+      // Normalisasi field Date ke format YYYY-MM-DD HH:mm:ss
+      // agar tidak tersimpan sebagai string Zulu (ISO 8601) di JSON
+      const normalized = records.map(normalizeRecord);
+
       // Tulis JSON dengan pretty-print (indent 2 spasi) agar mudah dibaca manual
-      await fs.writeFile(jsonFilePath, JSON.stringify(records, null, 2), "utf-8");
+      await fs.writeFile(jsonFilePath, JSON.stringify(normalized, null, 2), "utf-8");
 
       await this.loadFromJson(type, periode);
       if (release) await release();
@@ -158,7 +181,10 @@ class RekapBackupStagingService {
     try {
       const summaryFilePath = path.join(this.dataDir, "rekap_backup_summary_all.json");
 
+      logger.info(`Syncing summary all JSON...`);
+      logger.info(`Process getting data harian...`);
       const allHarian = await this.getAllData('harian');
+      logger.info(`Process getting data bulanan...`);
       const allBulanan = await this.getAllData('bulanan');
 
       const summaryMap = new Map();

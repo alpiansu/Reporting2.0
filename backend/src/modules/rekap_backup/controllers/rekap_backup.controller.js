@@ -9,7 +9,7 @@ class RekapBackupController {
       res.status(200).json(data);
     } catch (error) {
       logger.error(`Error getSummary: ${error.message}`);
-      res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
+      res.status(500).json({ success: false, message: "Terjadi kesalahan server : " + error.message });
     }
   }
 
@@ -20,7 +20,7 @@ class RekapBackupController {
       res.status(200).json(data);
     } catch (error) {
       logger.error(`Error getResumeHarian: ${error.message}`);
-      res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
+      res.status(500).json({ success: false, message: "Terjadi kesalahan server : " + error.message });
     }
   }
 
@@ -31,7 +31,7 @@ class RekapBackupController {
       res.status(200).json(data);
     } catch (error) {
       logger.error(`Error getResumeBulanan: ${error.message}`);
-      res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
+      res.status(500).json({ success: false, message: "Terjadi kesalahan server : " + error.message });
     }
   }
 
@@ -42,7 +42,7 @@ class RekapBackupController {
       res.status(200).json(data);
     } catch (error) {
       logger.error(`Error getDetailHarian: ${error.message}`);
-      res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
+      res.status(500).json({ success: false, message: "Terjadi kesalahan server : " + error.message });
     }
   }
 
@@ -53,7 +53,7 @@ class RekapBackupController {
       res.status(200).json(data);
     } catch (error) {
       logger.error(`Error getDetailBulanan: ${error.message}`);
-      res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
+      res.status(500).json({ success: false, message: "Terjadi kesalahan server : " + error.message });
     }
   }
 
@@ -63,7 +63,7 @@ class RekapBackupController {
       res.status(200).json([data]); // Maintain compatibility with old frontend expected format [ { oldest_year, newest_year } ]
     } catch (error) {
       logger.error(`Error getYears: ${error.message}`);
-      res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
+      res.status(500).json({ success: false, message: "Terjadi kesalahan server : " + error.message });
     }
   }
 
@@ -90,7 +90,7 @@ class RekapBackupController {
       res.send(buffer);
     } catch (error) {
       logger.error(`Error exportExcel: ${error.message}`);
-      res.status(500).json({ success: false, message: "Terjadi kesalahan server" });
+      res.status(500).json({ success: false, message: "Terjadi kesalahan server : " + error.message });
     }
   }
 
@@ -101,7 +101,7 @@ class RekapBackupController {
       res.status(200).json(result);
     } catch (error) {
       logger.error(`Error syncWrc: ${error.message}`);
-      res.status(500).json({ success: false, message: "Gagal sinkronisasi WRC" });
+      res.status(500).json({ success: false, message: "Gagal sinkronisasi WRC : " + error.message });
     }
   }
 
@@ -112,7 +112,7 @@ class RekapBackupController {
       res.status(200).json(result);
     } catch (error) {
       logger.error(`Error triggerStagingSync: ${error.message}`);
-      res.status(500).json({ success: false, message: "Gagal memproses JSON Staging" });
+      res.status(500).json({ success: false, message: "Gagal memproses JSON Staging : " + error.message });
     }
   }
 }

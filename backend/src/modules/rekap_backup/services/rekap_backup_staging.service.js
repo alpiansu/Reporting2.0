@@ -1,9 +1,9 @@
 import fs from "fs/promises";
-import { createWriteStream } from "fs";
+// createWriteStream tidak lagi dipakai setelah refactor ke JSON.stringify
 import path from "path";
-import logger from "../../config/logger.js";
+import logger from "../../../config/logger.js";
 import lockfile from "proper-lockfile";
-import config from "../../config/index.js";
+import config from "../../../config/index.js";
 const { resilientDb } = config;
 
 import dayjs from "dayjs";
@@ -100,7 +100,7 @@ class RekapBackupStagingService {
     let release;
     const jsonFilePath = this.getFilePath(type, periode);
     const backupPath = `${jsonFilePath}.backup.json`;
-    const tableName = type === 'harian' ? 'rekap_backup_harian' : 'rekap_backup_bulanan';
+    const tableName = type === 'harian' ? 'db_edp.rekap_backup_harian' : 'db_edp.rekap_backup_bulanan';
     
     try {
       await fs.mkdir(this.dataDir, { recursive: true });
@@ -121,26 +121,11 @@ class RekapBackupStagingService {
       }
 
       // Query from Database for specific periode
-      // Note: The period format in DB might be YYYY-MM or YYYYMM. 
-      // The old project queried WHERE LEFT(periode,4) for years. Usually it's YYYY-MM-DD or YYYYMM.
-      // We assume periode param is YYYYMM and the DB column is YYYYMM. If the DB is YYYY-MM, we adjust.
-      // Let's select all matching that period.
       const queryStr = `SELECT * FROM ${tableName} WHERE LEFT(cabang,1)='G' AND REPLACE(periode, '-', '') LIKE '${periode}%'`;
       const [records] = await sequelize.query(queryStr);
 
-      const stream = createWriteStream(jsonFilePath, { encoding: "utf8" });
-      await new Promise(resolve => stream.once("open", resolve));
-      stream.write("[");
-
-      let first = true;
-      for (const obj of records) {
-        if (!first) stream.write(",");
-        stream.write(JSON.stringify(obj));
-        first = false;
-      }
-
-      stream.write("]");
-      await new Promise((res, rej) => stream.end(err => (err ? rej(err) : res())));
+      // Tulis JSON dengan pretty-print (indent 2 spasi) agar mudah dibaca manual
+      await fs.writeFile(jsonFilePath, JSON.stringify(records, null, 2), "utf-8");
 
       await this.loadFromJson(type, periode);
       if (release) await release();
@@ -164,6 +149,72 @@ class RekapBackupStagingService {
     }
   }
 
+  /**
+   * Generate file summary all yang menggabungkan seluruh periode dari memory cache.
+   * File: rekap_backup_summary_all.json
+   * Dipanggil otomatis setelah syncAllFromDatabase selesai.
+   */
+  async syncSummaryJson() {
+    try {
+      const summaryFilePath = path.join(this.dataDir, "rekap_backup_summary_all.json");
+
+      const allHarian = await this.getAllData('harian');
+      const allBulanan = await this.getAllData('bulanan');
+
+      const summaryMap = new Map();
+
+      for (const row of allHarian) {
+        if (!row.cabang) continue;
+        const cab = row.cabang.trim().toUpperCase();
+        if (!summaryMap.has(cab)) {
+          summaryMap.set(cab, {
+            cabang: cab,
+            total_harian: 0, oldest_harian: null, newest_harian: null,
+            total_bln: 0, oldest_bln: null, newest_bln: null,
+          });
+        }
+        const s = summaryMap.get(cab);
+        s.total_harian += (row.jml_cek || 0);
+        if (row.periode) {
+          if (!s.oldest_harian || row.periode < s.oldest_harian) s.oldest_harian = row.periode;
+          if (!s.newest_harian || row.periode > s.newest_harian) s.newest_harian = row.periode;
+        }
+      }
+
+      for (const row of allBulanan) {
+        if (!row.cabang) continue;
+        const cab = row.cabang.trim().toUpperCase();
+        if (!summaryMap.has(cab)) {
+          summaryMap.set(cab, {
+            cabang: cab,
+            total_harian: 0, oldest_harian: null, newest_harian: null,
+            total_bln: 0, oldest_bln: null, newest_bln: null,
+          });
+        }
+        const s = summaryMap.get(cab);
+        if (row.jenis_file === 'IDT') s.total_bln += (row.jml_cek || 0);
+        if (row.periode) {
+          if (!s.oldest_bln || row.periode < s.oldest_bln) s.oldest_bln = row.periode;
+          if (!s.newest_bln || row.periode > s.newest_bln) s.newest_bln = row.periode;
+        }
+      }
+
+      const summaryArray = Array.from(summaryMap.values()).sort((a, b) => a.cabang.localeCompare(b.cabang));
+      const meta = {
+        generated_at: dayjs().tz("Asia/Jakarta").format("YYYY-MM-DD HH:mm:ss"),
+        total_cabang: summaryArray.length,
+        data: summaryArray,
+      };
+
+      await fs.writeFile(summaryFilePath, JSON.stringify(meta, null, 2), "utf-8");
+      logger.info(`Summary all JSON generated: ${summaryArray.length} cabang -> ${path.basename(summaryFilePath)}`);
+      return { success: true, totalCabang: summaryArray.length };
+    } catch (error) {
+      logger.error(`Error generating summary all JSON: ${error.message}`);
+      throw error;
+    }
+  }
+
   async syncAllFromDatabase() {
     const sequelize = await resilientDb.getDatabase();
     if (!sequelize) throw new Error("Database not connected");
@@ -172,7 +223,7 @@ class RekapBackupStagingService {
       const result = { harian: 0, bulanan: 0 };
       
       for (const type of ['harian', 'bulanan']) {
-        const tableName = type === 'harian' ? 'rekap_backup_harian' : 'rekap_backup_bulanan';
+        const tableName = type === 'harian' ? 'db_edp.rekap_backup_harian' : 'db_edp.rekap_backup_bulanan';
         const [periodes] = await sequelize.query(`SELECT DISTINCT REPLACE(LEFT(periode, 7), '-', '') AS prd FROM ${tableName} WHERE periode != '' AND periode IS NOT NULL`);
         
         for (const row of periodes) {
@@ -184,6 +235,9 @@ class RekapBackupStagingService {
         }
       }
       
+      // Generate summary all JSON setelah semua periode selesai di-sync
+      await this.syncSummaryJson();
+
       return { success: true, monthsProcessed: result };
     } catch (error) {
       logger.error(`Error in syncAllFromDatabase rekap_backup: ${error.message}`);

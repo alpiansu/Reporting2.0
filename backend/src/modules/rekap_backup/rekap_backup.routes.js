@@ -1,7 +1,11 @@
 import { Router } from "express";
 import rekapBackupController from "./controllers/rekap_backup.controller.js";
+import { authenticateJWT } from "../../middlewares/index.js";
 
 const router = Router();
+
+// Apply authentication middleware to all routes
+router.use(authenticateJWT);
 
 // Summary
 router.get("/summary", rekapBackupController.getSummary);

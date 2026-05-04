@@ -1,9 +1,9 @@
 import ExcelJS from "exceljs";
-import logger from "../../config/logger.js";
+import logger from "../../../config/logger.js";
 import stagingService from "./rekap_backup_staging.service.js";
-import WrcService from "../../services/wrc.service.js";
+import WrcService from "../../../services/wrc.service.js";
 import mysql from "mysql2/promise";
-import config from "../../config/index.js";
+import config from "../../../config/index.js";
 
 const { resilientDb } = config;
 const wrcService = new WrcService();
@@ -18,7 +18,8 @@ class RekapBackupService {
 
       // Aggregate Harian
       for (const row of allHarian) {
-        const cab = row.cabang;
+        if (!row.cabang) continue;
+        const cab = row.cabang.trim().toUpperCase();
         if (!summaryMap.has(cab)) {
           summaryMap.set(cab, { cabang: cab, total_harian: 0, oldest_harian: null, newest_harian: null, total_bln: 0, oldest_bln: null, newest_bln: null });
         }
@@ -33,7 +34,8 @@ class RekapBackupService {
 
       // Aggregate Bulanan
       for (const row of allBulanan) {
-        const cab = row.cabang;
+        if (!row.cabang) continue;
+        const cab = row.cabang.trim().toUpperCase();
         if (!summaryMap.has(cab)) {
           summaryMap.set(cab, { cabang: cab, total_harian: 0, oldest_harian: null, newest_harian: null, total_bln: 0, oldest_bln: null, newest_bln: null });
         }
@@ -85,12 +87,12 @@ class RekapBackupService {
     if (!sequelize) throw new Error("Database not connected");
 
     const strYear = periode.substring(0, 4);
-    const strTable = `rekap_backup_harian_${strYear}`; // assuming tables exist
+    const strTable = `db_edp.rekap_backup_harian_${strYear}`; // assuming tables exist
     
     try {
       // Need to adjust table name to match actual backup history tables if they differ
       // The old project used 'backup_harian_YYYY'
-      const actualTable = `backup_harian_${strYear}`;
+      const actualTable = `db_edp.backup_harian_${strYear}`;
       const query = `
         SELECT cabang, kdtk, tanggal as periode, stat, path, jml_isi, ip, note, updtime 
         FROM ${actualTable} 
@@ -111,7 +113,7 @@ class RekapBackupService {
     if (!sequelize) throw new Error("Database not connected");
 
     const strYear = periode.substring(0, 4);
-    const actualTable = `backup_bulanan_${strYear}`;
+    const actualTable = `db_edp.backup_bulanan_${strYear}`;
     
     try {
       const query = `

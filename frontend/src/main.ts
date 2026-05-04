@@ -18,6 +18,11 @@ import Badge from 'primevue/badge';
 import InputText from 'primevue/inputtext';
 import IconField from 'primevue/iconfield';
 import InputIcon from 'primevue/inputicon';
+import Dropdown from 'primevue/dropdown';
+import Card from 'primevue/card';
+import DataTable from 'primevue/datatable';
+import Column from 'primevue/column';
+import Dialog from 'primevue/dialog';
 
 // Import transitions
 import TransitionComponents from '@/components/transitions'
@@ -47,6 +52,11 @@ app.component('Badge', Badge)
 app.component('InputText', InputText)
 app.component('IconField', IconField)
 app.component('InputIcon', InputIcon)
+app.component('Dropdown', Dropdown)
+app.component('Card', Card)
+app.component('DataTable', DataTable)
+app.component('Column', Column)
+app.component('Dialog', Dialog)
 app.directive('tooltip', Tooltip);
 
 // Use transition components

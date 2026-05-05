@@ -133,12 +133,20 @@ class WrcExtractorService {
            const val = ignoreCaseKey ? row[ignoreCaseKey] : undefined;
 
            if (val !== undefined) {
-             if (code && code.toString().toUpperCase() !== 'GLOBAL') {
-               // Specific store code exists
+             // 1. Prioritas Utama: Jika rule secara tegas menyatakan level branch
+             if (rule.level === 'branch') {
+               targetFolder.branch_level_data[rule.key] = val;
+             } 
+             // 2. Prioritas Kedua: Jika rule secara tegas menyatakan level store
+             else if (rule.level === 'store' && code) {
+               if (!targetFolder.stores[code]) targetFolder.stores[code] = {};
+               targetFolder.stores[code][rule.key] = val;
+             }
+             // 3. Fallback: Logika lama berbasis KODE_TOKO 'GLOBAL'
+             else if (code && code.toString().toUpperCase() !== 'GLOBAL') {
                if (!targetFolder.stores[code]) targetFolder.stores[code] = {};
                targetFolder.stores[code][rule.key] = val;
              } else {
-               // Branch level scalar data
                targetFolder.branch_level_data[rule.key] = val;
              }
            }

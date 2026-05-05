@@ -69,13 +69,22 @@
 
           <Column field="name" header="Nama Indikator" style="width: 25%" />
 
-          <Column field="table_type" header="Tipe Tabel" style="width: 15%">
+          <Column field="table_type" header="Tipe Tabel" style="width: 10%">
             <template #body="slotProps">
               <Badge :value="slotProps.data.table_type" severity="warning" />
             </template>
           </Column>
 
-          <Column field="query" header="Query (SQL)" style="width: 30%">
+          <Column field="level" header="Level" style="width: 10%">
+            <template #body="slotProps">
+              <Tag 
+                :value="slotProps.data.level === 'branch' ? 'Branch' : 'Store'" 
+                :severity="slotProps.data.level === 'branch' ? 'info' : 'success'" 
+              />
+            </template>
+          </Column>
+
+          <Column field="query" header="Query (SQL)" style="width: 25%">
             <template #body="slotProps">
               <div class="sql-preview" v-tooltip.bottom="slotProps.data.query">
                 {{ slotProps.data.query }}
@@ -174,6 +183,19 @@
           />
         </div>
 
+        <div class="col-12 md:col-6 field mb-4">
+          <label class="font-semibold" for="wrc-level">Cakupan Data (Level) <span class="text-red-500">*</span></label>
+          <Dropdown
+            id="wrc-level"
+            v-model="currentRule.level"
+            :options="levelOptions"
+            optionLabel="label"
+            optionValue="value"
+            placeholder="Pilih Cakupan Data"
+            :class="{'p-invalid': !currentRule.level && validationError}"
+          />
+        </div>
+
         <div class="col-12 field mb-4">
           <label class="font-semibold" for="wrc-query">Query Executable (Raw SQL) <span class="text-red-500">*</span></label>
           <Textarea
@@ -186,7 +208,8 @@
           />
           <Message severity="info" :closable="false" class="mt-2 text-sm p-2 w-full">
             Tersedia Dynamic Replacement: <b>{period}</b> (YYMM), <b>{month}</b> (MM), <b>{year}</b> (YYYY).<br/>
-            WAJIB menampilkan kolom <b>KODE_TOKO</b> jika value ditujukan per toko. Ketik 'GLOBAL' AS KODE_TOKO jika untuk semua toko sekaligus.
+            <span v-if="currentRule.level === 'store'">WAJIB menampilkan kolom <b>KODE_TOKO</b> jika level adalah <b>Store</b>.</span>
+            <span v-else>Untuk level <b>Branch</b>, tidak wajib menampilkan KODE_TOKO. Sistem akan mengambil baris pertama sebagai nilai global.</span>
           </Message>
         </div>
       </div>
@@ -206,6 +229,7 @@ import Button from 'primevue/button';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Badge from 'primevue/badge';
+import Tag from 'primevue/tag';
 import InputText from 'primevue/inputtext';
 import Dropdown from 'primevue/dropdown';
 import Textarea from 'primevue/textarea';
@@ -227,6 +251,11 @@ const isLoading = ref(false);
 const isSaving = ref(false);
 const isExtracting = ref(false);
 const rules = ref([]);
+
+const levelOptions = [
+  { label: 'Branch Level (Global)', value: 'branch' },
+  { label: 'Store Level (Per Toko)', value: 'store' }
+];
 
 const editorVisible = ref(false);
 const editingIndex = ref(-1);
@@ -285,6 +314,7 @@ const openAddRule = () => {
   currentRule.value = {
     key: '',
     name: '',
+    level: 'store',
     table_type: 'kodetoko',
     query: '',
     valueField: ''
@@ -295,7 +325,10 @@ const openAddRule = () => {
 const editRule = (rule, index) => {
   validationError.value = '';
   editingIndex.value = index;
-  currentRule.value = JSON.parse(JSON.stringify(rule));
+  // Ensure level exists for old data migration in UI
+  const ruleData = JSON.parse(JSON.stringify(rule));
+  if (!ruleData.level) ruleData.level = 'store'; 
+  currentRule.value = ruleData;
   editorVisible.value = true;
 };
 
@@ -307,7 +340,7 @@ const deleteRule = (index) => {
 
 const applyRuleEdit = () => {
   const r = currentRule.value;
-  if (!r.key || !r.name || !r.table_type || !r.query || !r.valueField) {
+  if (!r.key || !r.name || !r.table_type || !r.query || !r.valueField || !r.level) {
     validationError.value = 'Mohon lengkapi semua field yang berbintang (*).';
     return;
   }

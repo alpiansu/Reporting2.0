@@ -346,17 +346,17 @@ class PrepClosingService {
       if (!wrcExtractorService.cacheData?.last_extracted_at) {
         await wrcExtractorService.loadCache();
       }
-      const globalData = wrcExtractorService.cacheData?.data_by_cabang?.[cab]?.branch_level_data || {};
-      const globalStoreFallback = wrcExtractorService.cacheData?.data_by_cabang?.[cab]?.stores?.['GLOBAL'] || {};
+      const branchData = wrcExtractorService.cacheData?.data_by_cabang?.[cab]?.branch_level_data || {};
       const storeData = wrcExtractorService.cacheData?.data_by_cabang?.[cab]?.stores?.[kdtk] || {};
 
-      const combinedWrcData = { ...globalData, ...globalStoreFallback, ...storeData };
+      // Gabungkan data dengan urutan: Branch data sebagai base, Store data menimpa jika ada spesifik per toko
+      const combinedWrcData = { ...branchData, ...storeData };
 
       return {
-        saldoBlnQty: combinedWrcData.saldo_akh_wrc_toko ? parseFloat(combinedWrcData.saldo_akh_wrc_toko) : 0,
-        saldoBlnRp: combinedWrcData.rp_saldo_akh_wrc_toko ? parseFloat(combinedWrcData.rp_saldo_akh_wrc_toko) : 0,
-        strBlnSlsWrc: combinedWrcData.bln_sls_wrc || null,
-        strMaxBlnAktWrc: combinedWrcData.terakhir_bln_akt_wrc || null,
+        saldoBlnQty: storeData.saldo_akh_wrc_toko ? parseFloat(storeData.saldo_akh_wrc_toko) : 0,
+        saldoBlnRp: storeData.rp_saldo_akh_wrc_toko ? parseFloat(storeData.rp_saldo_akh_wrc_toko) : 0,
+        strBlnSlsWrc: branchData.bln_sls_wrc || null,             // Ambil eksklusif dari branch level
+        strMaxBlnAktWrc: branchData.terakhir_bln_akt_wrc || null, // Ambil eksklusif dari branch level
         ...combinedWrcData
       };
     } catch (e) {

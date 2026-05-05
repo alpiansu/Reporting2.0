@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastUpdated": "2026-04-30T11:02:10.670Z",
+  "lastUpdated": "2026-05-05T06:23:50.226Z",
   "updatedBy": "2013076089",
   "description": "Aturan pengecekan kesiapan closing bulanan",
   "rules": [
@@ -621,7 +621,7 @@
       "enabled": true,
       "query": {
         "type": "existence_check",
-        "sql": "SELECT CAST(GROUP_CONCAT(DISTINCT tanggal) AS CHAR) as tgl_initial FROM initial WHERE tanggal != CURDATE() AND recid!='C'"
+        "sql": "SELECT CAST(GROUP_CONCAT(DISTINCT tanggal) AS CHAR) as tgl_initial FROM initial WHERE tanggal != CURDATE() AND recid!='C' and tanggal rlike '{year}-{month}'"
       },
       "validation": {
         "type": "null_check",

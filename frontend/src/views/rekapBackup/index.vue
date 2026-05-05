@@ -1,138 +1,143 @@
 <template>
-  <div class="rekap-backup-dashboard p-4">
-    <!-- Header Area -->
-    <div class="flex justify-content-between align-items-center mb-4">
-      <div>
-        <h2 class="m-0 text-3xl font-semibold text-color">Rekap Status Backup Data</h2>
-        <p class="text-color-secondary mt-1 mb-0">Harian & Bulanan (Staging Data)</p>
-      </div>
+  <div class="rekap-backup-view">
+    <PageHeader
+      title="Rekap Status Backup Data"
+      subtitle="Harian & Bulanan"
+      description="Pantau status kelengkapan data backup harian dan bulanan per cabang secara cepat."
+    />
+    
+    <div class="content-container">
+      <!-- Filter and Actions Section -->
+      <Card class="shadow-1 border-round-xl mb-3">
+        <template #content>
+          <div class="flex flex-wrap gap-3 align-items-end">
+            <div class="flex flex-column gap-1">
+              <label class="text-sm font-medium">Rentang Tahun (Khusus Export)</label>
+              <div class="flex gap-2">
+                <Dropdown 
+                  v-model="selectedStartYear" 
+                  :options="startYearOptions" 
+                  placeholder="Tahun Awal" 
+                  class="w-8rem"
+                />
+                <Dropdown 
+                  v-if="selectedStartYear !== 'All'"
+                  v-model="selectedEndYear" 
+                  :options="endYearOptions" 
+                  placeholder="Tahun Akhir" 
+                  class="w-8rem"
+                />
+              </div>
+            </div>
 
-      <!-- Actions -->
-      <div class="flex gap-2 align-items-end">
-        <div class="flex flex-column gap-1">
-          <label class="text-sm font-medium">Rentang Tahun (Khusus Export)</label>
-          <div class="flex gap-2">
-            <Dropdown 
-              v-model="selectedStartYear" 
-              :options="startYearOptions" 
-              placeholder="Tahun Awal" 
-              class="w-8rem"
-            />
-            <Dropdown 
-              v-if="selectedStartYear !== 'All'"
-              v-model="selectedEndYear" 
-              :options="endYearOptions" 
-              placeholder="Tahun Akhir" 
-              class="w-8rem"
-            />
+            <div class="flex flex-column gap-1">
+              <label class="text-sm font-medium">Cabang (Khusus Export)</label>
+              <Dropdown 
+                v-model="selectedCabang" 
+                :options="cabangOptions" 
+                placeholder="Pilih Cabang" 
+                class="w-12rem"
+              />
+            </div>
+
+            <div class="flex gap-2 ml-auto">
+              <Button 
+                label="Export Excel" 
+                icon="pi pi-file-excel" 
+                class="p-button-success"
+                @click="exportExcel"
+                :loading="exporting"
+              />
+              
+              <Button 
+                icon="pi pi-sync" 
+                class="p-button-secondary" 
+                v-tooltip.top="'Manual trigger sync WRC untuk toko aktif (gunakan jika perlu)'"
+                @click="showSyncWrcModal = true"
+              />
+            </div>
+          </div>
+        </template>
+      </Card>
+
+      <!-- Main Table Card -->
+      <Card class="shadow-1 border-round-xl">
+        <template #content>
+          <DataTable
+            :value="summaryData"
+            :loading="loading"
+            responsiveLayout="scroll"
+            stripedRows
+            class="p-datatable-sm"
+            emptyMessage="Tidak ada data ringkasan."
+          >
+            <Column field="cabang" header="CABANG" sortable style="min-width: 100px"></Column>
+
+            <!-- Group Harian -->
+            <Column header="HARIAN" alignHeader="center">
+              <template #body="{ data }">
+                <div class="flex align-items-center justify-content-between px-2">
+                  <div class="flex flex-column">
+                    <span class="font-semibold text-primary">{{ data.total_harian || 0 }} files</span>
+                    <span class="text-xs text-color-secondary">{{ data.oldest_harian || '-' }} s/d {{ data.newest_harian || '-' }}</span>
+                  </div>
+                  <Button 
+                    icon="pi pi-search" 
+                    class="p-button-rounded p-button-text p-button-sm ml-2" 
+                    @click="openDialog(data.cabang, 'harian')"
+                    v-tooltip.top="'Lihat History Harian'"
+                  />
+                </div>
+              </template>
+            </Column>
+
+            <!-- Group Bulanan -->
+            <Column header="BULANAN" alignHeader="center">
+              <template #body="{ data }">
+                <div class="flex align-items-center justify-content-between px-2">
+                  <div class="flex flex-column">
+                    <span class="font-semibold text-primary">{{ data.total_bln || 0 }} files (IDT)</span>
+                    <span class="text-xs text-color-secondary">{{ data.oldest_bln || '-' }} s/d {{ data.newest_bln || '-' }}</span>
+                  </div>
+                  <Button 
+                    icon="pi pi-search" 
+                    class="p-button-rounded p-button-text p-button-sm ml-2" 
+                    @click="openDialog(data.cabang, 'bulanan')"
+                    v-tooltip.top="'Lihat History Bulanan'"
+                  />
+                </div>
+              </template>
+            </Column>
+          </DataTable>
+        </template>
+      </Card>
+
+      <!-- Detailed Dialog -->
+      <DetailDialog
+        v-model:visible="dialogVisible"
+        :cabang="dialogCabang"
+        :type="dialogType"
+      />
+
+      <!-- Sync WRC Modal -->
+      <Dialog v-model:visible="showSyncWrcModal" header="Manual Sync Toko Aktif WRC" :style="{ width: '400px' }" modal>
+        <div class="flex flex-column gap-3 py-3">
+          <p class="m-0 text-color-secondary">Gunakan fitur ini hanya jika Anda yakin jumlah toko aktif untuk cabang/periode tertentu belum diperbarui.</p>
+          <div class="flex flex-column gap-1">
+            <label>Cabang</label>
+            <InputText v-model="syncForm.cabang" placeholder="Contoh: G001" />
+          </div>
+          <div class="flex flex-column gap-1">
+            <label>Periode</label>
+            <InputText v-model="syncForm.periode" placeholder="YYYYMM (Contoh: 202401)" />
           </div>
         </div>
-
-        <div class="flex flex-column gap-1 ml-2">
-          <label class="text-sm font-medium">Cabang (Khusus Export)</label>
-          <Dropdown 
-            v-model="selectedCabang" 
-            :options="cabangOptions" 
-            placeholder="Pilih Cabang" 
-            class="w-12rem"
-          />
-        </div>
-
-        <Button 
-          label="Export Excel" 
-          icon="pi pi-file-excel" 
-          class="p-button-success p-button-outlined ml-2" 
-          @click="exportExcel"
-          :loading="exporting"
-        />
-        
-        <Button 
-          icon="pi pi-sync" 
-          class="p-button-secondary ml-2" 
-          v-tooltip.top="'Manual trigger sync WRC untuk toko aktif (gunakan jika perlu)'"
-          @click="showSyncWrcModal = true"
-        />
-      </div>
+        <template #footer>
+          <Button label="Batal" icon="pi pi-times" class="p-button-text" @click="showSyncWrcModal = false" />
+          <Button label="Sync Sekarang" icon="pi pi-check" :loading="syncing" @click="doSyncWrc" autofocus />
+        </template>
+      </Dialog>
     </div>
-
-    <!-- Main Table Card -->
-    <Card class="shadow-1 border-round-xl">
-      <template #content>
-        <DataTable
-          :value="summaryData"
-          :loading="loading"
-          responsiveLayout="scroll"
-          stripedRows
-          class="p-datatable-sm"
-          emptyMessage="Tidak ada data ringkasan."
-        >
-          <!-- Gained spacing/padding for header text -->
-          <Column field="cabang" header="CABANG" sortable style="min-width: 100px"></Column>
-
-          <!-- Group Harian -->
-          <Column header="HARIAN" alignHeader="center">
-            <template #body="{ data }">
-              <div class="flex align-items-center justify-content-between px-2">
-                <div class="flex flex-column">
-                  <span class="font-semibold text-primary">{{ data.total_harian || 0 }} files</span>
-                  <span class="text-xs text-color-secondary">{{ data.oldest_harian || '-' }} s/d {{ data.newest_harian || '-' }}</span>
-                </div>
-                <Button 
-                  icon="pi pi-search" 
-                  class="p-button-rounded p-button-text p-button-sm ml-2" 
-                  @click="openDialog(data.cabang, 'harian')"
-                  v-tooltip.top="'Lihat History Harian'"
-                />
-              </div>
-            </template>
-          </Column>
-
-          <!-- Group Bulanan -->
-          <Column header="BULANAN" alignHeader="center">
-            <template #body="{ data }">
-              <div class="flex align-items-center justify-content-between px-2">
-                <div class="flex flex-column">
-                  <span class="font-semibold text-primary">{{ data.total_bln || 0 }} files (IDT)</span>
-                  <span class="text-xs text-color-secondary">{{ data.oldest_bln || '-' }} s/d {{ data.newest_bln || '-' }}</span>
-                </div>
-                <Button 
-                  icon="pi pi-search" 
-                  class="p-button-rounded p-button-text p-button-sm ml-2" 
-                  @click="openDialog(data.cabang, 'bulanan')"
-                  v-tooltip.top="'Lihat History Bulanan'"
-                />
-              </div>
-            </template>
-          </Column>
-        </DataTable>
-      </template>
-    </Card>
-
-    <!-- Detailed Dialog -->
-    <DetailDialog
-      v-model:visible="dialogVisible"
-      :cabang="dialogCabang"
-      :type="dialogType"
-    />
-
-    <!-- Sync WRC Modal -->
-    <Dialog v-model:visible="showSyncWrcModal" header="Manual Sync Toko Aktif WRC" :style="{ width: '400px' }" modal>
-      <div class="flex flex-column gap-3 py-3">
-        <p class="m-0 text-color-secondary">Gunakan fitur ini hanya jika Anda yakin jumlah toko aktif untuk cabang/periode tertentu belum diperbarui.</p>
-        <div class="flex flex-column gap-1">
-          <label>Cabang</label>
-          <InputText v-model="syncForm.cabang" placeholder="Contoh: G001" />
-        </div>
-        <div class="flex flex-column gap-1">
-          <label>Periode</label>
-          <InputText v-model="syncForm.periode" placeholder="YYYYMM (Contoh: 202401)" />
-        </div>
-      </div>
-      <template #footer>
-        <Button label="Batal" icon="pi pi-times" class="p-button-text" @click="showSyncWrcModal = false" />
-        <Button label="Sync Sekarang" icon="pi pi-check" :loading="syncing" @click="doSyncWrc" autofocus />
-      </template>
-    </Dialog>
   </div>
 </template>
 
@@ -140,6 +145,7 @@
 import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
 import { useToast } from 'primevue/usetoast';
+import PageHeader from '@/components/PageHeader.vue';
 import DetailDialog from './components/DetailDialog.vue';
 
 const toast = useToast();
@@ -278,8 +284,18 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.rekap-backup-dashboard {
-  background-color: var(--surface-ground);
-  min-height: calc(100vh - 70px);
+.rekap-backup-view {
+  padding: 1.5rem;
+}
+
+.content-container {
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 768px) {
+  .rekap-backup-view {
+    padding: 1rem;
+  }
 }
 </style>

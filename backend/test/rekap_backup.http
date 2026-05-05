@@ -1,0 +1,86 @@
+@baseUrl = http://localhost:3000/api
+@rekapBackupUrl = {{baseUrl}}/rekap-backup
+
+### 0. Login & Ambil Token (Jalankan ini Pertama Kali)
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin123"
+}
+
+### Set Variable Token (otomatis diambil dari response login di atas)
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc3Nzg2NTc5MSwiZXhwIjoxNzc3OTUyMTkxfQ.JoN-Tf7aszbfr2AmBs_XVTH-3MvJQU0jG1M2U7gWgFM
+
+
+### =========================================================
+### REKAP BACKUP ENDPOINTS (Wajib jalankan login terlebih dulu)
+### =========================================================
+
+### 1. Trigger Full Sync JSON dari Database (Admin)
+# Endpoint ini akan menyalin data dari database MySQL ke file JSON lokal (Staging)
+POST {{rekapBackupUrl}}/staging/sync
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+###
+
+### 2. Manual Sync Toko Aktif (WRC) per Cabang & Periode
+# Digunakan untuk menghitung ulang toko aktif dari WRC dan me-replace data JSON
+POST {{rekapBackupUrl}}/sync-wrc
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "cabang": "G033",
+  "periode": "202401"
+}
+
+###
+
+### 3. Get Summary Data
+# Mengambil rangkuman data harian dan bulanan per cabang
+GET {{rekapBackupUrl}}/summary
+Authorization: Bearer {{token}}
+
+###
+
+### 4. Get Available Years
+# Mengambil rentang tahun (oldest dan newest) dari data staging
+GET {{rekapBackupUrl}}/years
+Authorization: Bearer {{token}}
+
+###
+
+### 5. Get Resume Harian per Cabang
+GET {{rekapBackupUrl}}/harian/resume/G001
+Authorization: Bearer {{token}}
+
+###
+
+### 6. Get Resume Bulanan per Cabang
+GET {{rekapBackupUrl}}/bulanan/resume/G001
+Authorization: Bearer {{token}}
+
+###
+
+### 7. Get Detail Logs Harian
+# (Parameter: cabang / periode / kriteria)
+GET {{rekapBackupUrl}}/harian/detail/G001/202401/OK
+Authorization: Bearer {{token}}
+
+###
+
+### 8. Get Detail Logs Bulanan
+# (Parameter: cabang / periode / kriteria)
+GET {{rekapBackupUrl}}/bulanan/detail/G001/202401/OK
+Authorization: Bearer {{token}}
+
+###
+
+### 9. Export Excel Data
+# Mengunduh file Excel (Uji coba di browser disarankan untuk format blob)
+GET {{rekapBackupUrl}}/export?cabang=G001&startYear=2024&endYear=2024
+Authorization: Bearer {{token}}

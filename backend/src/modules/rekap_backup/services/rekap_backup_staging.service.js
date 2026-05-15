@@ -46,19 +46,19 @@ class RekapBackupStagingService {
     this.isInitialized = false;
   }
 
-  getFilePath(type, periode) {
-    return path.join(this.dataDir, `rekap_backup_${type}_${periode}.json`);
+  getFilePath(type, identifier) {
+    return path.join(this.dataDir, `rekap_backup_${type}_${identifier}.json`);
   }
 
-  async getAvailablePeriodes(type) {
+  async getAvailableBranches(type) {
     try {
       const files = await fs.readdir(this.dataDir).catch(() => []);
       return files
-        .filter(f => f.startsWith(`rekap_backup_${type}_`) && f.endsWith(".json") && !f.includes("backup"))
+        .filter(f => f.startsWith(`rekap_backup_${type}_`) && f.endsWith(".json") && !f.includes("summary") && !f.includes("backup"))
         .map(f => f.replace(`rekap_backup_${type}_`, "").replace(".json", ""))
-        .sort((a, b) => b.localeCompare(a));
+        .sort((a, b) => a.localeCompare(b));
     } catch (error) {
-      logger.error(`Error listing available periodes rekap_backup ${type}: ${error.message}`);
+      logger.error(`Error listing available branches rekap_backup ${type}: ${error.message}`);
       return [];
     }
   }
@@ -74,37 +74,37 @@ class RekapBackupStagingService {
     }
   }
 
-  async loadFromJson(type, periode) {
-    if (!periode) return;
-    const filePath = this.getFilePath(type, periode);
+  async loadFromJson(type, cabang) {
+    if (!cabang) return;
+    const filePath = this.getFilePath(type, cabang);
     const cache = type === 'harian' ? this.memoryCacheHarian : this.memoryCacheBulanan;
     
     try {
       const fileExists = await fs.access(filePath).then(() => true).catch(() => false);
       if (!fileExists) {
-        cache.set(periode, { data: [], timestamp: Date.now() });
+        cache.set(cabang, { data: [], timestamp: Date.now() });
         return;
       }
       const fileContent = await fs.readFile(filePath, "utf-8");
       const data = JSON.parse(fileContent);
-      cache.set(periode, {
+      cache.set(cabang, {
         data: Array.isArray(data) ? data : [],
         timestamp: Date.now(),
       });
     } catch (error) {
-      logger.error(`Error loading rekap_backup_${type} data for ${periode}: ${error.message}`);
-      cache.set(periode, { data: [], timestamp: Date.now() });
+      logger.error(`Error loading rekap_backup_${type} data for ${cabang}: ${error.message}`);
+      cache.set(cabang, { data: [], timestamp: Date.now() });
     }
   }
 
-  async getData(type, periode) {
-    if (!periode) return [];
+  async getData(type, cabang) {
+    if (!cabang) return [];
     const cache = type === 'harian' ? this.memoryCacheHarian : this.memoryCacheBulanan;
-    const cached = cache.get(periode);
+    const cached = cache.get(cabang);
     
     if (!cached || Date.now() - cached.timestamp > this.cacheTTL) {
-      await this.loadFromJson(type, periode);
-      return (cache.get(periode) || { data: [] }).data;
+      await this.loadFromJson(type, cabang);
+      return (cache.get(cabang) || { data: [] }).data;
     }
     return cached.data;
   }
@@ -137,8 +137,8 @@ class RekapBackupStagingService {
   }
 
   async getAllData(type) {
-    const periodes = await this.getAvailablePeriodes(type);
-    const results = await Promise.all(periodes.map(p => this.getData(type, p)));
+    const branches = await this.getAvailableBranches(type);
+    const results = await Promise.all(branches.map(b => this.getData(type, b)));
     return results.flat();
   }
 
@@ -191,14 +191,14 @@ class RekapBackupStagingService {
     }
   }
 
-  async syncToJson(type, periode) {
-    if (!periode) return { success: false, message: "Periode is required" };
+  async syncToJson(type, cabang) {
+    if (!cabang) return { success: false, message: "Cabang is required" };
     
     const sequelize = await resilientDb.getDatabase();
     if (!sequelize) throw new Error("Database not connected");
 
     let release;
-    const jsonFilePath = this.getFilePath(type, periode);
+    const jsonFilePath = this.getFilePath(type, cabang);
     const backupPath = `${jsonFilePath}.backup.json`;
     const tableName = type === 'harian' ? 'db_edp.rekap_backup_harian' : 'db_edp.rekap_backup_bulanan';
     
@@ -220,8 +220,8 @@ class RekapBackupStagingService {
         });
       }
 
-      // Query from Database for specific periode
-      const queryStr = `SELECT * FROM ${tableName} WHERE LEFT(cabang,1)='G' AND REPLACE(periode, '-', '') LIKE '${periode}%'`;
+      // Query from Database for specific cabang (all periods)
+      const queryStr = `SELECT * FROM ${tableName} WHERE cabang = '${cabang}' ORDER BY periode DESC`;
       const [records] = await sequelize.query(queryStr);
 
       // Normalisasi field Date ke format YYYY-MM-DD HH:mm:ss
@@ -231,21 +231,24 @@ class RekapBackupStagingService {
       // Otomatisasi sinkronisasi jml_toko_aktif jika NULL
       for (const record of normalized) {
         if (record.jml_toko_aktif === null) {
-          logger.info(`Auto-syncing jml_toko_aktif for ${record.cabang} - ${periode} because value is NULL`);
-          const count = await this._syncTokoAktifInternal(record.cabang, periode);
-          record.jml_toko_aktif = count;
+          const prd = record.periode ? record.periode.replace(/-/g, '').substring(0, 6) : null;
+          if (prd) {
+            logger.info(`Auto-syncing jml_toko_aktif for ${record.cabang} - ${prd} because value is NULL`);
+            const count = await this._syncTokoAktifInternal(record.cabang, prd);
+            record.jml_toko_aktif = count;
+          }
         }
       }
 
       // Tulis JSON dengan pretty-print (indent 2 spasi) agar mudah dibaca manual
       await fs.writeFile(jsonFilePath, JSON.stringify(normalized, null, 2), "utf-8");
 
-      await this.loadFromJson(type, periode);
+      await this.loadFromJson(type, cabang);
       if (release) await release();
       await fs.unlink(backupPath).catch(() => {});
 
       logger.info(`Synced ${records.length} records to ${path.basename(jsonFilePath)}`);
-      return { success: true, recordCount: records.length, periode };
+      return { success: true, recordCount: records.length, cabang };
     } catch (error) {
       try {
         const bakExists = await fs.access(backupPath).then(() => true).catch(() => false);
@@ -257,7 +260,7 @@ class RekapBackupStagingService {
       if (release) {
         try { await release(); } catch {}
       }
-      logger.error(`Error syncing rekap_backup_${type} for ${periode}: ${error.message}`);
+      logger.error(`Error syncing rekap_backup_${type} for ${cabang}: ${error.message}`);
       throw error;
     }
   }
@@ -357,23 +360,27 @@ class RekapBackupStagingService {
     try {
       const result = { harian: 0, bulanan: 0 };
       
-      for (const type of ['harian', 'bulanan']) {
-        const tableName = type === 'harian' ? 'db_edp.rekap_backup_harian' : 'db_edp.rekap_backup_bulanan';
-        const [periodes] = await sequelize.query(`SELECT DISTINCT REPLACE(LEFT(periode, 7), '-', '') AS prd FROM ${tableName} WHERE periode != '' AND periode IS NOT NULL`);
-        
-        for (const row of periodes) {
-          const prd = row.prd;
-          if (prd && prd.length >= 6) {
-            await this.syncToJson(type, prd);
-            result[type]++;
-          }
+      // Get all unique cabangs
+      const [cabangs] = await sequelize.query(`
+        SELECT DISTINCT cabang FROM db_edp.rekap_backup_harian WHERE LEFT(cabang,1)='G'
+        UNION
+        SELECT DISTINCT cabang FROM db_edp.rekap_backup_bulanan WHERE LEFT(cabang,1)='G'
+      `);
+      
+      for (const row of cabangs) {
+        const cab = row.cabang;
+        if (cab) {
+          await this.syncToJson('harian', cab);
+          await this.syncToJson('bulanan', cab);
+          result.harian++;
+          result.bulanan++;
         }
       }
       
-      // Generate summary all JSON setelah semua periode selesai di-sync
+      // Generate summary all JSON setelah semua cabang selesai di-sync
       await this.syncSummaryJson();
 
-      return { success: true, monthsProcessed: result };
+      return { success: true, branchesProcessed: result };
     } catch (error) {
       logger.error(`Error in syncAllFromDatabase rekap_backup: ${error.message}`);
       throw error;

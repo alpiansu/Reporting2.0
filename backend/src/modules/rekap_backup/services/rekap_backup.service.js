@@ -17,10 +17,7 @@ class RekapBackupService {
 
   async getResumeHarian(cabang) {
     try {
-      const allData = await stagingService.getAllData('harian');
-      const filtered = allData.filter(r => r.cabang === cabang);
-      filtered.sort((a, b) => b.periode.localeCompare(a.periode)); // DESC
-      return filtered;
+      return await stagingService.getData('harian', cabang);
     } catch (error) {
       logger.error(`Error in getResumeHarian: ${error.message}`);
       throw error;
@@ -29,10 +26,11 @@ class RekapBackupService {
 
   async getResumeBulanan(cabang) {
     try {
-      const allData = await stagingService.getAllData('bulanan');
-      const filtered = allData.filter(r => r.cabang === cabang && r.jenis_file === 'IDT');
-      filtered.sort((a, b) => b.periode.localeCompare(a.periode)); // DESC
-      return filtered;
+      const data = await stagingService.getData('bulanan', cabang);
+      // Filter jenis_file === 'IDT' as before if needed, 
+      // although the query might return others depending on implementation.
+      // The old code did: filtered = allData.filter(r => r.cabang === cabang && r.jenis_file === 'IDT');
+      return data.filter(r => r.jenis_file === 'IDT');
     } catch (error) {
       logger.error(`Error in getResumeBulanan: ${error.message}`);
       throw error;
@@ -112,11 +110,16 @@ class RekapBackupService {
 
   async generateExcel(cabang, startYear, endYear) {
     try {
-      const allHarian = await stagingService.getAllData('harian');
-      const allBulanan = await stagingService.getAllData('bulanan');
+      let harianData;
+      let bulananData;
 
-      let harianData = allHarian;
-      let bulananData = allBulanan;
+      if (cabang && cabang !== 'All' && cabang !== '') {
+        harianData = await stagingService.getData('harian', cabang);
+        bulananData = await stagingService.getData('bulanan', cabang);
+      } else {
+        harianData = await stagingService.getAllData('harian');
+        bulananData = await stagingService.getAllData('bulanan');
+      }
 
       if (startYear && startYear !== 'All') {
         const end = endYear || startYear;
@@ -125,8 +128,7 @@ class RekapBackupService {
       }
 
       if (cabang && cabang !== 'All' && cabang !== '') {
-        harianData = harianData.filter(r => r.cabang === cabang);
-        bulananData = bulananData.filter(r => r.cabang === cabang);
+        // Data already filtered by branch above if branch is specified
       }
 
       const workbook = new ExcelJS.Workbook();

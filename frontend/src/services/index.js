@@ -11,6 +11,7 @@ import progressService from "./progress.service";
 import notesService from "./notes.service";
 import penyesuaianService from "./penyesuaian.service";
 import userService from "./user.service";
+import rekapBackupService from "./rekapBackup.service";
 
 export {
   authService,
@@ -26,4 +27,5 @@ export {
   notesService,
   penyesuaianService,
   userService,
+  rekapBackupService,
 };

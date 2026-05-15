@@ -38,9 +38,13 @@ class RekapBackupController {
   async getDetailHarian(req, res) {
     try {
       const { cabang, periode } = req.params;
-      const page  = parseInt(req.query.page  ?? 1,  10);
-      const limit = parseInt(req.query.limit ?? 25, 10);
-      const data = await rekapBackupService.getDetailHarian(cabang, periode, page, limit);
+      const page      = parseInt(req.query.page  ?? 1,  10);
+      const limit     = parseInt(req.query.limit ?? 25, 10);
+      const search    = req.query.search || '';
+      const sortField = req.query.sortField || '';
+      const sortOrder = parseInt(req.query.sortOrder ?? 1, 10);
+      
+      const data = await rekapBackupService.getDetailHarian(cabang, periode, page, limit, search, sortField, sortOrder);
       res.status(200).json(data);
     } catch (error) {
       logger.error(`Error getDetailHarian: ${error.message}`);
@@ -51,9 +55,13 @@ class RekapBackupController {
   async getDetailBulanan(req, res) {
     try {
       const { cabang, periode } = req.params;
-      const page  = parseInt(req.query.page  ?? 1,  10);
-      const limit = parseInt(req.query.limit ?? 25, 10);
-      const data = await rekapBackupService.getDetailBulanan(cabang, periode, page, limit);
+      const page      = parseInt(req.query.page  ?? 1,  10);
+      const limit     = parseInt(req.query.limit ?? 25, 10);
+      const search    = req.query.search || '';
+      const sortField = req.query.sortField || '';
+      const sortOrder = parseInt(req.query.sortOrder ?? 1, 10);
+      
+      const data = await rekapBackupService.getDetailBulanan(cabang, periode, page, limit, search, sortField, sortOrder);
       res.status(200).json(data);
     } catch (error) {
       logger.error(`Error getDetailBulanan: ${error.message}`);

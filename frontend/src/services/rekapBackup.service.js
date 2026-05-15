@@ -11,9 +11,9 @@ class RekapBackupService {
     return response.data;
   }
 
-  async getDetail(type, cabang, periode, { page = 1, limit = 25 } = {}) {
+  async getDetail(type, cabang, periode, { page = 1, limit = 25, search = '', sortField = '', sortOrder = 1 } = {}) {
     const response = await api.get(`/rekap-backup/${type}/detail/${cabang}/${periode}`, {
-      params: { page, limit },
+      params: { page, limit, search, sortField, sortOrder },
     });
     return response.data;
   }

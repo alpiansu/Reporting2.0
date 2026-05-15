@@ -37,7 +37,7 @@ class RekapBackupService {
     }
   }
 
-  async getDetailHarian(cabang, periode, page = 1, limit = 25) {
+  async getDetailHarian(cabang, periode, page = 1, limit = 25, search = '', sortField = '', sortOrder = 1) {
     let sequelize = await resilientDb.getDatabase();
     if(!sequelize){
       sequelize = await resilientDb.forceReconnect();
@@ -50,8 +50,23 @@ class RekapBackupService {
     const offset = (page - 1) * limit;
 
     try {
-      const whereClause = `WHERE TANGGAL LIKE :prd AND CABANG = :cab`;
+      let whereClause = `WHERE TANGGAL LIKE :prd AND CABANG = :cab`;
       const replacements = { prd: `${periode}%`, cab: cabang };
+
+      if (search) {
+        whereClause += ` AND (kdtk LIKE :search OR ip LIKE :search OR path LIKE :search OR note LIKE :search OR stat LIKE :search)`;
+        replacements.search = `%${search}%`;
+      }
+
+      // Validasi sort field untuk mencegah SQL injection
+      const allowedSortFields = ['kdtk', 'tanggal', 'periode', 'stat', 'jml_isi', 'ip', 'path', 'updtime', 'note'];
+      let orderClause = `ORDER BY tanggal ASC, kdtk ASC`;
+      if (sortField && allowedSortFields.includes(sortField.toLowerCase())) {
+        const order = Number(sortOrder) === -1 ? 'DESC' : 'ASC';
+        let dbSortField = sortField;
+        if (sortField === 'periode') dbSortField = 'tanggal';
+        orderClause = `ORDER BY ${dbSortField} ${order}, kdtk ASC`;
+      }
 
       // Total count
       const [[countRow]] = await sequelize.query(
@@ -65,7 +80,7 @@ class RekapBackupService {
         `SELECT cabang, kdtk, tanggal AS periode, stat, path, jml_isi, ip, note, updtime
          FROM ${actualTable}
          ${whereClause}
-         ORDER BY tanggal ASC, kdtk ASC
+         ${orderClause}
          LIMIT :limit OFFSET :offset`,
         { replacements: { ...replacements, limit, offset } }
       );
@@ -83,7 +98,7 @@ class RekapBackupService {
     }
   }
 
-  async getDetailBulanan(cabang, periode, page = 1, limit = 25) {
+  async getDetailBulanan(cabang, periode, page = 1, limit = 25, search = '', sortField = '', sortOrder = 1) {
     let sequelize = await resilientDb.getDatabase();
     if(!sequelize){
       sequelize = await resilientDb.forceReconnect();
@@ -96,8 +111,21 @@ class RekapBackupService {
     const offset = (page - 1) * limit;
 
     try {
-      const whereClause = `WHERE periode LIKE :prd AND CABANG = :cab`;
+      let whereClause = `WHERE periode LIKE :prd AND CABANG = :cab`;
       const replacements = { prd: `${periode}%`, cab: cabang };
+
+      if (search) {
+        whereClause += ` AND (kdtk LIKE :search OR ip LIKE :search OR path LIKE :search OR note LIKE :search OR stat LIKE :search)`;
+        replacements.search = `%${search}%`;
+      }
+
+      // Validasi sort field untuk mencegah SQL injection
+      const allowedSortFields = ['kdtk', 'periode', 'stat', 'jml_isi', 'ip', 'path', 'updtime', 'note'];
+      let orderClause = `ORDER BY periode ASC, kdtk ASC`;
+      if (sortField && allowedSortFields.includes(sortField.toLowerCase())) {
+        const order = Number(sortOrder) === -1 ? 'DESC' : 'ASC';
+        orderClause = `ORDER BY ${sortField} ${order}, kdtk ASC`;
+      }
 
       // Total count
       const [[countRow]] = await sequelize.query(
@@ -111,7 +139,7 @@ class RekapBackupService {
         `SELECT cabang, kdtk, periode, stat, path, jml_isi, ip, note, updtime
          FROM ${actualTable}
          ${whereClause}
-         ORDER BY periode ASC, kdtk ASC
+         ${orderClause}
          LIMIT :limit OFFSET :offset`,
         { replacements: { ...replacements, limit, offset } }
       );

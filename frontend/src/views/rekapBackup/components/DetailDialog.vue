@@ -30,20 +30,34 @@
 
         <!-- ============ RESUME VIEW ============ -->
         <div v-if="viewMode === 'resume'" key="resume">
-          <div class="info-bar">
-            <p>Menampilkan seluruh history data <strong>{{ type }}</strong> untuk cabang <strong>{{ getCabangName(cabang) }}</strong>. Klik chevron untuk melihat log detail per periode.</p>
-            <Button
-              icon="pi pi-refresh"
-              label="Refresh"
-              class="p-button-text p-button-sm"
-              style="white-space: nowrap; font-weight: 600; height: 34px; flex-shrink: 0;"
-              :loading="loading"
-              @click="loadResume"
-            />
+          <div class="detail-nav" style="margin-bottom: 1rem; background: #f8fafc; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid #e2e8f0;">
+            <div class="detail-nav__left" style="flex: 1;">
+              <p style="margin: 0; font-size: 0.825rem; color: #475569; line-height: 1.5;">
+                Menampilkan history data <strong>{{ type }}</strong> untuk <strong>{{ getCabangName(cabang) }}</strong>.<br>Klik chevron untuk melihat log detail.
+              </p>
+            </div>
+            <div class="flex align-items-center gap-2">
+              <div class="search-wrapper">
+                <i class="pi pi-search search-icon"></i>
+                <InputText
+                  v-model="resumeSearch"
+                  placeholder="Cari periode atau catatan..."
+                  class="search-input"
+                />
+              </div>
+              <Button
+                icon="pi pi-refresh"
+                class="p-button-outlined p-button-secondary"
+                style="height: 36px; width: 36px; padding: 0; border-radius: 8px;"
+                v-tooltip.top="'Refresh Data'"
+                :loading="loading"
+                @click="loadResume"
+              />
+            </div>
           </div>
 
           <DataTable
-            :value="resumeData"
+            :value="filteredResumeData"
             :loading="loading"
             responsiveLayout="scroll"
             stripedRows
@@ -224,6 +238,7 @@
             :totalRecords="detailTotal"
             :first="(detailPage - 1) * detailLimit"
             @page="onDetailPage"
+            @sort="onDetailSort"
           >
             <!-- KDTK -->
             <Column field="kdtk" header="KDTK" sortable style="width: 100px;">
@@ -389,6 +404,18 @@ const getStatusSeverity = (stat) => {
 const viewMode  = ref('resume');
 const loading   = ref(false);
 const resumeData = ref([]);
+const resumeSearch = ref('');
+
+const filteredResumeData = computed(() => {
+  if (!resumeSearch.value) return resumeData.value;
+  const q = resumeSearch.value.toLowerCase();
+  return resumeData.value.filter(d => 
+    d.periode?.toLowerCase().includes(q) || 
+    d.note?.toLowerCase().includes(q) ||
+    d.path?.toLowerCase().includes(q) ||
+    d.ip?.toLowerCase().includes(q)
+  );
+});
 
 const loadResume = async () => {
   if (!props.cabang) return;
@@ -460,26 +487,27 @@ const deepDetailData = ref([]);
 const selectedPeriode = ref('');
 const deepSearch     = ref('');
 
-// Pagination state (server-side)
+// Pagination & Sort state (server-side)
 const detailPage  = ref(1);
 const detailLimit = ref(10);
 const detailTotal = ref(0);
+const detailSortField = ref('');
+const detailSortOrder = ref(1);
 
 const detailRangeStart = computed(() => detailTotal.value === 0 ? 0 : (detailPage.value - 1) * detailLimit.value + 1);
 const detailRangeEnd   = computed(() => Math.min(detailPage.value * detailLimit.value, detailTotal.value));
 
 const noteKey = (row) => `${row.kdtk}_${row.periode}`;
 
-// Search filter hanya di data halaman yang sudah dimuat (client-side search pada halaman aktif)
-const filteredDeepDetail = computed(() => {
-  if (!deepSearch.value) return deepDetailData.value;
-  const q = deepSearch.value.toLowerCase();
-  return deepDetailData.value.filter(d =>
-    d.kdtk?.toLowerCase().includes(q) ||
-    d.ip?.toLowerCase().includes(q) ||
-    d.path?.toLowerCase().includes(q) ||
-    d.note?.toLowerCase().includes(q)
-  );
+// Debounce for server-side searching
+let searchTimeout = null;
+watch(deepSearch, (newVal) => {
+  if (viewMode.value !== 'detail') return;
+  if (searchTimeout) clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    detailPage.value = 1;
+    loadDetail(1, detailLimit.value);
+  }, 500);
 });
 
 const loadDetail = async (page, limit) => {
@@ -487,7 +515,13 @@ const loadDetail = async (page, limit) => {
   try {
     const res = await rekapBackupService.getDetail(
       props.type, props.cabang, selectedPeriode.value,
-      { page, limit }
+      { 
+        page, 
+        limit, 
+        search: deepSearch.value,
+        sortField: detailSortField.value,
+        sortOrder: detailSortOrder.value
+      }
     );
     deepDetailData.value = Array.isArray(res.data) ? res.data : [];
     detailTotal.value    = res.total    ?? 0;
@@ -510,6 +544,14 @@ const onDetailPage = (event) => {
   detailLimit.value = newLimit;
   cancelEdit();
   loadDetail(newPage, newLimit);
+};
+
+const onDetailSort = (event) => {
+  detailSortField.value = event.sortField;
+  detailSortOrder.value = event.sortOrder;
+  detailPage.value = 1;
+  cancelEdit();
+  loadDetail(1, detailLimit.value);
 };
 
 const openDeepDetail = async (periode) => {
@@ -577,10 +619,13 @@ watch(() => props.visible, (val) => {
     setTimeout(() => {
       viewMode.value       = 'resume';
       resumeData.value     = [];
+      resumeSearch.value   = '';
       deepDetailData.value = [];
       deepSearch.value     = '';
       detailPage.value     = 1;
       detailTotal.value    = 0;
+      detailSortField.value = '';
+      detailSortOrder.value = 1;
       cancelEdit();
       cancelResumeEdit();
     }, 300);

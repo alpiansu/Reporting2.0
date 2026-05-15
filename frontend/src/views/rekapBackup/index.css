@@ -1,0 +1,16 @@
+.rekap-backup-view {
+  padding: 1.5rem;
+}
+
+.content-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 768px) {
+  .rekap-backup-view {
+    padding: 1rem;
+  }
+}

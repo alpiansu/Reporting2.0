@@ -1,12 +1,9 @@
 import ExcelJS from "exceljs";
 import logger from "../../../config/logger.js";
 import stagingService from "./rekap_backup_staging.service.js";
-import WrcService from "../../../services/wrc.service.js";
-import mysql from "mysql2/promise";
 import config from "../../../config/index.js";
 
 const { resilientDb } = config;
-const wrcService = new WrcService();
 
 class RekapBackupService {
   async getSummary() {
@@ -225,40 +222,7 @@ class RekapBackupService {
     
     logger.info(`Starting syncTokoAktifWrc for ${cabang} - ${periode}`);
     try {
-      const wrcConfig = await wrcService.getConnWRC(cabang);
-      const pool = mysql.createPool({
-        host: wrcConfig.host,
-        user: wrcConfig.user,
-        password: wrcConfig.password,
-        database: wrcConfig.database,
-      });
-
-      // Format date for WRC query. If periode is "202401", format to "2024-01-01"
-      let formattedPeriode = periode;
-      if (periode.length === 6) {
-        formattedPeriode = `${periode.substring(0,4)}-${periode.substring(4,6)}-01`;
-      }
-
-      const strCountStore = `
-        SELECT count(*) as stores FROM poscabang.mstr_toko_all 
-        WHERE (tok_tgl_tutup = '0000-00-00' OR (MONTH(tok_tgl_tutup) >= MONTH(date('${formattedPeriode}')) AND YEAR(tok_tgl_tutup) >= YEAR(date('${formattedPeriode}')))) 
-        AND DATE(tgl_buka) <= LAST_DAY(date('${formattedPeriode}'))
-      `;
-
-      const [rows] = await pool.query(strCountStore);
-      const countStores = rows[0]?.stores || 0;
-      await pool.end();
-
-      // Update local db
-      const sequelize = await resilientDb.getDatabase();
-      if (!sequelize) throw new Error("Database not connected");
-
-      await sequelize.query(`UPDATE rekap_backup_harian SET jml_toko_aktif = :count WHERE cabang = :cab AND periode = :prd`, {
-        replacements: { count: countStores, cab: cabang, prd: periode }
-      });
-      await sequelize.query(`UPDATE rekap_backup_bulanan SET jml_toko_aktif = :count WHERE cabang = :cab AND periode = :prd`, {
-        replacements: { count: countStores, cab: cabang, prd: periode }
-      });
+      const countStores = await stagingService._syncTokoAktifInternal(cabang, periode);
 
       // trigger json sync
       await stagingService.syncToJson('harian', periode);

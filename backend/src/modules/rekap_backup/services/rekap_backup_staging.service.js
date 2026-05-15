@@ -4,7 +4,11 @@ import path from "path";
 import logger from "../../../config/logger.js";
 import lockfile from "proper-lockfile";
 import config from "../../../config/index.js";
+import mysql from "mysql2/promise";
+import WrcService from "../../../services/wrc.service.js";
+
 const { resilientDb } = config;
+const wrcService = new WrcService();
 
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc.js";
@@ -138,6 +142,55 @@ class RekapBackupStagingService {
     return results.flat();
   }
 
+  async _syncTokoAktifInternal(cabang, periode) {
+    if (!cabang || !periode) return 0;
+    
+    try {
+      const wrcConfig = await wrcService.getConnWRC(cabang);
+      const pool = mysql.createPool({
+        host: wrcConfig.host,
+        user: wrcConfig.user,
+        password: wrcConfig.password,
+        database: wrcConfig.database,
+      });
+
+      let formattedPeriode = periode;
+      if (periode.length === 6) {
+        formattedPeriode = `${periode.substring(0,4)}-${periode.substring(4,6)}-01`;
+      }
+
+      const strCountStore = `
+        SELECT count(*) as stores FROM poscabang.mstr_toko_all
+        WHERE
+            DATE(tgl_buka) <= LAST_DAY(DATE('${formattedPeriode}'))
+        AND
+        (
+            tok_tgl_tutup='0000-00-00'
+            OR DATE(tok_tgl_tutup) >= DATE('${formattedPeriode}')
+        )
+      `;
+
+      const [rows] = await pool.query(strCountStore);
+      const countStores = rows[0]?.stores || 0;
+      await pool.end();
+
+      const sequelize = await resilientDb.getDatabase();
+      if (sequelize) {
+        await sequelize.query(`UPDATE db_edp.rekap_backup_harian SET jml_toko_aktif = :count WHERE cabang = :cab AND periode = :prd`, {
+          replacements: { count: countStores, cab: cabang, prd: periode }
+        });
+        await sequelize.query(`UPDATE db_edp.rekap_backup_bulanan SET jml_toko_aktif = :count WHERE cabang = :cab AND periode = :prd`, {
+          replacements: { count: countStores, cab: cabang, prd: periode }
+        });
+      }
+
+      return countStores;
+    } catch (error) {
+      logger.error(`Error in _syncTokoAktifInternal for ${cabang} - ${periode}: ${error.message}`);
+      return 0;
+    }
+  }
+
   async syncToJson(type, periode) {
     if (!periode) return { success: false, message: "Periode is required" };
     
@@ -174,6 +227,15 @@ class RekapBackupStagingService {
       // Normalisasi field Date ke format YYYY-MM-DD HH:mm:ss
       // agar tidak tersimpan sebagai string Zulu (ISO 8601) di JSON
       const normalized = records.map(normalizeRecord);
+
+      // Otomatisasi sinkronisasi jml_toko_aktif jika NULL
+      for (const record of normalized) {
+        if (record.jml_toko_aktif === null) {
+          logger.info(`Auto-syncing jml_toko_aktif for ${record.cabang} - ${periode} because value is NULL`);
+          const count = await this._syncTokoAktifInternal(record.cabang, periode);
+          record.jml_toko_aktif = count;
+        }
+      }
 
       // Tulis JSON dengan pretty-print (indent 2 spasi) agar mudah dibaca manual
       await fs.writeFile(jsonFilePath, JSON.stringify(normalized, null, 2), "utf-8");

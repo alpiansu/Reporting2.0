@@ -2,42 +2,43 @@
   <Dialog
     :visible="visible"
     modal
-    :style="{ width: '92vw', maxWidth: '1100px' }"
+    :style="{ width: '95vw', maxWidth: '1200px' }"
     :closable="true"
     @update:visible="val => $emit('update:visible', val)"
     @show="loadResume"
     class="detail-dialog"
   >
-    <!-- Custom Header -->
+    <!-- ── Header ── -->
     <template #header>
-      <div class="flex align-items-center gap-3">
-        <div class="dialog-header-icon">
-          <i :class="['pi text-lg', type === 'harian' ? 'pi-calendar' : 'pi-briefcase']"></i>
+      <div class="flex align-items-center gap-3" style="width: 100%;">
+        <div class="dialog-icon-wrap" :class="{ 'dialog-icon-wrap--warning': type === 'bulanan' }">
+          <i :class="['pi text-xl', type === 'harian' ? 'pi-calendar' : 'pi-briefcase']"></i>
         </div>
-        <div class="flex flex-column">
-          <span class="font-bold text-900" style="font-size: 1rem; line-height: 1.3; text-transform: capitalize;">
-            Resume Data {{ type }}
-          </span>
-          <span class="text-500" style="font-size: 0.78rem;">Cabang: {{ cabang }}</span>
+        <div>
+          <div class="text-xl font-bold text-900 capitalize mb-1" style="line-height: 1.2;">Resume Data {{ type }}</div>
+          <div class="text-sm text-600">
+            <span class="font-bold text-700">{{ getCabangName(cabang) }}</span>
+            <span> — {{ cabang }}</span>
+          </div>
         </div>
       </div>
     </template>
 
-    <!-- Content -->
-    <div style="min-height: 400px; padding: 1.25rem 1.5rem;">
+    <!-- ── Content ── -->
+    <div class="dialog-content">
       <transition name="slide-fade" mode="out-in">
 
-        <!-- ===== Resume View ===== -->
+        <!-- ============ RESUME VIEW ============ -->
         <div v-if="viewMode === 'resume'" key="resume">
-          <div class="resume-info-bar">
-            <p>Menampilkan seluruh history data {{ type }} untuk cabang <strong>{{ cabang }}</strong>. Klik tombol panah untuk melihat detail logs per periode.</p>
+          <div class="info-bar">
+            <p>Menampilkan seluruh history data <strong>{{ type }}</strong> untuk cabang <strong>{{ getCabangName(cabang) }}</strong>. Klik chevron untuk melihat log detail per periode.</p>
             <Button
               icon="pi pi-refresh"
               label="Refresh"
               class="p-button-text p-button-sm"
-              style="white-space: nowrap; font-weight: 600; height: 34px;"
-              @click="loadResume"
+              style="white-space: nowrap; font-weight: 600; height: 34px; flex-shrink: 0;"
               :loading="loading"
+              @click="loadResume"
             />
           </div>
 
@@ -49,41 +50,131 @@
             emptyMessage="Tidak ada data ditemukan."
             class="datatable-dialog"
             paginator
-            :rows="8"
+            :rows="10"
+            :rowsPerPageOptions="[10, 25, 50]"
+            sortMode="single"
           >
-            <Column field="periode" header="Periode" sortable style="width: 130px; font-weight: 700;">
+            <!-- Periode -->
+            <Column field="periode" header="Periode" sortable style="width: 140px;">
               <template #body="{ data }">
-                <span style="font-weight: 700; color: #1e293b;">{{ data.periode }}</span>
+                <span class="cell-bold">{{ data.periode }}</span>
               </template>
             </Column>
 
-            <Column field="jml_toko_aktif" header="Toko Aktif" style="width: 120px; text-align: center;">
+            <!-- Toko Aktif -->
+            <Column field="jml_toko_aktif" header="Toko Aktif" sortable style="width: 110px; text-align: right;">
               <template #body="{ data }">
-                <Tag severity="info" :value="String(data.jml_toko_aktif ?? '-')" style="min-width: 48px; justify-content: center;" />
+                <Tag
+                  severity="info"
+                  :value="formatNumber(data.jml_toko_aktif)"
+                  style="min-width: 52px; justify-content: center;"
+                />
               </template>
             </Column>
 
-            <Column field="jml_cek" header="Cek / Files" style="width: 120px; text-align: center;">
+            <!-- Toko Cek -->
+            <Column field="jml_toko_cek" header="Toko Cek" sortable style="width: 110px; text-align: right;">
               <template #body="{ data }">
-                <Tag severity="success" :value="String(data.jml_cek ?? '-')" style="min-width: 48px; justify-content: center;" />
+                <Tag
+                  severity="success"
+                  :value="formatNumber(data.jml_toko_cek)"
+                  style="min-width: 52px; justify-content: center;"
+                />
               </template>
             </Column>
 
-            <Column v-if="type === 'bulanan'" field="jenis_file" header="Jenis File" style="width: 120px;"></Column>
-
-            <Column field="note" header="Catatan" style="min-width: 180px;">
+            <!-- Path -->
+            <Column field="path" header="Path">
               <template #body="{ data }">
-                <span style="font-size: 0.82rem; color: #64748b; line-height: 1.5;">{{ data.note || '—' }}</span>
+                <span v-if="data.path" class="note-text">{{ data.path }}</span>
+                <span v-else class="note-text note-text--empty">—</span>
               </template>
             </Column>
 
-            <Column header="" style="width: 60px; text-align: center;">
+            <!-- IP -->
+            <Column field="ip" header="IP Address">
+              <template #body="{ data }">
+                <span v-if="data.ip" class="note-text">{{ data.ip }}</span>
+                <span v-else class="note-text note-text--empty">—</span>
+              </template>
+            </Column>
+
+            <!-- File OK -->
+            <Column field="jml_cek" header="File OK" sortable style="width: 110px; text-align: right;">
+              <template #body="{ data }">
+                <Tag
+                  severity="success"
+                  :value="formatNumber(data.jml_cek)"
+                  style="min-width: 52px; justify-content: center;"
+                />
+              </template>
+            </Column>
+
+            <!-- File NOK -->
+            <Column field="data_nok" header="File Nok" sortable style="width: 110px; text-align: right;">
+              <template #body="{ data }">
+                <Tag
+                  severity="danger"
+                  :value="formatNumber(data.data_nok)"
+                  style="min-width: 52px; justify-content: center;"
+                />
+              </template>
+            </Column>
+
+            <!-- Note -->
+            <Column field="note" header="Catatan" style="min-width: 210px;">
+              <template #body="{ data }">
+                <!-- Edit mode -->
+                <div v-if="editingResumeNoteKey === resumeNoteKey(data)" class="note-edit">
+                  <Textarea
+                    v-model="editingResumeNoteText"
+                    rows="3"
+                    autoResize
+                    class="note-textarea"
+                    placeholder="Tulis catatan..."
+                    @keydown.esc="cancelResumeEdit"
+                  />
+                  <div class="note-actions">
+                    <Button
+                      label="Simpan"
+                      icon="pi pi-check"
+                      class="p-button-success note-save-btn"
+                      :loading="savingResumeNote"
+                      @click="saveResumeNote(data)"
+                    />
+                    <Button
+                      icon="pi pi-times"
+                      class="p-button-text p-button-secondary note-cancel-btn"
+                      v-tooltip.top="'Batal'"
+                      :disabled="savingResumeNote"
+                      @click="cancelResumeEdit"
+                    />
+                  </div>
+                </div>
+
+                <!-- Display mode -->
+                <div v-else class="note-cell">
+                  <span :class="['note-text', !data.note && 'note-text--empty']">
+                    {{ data.note || '—' }}
+                  </span>
+                  <Button
+                    icon="pi pi-pencil"
+                    class="p-button-rounded p-button-text p-button-sm note-pencil"
+                    v-tooltip.left="'Edit note'"
+                    @click="startResumeEdit(data)"
+                  />
+                </div>
+              </template>
+            </Column>
+
+            <!-- Aksi -->
+            <Column style="width: 56px; text-align: center;">
               <template #body="{ data }">
                 <Button
                   icon="pi pi-chevron-right"
-                  class="p-button-rounded p-button-primary p-button-sm p-button-outlined"
+                  class="p-button-rounded p-button-sm p-button-outlined"
                   style="width: 34px; height: 34px;"
-                  v-tooltip.left="'Lihat Detail Logs'"
+                  v-tooltip.left="'Lihat Log Detail'"
                   @click="openDeepDetail(data.periode)"
                 />
               </template>
@@ -91,77 +182,154 @@
           </DataTable>
         </div>
 
-        <!-- ===== Deep Detail View ===== -->
+        <!-- ============ DETAIL VIEW ============ -->
         <div v-else-if="viewMode === 'detail'" key="detail">
-          <div class="detail-header">
-            <div class="detail-header-left">
+          <!-- Nav bar -->
+          <div class="detail-nav">
+            <div class="detail-nav__left">
               <Button
                 icon="pi pi-arrow-left"
                 label="Kembali"
-                class="p-button-outlined p-button-secondary detail-back-btn"
+                class="p-button-outlined p-button-secondary detail-nav__back"
                 @click="viewMode = 'resume'"
               />
-              <div class="detail-title-block">
+              <div class="detail-nav__title">
                 <h3>Log Detail Backup</h3>
-                <span>Periode: {{ selectedPeriode }}</span>
+                <span>{{ getCabangName(cabang) }} · Periode: {{ selectedPeriode }}</span>
               </div>
             </div>
-            <div class="detail-search-wrapper">
-              <i class="pi pi-search detail-search-icon"></i>
+            <div class="search-wrapper">
+              <i class="pi pi-search search-icon"></i>
               <InputText
                 v-model="deepSearch"
-                placeholder="Cari KDTK atau keterangan..."
-                class="detail-search-input"
+                placeholder="Cari KDTK, IP, path..."
+                class="search-input"
               />
             </div>
           </div>
-
+          
           <DataTable
-            :value="filteredDeepDetail"
+            :value="deepDetailData"
             :loading="loadingDeep"
             responsiveLayout="scroll"
             stripedRows
             emptyMessage="Tidak ada log ditemukan."
             class="datatable-dialog"
             scrollable
-            scrollHeight="420px"
+            scrollHeight="400px"
+            lazy
+            paginator
+            :rows="detailLimit"
+            :rowsPerPageOptions="[10, 25, 50, 100]"
+            :totalRecords="detailTotal"
+            :first="(detailPage - 1) * detailLimit"
+            @page="onDetailPage"
           >
-            <Column field="kdtk" header="KDTK" sortable style="width: 110px;">
+            <!-- KDTK -->
+            <Column field="kdtk" header="KDTK" sortable style="width: 100px;">
               <template #body="{ data }">
-                <span style="font-weight: 700; color: var(--primary-color); font-size: 0.875rem;">{{ data.kdtk }}</span>
+                <span class="cell-primary">{{ data.kdtk }}</span>
               </template>
             </Column>
 
-            <Column field="periode" header="Tanggal / Periode" sortable style="width: 155px;">
+            <!-- Tanggal / Periode -->
+            <Column field="periode" header="Tanggal" sortable style="width: 140px;">
               <template #body="{ data }">
-                <span style="font-size: 0.85rem; color: #334155;">{{ data.periode }}</span>
+                <span class="cell-date">{{ data.periode }}</span>
               </template>
             </Column>
 
-            <Column field="stat" header="Status" style="width: 100px;">
+            <!-- Status -->
+            <Column field="stat" header="Status" sortable style="width: 90px;">
               <template #body="{ data }">
-                <Tag :severity="getStatusSeverity(data.stat)" :value="data.stat || '-'" style="min-width: 60px; justify-content: center;" />
+                <Tag
+                  :severity="getStatusSeverity(data.stat)"
+                  :value="data.stat || '—'"
+                  style="min-width: 50px; justify-content: center;"
+                />
               </template>
             </Column>
 
-            <Column field="jml_isi" header="Isi" style="width: 70px; text-align: center;">
+            <!-- Jml Isi -->
+            <Column field="jml_isi" header="Isi" sortable style="width: 80px; text-align: right;">
               <template #body="{ data }">
-                <span style="font-size: 0.85rem;">{{ data.jml_isi ?? '-' }}</span>
+                <span class="cell-num">{{ formatNumber(data.jml_isi) }}</span>
               </template>
             </Column>
 
-            <Column field="note" header="Keterangan" style="min-width: 180px;">
+            <!-- IP -->
+            <Column field="ip" header="IP" style="width: 130px;">
               <template #body="{ data }">
-                <span style="font-size: 0.8rem; color: #64748b;">{{ data.note || '—' }}</span>
+                <span class="cell-mono" v-tooltip.top="data.ip || ''">{{ data.ip || '—' }}</span>
               </template>
             </Column>
 
-            <Column field="path" header="Path Penyimpanan" style="min-width: 300px;">
+            <!-- Path -->
+            <Column field="path" header="Path Simpan" style="min-width: 200px;">
               <template #body="{ data }">
-                <span class="path-cell" v-tooltip.top="data.path || ''">{{ data.path || '—' }}</span>
+                <span class="cell-path" v-tooltip.top="data.path || ''">{{ data.path || '—' }}</span>
+              </template>
+            </Column>
+
+            <!-- Waktu Update -->
+            <Column field="updtime" header="Diperbarui" sortable style="width: 150px;">
+              <template #body="{ data }">
+                <span class="cell-date" style="font-size: 0.78rem; color: #94a3b8;">
+                  {{ formatDate(data.updtime) }}
+                </span>
+              </template>
+            </Column>
+
+            <!-- Note (editable inline) -->
+            <Column field="note" header="Note" style="min-width: 210px;">
+              <template #body="{ data }">
+                <!-- Edit mode -->
+                <div v-if="editingNoteKey === noteKey(data)" class="note-edit">
+                  <Textarea
+                    v-model="editingNoteText"
+                    rows="3"
+                    autoResize
+                    class="note-textarea"
+                    placeholder="Tulis catatan..."
+                    @keydown.esc="cancelEdit"
+                  />
+                  <div class="note-actions">
+                    <Button
+                      label="Simpan"
+                      icon="pi pi-check"
+                      class="p-button-success note-save-btn"
+                      :loading="savingNote"
+                      @click="saveNote(data)"
+                    />
+                    <Button
+                      icon="pi pi-times"
+                      class="p-button-text p-button-secondary note-cancel-btn"
+                      v-tooltip.top="'Batal'"
+                      :disabled="savingNote"
+                      @click="cancelEdit"
+                    />
+                  </div>
+                </div>
+
+                <!-- Display mode -->
+                <div v-else class="note-cell">
+                  <span :class="['note-text', !data.note && 'note-text--empty']">
+                    {{ data.note || '—' }}
+                  </span>
+                  <Button
+                    icon="pi pi-pencil"
+                    class="p-button-rounded p-button-text p-button-sm note-pencil"
+                    v-tooltip.left="'Edit note'"
+                    @click="startEdit(data)"
+                  />
+                </div>
               </template>
             </Column>
           </DataTable>
+          <!-- Info pagination -->
+          <div class="detail-pagination-info" style="font-size: 0.8rem; color: #64748b; padding: 0.5rem 0.25rem;">
+            <span>Menampilkan {{ detailRangeStart }}–{{ detailRangeEnd }} dari {{ detailTotal.toLocaleString('id-ID') }} record</span>
+          </div>
         </div>
 
       </transition>
@@ -172,64 +340,40 @@
 <script setup>
 import { ref, watch, computed } from 'vue';
 import { useToast } from 'primevue/usetoast';
-import { rekapBackupService } from '@/services';
+import Textarea from 'primevue/textarea';
 import Tag from 'primevue/tag';
+import { rekapBackupService } from '@/services';
+import { useCabangStore } from '@/stores';
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
-  cabang: { type: String, default: '' },
-  type: { type: String, default: 'harian' },
+  cabang:  { type: String,  default: '' },
+  type:    { type: String,  default: 'harian' },
 });
 
 const emit = defineEmits(['update:visible']);
 const toast = useToast();
+const cabangStore = useCabangStore();
 
-const viewMode = ref('resume');
-const loading = ref(false);
-const resumeData = ref([]);
+const getCabangName = (kdcab) => cabangStore.getCabangName(kdcab);
 
-const loadingDeep = ref(false);
-const deepDetailData = ref([]);
-const selectedPeriode = ref('');
-const deepSearch = ref('');
-
-const filteredDeepDetail = computed(() => {
-  if (!deepSearch.value) return deepDetailData.value;
-  const q = deepSearch.value.toLowerCase();
-  return deepDetailData.value.filter(d =>
-    d.kdtk?.toLowerCase().includes(q) ||
-    d.note?.toLowerCase().includes(q)
-  );
-});
-
-const loadResume = async () => {
-  if (!props.cabang) return;
-  viewMode.value = 'resume';
-  loading.value = true;
-  try {
-    const data = await rekapBackupService.getResume(props.type, props.cabang);
-    resumeData.value = Array.isArray(data) ? data : [];
-  } catch {
-    resumeData.value = [];
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat resume data', life: 3000 });
-  } finally {
-    loading.value = false;
-  }
+// ── Helpers ──────────────────────────────────────────────────
+const formatNumber = (n) => {
+  if (n === null || n === undefined || n === '') return '—';
+  const num = Number(n);
+  if (isNaN(num)) return '—';
+  return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(num);
 };
 
-const openDeepDetail = async (periode) => {
-  selectedPeriode.value = periode;
-  viewMode.value = 'detail';
-  loadingDeep.value = true;
-  deepSearch.value = '';
+const formatDate = (val) => {
+  if (!val) return '—';
   try {
-    const data = await rekapBackupService.getDetail(props.type, props.cabang, periode, 'OK');
-    deepDetailData.value = Array.isArray(data) ? data : [];
+    return new Intl.DateTimeFormat('id-ID', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    }).format(new Date(val));
   } catch {
-    deepDetailData.value = [];
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat detail logs', life: 3000 });
-  } finally {
-    loadingDeep.value = false;
+    return val;
   }
 };
 
@@ -241,13 +385,204 @@ const getStatusSeverity = (stat) => {
   return 'danger';
 };
 
+// ── Resume ───────────────────────────────────────────────────
+const viewMode  = ref('resume');
+const loading   = ref(false);
+const resumeData = ref([]);
+
+const loadResume = async () => {
+  if (!props.cabang) return;
+  viewMode.value = 'resume';
+  loading.value  = true;
+  cancelResumeEdit();
+  try {
+    const data = await rekapBackupService.getResume(props.type, props.cabang);
+    resumeData.value = Array.isArray(data) ? data : [];
+  } catch {
+    resumeData.value = [];
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat resume data', life: 3000 });
+  } finally {
+    loading.value = false;
+  }
+};
+
+// ── Inline Note Edit (Resume) ────────────────────────────────
+const editingResumeNoteKey  = ref(null);   // key = periode
+const editingResumeNoteText = ref('');
+const savingResumeNote      = ref(false);
+
+const resumeNoteKey = (row) => row.periode;
+
+const startResumeEdit = (row) => {
+  editingResumeNoteKey.value  = resumeNoteKey(row);
+  editingResumeNoteText.value = row.note ?? '';
+};
+
+const cancelResumeEdit = () => {
+  editingResumeNoteKey.value  = null;
+  editingResumeNoteText.value = '';
+};
+
+const saveResumeNote = async (row) => {
+  const newNote = editingResumeNoteText.value;
+  const oldNote = row.note ?? '';
+
+  if (newNote === '' && oldNote === '') {
+    cancelResumeEdit();
+    return;
+  }
+
+  savingResumeNote.value = true;
+  try {
+    await rekapBackupService.updateResumeNote(props.type, {
+      cabang:  props.cabang,
+      periode: row.periode,
+      note:    newNote,
+    });
+
+    // Update data lokal
+    const target = resumeData.value.find(d => resumeNoteKey(d) === resumeNoteKey(row));
+    if (target) target.note = newNote;
+
+    toast.add({ severity: 'success', summary: 'Berhasil', detail: 'Note resume berhasil disimpan', life: 2500 });
+    cancelResumeEdit();
+  } catch (err) {
+    const msg = err?.response?.data?.message || 'Gagal menyimpan note resume';
+    toast.add({ severity: 'error', summary: 'Gagal', detail: msg, life: 3500 });
+  } finally {
+    savingResumeNote.value = false;
+  }
+};
+
+// ── Deep Detail ──────────────────────────────────────────────
+const loadingDeep    = ref(false);
+const deepDetailData = ref([]);
+const selectedPeriode = ref('');
+const deepSearch     = ref('');
+
+// Pagination state (server-side)
+const detailPage  = ref(1);
+const detailLimit = ref(10);
+const detailTotal = ref(0);
+
+const detailRangeStart = computed(() => detailTotal.value === 0 ? 0 : (detailPage.value - 1) * detailLimit.value + 1);
+const detailRangeEnd   = computed(() => Math.min(detailPage.value * detailLimit.value, detailTotal.value));
+
+const noteKey = (row) => `${row.kdtk}_${row.periode}`;
+
+// Search filter hanya di data halaman yang sudah dimuat (client-side search pada halaman aktif)
+const filteredDeepDetail = computed(() => {
+  if (!deepSearch.value) return deepDetailData.value;
+  const q = deepSearch.value.toLowerCase();
+  return deepDetailData.value.filter(d =>
+    d.kdtk?.toLowerCase().includes(q) ||
+    d.ip?.toLowerCase().includes(q) ||
+    d.path?.toLowerCase().includes(q) ||
+    d.note?.toLowerCase().includes(q)
+  );
+});
+
+const loadDetail = async (page, limit) => {
+  loadingDeep.value = true;
+  try {
+    const res = await rekapBackupService.getDetail(
+      props.type, props.cabang, selectedPeriode.value,
+      { page, limit }
+    );
+    deepDetailData.value = Array.isArray(res.data) ? res.data : [];
+    detailTotal.value    = res.total    ?? 0;
+    detailPage.value     = res.page     ?? page;
+    detailLimit.value    = res.limit    ?? limit;
+  } catch {
+    deepDetailData.value = [];
+    detailTotal.value    = 0;
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat detail logs', life: 3000 });
+  } finally {
+    loadingDeep.value = false;
+  }
+};
+
+const onDetailPage = (event) => {
+  // PrimeVue lazy paginator: event.first = offset, event.rows = jumlah per halaman
+  const newPage  = Math.floor(event.first / event.rows) + 1;
+  const newLimit = event.rows;
+  detailPage.value  = newPage;
+  detailLimit.value = newLimit;
+  cancelEdit();
+  loadDetail(newPage, newLimit);
+};
+
+const openDeepDetail = async (periode) => {
+  selectedPeriode.value = periode;
+  viewMode.value = 'detail';
+  deepSearch.value = '';
+  cancelEdit();
+  // Reset ke halaman pertama setiap buka periode baru
+  detailPage.value  = 1;
+  detailLimit.value = 10;
+  await loadDetail(1, 10);
+};
+
+// ── Inline Note Edit ─────────────────────────────────────────
+const editingNoteKey  = ref(null);   // key unik baris yang sedang diedit
+const editingNoteText = ref('');
+const savingNote      = ref(false);
+
+const startEdit = (row) => {
+  editingNoteKey.value  = noteKey(row);
+  editingNoteText.value = row.note ?? '';
+};
+
+const cancelEdit = () => {
+  editingNoteKey.value  = null;
+  editingNoteText.value = '';
+};
+
+const saveNote = async (row) => {
+  const newNote = editingNoteText.value;
+  const oldNote = row.note ?? '';
+
+  // Satu-satunya kondisi skip: keduanya kosong (tidak ada perubahan yang berarti)
+  if (newNote === '' && oldNote === '') {
+    cancelEdit();
+    return;
+  }
+
+  savingNote.value = true;
+  try {
+    await rekapBackupService.updateNote(props.type, {
+      cabang:  props.cabang,
+      kdtk:    row.kdtk,
+      periode: row.periode,
+      note:    newNote,
+    });
+
+    // Update data lokal
+    const target = deepDetailData.value.find(d => noteKey(d) === noteKey(row));
+    if (target) target.note = newNote;
+
+    toast.add({ severity: 'success', summary: 'Berhasil', detail: 'Note berhasil disimpan', life: 2500 });
+    cancelEdit();
+  } catch (err) {
+    const msg = err?.response?.data?.message || 'Gagal menyimpan note';
+    toast.add({ severity: 'error', summary: 'Gagal', detail: msg, life: 3500 });
+  } finally {
+    savingNote.value = false;
+  }
+};
+
+// ── Reset on close ───────────────────────────────────────────
 watch(() => props.visible, (val) => {
   if (!val) {
     setTimeout(() => {
-      viewMode.value = 'resume';
-      resumeData.value = [];
+      viewMode.value       = 'resume';
+      resumeData.value     = [];
       deepDetailData.value = [];
-      deepSearch.value = '';
+      deepSearch.value     = '';
+      detailPage.value     = 1;
+      detailTotal.value    = 0;
+      cancelEdit();
+      cancelResumeEdit();
     }, 300);
   }
 });
@@ -255,45 +590,4 @@ watch(() => props.visible, (val) => {
 
 <style scoped>
 @import './DetailDialog.style.css';
-
-/* DataTable deep overrides — butuh :deep() scoped context */
-:deep(.datatable-dialog .p-datatable-thead > tr > th) {
-  background: #f8fafc;
-  color: #64748b;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 0.75rem 1rem;
-  border-bottom: 2px solid #e2e8f0;
-}
-
-:deep(.datatable-dialog .p-datatable-tbody > tr > td) {
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid #f8fafc;
-  vertical-align: middle;
-}
-
-:deep(.datatable-dialog .p-datatable-tbody > tr) {
-  transition: background-color 0.15s;
-}
-
-:deep(.datatable-dialog .p-datatable-tbody > tr:hover) {
-  background-color: #f8fafc !important;
-}
-
-:deep(.datatable-dialog .p-paginator) {
-  border-top: 1px solid #f1f5f9;
-  padding: 0.75rem 1rem;
-  background: #fafafa;
-}
-
-:deep(.detail-dialog .p-dialog-header) {
-  padding: 1.25rem 1.5rem 1rem;
-  border-bottom: 1px solid #f1f5f9;
-}
-
-:deep(.detail-dialog .p-dialog-content) {
-  padding: 0;
-}
 </style>

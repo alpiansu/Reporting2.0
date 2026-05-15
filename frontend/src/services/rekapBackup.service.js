@@ -11,8 +11,10 @@ class RekapBackupService {
     return response.data;
   }
 
-  async getDetail(type, cabang, periode, kriteria = "OK") {
-    const response = await api.get(`/rekap-backup/${type}/detail/${cabang}/${periode}/${kriteria}`);
+  async getDetail(type, cabang, periode, { page = 1, limit = 25 } = {}) {
+    const response = await api.get(`/rekap-backup/${type}/detail/${cabang}/${periode}`, {
+      params: { page, limit },
+    });
     return response.data;
   }
 
@@ -31,6 +33,18 @@ class RekapBackupService {
 
   async triggerStagingSync() {
     const response = await api.post("/rekap-backup/staging/sync");
+    return response.data;
+  }
+
+  async updateNote(type, payload) {
+    // payload: { cabang, kdtk, periode, note }
+    const response = await api.patch(`/rekap-backup/${type}/detail/note`, payload);
+    return response.data;
+  }
+
+  async updateResumeNote(type, payload) {
+    // payload: { cabang, periode, note }
+    const response = await api.patch(`/rekap-backup/${type}/resume/note`, payload);
     return response.data;
   }
 }

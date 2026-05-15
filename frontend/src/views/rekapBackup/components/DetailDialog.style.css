@@ -1,102 +1,137 @@
 /* =============================================================
-   DetailDialog.style.css — DetailDialog Component Styles
-   Dipanggil dari: views/RekapBackup/components/DetailDialog.vue
+   DetailDialog.style.css — Styles for RekapBackup DetailDialog
    ============================================================= */
 
-/* =====================
-   Dialog Header
-   ===================== */
-.dialog-header-icon {
+/* ── Dialog overrides ──────────────────────────────────────── */
+:deep(.detail-dialog .p-dialog-header) {
+  padding: 1.25rem 1.5rem 1rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+:deep(.detail-dialog .p-dialog-content) {
+  padding: 0;
+}
+
+/* ── Dialog header ─────────────────────────────────────────── */
+.dialog-icon-wrap {
   width: 40px;
   height: 40px;
+  border-radius: 10px;
+  background: var(--primary-color, #6366f1);
+  color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
-  background: var(--primary-color);
-  color: #ffffff;
   flex-shrink: 0;
+  margin-right: 5px;
 }
 
-/* =====================
-   Info Banner (Resume View)
-   ===================== */
-.resume-info-bar {
+.dialog-icon-wrap--warning {
+  background: #f59e0b;
+}
+
+.dialog-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.3;
+  text-transform: capitalize;
+}
+
+.dialog-subtitle {
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.dialog-subtitle strong {
+  color: #334155;
+  font-weight: 700;
+}
+
+/* ── Content area ──────────────────────────────────────────── */
+.dialog-content {
+  min-height: 420px;
+  padding: 1.25rem 1.5rem;
+}
+
+/* ── Info banner ───────────────────────────────────────────── */
+.info-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
   padding: 0.75rem 1rem;
   background: #f8fafc;
-  border-radius: 8px;
   border: 1px solid #e2e8f0;
-  margin-bottom: 1.25rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
 }
 
-.resume-info-bar p {
+.info-bar p {
   margin: 0;
   font-size: 0.825rem;
   color: #475569;
   line-height: 1.5;
 }
 
-/* =====================
-   Deep Detail Header
-   ===================== */
-.detail-header {
+/* ── Detail view header ────────────────────────────────────── */
+.detail-nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
 }
 
-.detail-header-left {
+.detail-nav__left {
   display: flex;
   align-items: center;
   gap: 0.875rem;
 }
 
-.detail-back-btn {
+.detail-nav__back {
   height: 36px;
   border-radius: 8px !important;
+  flex-shrink: 0;
 }
 
-.detail-title-block {
+.detail-nav__title {
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
 }
 
-.detail-title-block h3 {
+.detail-nav__title h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 700;
   color: #1e293b;
   line-height: 1.3;
 }
 
-.detail-title-block span {
+.detail-nav__title span {
   font-size: 0.75rem;
   color: #94a3b8;
 }
 
-.detail-search-wrapper {
+/* ── Search ────────────────────────────────────────────────── */
+.search-wrapper {
   position: relative;
-  display: flex;
-  align-items: center;
+  flex-shrink: 0;
 }
 
-.detail-search-icon {
+.search-icon {
   position: absolute;
   left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
   color: #94a3b8;
   font-size: 0.8rem;
   pointer-events: none;
-  z-index: 1;
 }
 
-.detail-search-input {
+.search-input {
   height: 36px;
   padding-left: 2rem !important;
   padding-right: 0.75rem !important;
@@ -104,60 +139,193 @@
   border-radius: 8px !important;
   background: #f8fafc !important;
   font-size: 0.825rem !important;
-  width: 200px;
-  transition: border-color 0.2s;
+  width: 220px;
 }
 
-.detail-search-input:focus {
-  border-color: var(--primary-color) !important;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.08) !important;
+/* ── Cell styles ───────────────────────────────────────────── */
+.cell-primary {
+  font-weight: 700;
+  color: var(--primary-color, #6366f1);
+  font-size: 0.875rem;
 }
 
-/* =====================
-   Path Cell
-   ===================== */
-.path-cell {
-  display: block;
+.cell-bold {
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.cell-mono {
+  font-family: 'Consolas', 'SFMono-Regular', monospace;
+  font-size: 0.75rem;
+  color: #475569;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 0.15rem 0.375rem;
+  display: inline-block;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.cell-path {
   font-family: 'Consolas', 'SFMono-Regular', monospace;
   font-size: 0.72rem;
   color: #64748b;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
-  padding: 0.3rem 0.5rem;
-  white-space: nowrap;
+  padding: 0.25rem 0.5rem;
+  display: block;
+  max-width: 280px;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 350px;
+  white-space: nowrap;
 }
 
-/* =====================
-   Animations
-   ===================== */
+.cell-date {
+  font-size: 0.825rem;
+  color: #334155;
+}
+
+.cell-num {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+/* ── Note cell (editable) ──────────────────────────────────── */
+.note-cell {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  min-width: 180px;
+  position: relative;
+}
+
+.note-text {
+  font-size: 0.825rem;
+  color: #475569;
+  line-height: 1.5;
+  flex: 1;
+}
+
+.note-text--empty {
+  color: #cbd5e1;
+  font-style: italic;
+}
+
+.note-pencil {
+  opacity: 0;
+  width: 26px !important;
+  height: 26px !important;
+  flex-shrink: 0;
+  margin-top: -2px;
+  transition: opacity 0.15s;
+}
+
+/* Pencil muncul saat row di-hover */
+tr:hover .note-pencil {
+  opacity: 1;
+}
+
+/* ── Note edit area ────────────────────────────────────────── */
+.note-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 220px;
+}
+
+.note-textarea {
+  width: 100%;
+  border: 1.5px solid var(--primary-color, #6366f1) !important;
+  border-radius: 6px !important;
+  font-size: 0.825rem !important;
+  resize: vertical;
+  min-height: 60px;
+  padding: 0.375rem 0.5rem !important;
+  background: #fff !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.note-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.note-save-btn {
+  height: 28px !important;
+  padding: 0 0.625rem !important;
+  font-size: 0.75rem !important;
+  border-radius: 6px !important;
+  font-weight: 600 !important;
+}
+
+.note-cancel-btn {
+  height: 28px !important;
+  width: 28px !important;
+  border-radius: 6px !important;
+}
+
+/* ── Slide animation ───────────────────────────────────────── */
 .slide-fade-enter-active {
-  transition: all 0.25s ease-out;
+  transition: all 0.2s ease-out;
 }
 
 .slide-fade-leave-active {
-  transition: all 0.15s ease-in;
+  transition: all 0.12s ease-in;
 }
 
 .slide-fade-enter-from,
 .slide-fade-leave-to {
-  transform: translateX(12px);
+  transform: translateX(10px);
   opacity: 0;
 }
 
-/* =====================
-   Responsive
-   ===================== */
+/* ── DataTable deep overrides ──────────────────────────────── */
+:deep(.datatable-dialog .p-datatable-thead > tr > th) {
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.75rem 1rem;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+:deep(.datatable-dialog .p-datatable-tbody > tr > td) {
+  padding: 0.625rem 1rem;
+  border-bottom: 1px solid #f8fafc;
+  vertical-align: middle;
+}
+
+:deep(.datatable-dialog .p-datatable-tbody > tr) {
+  transition: background-color 0.15s;
+}
+
+:deep(.datatable-dialog .p-datatable-tbody > tr:hover) {
+  background-color: #f8fafc !important;
+}
+
+:deep(.datatable-dialog .p-paginator) {
+  border-top: 1px solid #f1f5f9;
+  padding: 0.75rem 1rem;
+  background: #fafafa;
+}
+
+/* ── Responsive ────────────────────────────────────────────── */
 @media (max-width: 640px) {
-  .detail-header {
+  .detail-nav {
     flex-direction: column;
     align-items: flex-start;
   }
 
-  .detail-search-input {
+  .search-input {
     width: 100%;
   }
 }

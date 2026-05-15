@@ -182,7 +182,7 @@ const formatNumber = (n) => {
 };
 
 // Default active type untuk tombol detail di kolom aksi
-const activeType = ref('harian');
+const activeType = ref('bulanan');
 
 const searchQuery = ref('');
 const filteredData = computed(() => {

@@ -15,8 +15,16 @@ router.get("/harian/resume/:cabang", rekapBackupController.getResumeHarian);
 router.get("/bulanan/resume/:cabang", rekapBackupController.getResumeBulanan);
 
 // Detail specific period & criteria
-router.get("/harian/detail/:cabang/:periode/:kriteria", rekapBackupController.getDetailHarian);
-router.get("/bulanan/detail/:cabang/:periode/:kriteria", rekapBackupController.getDetailBulanan);
+router.get("/harian/detail/:cabang/:periode", rekapBackupController.getDetailHarian);
+router.get("/bulanan/detail/:cabang/:periode", rekapBackupController.getDetailBulanan);
+
+// Update note on detail record
+router.patch("/harian/detail/note", rekapBackupController.updateNoteHarian);
+router.patch("/bulanan/detail/note", rekapBackupController.updateNoteBulanan);
+
+// Update note on resume record
+router.patch("/harian/resume/note", rekapBackupController.updateResumeNoteHarian);
+router.patch("/bulanan/resume/note", rekapBackupController.updateResumeNoteBulanan);
 
 // Available years for filter
 router.get("/years", rekapBackupController.getYears);

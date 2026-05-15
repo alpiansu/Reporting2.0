@@ -37,49 +37,92 @@ class RekapBackupService {
     }
   }
 
-  async getDetailHarian(cabang, periode, kriteria) {
-    const sequelize = await resilientDb.getDatabase();
+  async getDetailHarian(cabang, periode, page = 1, limit = 25) {
+    let sequelize = await resilientDb.getDatabase();
+    if(!sequelize){
+      sequelize = await resilientDb.forceReconnect();
+    }
+
     if (!sequelize) throw new Error("Database not connected");
 
     const strYear = periode.substring(0, 4);
-    const strTable = `db_edp.rekap_backup_harian_${strYear}`; // assuming tables exist
-    
+    const actualTable = `db_edp.backup_harian_${strYear}`;
+    const offset = (page - 1) * limit;
+
     try {
-      // Need to adjust table name to match actual backup history tables if they differ
-      // The old project used 'backup_harian_YYYY'
-      const actualTable = `db_edp.backup_harian_${strYear}`;
-      const query = `
-        SELECT cabang, kdtk, tanggal as periode, stat, path, jml_isi, ip, note, updtime 
-        FROM ${actualTable} 
-        WHERE TANGGAL LIKE :prd AND CABANG = :cab AND stat = :krt
-      `;
-      const [results] = await sequelize.query(query, {
-        replacements: { prd: `${periode}%`, cab: cabang, krt: kriteria }
-      });
-      return results;
+      const whereClause = `WHERE TANGGAL LIKE :prd AND CABANG = :cab`;
+      const replacements = { prd: `${periode}%`, cab: cabang };
+
+      // Total count
+      const [[countRow]] = await sequelize.query(
+        `SELECT COUNT(*) AS total FROM ${actualTable} ${whereClause}`,
+        { replacements }
+      );
+      const total = Number(countRow.total) || 0;
+
+      // Paginated data
+      const [results] = await sequelize.query(
+        `SELECT cabang, kdtk, tanggal AS periode, stat, path, jml_isi, ip, note, updtime
+         FROM ${actualTable}
+         ${whereClause}
+         ORDER BY tanggal ASC, kdtk ASC
+         LIMIT :limit OFFSET :offset`,
+        { replacements: { ...replacements, limit, offset } }
+      );
+
+      return {
+        data:       results,
+        total,
+        page:       Number(page),
+        limit:      Number(limit),
+        totalPages: Math.ceil(total / limit),
+      };
     } catch (error) {
       logger.error(`Error in getDetailHarian: ${error.message}`);
       throw error;
     }
   }
 
-  async getDetailBulanan(cabang, periode, kriteria) {
-    const sequelize = await resilientDb.getDatabase();
+  async getDetailBulanan(cabang, periode, page = 1, limit = 25) {
+    let sequelize = await resilientDb.getDatabase();
+    if(!sequelize){
+      sequelize = await resilientDb.forceReconnect();
+    }
+    
     if (!sequelize) throw new Error("Database not connected");
 
     const strYear = periode.substring(0, 4);
     const actualTable = `db_edp.backup_bulanan_${strYear}`;
-    
+    const offset = (page - 1) * limit;
+
     try {
-      const query = `
-        SELECT cabang, kdtk, periode, stat, path, jml_isi, ip, note, updtime 
-        FROM ${actualTable} 
-        WHERE periode LIKE :prd AND CABANG = :cab AND stat = :krt
-      `;
-      const [results] = await sequelize.query(query, {
-        replacements: { prd: `${periode}%`, cab: cabang, krt: kriteria }
-      });
-      return results;
+      const whereClause = `WHERE periode LIKE :prd AND CABANG = :cab`;
+      const replacements = { prd: `${periode}%`, cab: cabang };
+
+      // Total count
+      const [[countRow]] = await sequelize.query(
+        `SELECT COUNT(*) AS total FROM ${actualTable} ${whereClause}`,
+        { replacements }
+      );
+      const total = Number(countRow.total) || 0;
+
+      // Paginated data
+      const [results] = await sequelize.query(
+        `SELECT cabang, kdtk, periode, stat, path, jml_isi, ip, note, updtime
+         FROM ${actualTable}
+         ${whereClause}
+         ORDER BY periode ASC, kdtk ASC
+         LIMIT :limit OFFSET :offset`,
+        { replacements: { ...replacements, limit, offset } }
+      );
+
+      return {
+        data:       results,
+        total,
+        page:       Number(page),
+        limit:      Number(limit),
+        totalPages: Math.ceil(total / limit),
+      };
     } catch (error) {
       logger.error(`Error in getDetailBulanan: ${error.message}`);
       throw error;
@@ -217,6 +260,74 @@ class RekapBackupService {
       logger.error(`Error in generateExcel: ${error.message}`);
       throw error;
     }
+  }
+
+  async updateNoteHarian(cabang, kdtk, periode, note) {
+    const sequelize = await resilientDb.getDatabase();
+    if (!sequelize) throw new Error("Database not connected");
+
+    const strYear = periode.substring(0, 4);
+    const tableName = `db_edp.backup_harian_${strYear}`;
+
+    const [, meta] = await sequelize.query(
+      `UPDATE ${tableName} SET note = :note, updtime = NOW()
+       WHERE cabang = :cab AND kdtk = :kdtk AND tanggal LIKE :prd`,
+      { replacements: { note, cab: cabang, kdtk, prd: `${periode}%` } }
+    );
+    return meta?.affectedRows ?? 0;
+  }
+
+  async updateNoteBulanan(cabang, kdtk, periode, note) {
+    const sequelize = await resilientDb.getDatabase();
+    if (!sequelize) throw new Error("Database not connected");
+
+    const strYear = periode.substring(0, 4);
+    const tableName = `db_edp.backup_bulanan_${strYear}`;
+
+    const [, meta] = await sequelize.query(
+      `UPDATE ${tableName} SET note = :note, updtime = NOW()
+       WHERE cabang = :cab AND kdtk = :kdtk AND periode LIKE :prd`,
+      { replacements: { note, cab: cabang, kdtk, prd: `${periode}%` } }
+    );
+    return meta?.affectedRows ?? 0;
+  }
+
+  async updateResumeNoteHarian(cabang, periode, note) {
+    let sequelize = await resilientDb.getDatabase();
+    if(!sequelize){
+      sequelize = await resilientDb.forceReconnect();
+    }
+    if (!sequelize) throw new Error("Database not connected");
+
+    const [, meta] = await sequelize.query(
+      `UPDATE db_edp.rekap_backup_harian SET note = :note 
+       WHERE cabang = :cab AND periode = :prd`,
+      { replacements: { note, cab: cabang, prd: periode } }
+    );
+    
+    // Sync staging so frontend sees the update
+    await stagingService.syncToJson('harian', cabang);
+    
+    return meta?.affectedRows ?? 0;
+  }
+
+  async updateResumeNoteBulanan(cabang, periode, note) {
+    let sequelize = await resilientDb.getDatabase();
+    if(!sequelize){
+      sequelize = await resilientDb.forceReconnect();
+    }
+    if (!sequelize) throw new Error("Database not connected");
+
+    const [, meta] = await sequelize.query(
+      `UPDATE db_edp.rekap_backup_bulanan SET note = :note 
+       WHERE cabang = :cab AND periode = :prd`,
+      { replacements: { note, cab: cabang, prd: periode } }
+    );
+    
+    // Sync staging so frontend sees the update
+    await stagingService.syncToJson('bulanan', cabang);
+
+    return meta?.affectedRows ?? 0;
   }
 }
 

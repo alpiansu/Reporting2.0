@@ -37,8 +37,10 @@ class RekapBackupController {
 
   async getDetailHarian(req, res) {
     try {
-      const { cabang, periode, kriteria } = req.params;
-      const data = await rekapBackupService.getDetailHarian(cabang, periode, kriteria);
+      const { cabang, periode } = req.params;
+      const page  = parseInt(req.query.page  ?? 1,  10);
+      const limit = parseInt(req.query.limit ?? 25, 10);
+      const data = await rekapBackupService.getDetailHarian(cabang, periode, page, limit);
       res.status(200).json(data);
     } catch (error) {
       logger.error(`Error getDetailHarian: ${error.message}`);
@@ -48,8 +50,10 @@ class RekapBackupController {
 
   async getDetailBulanan(req, res) {
     try {
-      const { cabang, periode, kriteria } = req.params;
-      const data = await rekapBackupService.getDetailBulanan(cabang, periode, kriteria);
+      const { cabang, periode } = req.params;
+      const page  = parseInt(req.query.page  ?? 1,  10);
+      const limit = parseInt(req.query.limit ?? 25, 10);
+      const data = await rekapBackupService.getDetailBulanan(cabang, periode, page, limit);
       res.status(200).json(data);
     } catch (error) {
       logger.error(`Error getDetailBulanan: ${error.message}`);
@@ -102,6 +106,62 @@ class RekapBackupController {
     } catch (error) {
       logger.error(`Error triggerStagingSync: ${error.message}`);
       res.status(500).json({ success: false, message: "Gagal memproses JSON Staging : " + error.message });
+    }
+  }
+
+  async updateNoteHarian(req, res) {
+    try {
+      const { cabang, kdtk, periode, note } = req.body;
+      if (!cabang || !kdtk || !periode) {
+        return res.status(400).json({ success: false, message: "cabang, kdtk, dan periode wajib diisi" });
+      }
+      const result = await rekapBackupService.updateNoteHarian(cabang, kdtk, periode, note ?? '');
+      res.status(200).json({ success: true, updated: result, message: "Note berhasil diperbarui" });
+    } catch (error) {
+      logger.error(`Error updateNoteHarian: ${error.message}`);
+      res.status(500).json({ success: false, message: "Gagal memperbarui note : " + error.message });
+    }
+  }
+
+  async updateNoteBulanan(req, res) {
+    try {
+      const { cabang, kdtk, periode, note } = req.body;
+      if (!cabang || !kdtk || !periode) {
+        return res.status(400).json({ success: false, message: "cabang, kdtk, dan periode wajib diisi" });
+      }
+      const result = await rekapBackupService.updateNoteBulanan(cabang, kdtk, periode, note ?? '');
+      res.status(200).json({ success: true, updated: result, message: "Note berhasil diperbarui" });
+    } catch (error) {
+      logger.error(`Error updateNoteBulanan: ${error.message}`);
+      res.status(500).json({ success: false, message: "Gagal memperbarui note : " + error.message });
+    }
+  }
+
+  async updateResumeNoteHarian(req, res) {
+    try {
+      const { cabang, periode, note } = req.body;
+      if (!cabang || !periode) {
+        return res.status(400).json({ success: false, message: "cabang dan periode wajib diisi" });
+      }
+      const result = await rekapBackupService.updateResumeNoteHarian(cabang, periode, note ?? '');
+      res.status(200).json({ success: true, updated: result, message: "Note resume berhasil diperbarui" });
+    } catch (error) {
+      logger.error(`Error updateResumeNoteHarian: ${error.message}`);
+      res.status(500).json({ success: false, message: "Gagal memperbarui note resume : " + error.message });
+    }
+  }
+
+  async updateResumeNoteBulanan(req, res) {
+    try {
+      const { cabang, periode, note } = req.body;
+      if (!cabang || !periode) {
+        return res.status(400).json({ success: false, message: "cabang dan periode wajib diisi" });
+      }
+      const result = await rekapBackupService.updateResumeNoteBulanan(cabang, periode, note ?? '');
+      res.status(200).json({ success: true, updated: result, message: "Note resume berhasil diperbarui" });
+    } catch (error) {
+      logger.error(`Error updateResumeNoteBulanan: ${error.message}`);
+      res.status(500).json({ success: false, message: "Gagal memperbarui note resume : " + error.message });
     }
   }
 }

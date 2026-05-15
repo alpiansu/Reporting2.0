@@ -12,7 +12,7 @@ Content-Type: application/json
 }
 
 ### Set Variable Token (otomatis diambil dari response login di atas)
-@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc3Nzg2NTc5MSwiZXhwIjoxNzc3OTUyMTkxfQ.JoN-Tf7aszbfr2AmBs_XVTH-3MvJQU0jG1M2U7gWgFM
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc3ODgxNzYyMCwiZXhwIjoxNzc4OTA0MDIwfQ.m-3DLSXH1xB64A_IAmglAof2mJwml9f_slTIiKunSrc
 
 
 ### =========================================================
@@ -27,60 +27,77 @@ Authorization: Bearer {{token}}
 
 ###
 
-### 2. Manual Sync Toko Aktif (WRC) per Cabang & Periode
-# Digunakan untuk menghitung ulang toko aktif dari WRC dan me-replace data JSON
-POST {{rekapBackupUrl}}/sync-wrc
-Content-Type: application/json
-Authorization: Bearer {{token}}
-
-{
-  "cabang": "G033",
-  "periode": "202401"
-}
-
-###
-
-### 3. Get Summary Data
+### 2. Get Summary Data
 # Mengambil rangkuman data harian dan bulanan per cabang
 GET {{rekapBackupUrl}}/summary
 Authorization: Bearer {{token}}
 
 ###
 
-### 4. Get Available Years
+### 3. Get Available Years
 # Mengambil rentang tahun (oldest dan newest) dari data staging
 GET {{rekapBackupUrl}}/years
 Authorization: Bearer {{token}}
 
 ###
 
-### 5. Get Resume Harian per Cabang
-GET {{rekapBackupUrl}}/harian/resume/G001
+### 4. Get Resume Harian per Cabang
+GET {{rekapBackupUrl}}/harian/resume/G033
 Authorization: Bearer {{token}}
 
 ###
 
-### 6. Get Resume Bulanan per Cabang
+### 5. Get Resume Bulanan per Cabang
 GET {{rekapBackupUrl}}/bulanan/resume/G001
 Authorization: Bearer {{token}}
 
 ###
 
-### 7. Get Detail Logs Harian
-# (Parameter: cabang / periode / kriteria)
-GET {{rekapBackupUrl}}/harian/detail/G001/202401/OK
+### 6. Get Detail Logs Harian (dengan Pagination)
+# (Parameter: cabang / periode)
+# Query Params (opsional): page, limit
+GET {{rekapBackupUrl}}/harian/detail/G001/202401?page=1&limit=25
 Authorization: Bearer {{token}}
 
 ###
 
-### 8. Get Detail Logs Bulanan
-# (Parameter: cabang / periode / kriteria)
-GET {{rekapBackupUrl}}/bulanan/detail/G001/202401/OK
+### 7. Get Detail Logs Bulanan (dengan Pagination)
+# (Parameter: cabang / periode)
+# Query Params (opsional): page, limit
+GET {{rekapBackupUrl}}/bulanan/detail/G001/202401?page=1&limit=25
 Authorization: Bearer {{token}}
 
 ###
 
-### 9. Export Excel Data
+### 8. Update Note Harian (Live Edit Note)
+PATCH {{rekapBackupUrl}}/harian/detail/note
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "cabang": "G001",
+  "kdtk": "TB01",
+  "periode": "20240101",
+  "note": "Catatan tes harian via HTTP"
+}
+
+###
+
+### 9. Update Note Bulanan (Live Edit Note)
+PATCH {{rekapBackupUrl}}/bulanan/detail/note
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "cabang": "G001",
+  "kdtk": "TB01",
+  "periode": "202401",
+  "note": "Catatan tes bulanan via HTTP"
+}
+
+###
+
+### 10. Export Excel Data
 # Mengunduh file Excel (Uji coba di browser disarankan untuk format blob)
 GET {{rekapBackupUrl}}/export?cabang=G001&startYear=2024&endYear=2024
 Authorization: Bearer {{token}}

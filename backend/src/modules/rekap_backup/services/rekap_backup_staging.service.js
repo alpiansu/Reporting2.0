@@ -174,7 +174,10 @@ class RekapBackupStagingService {
       const countStores = rows[0]?.stores || 0;
       await pool.end();
 
-      const sequelize = await resilientDb.getDatabase();
+      let sequelize = await resilientDb.getDatabase();
+      if(!sequelize){
+        sequelize = await resilientDb.forceReconnect();
+      } 
       if (sequelize) {
         await sequelize.query(`UPDATE db_edp.rekap_backup_harian SET jml_toko_aktif = :count WHERE cabang = :cab AND periode = :prd`, {
           replacements: { count: countStores, cab: cabang, prd: periode }
@@ -280,7 +283,10 @@ class RekapBackupStagingService {
       logger.info(`Process getting data bulanan...`);
       const querySummaryBulanan = `SELECT cabang, sum(jml_cek) AS total_harian, MIN(periode) AS oldest_harian, MAX(periode) AS newest_harian FROM db_edp.rekap_backup_harian WHERE LEFT(CABANG,1) IN ('G') GROUP BY cabang;`;
 
-      const sequelize = await resilientDb.getDatabase();
+      let sequelize = await resilientDb.getDatabase();
+      if(!sequelize){
+        sequelize = await resilientDb.forceReconnect();
+      } 
       if (!sequelize) throw new Error("Database not connected : " + resilientDb);
 
       const [allHarian] = await sequelize.query(querySummaryBulanan);
@@ -354,7 +360,10 @@ class RekapBackupStagingService {
   }
 
   async syncAllFromDatabase() {
-    const sequelize = await resilientDb.getDatabase();
+    let sequelize = await resilientDb.getDatabase();
+    if(!sequelize){
+      sequelize = await resilientDb.forceReconnect();
+    }   
     if (!sequelize) throw new Error("Database not connected");
 
     try {

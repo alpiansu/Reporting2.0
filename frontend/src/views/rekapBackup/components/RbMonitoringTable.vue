@@ -24,9 +24,6 @@
       responsiveLayout="scroll"
       stripedRows
       emptyMessage="Tidak ada data ditemukan."
-      paginator
-      :rows="10"
-      :rowsPerPageOptions="[10, 25, 50]"
       class="datatable-monitoring"
       sortMode="single"
     >

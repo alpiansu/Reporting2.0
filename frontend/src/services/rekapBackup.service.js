@@ -29,8 +29,8 @@ class RekapBackupService {
     });
   }
 
-  async syncWrc(payload) {
-    const response = await api.post("/rekap-backup/sync-wrc", payload);
+  async triggerStagingSync() {
+    const response = await api.post("/rekap-backup/staging/sync");
     return response.data;
   }
 }

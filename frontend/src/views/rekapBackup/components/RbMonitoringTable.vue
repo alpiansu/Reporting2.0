@@ -27,6 +27,7 @@
       :rows="10"
       :rowsPerPageOptions="[10, 25, 50]"
       class="datatable-monitoring"
+      sortMode="single"
     >
       <!-- Cabang Column -->
       <Column field="cabang" header="Cabang" sortable style="width: 220px; padding-left: 1.25rem;">
@@ -41,17 +42,17 @@
       </Column>
 
       <!-- Harian Column -->
-      <Column style="min-width: 270px;">
+      <Column field="total_harian" sortable sort-field="total_harian" style="min-width: 270px;">
         <template #header>
           <div class="col-header">
             <span class="col-badge col-badge--info">H</span>
             <span>Harian</span>
           </div>
         </template>
-        <template #body="{ data: row }" >
+        <template #body="{ data: row }">
           <div class="status-cell" @click="$emit('open-detail', row.cabang, 'harian')">
             <div class="status-cell__main">
-              <Tag severity="info" :value="`${row.total_harian || 0} Files`" class="status-tag" />
+              <Tag severity="info" :value="`${formatNumber(row.total_harian)} Files`" class="status-tag" />
               <div class="status-cell__meta">
                 <i class="pi pi-clock"></i>
                 <span>{{ row.oldest_harian || '—' }}</span>
@@ -70,7 +71,7 @@
       </Column>
 
       <!-- Bulanan Column -->
-      <Column style="min-width: 270px;">
+      <Column field="total_bln" sortable sort-field="total_bln" style="min-width: 270px;">
         <template #header>
           <div class="col-header">
             <span class="col-badge col-badge--warning">B</span>
@@ -80,7 +81,7 @@
         <template #body="{ data: row }">
           <div class="status-cell" @click="$emit('open-detail', row.cabang, 'bulanan')">
             <div class="status-cell__main">
-              <Tag severity="warning" :value="`${row.total_bln || 0} Files (IDT)`" class="status-tag" />
+              <Tag severity="warning" :value="`${formatNumber(row.total_bln)} Files (IDT)`" class="status-tag" />
               <div class="status-cell__meta">
                 <i class="pi pi-calendar-minus"></i>
                 <span>{{ row.oldest_bln || '—' }}</span>
@@ -115,6 +116,13 @@ defineEmits(['open-detail']);
 
 const cabangStore = useCabangStore();
 const getCabangName = (kdcab) => cabangStore.getCabangName(kdcab);
+
+// Format angka dengan pemisah ribuan (tanpa desimal)
+const formatNumber = (n) => {
+  const num = Number(n);
+  if (!n && n !== 0) return '0';
+  return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(num);
+};
 
 const searchQuery = ref('');
 const filteredData = computed(() => {

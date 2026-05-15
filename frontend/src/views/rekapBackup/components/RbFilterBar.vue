@@ -56,10 +56,10 @@
             @click="$emit('export-clicked')"
           />
           <Button
-            icon="pi pi-sync"
-            class="p-button-outlined p-button-secondary sync-btn"
-            v-tooltip.bottom="'Manual sync data toko aktif WRC'"
-            @click="$emit('sync-clicked')"
+            icon="pi pi-database"
+            class="p-button-outlined p-button-info sync-btn"
+            v-tooltip.bottom="'Sinkronisasi data JSON ke database'"
+            @click="$emit('staging-sync-clicked')"
           />
         </div>
       </div>
@@ -74,12 +74,12 @@ import Button from 'primevue/button';
 import { useCabangStore } from '@/stores';
 
 const props = defineProps({
-  startYear:   { type: String, default: 'All' },
-  endYear:     { type: String, default: '' },
-  cabang:      { type: String, default: null },
-  isExporting: { type: Boolean, default: false },
-  startYearOptions: { type: Array, default: () => ['All'] },
-  endYearOptions:   { type: Array, default: () => [] },
+  startYear:        { type: String,  default: 'All' },
+  endYear:          { type: String,  default: '' },
+  cabang:           { type: String,  default: null },
+  isExporting:      { type: Boolean, default: false },
+  startYearOptions: { type: Array,   default: () => ['All'] },
+  endYearOptions:   { type: Array,   default: () => [] },
 });
 
 defineEmits([
@@ -87,7 +87,7 @@ defineEmits([
   'update:endYear',
   'update:cabang',
   'export-clicked',
-  'sync-clicked',
+  'staging-sync-clicked',
 ]);
 
 const cabangStore = useCabangStore();

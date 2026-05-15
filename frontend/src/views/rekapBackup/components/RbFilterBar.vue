@@ -1,6 +1,23 @@
 <template>
   <div class="filter-bar card">
     <div class="filter-bar__fields">
+      <!-- Cabang -->
+      <div class="field">
+        <label class="field-label">Cabang Export</label>
+        <Dropdown
+          :model-value="cabang"
+          :options="cabangOptions"
+          option-label="namacab"
+          option-value="kdcab"
+          placeholder="Semua Cabang"
+          class="w-full"
+          filter
+          filter-placeholder="Cari cabang..."
+          show-clear
+          @change="$emit('update:cabang', $event.value)"
+        />
+      </div>
+      
       <!-- Tahun Awal -->
       <div class="field">
         <label class="field-label">Tahun Awal</label>
@@ -26,23 +43,6 @@
         />
       </div>
 
-      <!-- Cabang -->
-      <div class="field">
-        <label class="field-label">Cabang Export</label>
-        <Dropdown
-          :model-value="cabang"
-          :options="cabangOptions"
-          option-label="namacab"
-          option-value="kdcab"
-          placeholder="Semua Cabang"
-          class="w-full"
-          filter
-          filter-placeholder="Cari cabang..."
-          show-clear
-          @change="$emit('update:cabang', $event.value)"
-        />
-      </div>
-
       <!-- Action Buttons -->
       <div class="field field--action">
         <label class="field-label field-label--spacer">&nbsp;</label>
@@ -56,7 +56,7 @@
             @click="$emit('export-clicked')"
           />
           <Button
-            icon="pi pi-database"
+            icon="pi pi-sync"
             class="p-button-outlined p-button-info sync-btn"
             v-tooltip.bottom="'Sinkronisasi data JSON ke database'"
             @click="$emit('staging-sync-clicked')"

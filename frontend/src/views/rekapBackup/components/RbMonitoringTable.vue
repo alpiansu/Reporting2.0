@@ -16,7 +16,8 @@
       </div>
     </div>
 
-    <!-- DataTable -->
+    <!-- DataTable dengan grouped header -->
+     <!-- {{filteredData}} -->
     <DataTable
       :value="filteredData"
       :loading="loading"
@@ -29,72 +30,131 @@
       class="datatable-monitoring"
       sortMode="single"
     >
-      <!-- Cabang Column -->
-      <Column field="cabang" header="Cabang" sortable style="width: 220px; padding-left: 1.25rem;">
+      <!-- =============== GROUPED HEADER =============== -->
+      <ColumnGroup type="header">
+        <!-- Row 1: Group Labels -->
+        <Row>
+          <Column header="cabang" sortable sortField="cabang" :rowspan="2" style="width: 200px;">
+            <template #header>
+              <div class="group-label group-label--harian">
+                <span class="group-badge">I</span>
+                <span>Informasi Cabang</span>
+              </div>
+            </template>
+          </Column>
+          <Column header="" :rowspan="2" style="width: 50px;" />
+          <!-- Harian group -->
+          <Column :colspan="3" class="group-header group-header--harian">
+            <template #header>
+              <div class="group-label group-label--harian">
+                <span class="group-badge">H</span>
+                <span>Monitoring Harian</span>
+              </div>
+            </template>
+          </Column>
+          <!-- Bulanan group -->
+          <Column :colspan="3" class="group-header group-header--bulanan">
+            <template #header>
+              <div class="group-label group-label--bulanan">
+                <span class="group-badge group-badge--warning">B</span>
+                <span>Monitoring Bulanan</span>
+              </div>
+            </template>
+          </Column>
+        </Row>
+        <!-- Row 2: Sub-column labels -->
+        <Row>
+          <!-- Harian sub-columns -->
+          <Column header="Total Files"      sortable sortField="total_harian" style="width: 120px;" />
+          <Column header="Periode Awal"     sortable sortField="oldest_harian" style="width: 130px;" />
+          <Column header="Periode Terbaru"  sortable sortField="newest_harian" style="width: 130px;" />
+          <!-- Bulanan sub-columns -->
+          <Column header="Total Files (IDT)" sortable sortField="total_bln"    style="width: 130px;" />
+          <Column header="Periode Awal"      sortable sortField="oldest_bln"   style="width: 130px;" />
+          <Column header="Periode Terbaru"   sortable sortField="newest_bln"   style="width: 130px;" />
+        </Row>
+      </ColumnGroup>
+
+      <!-- =============== BODY COLUMNS =============== -->
+
+      <!-- 1. Cabang -->
+      <Column field="cabang" style="width: 200px; padding-left: 1.25rem;">
         <template #body="{ data: row }">
-          <div class="cabang-cell">
-            <div class="cabang-info">
-              <strong>{{ getCabangName(row.cabang) }}</strong>
-              <small>{{ row.cabang }}</small>
-            </div>
+          <div class="cabang-info">
+            <strong>{{ getCabangName(row.cabang) }}</strong>
+            <small>{{ row.cabang }}</small>
           </div>
         </template>
       </Column>
 
-      <!-- Harian Column -->
-      <Column field="total_harian" sortable sort-field="total_harian" style="min-width: 270px;">
-        <template #header>
-          <div class="col-header">
-            <span class="col-badge col-badge--info">H</span>
-            <span>Harian</span>
-          </div>
-        </template>
+      <!-- 2. Aksi (tombol detail, rowspan via styling di paling kiri setelah cabang) -->
+      <Column style="width: 50px; text-align: center;">
         <template #body="{ data: row }">
-          <div class="status-cell" @click="$emit('open-detail', row.cabang, 'harian')">
-            <div class="status-cell__main">
-              <Tag severity="info" :value="`${formatNumber(row.total_harian)} Files`" class="status-tag" />
-              <div class="status-cell__meta">
-                <i class="pi pi-clock"></i>
-                <span>{{ row.oldest_harian || '—' }}</span>
-                <i class="pi pi-arrow-right"></i>
-                <span>{{ row.newest_harian || '—' }}</span>
-              </div>
-            </div>
-            <Button
-              icon="pi pi-search-plus"
-              class="p-button-rounded p-button-text p-button-sm detail-btn"
-              v-tooltip.left="'Lihat History Harian'"
-              @click.stop="$emit('open-detail', row.cabang, 'harian')"
-            />
+          <Button
+            icon="pi pi-search-plus"
+            class="p-button-rounded p-button-text p-button-sm detail-btn-fixed"
+            v-tooltip.right="'Lihat History Detail'"
+            @click="$emit('open-detail', row.cabang, activeType)"
+          />
+        </template>
+      </Column>
+
+      <!-- 3. Harian: Total Files -->
+      <Column field="total_harian" sortField="total_harian" style="width: 120px;">
+        <template #body="{ data: row }">
+          <div class="num-cell num-cell--harian" @click="$emit('open-detail', row.cabang, 'harian')">
+            <span class="num-value">{{ formatNumber(row.total_harian) }}</span>
+            <small>files</small>
           </div>
         </template>
       </Column>
 
-      <!-- Bulanan Column -->
-      <Column field="total_bln" sortable sort-field="total_bln" style="min-width: 270px;">
-        <template #header>
-          <div class="col-header">
-            <span class="col-badge col-badge--warning">B</span>
-            <span>Bulanan</span>
+      <!-- 4. Harian: Periode Awal -->
+      <Column field="oldest_harian" sortField="oldest_harian" style="width: 130px;">
+        <template #body="{ data: row }">
+          <div class="period-cell period-cell--oldest" @click="$emit('open-detail', row.cabang, 'harian')">
+            <i class="pi pi-calendar period-icon"></i>
+            <span>{{ row.oldest_harian || '—' }}</span>
           </div>
         </template>
+      </Column>
+
+      <!-- 5. Harian: Periode Terbaru -->
+      <Column field="newest_harian" sortField="newest_harian" style="width: 130px;">
         <template #body="{ data: row }">
-          <div class="status-cell" @click="$emit('open-detail', row.cabang, 'bulanan')">
-            <div class="status-cell__main">
-              <Tag severity="warning" :value="`${formatNumber(row.total_bln)} Files (IDT)`" class="status-tag" />
-              <div class="status-cell__meta">
-                <i class="pi pi-calendar-minus"></i>
-                <span>{{ row.oldest_bln || '—' }}</span>
-                <i class="pi pi-arrow-right"></i>
-                <span>{{ row.newest_bln || '—' }}</span>
-              </div>
-            </div>
-            <Button
-              icon="pi pi-search-plus"
-              class="p-button-rounded p-button-text p-button-sm detail-btn"
-              v-tooltip.left="'Lihat History Bulanan'"
-              @click.stop="$emit('open-detail', row.cabang, 'bulanan')"
-            />
+          <div class="period-cell period-cell--newest" @click="$emit('open-detail', row.cabang, 'harian')">
+            <i class="pi pi-calendar-plus period-icon"></i>
+            <span>{{ row.newest_harian || '—' }}</span>
+          </div>
+        </template>
+      </Column>
+
+      <!-- 6. Bulanan: Total Files -->
+      <Column field="total_bln" sortField="total_bln" style="width: 130px;">
+        <template #body="{ data: row }">
+          <div class="num-cell num-cell--bulanan" @click="$emit('open-detail', row.cabang, 'bulanan')">
+            <span class="num-value">{{ formatNumber(row.total_bln) }}</span>
+            <small>files (IDT)</small>
+          </div>
+        </template>
+      </Column>
+
+      <!-- 7. Bulanan: Periode Awal -->
+      <Column field="oldest_bln" sortField="oldest_bln" style="width: 130px;">
+        <template #body="{ data: row }">
+          <div class="period-cell period-cell--oldest" @click="$emit('open-detail', row.cabang, 'bulanan')">
+            <i class="pi pi-calendar period-icon"></i>
+            <span>{{ row.oldest_bln || '—' }}</span>
+          </div>
+        </template>
+      </Column>
+
+      <!-- 8. Bulanan: Periode Terbaru -->
+      <Column field="newest_bln" sortField="newest_bln" style="width: 130px;">
+        <template #body="{ data: row }">
+          <div class="period-cell period-cell--newest" @click="$emit('open-detail', row.cabang, 'bulanan')">
+            <i class="pi pi-calendar-plus period-icon"></i>
+            <span>{{ row.newest_bln || '—' }}</span>
           </div>
         </template>
       </Column>
@@ -104,7 +164,8 @@
 
 <script setup>
 import { ref, computed } from 'vue';
-import Tag from 'primevue/tag';
+import ColumnGroup from 'primevue/columngroup';
+import Row from 'primevue/row';
 import { useCabangStore } from '@/stores';
 
 const props = defineProps({
@@ -117,12 +178,14 @@ defineEmits(['open-detail']);
 const cabangStore = useCabangStore();
 const getCabangName = (kdcab) => cabangStore.getCabangName(kdcab);
 
-// Format angka dengan pemisah ribuan (tanpa desimal)
+// Format angka ribuan tanpa desimal (id-ID: pemisah titik)
 const formatNumber = (n) => {
-  const num = Number(n);
-  if (!n && n !== 0) return '0';
-  return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(num);
+  if (n === null || n === undefined || n === '') return '0';
+  return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Number(n));
 };
+
+// Default active type untuk tombol detail di kolom aksi
+const activeType = ref('harian');
 
 const searchQuery = ref('');
 const filteredData = computed(() => {
@@ -144,7 +207,7 @@ const filteredData = computed(() => {
   overflow: hidden;
 }
 
-/* Toolbar */
+/* ── Toolbar ───────────────────────────────── */
 .table-toolbar {
   display: flex;
   align-items: center;
@@ -190,14 +253,16 @@ const filteredData = computed(() => {
   width: 240px;
 }
 
-/* Column header */
-.col-header {
+/* ── Grouped header labels ─────────────────── */
+.group-label {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
 }
 
-.col-badge {
+.group-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -206,19 +271,17 @@ const filteredData = computed(() => {
   border-radius: 6px;
   font-size: 0.65rem;
   font-weight: 800;
+  background: #dbeafe;
+  color: #1d4ed8;
   flex-shrink: 0;
 }
 
-.col-badge--info    { background: #dbeafe; color: #1d4ed8; }
-.col-badge--warning { background: #fef3c7; color: #b45309; }
-
-/* Cabang cell */
-.cabang-cell {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
+.group-badge--warning {
+  background: #fef3c7;
+  color: #b45309;
 }
 
+/* ── Cabang cell ───────────────────────────── */
 .cabang-info {
   display: flex;
   flex-direction: column;
@@ -236,69 +299,142 @@ const filteredData = computed(() => {
   color: #94a3b8;
 }
 
-/* Status cell */
-.status-cell {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.5rem 0.625rem;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.status-cell:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
-}
-
-.status-cell:hover .detail-btn {
-  opacity: 1;
-}
-
-.status-cell__main {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.status-tag {
-  font-size: 0.72rem;
-  width: max-content;
-}
-
-.status-cell__meta {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.72rem;
-  color: #64748b;
-}
-
-.status-cell__meta .pi {
-  font-size: 0.65rem;
-}
-
-.detail-btn {
-  opacity: 0;
+/* ── Detail button (fixed position col) ────── */
+.detail-btn-fixed {
   width: 30px !important;
   height: 30px !important;
-  flex-shrink: 0;
+  opacity: 0.4;
   transition: opacity 0.15s;
 }
 
-/* DataTable deep overrides */
-:deep(.datatable-monitoring .p-datatable-thead > tr > th) {
+/* ── Number cell ───────────────────────────── */
+.num-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  cursor: pointer;
+  padding: 0.25rem 0.375rem;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.num-cell:hover {
+  background: #f1f5f9;
+}
+
+.num-value {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.num-cell--harian .num-value  { color: #1d4ed8; }
+.num-cell--bulanan .num-value { color: #b45309; }
+
+.num-cell small {
+  font-size: 0.68rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+/* ── Period cell ───────────────────────────── */
+.period-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.period-cell:hover {
+  background: #f1f5f9;
+}
+
+.period-icon {
+  font-size: 0.72rem;
+  flex-shrink: 0;
+}
+
+/* Awal — subtle grey-blue */
+.period-cell--oldest {
+  color: #64748b;
+}
+
+.period-cell--oldest .period-icon {
+  color: #94a3b8;
+}
+
+/* Terbaru — lebih tegas, hijau tua jika ada data */
+.period-cell--newest {
+  color: #0f766e;
+  font-weight: 600;
+}
+
+.period-cell--newest .period-icon {
+  color: #14b8a6;
+}
+
+/* Kosong / tidak ada data */
+.period-cell span:only-child,
+.period-cell > span:last-child {
+  color: inherit;
+}
+
+/* ── DataTable deep overrides ──────────────── */
+
+/* Row 1 group headers */
+:deep(.datatable-monitoring .p-datatable-thead > tr:first-child > th) {
+  background: #f1f5f9;
+  padding: 0.625rem 1rem;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 0;              /* hide auto-generated text, use slot */
+}
+
+/* Row 1 — Harian group: beri accent biru sangat terang */
+:deep(.datatable-monitoring .p-datatable-thead > tr:first-child > th:nth-child(3)),
+:deep(.datatable-monitoring .p-datatable-thead > tr:first-child > th:nth-child(4)),
+:deep(.datatable-monitoring .p-datatable-thead > tr:first-child > th:nth-child(5)) {
+  background: #eff6ff;
+  border-left: 2px solid #bfdbfe;
+}
+
+/* Row 1 — Bulanan group: beri accent kuning sangat terang */
+:deep(.datatable-monitoring .p-datatable-thead > tr:first-child > th:nth-child(6)),
+:deep(.datatable-monitoring .p-datatable-thead > tr:first-child > th:nth-child(7)),
+:deep(.datatable-monitoring .p-datatable-thead > tr:first-child > th:nth-child(8)) {
+  background: #fffbeb;
+  border-left: 2px solid #fde68a;
+}
+
+/* Row 2 sub-column headers */
+:deep(.datatable-monitoring .p-datatable-thead > tr:last-child > th) {
   background: #f8fafc;
   color: #64748b;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  padding: 0.875rem 1rem;
+  padding: 0.625rem 1rem;
   border-bottom: 2px solid #e2e8f0;
+}
+
+/* Sub-cols Harian accent */
+:deep(.datatable-monitoring .p-datatable-thead > tr:last-child > th:nth-child(1)),
+:deep(.datatable-monitoring .p-datatable-thead > tr:last-child > th:nth-child(2)),
+:deep(.datatable-monitoring .p-datatable-thead > tr:last-child > th:nth-child(3)) {
+  border-left: 2px solid #bfdbfe;
+}
+
+/* Sub-cols Bulanan accent */
+:deep(.datatable-monitoring .p-datatable-thead > tr:last-child > th:nth-child(4)),
+:deep(.datatable-monitoring .p-datatable-thead > tr:last-child > th:nth-child(5)),
+:deep(.datatable-monitoring .p-datatable-thead > tr:last-child > th:nth-child(6)) {
+  border-left: 2px solid #fde68a;
 }
 
 :deep(.datatable-monitoring .p-datatable-tbody > tr > td) {
@@ -313,6 +449,10 @@ const filteredData = computed(() => {
 
 :deep(.datatable-monitoring .p-datatable-tbody > tr:hover) {
   background-color: #f8fafc !important;
+}
+
+:deep(.datatable-monitoring .p-datatable-tbody > tr:hover .detail-btn-fixed) {
+  opacity: 1;
 }
 
 :deep(.datatable-monitoring .p-paginator) {

@@ -11,47 +11,7 @@ const wrcService = new WrcService();
 class RekapBackupService {
   async getSummary() {
     try {
-      const allHarian = await stagingService.getAllData('harian');
-      const allBulanan = await stagingService.getAllData('bulanan');
-
-      const summaryMap = new Map();
-
-      // Aggregate Harian
-      for (const row of allHarian) {
-        if (!row.cabang) continue;
-        const cab = row.cabang.trim().toUpperCase();
-        if (!summaryMap.has(cab)) {
-          summaryMap.set(cab, { cabang: cab, total_harian: 0, oldest_harian: null, newest_harian: null, total_bln: 0, oldest_bln: null, newest_bln: null });
-        }
-        const state = summaryMap.get(cab);
-        state.total_harian += (row.jml_cek || 0);
-        
-        if (row.periode) {
-          if (!state.oldest_harian || row.periode < state.oldest_harian) state.oldest_harian = row.periode;
-          if (!state.newest_harian || row.periode > state.newest_harian) state.newest_harian = row.periode;
-        }
-      }
-
-      // Aggregate Bulanan
-      for (const row of allBulanan) {
-        if (!row.cabang) continue;
-        const cab = row.cabang.trim().toUpperCase();
-        if (!summaryMap.has(cab)) {
-          summaryMap.set(cab, { cabang: cab, total_harian: 0, oldest_harian: null, newest_harian: null, total_bln: 0, oldest_bln: null, newest_bln: null });
-        }
-        const state = summaryMap.get(cab);
-        // old query: SUM(jml_cek) AS total_bln WHERE jenis_file='IDT'
-        if (row.jenis_file === 'IDT') {
-            state.total_bln += (row.jml_cek || 0);
-        }
-        
-        if (row.periode) {
-          if (!state.oldest_bln || row.periode < state.oldest_bln) state.oldest_bln = row.periode;
-          if (!state.newest_bln || row.periode > state.newest_bln) state.newest_bln = row.periode;
-        }
-      }
-
-      return Array.from(summaryMap.values());
+      return await stagingService.getSummaryData();
     } catch (error) {
       logger.error(`Error in getSummary: ${error.message}`);
       throw error;
@@ -133,12 +93,15 @@ class RekapBackupService {
 
   async getYears() {
     try {
-      const allHarian = await stagingService.getAllData('harian');
-      const allBulanan = await stagingService.getAllData('bulanan');
-      
+      const summaryData = await stagingService.getSummaryData();
       const years = new Set();
-      allHarian.forEach(r => { if(r.periode) years.add(r.periode.substring(0, 4)); });
-      allBulanan.forEach(r => { if(r.periode) years.add(r.periode.substring(0, 4)); });
+      
+      for (const row of summaryData) {
+        if (row.oldest_harian) years.add(row.oldest_harian.substring(0, 4));
+        if (row.newest_harian) years.add(row.newest_harian.substring(0, 4));
+        if (row.oldest_bln) years.add(row.oldest_bln.substring(0, 4));
+        if (row.newest_bln) years.add(row.newest_bln.substring(0, 4));
+      }
       
       const yearsArr = Array.from(years).sort();
       if (yearsArr.length === 0) return { oldest_year: null, newest_year: null };

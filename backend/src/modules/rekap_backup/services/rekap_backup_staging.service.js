@@ -37,6 +37,7 @@ class RekapBackupStagingService {
     this.dataDir = path.join(process.cwd(), "data", "rekap_backup");
     this.memoryCacheHarian = new Map();
     this.memoryCacheBulanan = new Map();
+    this.memoryCacheSummary = null;
     this.cacheTTL = 15 * 60 * 1000; // 15 mins
     this.isInitialized = false;
   }
@@ -102,6 +103,33 @@ class RekapBackupStagingService {
       return (cache.get(periode) || { data: [] }).data;
     }
     return cached.data;
+  }
+
+  async loadSummaryFromJson() {
+    const summaryFilePath = path.join(this.dataDir, "rekap_backup_summary_all.json");
+    try {
+      const fileExists = await fs.access(summaryFilePath).then(() => true).catch(() => false);
+      if (!fileExists) {
+        this.memoryCacheSummary = { data: [], timestamp: Date.now() };
+        return;
+      }
+      const fileContent = await fs.readFile(summaryFilePath, "utf-8");
+      const json = JSON.parse(fileContent);
+      this.memoryCacheSummary = {
+        data: json.data || [],
+        timestamp: Date.now(),
+      };
+    } catch (error) {
+      logger.error(`Error loading rekap_backup_summary_all data: ${error.message}`);
+      this.memoryCacheSummary = { data: [], timestamp: Date.now() };
+    }
+  }
+
+  async getSummaryData() {
+    if (!this.memoryCacheSummary || Date.now() - this.memoryCacheSummary.timestamp > this.cacheTTL) {
+      await this.loadSummaryFromJson();
+    }
+    return this.memoryCacheSummary.data;
   }
 
   async getAllData(type) {
@@ -183,46 +211,64 @@ class RekapBackupStagingService {
 
       logger.info(`Syncing summary all JSON...`);
       logger.info(`Process getting data harian...`);
-      const allHarian = await this.getAllData('harian');
+      const querySummaryHarian = `SELECT cabang, sum(jml_cek) AS total_bln, MIN(periode) AS oldest_bln, MAX(periode) AS newest_bln FROM db_edp.rekap_backup_bulanan where jenis_file='IDT' AND LEFT(CABANG,1) IN ('G') GROUP BY cabang;`;
       logger.info(`Process getting data bulanan...`);
-      const allBulanan = await this.getAllData('bulanan');
+      const querySummaryBulanan = `SELECT cabang, sum(jml_cek) AS total_harian, MIN(periode) AS oldest_harian, MAX(periode) AS newest_harian FROM db_edp.rekap_backup_harian WHERE LEFT(CABANG,1) IN ('G') GROUP BY cabang;`;
+
+      const sequelize = await resilientDb.getDatabase();
+      if (!sequelize) throw new Error("Database not connected : " + resilientDb);
+
+      const [allHarian] = await sequelize.query(querySummaryBulanan);
+      const [allBulanan] = await sequelize.query(querySummaryHarian);
 
       const summaryMap = new Map();
 
       for (const row of allHarian) {
         if (!row.cabang) continue;
+
         const cab = row.cabang.trim().toUpperCase();
+
         if (!summaryMap.has(cab)) {
-          summaryMap.set(cab, {
-            cabang: cab,
-            total_harian: 0, oldest_harian: null, newest_harian: null,
-            total_bln: 0, oldest_bln: null, newest_bln: null,
-          });
+            summaryMap.set(cab, {
+                cabang: cab,
+                total_harian: 0,
+                oldest_harian: null,
+                newest_harian: null,
+                total_bln: 0,
+                oldest_bln: null,
+                newest_bln: null
+            });
         }
+
         const s = summaryMap.get(cab);
-        s.total_harian += (row.jml_cek || 0);
-        if (row.periode) {
-          if (!s.oldest_harian || row.periode < s.oldest_harian) s.oldest_harian = row.periode;
-          if (!s.newest_harian || row.periode > s.newest_harian) s.newest_harian = row.periode;
-        }
+
+        s.total_harian = row.total_harian || 0;
+        s.oldest_harian = row.oldest_harian;
+        s.newest_harian = row.newest_harian;
       }
 
       for (const row of allBulanan) {
         if (!row.cabang) continue;
+
         const cab = row.cabang.trim().toUpperCase();
+
         if (!summaryMap.has(cab)) {
-          summaryMap.set(cab, {
-            cabang: cab,
-            total_harian: 0, oldest_harian: null, newest_harian: null,
-            total_bln: 0, oldest_bln: null, newest_bln: null,
-          });
+            summaryMap.set(cab, {
+                cabang: cab,
+                total_harian: 0,
+                oldest_harian: null,
+                newest_harian: null,
+                total_bln: 0,
+                oldest_bln: null,
+                newest_bln: null
+            });
         }
+
         const s = summaryMap.get(cab);
-        if (row.jenis_file === 'IDT') s.total_bln += (row.jml_cek || 0);
-        if (row.periode) {
-          if (!s.oldest_bln || row.periode < s.oldest_bln) s.oldest_bln = row.periode;
-          if (!s.newest_bln || row.periode > s.newest_bln) s.newest_bln = row.periode;
-        }
+
+        s.total_bln = row.total_bln || 0;
+        s.oldest_bln = row.oldest_bln;
+        s.newest_bln = row.newest_bln;
       }
 
       const summaryArray = Array.from(summaryMap.values()).sort((a, b) => a.cabang.localeCompare(b.cabang));
@@ -233,6 +279,7 @@ class RekapBackupStagingService {
       };
 
       await fs.writeFile(summaryFilePath, JSON.stringify(meta, null, 2), "utf-8");
+      await this.loadSummaryFromJson();
       logger.info(`Summary all JSON generated: ${summaryArray.length} cabang -> ${path.basename(summaryFilePath)}`);
       return { success: true, totalCabang: summaryArray.length };
     } catch (error) {

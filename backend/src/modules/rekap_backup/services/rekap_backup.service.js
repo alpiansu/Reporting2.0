@@ -216,24 +216,6 @@ class RekapBackupService {
       throw error;
     }
   }
-
-  async syncTokoAktifWrc(cabang, periode) {
-    if (!cabang || !periode) throw new Error("Cabang and Periode are required");
-    
-    logger.info(`Starting syncTokoAktifWrc for ${cabang} - ${periode}`);
-    try {
-      const countStores = await stagingService._syncTokoAktifInternal(cabang, periode);
-
-      // trigger json sync
-      await stagingService.syncToJson('harian', periode);
-      await stagingService.syncToJson('bulanan', periode);
-
-      return { success: true, count: countStores };
-    } catch (error) {
-      logger.error(`Error syncing Toko Aktif WRC: ${error.message}`);
-      throw error;
-    }
-  }
 }
 
 export default new RekapBackupService();

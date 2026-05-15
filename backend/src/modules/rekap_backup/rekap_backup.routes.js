@@ -24,9 +24,6 @@ router.get("/years", rekapBackupController.getYears);
 // Export Excel
 router.get("/export", rekapBackupController.exportExcel);
 
-// Sync Toko Aktif (WRC)
-router.post("/sync-wrc", rekapBackupController.syncWrc);
-
 // Admin: trigger staging sync manually
 router.post("/staging/sync", rekapBackupController.triggerStagingSync);
 

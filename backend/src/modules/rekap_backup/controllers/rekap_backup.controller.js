@@ -94,17 +94,6 @@ class RekapBackupController {
     }
   }
 
-  async syncWrc(req, res) {
-    try {
-      const { cabang, periode } = req.body;
-      const result = await rekapBackupService.syncTokoAktifWrc(cabang, periode);
-      res.status(200).json(result);
-    } catch (error) {
-      logger.error(`Error syncWrc: ${error.message}`);
-      res.status(500).json({ success: false, message: "Gagal sinkronisasi WRC : " + error.message });
-    }
-  }
-
   // Admin endpoint to trigger json staging manually
   async triggerStagingSync(req, res) {
     try {

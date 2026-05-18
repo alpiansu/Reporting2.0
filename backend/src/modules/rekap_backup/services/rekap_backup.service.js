@@ -356,7 +356,7 @@ class RekapBackupService {
           file_tgab: boolToX(row.file_tgab),
           file_tfrc: boolToX(row.file_tfrc),
           file_treg: boolToX(row.file_treg),
-          file_t: boolToX(row.file_t),
+          file_t: row.jml_cek > 0 ? 'X' : '',
           file_it: boolToX(row.file_it),
           path: row.path
         });

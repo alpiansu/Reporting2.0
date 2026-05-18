@@ -54,7 +54,7 @@ class RekapBackupStagingService {
     try {
       const files = await fs.readdir(this.dataDir).catch(() => []);
       return files
-        .filter(f => f.startsWith(`rekap_backup_${type}_`) && f.endsWith(".json") && !f.includes("summary") && !f.includes("backup"))
+        .filter(f => f.startsWith(`rekap_backup_${type}_`) && f.endsWith(".json") && !f.includes("summary"))
         .map(f => f.replace(`rekap_backup_${type}_`, "").replace(".json", ""))
         .sort((a, b) => a.localeCompare(b));
     } catch (error) {

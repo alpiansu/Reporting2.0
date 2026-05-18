@@ -198,76 +198,155 @@ class RekapBackupService {
         bulananData = bulananData.filter(r => r.periode && r.periode.substring(0, 4) >= startYear && r.periode.substring(0, 4) <= end);
       }
 
-      if (cabang && cabang !== 'All' && cabang !== '') {
-        // Data already filtered by branch above if branch is specified
-      }
-
       const workbook = new ExcelJS.Workbook();
+
+      // --- Styling header ---
+      const headerStyle = {
+        font:      { bold: true },
+        alignment: { vertical: 'middle', horizontal: 'center', wrapText: true },
+      };
       
       // --- Sheet 1: Rekap Harian ---
       const sheetHarian = workbook.addWorksheet('Rekap Harian');
+
+      // Set column widths (tanpa header property)
       sheetHarian.columns = [
-        { header: 'NO', key: 'no', width: 5 },
-        { header: 'CABANG', key: 'cabang', width: 15 },
-        { header: 'PERIODE', key: 'periode', width: 15 },
-        { header: 'TOKO ACTIVE', key: 'toko_aktif', width: 15 },
-        // Dates 1-31
-        ...Array.from({ length: 31 }, (_, i) => ({ header: `${i+1}`, key: `tg${i+1}`, width: 5 })),
-        { header: 'TOTAL HARI', key: 'total_hari', width: 12 },
-        { header: 'TOTAL FILES', key: 'total_files', width: 12 },
-        { header: 'LOKASI PENYIMPANAN', key: 'path', width: 55 }
+        { key: 'no',          width: 5  },
+        { key: 'cabang',      width: 15 },
+        { key: 'periode',     width: 15 },
+        { key: 'toko_aktif',  width: 15 },
+        ...Array.from({ length: 31 }, (_, i) => ({ key: `tg${i+1}`, width: 5 })),
+        { key: 'total_hari',  width: 12 },
+        { key: 'total_files', width: 12 },
+        { key: 'path',        width: 55 },
       ];
 
-      // Format Header Rows
-      const headerRow = sheetHarian.getRow(1);
-      headerRow.font = { bold: true };
-      headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+      // --- Row 1 ---
+      const row1 = sheetHarian.getRow(1);
+      row1.getCell(1).value  = 'NO';
+      row1.getCell(2).value  = 'CABANG';
+      row1.getCell(3).value  = 'PERIODE';
+      row1.getCell(4).value  = 'TOKO ACTIVE';
+      row1.getCell(5).value  = 'TANGGAL';   // header group, akan di-colspan 31
+      row1.getCell(36).value = 'TOTAL HARI';
+      row1.getCell(37).value = 'TOTAL FILES';
+      row1.getCell(38).value = 'LOKASI PENYIMPANAN';
+      row1.commit();
 
+      // --- Row 2 (angka tanggal 1-31) ---
+      const row2 = sheetHarian.getRow(2);
+      for (let i = 1; i <= 31; i++) {
+        row2.getCell(4 + i).value = i;  // kolom E(5) sampai AI(35)
+      }
+      row2.commit();
+
+      // --- Merge Cells ---
+      sheetHarian.mergeCells('A1:A2');  // NO
+      sheetHarian.mergeCells('B1:B2');  // CABANG
+      sheetHarian.mergeCells('C1:C2');  // PERIODE
+      sheetHarian.mergeCells('D1:D2');  // TOKO ACTIVE
+      sheetHarian.mergeCells('E1:AI1'); // TANGGAL (kolom 5-35 = 31 kolom)
+      sheetHarian.mergeCells('AJ1:AJ2'); // TOTAL HARI
+      sheetHarian.mergeCells('AK1:AK2'); // TOTAL FILES
+      sheetHarian.mergeCells('AL1:AL2'); // LOKASI PENYIMPANAN
+
+      // Apply style ke row 1 & 2
+      [1, 2].forEach(rowNum => {
+        const row = sheetHarian.getRow(rowNum);
+        row.height = 20;
+        row.eachCell({ includeEmpty: true }, cell => {
+          cell.style = headerStyle;
+        });
+      });
+
+      // --- Data mulai row 3 (otomatis karena row 1 & 2 sudah terisi) ---
       harianData.forEach((row, idx) => {
         let totalHari = 0;
         const rowData = {
-          no: idx + 1,
-          cabang: row.cabang,
-          periode: row.periode,
-          toko_aktif: row.jml_toko_aktif,
-          total_files: row.jml_cek, // Actually the old project mapped jml_cek to jml_files? Let's use what we have.
-          path: row.path
+          no:          idx + 1,
+          cabang:      row.cabang,
+          periode:     row.periode,
+          toko_aktif:  row.jml_toko_aktif,
+          total_files: row.jml_cek,
+          path:        row.path,
         };
-        for(let i=1; i<=31; i++) {
+        for (let i = 1; i <= 31; i++) {
           const val = row[`tg${i}`];
           rowData[`tg${i}`] = val;
           if (val) totalHari++;
         }
         rowData.total_hari = totalHari;
-        sheetHarian.addRow(rowData);
+
+        const newRow = sheetHarian.addRow(rowData);
+  
+        // Center semua cell di row ini
+        newRow.eachCell({ includeEmpty: true }, cell => {
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        });
       });
 
       // --- Sheet 2: Rekap Bulanan ---
       const sheetBulanan = workbook.addWorksheet('Rekap Bulanan');
-      sheetBulanan.columns = [
-        { header: 'NO', key: 'no', width: 5 },
-        { header: 'CABANG', key: 'cabang', width: 15 },
-        { header: 'PERIODE', key: 'periode', width: 15 },
-        { header: 'TOKO ACTIVE', key: 'toko_aktif', width: 15 },
-        { header: 'FILE G', key: 'file_g', width: 10 },
-        { header: 'IDT', key: 'file_idt', width: 10 },
-        { header: 'TGAB', key: 'file_tgab', width: 10 },
-        { header: 'TFRC', key: 'file_tfrc', width: 10 },
-        { header: 'TREG', key: 'file_treg', width: 10 },
-        { header: 'FILE T', key: 'file_t', width: 10 },
-        { header: 'FILE IT', key: 'file_it', width: 10 },
-        { header: 'LOKASI PENYIMPANAN', key: 'path', width: 55 }
-      ];
 
-      const headerRowBln = sheetBulanan.getRow(1);
-      headerRowBln.font = { bold: true };
-      headerRowBln.alignment = { vertical: 'middle', horizontal: 'center' };
+      // set column width
+      sheetBulanan.columns = [
+        { key: 'no', width: 5 },
+        { key: 'cabang', width: 15 },
+        { key: 'periode', width: 15 },
+        { key: 'toko_aktif', width: 15 },
+        { key: 'file_g', width: 10 },
+        { key: 'file_idt', width: 10 },
+        { key: 'file_tgab', width: 10 },
+        { key: 'file_tfrc', width: 10 },
+        { key: 'file_treg', width: 10 },
+        { key: 'file_t', width: 10 },
+        { key: 'file_it', width: 10 },
+        { key: 'path', width: 55 }
+      ];
+      
+      // --- Row 1 ---
+      const row1Bulan = sheetBulanan.getRow(1);
+      row1Bulan.getCell(1).value  = 'NO';
+      row1Bulan.getCell(2).value  = 'CABANG';
+      row1Bulan.getCell(3).value  = 'PERIODE';
+      row1Bulan.getCell(4).value  = 'TOKO ACTIVE';
+      row1Bulan.getCell(5).value  = 'FILE';
+      row1Bulan.getCell(12).value = 'LOKASI PENYIMPANAN';
+      row1Bulan.commit();
+
+      // --- Row 2 (angka tanggal 1-31) ---
+      const row2Bulan = sheetBulanan.getRow(2);
+      row2Bulan.getCell(5).value  = 'FILE G';
+      row2Bulan.getCell(6).value  = 'FILE IDT';
+      row2Bulan.getCell(7).value  = 'FILE TGAB';
+      row2Bulan.getCell(8).value  = 'FILE TFRC';
+      row2Bulan.getCell(9).value  = 'FILE TREG';
+      row2Bulan.getCell(10).value = 'FILE T';
+      row2Bulan.getCell(11).value = 'FILE IT';
+      row2Bulan.commit();
+
+      // --- Merge Cells ---
+      sheetBulanan.mergeCells('A1:A2');  // NO
+      sheetBulanan.mergeCells('B1:B2');  // CABANG
+      sheetBulanan.mergeCells('C1:C2');  // PERIODE
+      sheetBulanan.mergeCells('D1:D2');  // TOKO ACTIVE
+      sheetBulanan.mergeCells('E1:K1'); // FILE
+      sheetBulanan.mergeCells('L1:L2'); // LOKASI PENYIMPANAN
+
+      // Apply style ke row 1 & 2
+      [1, 2].forEach(rowNum => {
+        const row = sheetBulanan.getRow(rowNum);
+        row.height = 20;
+        row.eachCell({ includeEmpty: true }, cell => {
+          cell.style = headerStyle;
+        });
+      });
 
       // We need to merge path_bulanan with rekap_backup_bulanan for export, but in JSON staging we might just use what's available
       bulananData.forEach((row, idx) => {
         // old code checked if file_g = '1' -> 'X'
         const boolToX = (val) => String(val) === '1' ? 'X' : '';
-        sheetBulanan.addRow({
+        const newRowBulanan = sheetBulanan.addRow({
           no: idx + 1,
           cabang: row.cabang,
           periode: row.periode,
@@ -280,6 +359,11 @@ class RekapBackupService {
           file_t: boolToX(row.file_t),
           file_it: boolToX(row.file_it),
           path: row.path
+        });
+
+        // Center semua cell di row ini
+        newRowBulanan.eachCell({ includeEmpty: true }, cell => {
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
         });
       });
 

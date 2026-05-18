@@ -99,6 +99,7 @@ class RekapBackupController {
 
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
       res.send(buffer);
     } catch (error) {
       logger.error(`Error exportExcel: ${error.message}`);

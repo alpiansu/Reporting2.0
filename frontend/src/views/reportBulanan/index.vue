@@ -77,10 +77,8 @@ import ReportList from './components/ReportList.vue';
 import ReportManagerDialog from './components/ReportManagerDialog.vue';
 import ReportFormDialog from './components/ReportFormDialog.vue';
 import monthlyReportsService from '@/services/monthlyReports.service.js';
-import { useAuthStore } from '@/stores';
 
 const toast = useToastService();
-const authStore = useAuthStore();
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const cabang       = ref('');
@@ -220,11 +218,12 @@ const doDelete = async () => {
 // ─── Lifecycle ────────────────────────────────────────────────────────────────
 onMounted(() => {
   loadReports();
-  // Set periode default ke bulan ini
-  const now = new Date();
-  selectedDate.value = now;
-  const yy = now.getFullYear().toString().slice(-2);
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const lastMonth = new Date();
+  lastMonth.setMonth(lastMonth.getMonth() - 1);
+
+  selectedDate.value = lastMonth;
+  const yy = lastMonth.getFullYear().toString().slice(-2);
+  const mm = String(lastMonth.getMonth() + 1).padStart(2, '0');
   periode.value = yy + mm;
 });
 </script>

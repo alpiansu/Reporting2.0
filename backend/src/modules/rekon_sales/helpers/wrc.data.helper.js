@@ -59,8 +59,8 @@ class WrcDataHelper {
       const tempFile = await WrcUtils.getWrcData(strCab, period, "glslp", queryTemplate, shops);
 
       if (!tempFile) {
-        logger.warn(`[rekon_sales.WrcDataHelper] No WRC data returned for cab: ${cab}, period: ${prdFilet}`);
-        return [];
+        logger.warn(`[rekon_sales.WrcDataHelper] No WRC data returned for cab: ${strCab}, period: ${period}`);
+        return { data: [], tempFile: null };
       }
 
       // Read JSON result file
@@ -110,8 +110,8 @@ class WrcDataHelper {
 
       const tempFile = await WrcUtils.getWrcData(strCab, period, "glslp", queryTemplate, shops);
       if (!tempFile) {
-        logger.warn(`[rekon_sales.WrcDataHelper] No WRC data returned for cab: ${cab}, period: ${prdFilet}`);
-        return [];
+        logger.warn(`[rekon_sales.WrcDataHelper] No WRC data returned for cab: ${strCab}, period: ${period}`);
+        return "";
       }
 
       const raw = await fs.readFile(tempFile, "utf-8");

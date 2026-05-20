@@ -1,0 +1,712 @@
+###
+# Rekon Sales API Tests
+# Module: rekon_sales
+# Base URL: http://localhost:3000/api/rekon-sales
+#
+# DESKRIPSI MODULE:
+# Modul ini melakukan proses screening/rekonsiliasi data penjualan toko
+# dengan cara membandingkan 3 sumber data:
+#   1. NET_TOKO (mtran dari database toko)
+#   2. NET_GL   (data GL dari WRC cabang)
+#   3. NET_CD   (closing_detail dari database toko)
+#
+# ALUR KERJA:
+#   Screening → Summary → Resume Per Toko → Detail Per Toko → Differences/KodePesanan Issues
+#
+# FORMAT PERIODE:
+#   Screening  : periode=YYYY-MM  (contoh: 2025-05)
+#   Summary    : month=05&year=2025
+#   Detail     : month=05&year=2025
+#
+# RECID:
+#   '*' = toko masih ada selisih (aktif/bermasalah)
+#   '1' = toko sudah resolved (tidak muncul di query)
+###
+
+### ─── VARIABEL ─────────────────────────────────────────────────────────────
+@baseUrl   = http://localhost:3000/api
+@token     = YOUR_JWT_TOKEN_HERE
+@cabang    = G033
+@kdtk      = TW75
+@month     = 05
+@year      = 2025
+@periode   = 2025-05
+
+###############################################
+# 1. AUTHENTICATION
+###############################################
+
+### [AUTH-01] Login → salin accessToken ke @token di atas
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin2",
+  "password": "admin123"
+}
+
+###############################################
+# 2. SCREENING – 3 LEVEL
+###############################################
+# Level 1: Semua cabang
+# Level 2: 1 cabang spesifik
+# Level 3: 1 toko spesifik (single store refresh)
+# Proses cukup lama karena connect ke setiap toko
+###############################################
+
+### [SCR-01] Level 1: Screening semua cabang
+# WARNING: Proses sangat lama (semua toko)
+GET {{baseUrl}}/rekon-sales/screening?cabang=All&periode={{periode}}
+Authorization: Bearer {{token}}
+
+###
+
+### [SCR-02] Level 2: Screening 1 cabang spesifik
+# Lebih cepat dari Level 1, hanya toko di cabang ini
+GET {{baseUrl}}/rekon-sales/screening?cabang={{cabang}}&periode={{periode}}
+Authorization: Bearer {{token}}
+
+###
+
+### [SCR-03] Level 3: Screening 1 toko saja (paling cepat)
+# Dipakai saat user klik tombol refresh pada baris tertentu di UI
+GET {{baseUrl}}/rekon-sales/screening?kdtk={{kdtk}}&periode={{periode}}
+Authorization: Bearer {{token}}
+
+###
+
+### [SCR-04] ERROR: Tanpa parameter periode (harus return 400)
+GET {{baseUrl}}/rekon-sales/screening?cabang={{cabang}}
+Authorization: Bearer {{token}}
+
+###
+
+### [SCR-05] ERROR: Format periode salah – YYMM bukan YYYY-MM (harus return 400)
+GET {{baseUrl}}/rekon-sales/screening?cabang={{cabang}}&periode=2511
+Authorization: Bearer {{token}}
+
+###
+
+### [SCR-06] ERROR: Format periode salah – hanya tahun (harus return 400)
+GET {{baseUrl}}/rekon-sales/screening?cabang={{cabang}}&periode=2025
+Authorization: Bearer {{token}}
+
+###
+
+### [SCR-07] ERROR: Periode dengan karakter alfabet (harus return 400)
+GET {{baseUrl}}/rekon-sales/screening?cabang={{cabang}}&periode=abcd-ef
+Authorization: Bearer {{token}}
+
+###
+
+### [SCR-08] Level 3: Toko lain (test single store berbeda)
+GET {{baseUrl}}/rekon-sales/screening?kdtk=T001&periode={{periode}}
+Authorization: Bearer {{token}}
+
+###
+
+### [SCR-09] Level 3: Toko yang tidak diketahui (koneksi gagal, tapi tidak crash)
+GET {{baseUrl}}/rekon-sales/screening?kdtk=XXXX&periode={{periode}}
+Authorization: Bearer {{token}}
+
+###############################################
+# 3. SUMMARY – Statistik Agregat
+###############################################
+# Menampilkan total issue, total selisih NET & PPN
+# Hanya menghitung data RECID='*' (belum resolved)
+###############################################
+
+### [SUM-01] Summary semua cabang bulan berjalan
+GET {{baseUrl}}/rekon-sales/summary?cabang=All&month={{month}}&year={{year}}
+Authorization: Bearer {{token}}
+
+###
+
+### [SUM-02] Summary 1 cabang spesifik
+GET {{baseUrl}}/rekon-sales/summary?cabang={{cabang}}&month={{month}}&year={{year}}
+Authorization: Bearer {{token}}
+
+###
+
+### [SUM-03] Summary tanpa filter cabang (default All)
+GET {{baseUrl}}/rekon-sales/summary?month={{month}}&year={{year}}
+Authorization: Bearer {{token}}
+
+###
+
+### [SUM-04] Summary bulan sebelumnya (untuk perbandingan)
+GET {{baseUrl}}/rekon-sales/summary?cabang={{cabang}}&month=04&year=2025
+Authorization: Bearer {{token}}
+
+###
+
+### [SUM-05] ERROR: Tanpa month dan year (harus return 400)
+GET {{baseUrl}}/rekon-sales/summary?cabang={{cabang}}
+Authorization: Bearer {{token}}
+
+###
+
+### [SUM-06] ERROR: Tanpa year saja (harus return 400)
+GET {{baseUrl}}/rekon-sales/summary?cabang={{cabang}}&month={{month}}
+Authorization: Bearer {{token}}
+
+###
+
+### [SUM-07] ERROR: Tanpa month saja (harus return 400)
+GET {{baseUrl}}/rekon-sales/summary?cabang={{cabang}}&year={{year}}
+Authorization: Bearer {{token}}
+
+###############################################
+# 4. RESUME PER TOKO – Daftar Toko Bermasalah (Paginated)
+###############################################
+# Menampilkan agregasi per toko: total issues, total selisih NET/PPN, tanggal-tanggal bermasalah
+# Kolom output: CAB, KDTK, NAMA, TOTAL_ISSUES, TOTAL_SEL_NET_GL, TOTAL_SEL_NET_CD,
+#               TOTAL_SEL_PPN_GL, TOTAL_SEL_PPN_CD, TOTAL_SEL_NET, TOTAL_SEL_PPN,
+#               DATES, UPDTIME_LATEST, note
+###############################################
+
+### [RSM-01] Resume semua toko (default: page=1, limit=10, sort=KDTK ASC)
+GET {{baseUrl}}/rekon-sales/resumePerShop?month={{month}}&year={{year}}
+Authorization: Bearer {{token}}
+
+###
+
+### [RSM-02] Resume 1 cabang spesifik
+GET {{baseUrl}}/rekon-sales/resumePerShop?month={{month}}&year={{year}}&cabang={{cabang}}
+Authorization: Bearer {{token}}
+
+###
+
+### [RSM-03] Resume dengan pagination – halaman 2, 20 item per halaman
+GET {{baseUrl}}/rekon-sales/resumePerShop?month={{month}}&year={{year}}&cabang=All&page=2&limit=20
+Authorization: Bearer {{token}}
+
+###
+
+### [RSM-04] Resume dengan search query (cari nama/kode toko)
+GET {{baseUrl}}/rekon-sales/resumePerShop?month={{month}}&year={{year}}&searchQuery={{kdtk}}
+Authorization: Bearer {{token}}
+
+###
+
+### [RSM-05] Resume sorted by TOTAL_SEL_NET_GL DESC (selisih terbesar dulu)
+GET {{baseUrl}}/rekon-sales/resumePerShop?month={{month}}&year={{year}}&sortColumn=TOTAL_SEL_NET_GL&sortOrder=DESC
+Authorization: Bearer {{token}}
+
+###
+
+### [RSM-06] Resume sorted by TOTAL_SEL_NET_CD DESC
+GET {{baseUrl}}/rekon-sales/resumePerShop?month={{month}}&year={{year}}&sortColumn=TOTAL_SEL_NET_CD&sortOrder=DESC
+Authorization: Bearer {{token}}
+
+###
+
+### [RSM-07] Resume sorted by TOTAL_ISSUES DESC (toko dengan issue terbanyak)
+GET {{baseUrl}}/rekon-sales/resumePerShop?month={{month}}&year={{year}}&sortColumn=TOTAL_ISSUES&sortOrder=DESC
+Authorization: Bearer {{token}}
+
+###
+
+### [RSM-08] Resume sorted by UPDTIME_LATEST DESC (paling baru di-scan)
+GET {{baseUrl}}/rekon-sales/resumePerShop?month={{month}}&year={{year}}&sortColumn=UPDTIME_LATEST&sortOrder=DESC
+Authorization: Bearer {{token}}
+
+###
+
+### [RSM-09] Resume sorted by NAMA ASC
+GET {{baseUrl}}/rekon-sales/resumePerShop?month={{month}}&year={{year}}&sortColumn=NAMA&sortOrder=ASC
+Authorization: Bearer {{token}}
+
+###
+
+### [RSM-10] Resume dengan search + sort + pagination dikombinasikan
+GET {{baseUrl}}/rekon-sales/resumePerShop?month={{month}}&year={{year}}&cabang={{cabang}}&searchQuery=mart&sortColumn=TOTAL_SEL_NET_GL&sortOrder=DESC&page=1&limit=50
+Authorization: Bearer {{token}}
+
+###
+
+### [RSM-11] Resume dengan limit besar (ambil semua, test performa)
+GET {{baseUrl}}/rekon-sales/resumePerShop?month={{month}}&year={{year}}&page=1&limit=1000
+Authorization: Bearer {{token}}
+
+###
+
+### [RSM-12] ERROR: Tanpa month dan year (harus return 400)
+GET {{baseUrl}}/rekon-sales/resumePerShop?cabang={{cabang}}
+Authorization: Bearer {{token}}
+
+###
+
+### [RSM-13] Resume bulan sebelumnya (cek data historis)
+GET {{baseUrl}}/rekon-sales/resumePerShop?month=04&year=2025&cabang=All
+Authorization: Bearer {{token}}
+
+###############################################
+# 5. DETAIL PER TOKO (Monthly View)
+###############################################
+# Menampilkan breakdown per hari dari 1 toko
+# Output: summary (total bulan), daily[] (per tanggal), notes[] (catatan per tanggal)
+###############################################
+
+### [DTL-01] Detail toko tertentu – bulan berjalan
+GET {{baseUrl}}/rekon-sales/details?kdtk={{kdtk}}&month={{month}}&year={{year}}
+Authorization: Bearer {{token}}
+
+###
+
+### [DTL-02] Detail toko berbeda
+GET {{baseUrl}}/rekon-sales/details?kdtk=T001&month={{month}}&year={{year}}
+Authorization: Bearer {{token}}
+
+###
+
+### [DTL-03] Detail bulan sebelumnya (data historis)
+GET {{baseUrl}}/rekon-sales/details?kdtk={{kdtk}}&month=04&year=2025
+Authorization: Bearer {{token}}
+
+###
+
+### [DTL-04] Detail toko yang tidak ada di data (harus return data kosong, bukan error)
+GET {{baseUrl}}/rekon-sales/details?kdtk=XXXX&month={{month}}&year={{year}}
+Authorization: Bearer {{token}}
+
+###
+
+### [DTL-05] ERROR: Tanpa kdtk (harus return 400)
+GET {{baseUrl}}/rekon-sales/details?month={{month}}&year={{year}}
+Authorization: Bearer {{token}}
+
+###
+
+### [DTL-06] ERROR: Tanpa month (harus return 400)
+GET {{baseUrl}}/rekon-sales/details?kdtk={{kdtk}}&year={{year}}
+Authorization: Bearer {{token}}
+
+###
+
+### [DTL-07] ERROR: Tanpa year (harus return 400)
+GET {{baseUrl}}/rekon-sales/details?kdtk={{kdtk}}&month={{month}}
+Authorization: Bearer {{token}}
+
+###############################################
+# 6. DIFFERENCES – Selisih Detail Mtran vs Closing Detail
+###############################################
+# Menampilkan perbedaan per dokumen/transaksi antara mtran dan closing_detail
+# Hanya tersedia jika screening menemukan selisih (NET/PPN) melebihi tolerance (50 rupiah)
+# Output: daily[] grouped by tanggal, setiap tanggal berisi rows dokumen
+###############################################
+
+### [DIF-01] Differences toko tertentu bulan berjalan
+GET {{baseUrl}}/rekon-sales/differences?kdtk={{kdtk}}&month={{month}}&year={{year}}
+Authorization: Bearer {{token}}
+
+###
+
+### [DIF-02] Differences toko berbeda
+GET {{baseUrl}}/rekon-sales/differences?kdtk=T001&month={{month}}&year={{year}}
+Authorization: Bearer {{token}}
+
+###
+
+### [DIF-03] Differences toko yang tidak ada datanya (harus return { daily: [] })
+GET {{baseUrl}}/rekon-sales/differences?kdtk=XXXX&month={{month}}&year={{year}}
+Authorization: Bearer {{token}}
+
+###
+
+### [DIF-04] ERROR: Tanpa kdtk (harus return 400)
+GET {{baseUrl}}/rekon-sales/differences?month={{month}}&year={{year}}
+Authorization: Bearer {{token}}
+
+###
+
+### [DIF-05] ERROR: Tanpa month (harus return 400)
+GET {{baseUrl}}/rekon-sales/differences?kdtk={{kdtk}}&year={{year}}
+Authorization: Bearer {{token}}
+
+###
+
+### [DIF-06] Differences bulan sebelumnya
+GET {{baseUrl}}/rekon-sales/differences?kdtk={{kdtk}}&month=04&year=2025
+Authorization: Bearer {{token}}
+
+###############################################
+# 7. KODE PESANAN ISSUES
+###############################################
+# Menampilkan kode pesanan yang ada di mtran toko tapi tidak ada di GL WRC (atau sebaliknya)
+# VALSUBKEY berisi kode pesanan yang hilang (satu nilai per record)
+# Output: daily[] grouped by tanggal, setiap tanggal berisi issues[]
+###############################################
+
+### [KP-01] Kode pesanan issues toko tertentu bulan berjalan
+GET {{baseUrl}}/rekon-sales/kodePesananIssues?kdtk={{kdtk}}&month={{month}}&year={{year}}
+Authorization: Bearer {{token}}
+
+###
+
+### [KP-02] Kode pesanan toko berbeda
+GET {{baseUrl}}/rekon-sales/kodePesananIssues?kdtk=T001&month={{month}}&year={{year}}
+Authorization: Bearer {{token}}
+
+###
+
+### [KP-03] Kode pesanan toko tanpa issue (harus return { daily: [] })
+GET {{baseUrl}}/rekon-sales/kodePesananIssues?kdtk=XXXX&month={{month}}&year={{year}}
+Authorization: Bearer {{token}}
+
+###
+
+### [KP-04] ERROR: Tanpa kdtk (harus return 400)
+GET {{baseUrl}}/rekon-sales/kodePesananIssues?month={{month}}&year={{year}}
+Authorization: Bearer {{token}}
+
+###
+
+### [KP-05] ERROR: Tanpa month (harus return 400)
+GET {{baseUrl}}/rekon-sales/kodePesananIssues?kdtk={{kdtk}}&year={{year}}
+Authorization: Bearer {{token}}
+
+###
+
+### [KP-06] Kode pesanan bulan sebelumnya
+GET {{baseUrl}}/rekon-sales/kodePesananIssues?kdtk={{kdtk}}&month=04&year=2025
+Authorization: Bearer {{token}}
+
+###############################################
+# 8. EXPORT DATA (untuk Excel)
+###############################################
+# Mengembalikan summary + semua data toko bermasalah dalam satu response
+# Digunakan frontend untuk generate file Excel
+###############################################
+
+### [EXP-01] Export semua cabang bulan berjalan
+GET {{baseUrl}}/rekon-sales/export-data?cabang=All&month={{month}}&year={{year}}
+Authorization: Bearer {{token}}
+
+###
+
+### [EXP-02] Export 1 cabang spesifik
+GET {{baseUrl}}/rekon-sales/export-data?cabang={{cabang}}&month={{month}}&year={{year}}
+Authorization: Bearer {{token}}
+
+###
+
+### [EXP-03] Export dengan filter search (hanya toko yang match)
+GET {{baseUrl}}/rekon-sales/export-data?cabang=All&month={{month}}&year={{year}}&searchQuery={{kdtk}}
+Authorization: Bearer {{token}}
+
+###
+
+### [EXP-04] ERROR: Tanpa month dan year (harus return 400)
+GET {{baseUrl}}/rekon-sales/export-data?cabang={{cabang}}
+Authorization: Bearer {{token}}
+
+###
+
+### [EXP-05] Export bulan sebelumnya
+GET {{baseUrl}}/rekon-sales/export-data?cabang=All&month=04&year=2025
+Authorization: Bearer {{token}}
+
+###############################################
+# 9. NOTE – Tambah/Update/Hapus Catatan per Tanggal
+###############################################
+# Note disimpan per kombinasi kdtk+tanggal (bukan per bulan)
+# PUT /note → upsert (insert jika baru, update jika sudah ada)
+# Jika noteText kosong → note dihapus (soft delete)
+###############################################
+
+### [NOTE-01] Tambah/update note untuk toko+tanggal tertentu
+PUT {{baseUrl}}/rekon-sales/note
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "cabang": "{{cabang}}",
+  "kdtk": "{{kdtk}}",
+  "tanggal": "2025-05-15",
+  "noteText": "Selisih sudah dikonfirmasi ke toko, menunggu perbaikan data"
+}
+
+###
+
+### [NOTE-02] Update note yang sudah ada (ganti teks)
+PUT {{baseUrl}}/rekon-sales/note
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "cabang": "{{cabang}}",
+  "kdtk": "{{kdtk}}",
+  "tanggal": "2025-05-15",
+  "noteText": "Update: toko sudah perbaiki data, menunggu re-screening"
+}
+
+###
+
+### [NOTE-03] Hapus note (noteText kosong → delete)
+PUT {{baseUrl}}/rekon-sales/note
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "cabang": "{{cabang}}",
+  "kdtk": "{{kdtk}}",
+  "tanggal": "2025-05-15",
+  "noteText": ""
+}
+
+###
+
+### [NOTE-04] Note untuk tanggal berbeda di toko yang sama
+PUT {{baseUrl}}/rekon-sales/note
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "cabang": "{{cabang}}",
+  "kdtk": "{{kdtk}}",
+  "tanggal": "2025-05-20",
+  "noteText": "Issue ini terkait dengan promo weekend, sedang investigasi"
+}
+
+###
+
+### [NOTE-05] ERROR: Tanpa cabang (harus return 400)
+PUT {{baseUrl}}/rekon-sales/note
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "kdtk": "{{kdtk}}",
+  "tanggal": "2025-05-15",
+  "noteText": "Missing cabang test"
+}
+
+###
+
+### [NOTE-06] ERROR: Tanpa kdtk (harus return 400)
+PUT {{baseUrl}}/rekon-sales/note
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "cabang": "{{cabang}}",
+  "tanggal": "2025-05-15",
+  "noteText": "Missing kdtk test"
+}
+
+###
+
+### [NOTE-07] ERROR: Tanpa tanggal (harus return 400)
+PUT {{baseUrl}}/rekon-sales/note
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "cabang": "{{cabang}}",
+  "kdtk": "{{kdtk}}",
+  "noteText": "Missing tanggal test"
+}
+
+###
+
+### [NOTE-08] ERROR: Tanpa noteText (harus return 400 – bukan kosong tapi tidak ada field-nya)
+PUT {{baseUrl}}/rekon-sales/note
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "cabang": "{{cabang}}",
+  "kdtk": "{{kdtk}}",
+  "tanggal": "2025-05-15"
+}
+
+###############################################
+# 10. AUTHENTICATION ERRORS
+###############################################
+
+### [AUTH-ERR-01] Tanpa token (harus return 401)
+GET {{baseUrl}}/rekon-sales/summary?month={{month}}&year={{year}}
+
+###
+
+### [AUTH-ERR-02] Token tidak valid (harus return 401)
+GET {{baseUrl}}/rekon-sales/summary?month={{month}}&year={{year}}
+Authorization: Bearer token_palsu_12345_tidak_valid
+
+###
+
+### [AUTH-ERR-03] Token expired / malformed (harus return 401)
+GET {{baseUrl}}/rekon-sales/resumePerShop?month={{month}}&year={{year}}
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.expired
+
+###############################################
+# 11. WORKFLOW SIMULATION (Urutan Realistis)
+###############################################
+
+### WORKFLOW A: Screening Awal Bulan
+#
+# Step 1: Screening semua cabang (bisa lama)
+GET {{baseUrl}}/rekon-sales/screening?cabang=All&periode={{periode}}
+Authorization: Bearer {{token}}
+
+### Step 2: Lihat summary hasil screening
+GET {{baseUrl}}/rekon-sales/summary?cabang=All&month={{month}}&year={{year}}
+Authorization: Bearer {{token}}
+
+### Step 3: Lihat daftar toko bermasalah (sort selisih terbesar)
+GET {{baseUrl}}/rekon-sales/resumePerShop?month={{month}}&year={{year}}&sortColumn=TOTAL_SEL_NET_GL&sortOrder=DESC&limit=50
+Authorization: Bearer {{token}}
+
+###
+
+### WORKFLOW B: Investigasi 1 Toko Bermasalah
+#
+# Step 1: Lihat detail breakdown per hari
+GET {{baseUrl}}/rekon-sales/details?kdtk={{kdtk}}&month={{month}}&year={{year}}
+Authorization: Bearer {{token}}
+
+### Step 2: Lihat detail dokumen yang berbeda (mtran vs closing_detail)
+GET {{baseUrl}}/rekon-sales/differences?kdtk={{kdtk}}&month={{month}}&year={{year}}
+Authorization: Bearer {{token}}
+
+### Step 3: Lihat kode pesanan yang bermasalah
+GET {{baseUrl}}/rekon-sales/kodePesananIssues?kdtk={{kdtk}}&month={{month}}&year={{year}}
+Authorization: Bearer {{token}}
+
+### Step 4: Tambah catatan penanganan
+PUT {{baseUrl}}/rekon-sales/note
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "cabang": "{{cabang}}",
+  "kdtk": "{{kdtk}}",
+  "tanggal": "2025-05-15",
+  "noteText": "Sudah koordinasi ke kepala toko, data akan diperbaiki besok"
+}
+
+###
+
+### WORKFLOW C: Re-screening Setelah Toko Perbaiki Data
+#
+# Step 1: Re-screening toko spesifik (single store)
+GET {{baseUrl}}/rekon-sales/screening?kdtk={{kdtk}}&periode={{periode}}
+Authorization: Bearer {{token}}
+
+### Step 2: Cek apakah masih ada issue (jika resolved, tidak muncul)
+GET {{baseUrl}}/rekon-sales/details?kdtk={{kdtk}}&month={{month}}&year={{year}}
+Authorization: Bearer {{token}}
+
+### Step 3: Cek summary – apakah total issue berkurang
+GET {{baseUrl}}/rekon-sales/summary?cabang=All&month={{month}}&year={{year}}
+Authorization: Bearer {{token}}
+
+###
+
+### WORKFLOW D: Export Laporan Akhir Bulan
+#
+# Step 1: Get semua data resume untuk export
+GET {{baseUrl}}/rekon-sales/export-data?cabang=All&month={{month}}&year={{year}}
+Authorization: Bearer {{token}}
+
+###############################################
+# 12. EDGE CASES
+###############################################
+
+### [EDGE-01] Periode di awal tahun (Januari)
+GET {{baseUrl}}/rekon-sales/screening?kdtk={{kdtk}}&periode=2025-01
+Authorization: Bearer {{token}}
+
+###
+
+### [EDGE-02] Periode di akhir tahun (Desember)
+GET {{baseUrl}}/rekon-sales/screening?kdtk={{kdtk}}&periode=2025-12
+Authorization: Bearer {{token}}
+
+###
+
+### [EDGE-03] Data bulan yang sangat lama (mungkin tidak ada di JSON cache, harus sync dari DB)
+GET {{baseUrl}}/rekon-sales/resumePerShop?month=01&year=2024&cabang=All
+Authorization: Bearer {{token}}
+
+###
+
+### [EDGE-04] Data bulan masa depan (harus return kosong, bukan error)
+GET {{baseUrl}}/rekon-sales/resumePerShop?month=12&year=2026&cabang=All
+Authorization: Bearer {{token}}
+
+###
+
+### [EDGE-05] Resume dengan page yang melebihi total data
+GET {{baseUrl}}/rekon-sales/resumePerShop?month={{month}}&year={{year}}&page=9999&limit=10
+Authorization: Bearer {{token}}
+
+###
+
+### [EDGE-06] Resume dengan sortColumn tidak valid (harus fallback ke KDTK)
+GET {{baseUrl}}/rekon-sales/resumePerShop?month={{month}}&year={{year}}&sortColumn=INVALID_COL&sortOrder=DESC
+Authorization: Bearer {{token}}
+
+###
+
+### [EDGE-07] Note dengan noteText sangat panjang
+PUT {{baseUrl}}/rekon-sales/note
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "cabang": "{{cabang}}",
+  "kdtk": "{{kdtk}}",
+  "tanggal": "2025-05-15",
+  "noteText": "Ini adalah catatan yang sangat panjang untuk menguji batas panjang teks yang dapat disimpan dalam field noteText di tabel notes. Perlu dicek apakah ada validasi panjang maksimum atau apakah database akan truncate otomatis. Catatan ini sengaja dibuat lebih dari 255 karakter untuk edge case testing purposes."
+}
+
+###############################################
+# 13. CATATAN PENTING FIELD & BEHAVIOR
+###############################################
+
+# ─── SCREENING ────────────────────────────────────────────────
+# Parameter:
+#   cabang  : kode cabang (optional, default All)
+#   kdtk    : kode toko (optional, jika ada → Level 3 single store)
+#   periode : YYYY-MM (WAJIB)
+#
+# Response sukses (multi-store):
+#   { success, message, screenedStores, activeStores, resolvedStores, taskId }
+#
+# Response sukses (single store):
+#   { success, message, hasIssues, issuesCount }
+
+# ─── RESUME PER SHOP ──────────────────────────────────────────
+# Hanya menampilkan toko dengan RECID='*' (ada selisih)
+# Toko resolved (RECID='1') tidak muncul
+# Kolom sort valid: CAB, KDTK, NAMA, TOTAL_ISSUES, TOTAL_SEL_NET_GL,
+#   TOTAL_SEL_NET_CD, TOTAL_SEL_PPN_GL, TOTAL_SEL_PPN_CD, TOTAL_SEL_NET,
+#   TOTAL_SEL_PPN, UPDTIME_LATEST
+
+# ─── DETAIL PER TOKO ─────────────────────────────────────────
+# Format tanggal di daily[]: YYYY-MM-DD
+# Selisih positif  = NET_TOKO > NET_GL/CD (toko lebih besar dari WRC/CD)
+# Selisih negatif  = NET_TOKO < NET_GL/CD (toko lebih kecil dari WRC/CD)
+# Tolerance        = 50 rupiah (selisih < 50 dianggap zero/ok)
+
+# ─── DIFFERENCES ─────────────────────────────────────────────
+# Hanya ada data jika screening menemukan SEL_NET > tolerance
+# GROSS   = nilai di mtran toko
+# NET_CD  = nilai di closing_detail
+# SELISIH = GROSS - NET_CD
+
+# ─── KODE PESANAN ISSUES ─────────────────────────────────────
+# VALSUBKEY = kode pesanan yang ada di mtran toko tapi tidak ada di GL WRC
+# 1 record = 1 kode pesanan yang hilang
+# Grouped by TGL
+
+# ─── NOTE ────────────────────────────────────────────────────
+# unixKey = kdtk + tanggal (contoh: TW752025-05-15)
+# noteText kosong string = HAPUS note
+# noteText undefined/tidak ada field = ERROR 400
+
+###############################################
+# END OF TESTS
+###############################################

@@ -306,100 +306,6 @@ class RekonSalesService {
     return results;
   }
 
-  /**
-   * Rekon vs GL - Main reconciliation logic
-   */
-  async rekonVsGl(cab, kdtk, strMonth, strYear, mtranData, dataGL, storeConnection) {
-    try {
-      logger.info(`[rekon_sales.service] Starting rekonVsGl for store ${kdtk}`);
-
-      const cariData = async (kodeToko, tglGL) => {
-        return dataGL.filter(item => item.KODE_TOKO === kodeToko && item.TGL_GL === tglGL);
-      };
-
-      // Aggregate data per date
-      const valResume = {};
-      const dataResume = mtranData.map(async item => {
-        const dataGLItem = await cariData(item.SHOP, item.TANGGAL);
-        const keyData = `${item.SHOP}-${item.TANGGAL}`;
-
-        if (!valResume[keyData]) {
-          valResume[keyData] = {
-            CAB: item.CAB,
-            SHOP: item.SHOP,
-            TANGGAL: item.TANGGAL,
-            NET_MTRAN: 0,
-            NET_GL: dataGLItem.length > 0 ? parseFloat(dataGLItem[0].NET_GL) : 0,
-            NET_ClosingDetail: 0,
-            SEL_NET_GL: 0,
-            SEL_NET_CD: 0,
-            PPN_MTRAN: 0,
-            PPN_GL: dataGLItem.length > 0 ? parseFloat(dataGLItem[0].PPN_GL) : 0,
-            PPN_CD: 0,
-            SEL_PPN_GL: 0,
-            SEL_PPN_CD: 0,
-            NET_RETUR_ECOM: dataGLItem.length > 0 ? parseFloat(dataGLItem[0].NET_RETUR_ECOM) : 0,
-            PPN_RETUR_ECOM: dataGLItem.length > 0 ? parseFloat(dataGLItem[0].PPN_RETUR_ECOM) : 0,
-            RETUR_PPNJP_ISTORE: 0,
-          };
-        }
-
-        valResume[keyData].NET_MTRAN += parseFloat(item.NET_MTRAN);
-        valResume[keyData].NET_ClosingDetail += parseFloat(item.NET_ClosingDetail);
-        valResume[keyData].PPN_MTRAN += parseFloat(item.PPN_MTRAN) - parseFloat(item.PPN_IO || 0);
-        valResume[keyData].PPN_CD += parseFloat(item.PPN_CD);
-        valResume[keyData].RETUR_PPNJP_ISTORE += parseFloat(item.RETUR_PPNJP_ISTORE || 0);
-
-        // Reset detail records
-        await this.resetDetailRecid(item.SHOP, item.TANGGAL);
-      });
-      await Promise.all(dataResume);
-
-      // Calculate differences
-      const keysResume = Object.keys(valResume);
-      keysResume.forEach(key => {
-        const item = valResume[key];
-        item.SEL_NET_GL = parseFloat(item.NET_MTRAN) - parseFloat(item.NET_GL);
-        item.SEL_NET_CD = parseFloat(item.NET_MTRAN) - parseFloat(item.NET_ClosingDetail);
-        item.SEL_PPN_GL = parseFloat(item.PPN_MTRAN) - parseFloat(item.PPN_GL);
-        item.SEL_PPN_CD = parseFloat(item.PPN_MTRAN) - parseFloat(item.PPN_CD);
-      });
-
-      // Check kode pesanan (dikembalikan untuk disimpan di tahap final saat mass screening)
-      const checkKodePesanan = await this.rekonKodePesanan(cab, kdtk, mtranData, dataGL);
-      const detailIssues = Array.isArray(checkKodePesanan) ? checkKodePesanan : [];
-
-      // Filter data based on threshold
-      const finalData = [];
-      const tolerance = config.tolerance || 50;
-
-      for (const key of keysResume) {
-        const item = valResume[key];
-        const [keyKdtk, keyTgl] = this.extractKeys(key);
-
-        const resultKodePesanan = checkKodePesanan.filter(issue => issue.SHOP === keyKdtk && issue.TANGGAL === keyTgl);
-
-        if (
-          Math.abs(item.SEL_NET_GL) > tolerance ||
-          Math.abs(item.SEL_NET_CD) > tolerance ||
-          Math.abs(item.SEL_PPN_GL) > tolerance ||
-          Math.abs(item.SEL_PPN_CD) > tolerance ||
-          resultKodePesanan.length > 0
-        ) {
-          finalData.push(item);
-        }
-      }
-
-      // Skip records where closing detail is zero
-      const filteredData = await this.skipDataClosingDetailZero(finalData, tolerance);
-
-      logger.info(`[rekon_sales.service] Completed rekonVsGl for store ${kdtk}, found ${filteredData.length} issues`);
-      return filteredData;
-    } catch (error) {
-      logger.error(`[rekon_sales.service] Error in rekonVsGl: ${error.message}`);
-      throw error;
-    }
-  }
 
   /**
    * Rekon kode pesanan - Check order code differences
@@ -529,17 +435,20 @@ class RekonSalesService {
       await this.deleteRekonSales(kdtk, strMonth, strYear);
 
       // Prepare rekon sales data
+      // Field names sesuai output RekonCalculator.aggregateByDate:
+      // KDTK (bukan SHOP), TGL (bukan TANGGAL), NET_TOKO (bukan NET_MTRAN),
+      // NET_CLOSINGDETAIL (bukan NET_ClosingDetail), PPN_TOKO (bukan PPN_MTRAN)
       const rekonSalesData = rekonResults.map(item => ({
         RECID: "*",
         CAB: item.CAB,
-        KDTK: item.SHOP,
-        TGL: item.TANGGAL,
-        NET_TOKO: item.NET_MTRAN,
+        KDTK: item.KDTK,
+        TGL: item.TGL,
+        NET_TOKO: item.NET_TOKO,
         NET_GL: item.NET_GL,
-        NET_CLOSINGDETAIL: item.NET_ClosingDetail,
+        NET_CLOSINGDETAIL: item.NET_CLOSINGDETAIL,
         SEL_NET_GL: item.SEL_NET_GL,
         SEL_NET_CD: item.SEL_NET_CD,
-        PPN_MTRAN: item.PPN_MTRAN,
+        PPN_MTRAN: item.PPN_TOKO,
         PPN_GL: item.PPN_GL,
         PPN_CD: item.PPN_CD,
         SEL_PPN_GL: item.SEL_PPN_GL,
@@ -1669,15 +1578,10 @@ class RekonSalesService {
         const tgl = r.TGL;
         if (!grouped.has(tgl)) grouped.set(tgl, []);
 
-        // Parse VALSUBKEY: TOKO|GL|DIFF
-        const valSubkey = r.VALSUBKEY || "";
-        const parts = valSubkey.split("|");
-
+        // VALSUBKEY menyimpan kode pesanan yang hilang (satu nilai per record)
         const mapped = {
           ...r.toJSON(),
-          KODEPESANANTOKO: parts[0] || "",
-          KODEPSANANGL: parts[1] || "",
-          SELKODE: parts[2] || "",
+          SELKODE: r.VALSUBKEY || "",
         };
 
         grouped.get(tgl).push(mapped);

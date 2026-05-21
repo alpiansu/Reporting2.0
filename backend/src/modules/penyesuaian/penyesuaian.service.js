@@ -1207,10 +1207,13 @@ class PenyesuaianService {
 
       const notesByKey = new Map(notes.filter(n => n.tableName === "sesuai_toko").map(n => [n.unixKey, n]));
 
-      return data.map(item => {
+      let enrichedData = data.map(item => {
         const unixKey = `${item.KDTK}${item.PERIODE}`;
         const note = notesByKey.get(unixKey) || null;
-        if (!note) return { ...item, note: null };
+        
+        if (!note) {
+          return { ...item, note: null };
+        }
 
         return {
           ...item,
@@ -1223,6 +1226,46 @@ class PenyesuaianService {
           },
         };
       });
+
+      // --- FALLBACK LOGIC: Ambil dari table lama jika note kosong ---
+      const itemsWithoutNote = enrichedData.filter(item => !item.note);
+      
+      if (itemsWithoutNote.length > 0) {
+        // Bentuk format IDNOTE dari table lama: CABANG + KDTK + PERIODE (tanpa titik, sesuai permintaan)
+        const missingIdNotes = itemsWithoutNote.map(item => `${item.CABANG}${item.KDTK}${item.PERIODE}`);
+        
+        // Ambil note dari db legacy
+        const legacyNotes = await notesService.getLegacyNotesFallback("web_reporting.sesuaiToko", missingIdNotes);
+        
+        if (legacyNotes && legacyNotes.length > 0) {
+          const legacyNotesMap = new Map(legacyNotes.map(n => [n.legacyIdNote, n]));
+          
+          // Map ulang data dan masukkan legacy notes jika ada
+          enrichedData = enrichedData.map(item => {
+            if (item.note) return item; // Jika sudah punya note dari sistem baru, skip
+            
+            const legacyIdNote = `${item.CABANG}${item.KDTK}${item.PERIODE}`;
+            const legacyNote = legacyNotesMap.get(legacyIdNote);
+            
+            if (legacyNote) {
+              return {
+                ...item,
+                note: {
+                  unixKey: legacyNote.unixKey,
+                  noteText: legacyNote.noteText,
+                  pic: legacyNote.pic,
+                  fullName: legacyNote.fullName,
+                  updated_at: legacyNote.updated_at
+                }
+              };
+            }
+            
+            return item;
+          });
+        }
+      }
+
+      return enrichedData;
     } catch (err) {
       logger.error(`[penyesuaian.service] Error enriching data with notes: ${err.message}`);
       return data;

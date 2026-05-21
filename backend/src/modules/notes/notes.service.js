@@ -7,6 +7,7 @@ import fs from "fs";
 import path from "path";
 import NotesModel from "../../models/notes.model.js";
 import config from "./notes.config.js";
+import sysConfig from "../../config/index.js";
 import logger from "../../config/logger.js";
 import UserService from "../user/user.service.js";
 
@@ -154,6 +155,44 @@ class NotesService {
     await this.writeJson(all.map(n => n.toJSON()));
 
     return true;
+  }
+
+  /** 
+   * Fallback to legacy notes table when note is not found in new system
+   * Returns an array of notes mapped to the new format, containing legacyIdNote to help matching
+   */
+  async getLegacyNotesFallback(tableName, idNotesArray) {
+    if (!idNotesArray || idNotesArray.length === 0) return [];
+    
+    try {
+      const sequelize = await sysConfig.resilientDb.getDatabase();
+      const userMap = await this.ensureUserMap();
+
+      const query = `
+        SELECT CABANG, IDNOTE, TABLE_RELATION, NOTE_EDP, username, UPDTIME 
+        FROM web_reporting.note_fuedp 
+        WHERE TABLE_RELATION = :tableName 
+        AND IDNOTE IN (:idNotes)
+      `;
+      
+      const [results] = await sequelize.query(query, {
+        replacements: { tableName, idNotes: idNotesArray },
+      });
+
+      return results.map(row => {
+        return {
+          legacyIdNote: row.IDNOTE,
+          unixKey: row.IDNOTE, // provide fallback just in case
+          noteText: row.NOTE_EDP || "",
+          pic: row.username || "",
+          fullName: row.username ? (userMap.get(row.username) || null) : null,
+          updated_at: row.UPDTIME || null
+        };
+      });
+    } catch (error) {
+      logger.error(`[NotesService] Error fetching legacy notes fallback: ${error.message}`);
+      return []; // Return empty array on failure so it doesn't break the main flow
+    }
   }
 }
 

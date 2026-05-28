@@ -189,38 +189,52 @@ const loading = ref(false);
 const filters = ref({ pics: [], kdtks: [] });
 const picSuggestions = ref([]);
 
-const hasActiveFilters = computed(() => {
-  const picValue = typeof pic.value === 'object' ? pic.value.username : pic.value;
-  return (picMode.value === 'select' && picValue) ||
-    (kdtkMode.value === 'select' && selectedKdtks.value.length) ||
-    (status.value && status.value !== 'ALL');
-});
+// ---------------------------------------------------------------------------
+// Helper lokal: akses pic.value dengan aman (null-safe)
+// PrimeVue AutoComplete dengan showClear mengeset v-model ke null (bukan '')
+// saat user klik tombol clear, sehingga typeof null === 'object' akan crash
+// ---------------------------------------------------------------------------
 
-const getPicDisplayName = computed(() => {
+/** Kembalikan username string dari pic.value, apapun bentuknya (object/string/null) */
+const getPicValue = () => {
   if (!pic.value) return '';
+  if (typeof pic.value === 'object') return pic.value.username ?? '';
+  return String(pic.value);
+};
+
+/** Apakah user sudah memilih PIC yang valid? */
+const hasPicSelected = () => getPicValue() !== '';
+
+// ---------------------------------------------------------------------------
+
+// Computed property to check if any filters are active
+const hasActiveFilters = computed(() =>
+  (picMode.value === 'select' && hasPicSelected()) ||
+  (kdtkMode.value === 'select' && selectedKdtks.value.length > 0) ||
+  (status.value && status.value !== 'ALL')
+);
+
+// Computed property to get PIC display name
+const getPicDisplayName = computed(() => {
+  if (!hasPicSelected()) return '';
   if (typeof pic.value === 'object') {
-    return pic.value.fullName ? `${pic.value.username} (${pic.value.fullName})` : pic.value.username;
+    return pic.value.fullName
+      ? `${pic.value.username} (${pic.value.fullName})`
+      : pic.value.username ?? '';
   }
-  return pic.value;
+  return String(pic.value);
 });
 
+// Validation computed properties
 const isFormValid = computed(() => {
-  if (picMode.value === 'select' && !pic.value) {
-    return false;
-  }
-  if (kdtkMode.value === 'select' && selectedKdtks.value.length === 0) {
-    return false;
-  }
+  if (picMode.value === 'select' && !hasPicSelected()) return false;
+  if (kdtkMode.value === 'select' && selectedKdtks.value.length === 0) return false;
   return true;
 });
 
 const validationMessage = computed(() => {
-  if (picMode.value === 'select' && !pic.value) {
-    return 'Harap pilih PIC terlebih dahulu';
-  }
-  if (kdtkMode.value === 'select' && selectedKdtks.value.length === 0) {
-    return 'Harap pilih minimal satu toko';
-  }
+  if (picMode.value === 'select' && !hasPicSelected()) return 'Harap pilih PIC terlebih dahulu';
+  if (kdtkMode.value === 'select' && selectedKdtks.value.length === 0) return 'Harap pilih minimal satu toko';
   return '';
 });
 
@@ -300,8 +314,8 @@ const searchPic = async (event) => {
 
 const buildParams = () => {
   const params = { month: month.value };
-  if (picMode.value === 'select' && pic.value) {
-    params.pic = typeof pic.value === 'object' ? pic.value.username : pic.value;
+  if (picMode.value === 'select' && hasPicSelected()) {
+    params.pic = getPicValue();
   }
   if (status.value && status.value !== 'ALL') {
     params.status = status.value;

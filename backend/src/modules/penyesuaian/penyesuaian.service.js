@@ -889,7 +889,7 @@ class PenyesuaianService {
       await storeService.ensureInitialized();
 
       let filtered = this.penyesuaianData.filter(
-        i => i.PERIODE === periode && (cabang === "All" || i.CABANG === cabang)
+        i => i.PERIODE === periode && (cabang === "All" || i.CABANG === cabang) && i.RECID === '*'
       );
 
       // Ambil nama toko dari storeService
@@ -985,7 +985,7 @@ class PenyesuaianService {
       let filtered = this.penyesuaianData.filter(i => i.PERIODE === periode && i.KDTK === kdtk);
 
       // Ambil nama toko dari storeService
-      const results = [];
+      let results = [];
       for (const item of filtered) {
         let storeName = "-";
         try {

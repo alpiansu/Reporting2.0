@@ -165,7 +165,20 @@ class NotesService {
     if (!idNotesArray || idNotesArray.length === 0) return [];
     
     try {
-      const sequelize = await sysConfig.resilientDb.getDatabase();
+      let sequelize = await sysConfig.resilientDb.getDatabase();
+      
+      if (!sequelize) {
+        try {
+          logger.info(`[NotesService] Database offline, attempting to reconnect...`);
+          sequelize = await sysConfig.resilientDb.forceReconnect();
+        } catch (e) {
+          logger.warn(`[NotesService] Database reconnect failed: ${e.message}`);
+          return [];
+        }
+      }
+
+      if (!sequelize) return [];
+
       const userMap = await this.ensureUserMap();
 
       const query = `

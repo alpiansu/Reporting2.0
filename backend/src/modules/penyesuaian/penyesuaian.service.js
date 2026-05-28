@@ -33,6 +33,12 @@ class PenyesuaianService {
     // 🔥 New multi-key cache for database records (per kdtk/cabang)
     this.cacheDetailData = new Map();
     this.cacheTTL = 5 * 60 * 1000; // 5 minutes
+
+    // 📋 Legacy notes cache (in-memory, di-refresh saat sync atau saat TTL habis)
+    this.legacyNotesCache = new Map();
+    this.legacyNotesCachedAt = 0;
+    this.legacyNotesTTL = 30 * 60 * 1000; // 30 menit
+    this.legacyNotesPeriode = null;
   }
 
   /**
@@ -183,6 +189,60 @@ class PenyesuaianService {
   }
 
   /**
+   * Invalidate legacy notes cache
+   */
+  invalidateLegacyCache() {
+    this.legacyNotesCache = new Map();
+    this.legacyNotesCachedAt = 0;
+    this.legacyNotesPeriode = null;
+    logger.info("[penyesuaian.service] Legacy notes cache invalidated");
+  }
+
+  /**
+   * Cek apakah legacy notes cache masih valid untuk periode tertentu
+   */
+  isLegacyCacheValid(periode) {
+    if (!this.legacyNotesPeriode || this.legacyNotesPeriode !== periode) return false;
+    if (this.legacyNotesCachedAt === 0) return false;
+    return Date.now() - this.legacyNotesCachedAt < this.legacyNotesTTL;
+  }
+
+  /**
+   * Refresh in-memory legacy notes cache secara batch (satu kali query DB)
+   * Dipanggil saat sync selesai, atau saat TTL habis dari enrichWithNotes
+   * @param {Array} data - Array data penyesuaian (harus punya CABANG, KDTK, PERIODE)
+   * @param {string} periode - Periode yang sedang aktif
+   */
+  async refreshLegacyNotesCache(data, periode) {
+    try {
+      if (!data || data.length === 0) {
+        this.legacyNotesCache = new Map();
+        this.legacyNotesCachedAt = Date.now();
+        this.legacyNotesPeriode = periode;
+        return;
+      }
+
+      // Kumpulkan semua idNotes unik (format: CABANG+KDTK+PERIODE)
+      const allIdNotes = data.map(item => `${item.CABANG}${item.KDTK}${item.PERIODE}`);
+      const uniqueIdNotes = [...new Set(allIdNotes)];
+
+      // Query sekali ke DB legacy secara batch
+      const legacyNotes = await notesService.getLegacyNotesFallback("web_reporting.sesuaiToko", uniqueIdNotes);
+
+      // Simpan ke Map
+      this.legacyNotesCache = new Map(legacyNotes.map(n => [n.legacyIdNote, n]));
+      this.legacyNotesCachedAt = Date.now();
+      this.legacyNotesPeriode = periode;
+
+      logger.info(
+        `[penyesuaian.service] Legacy notes cache refreshed: ${this.legacyNotesCache.size} entries, periode=${periode}, TTL expires at: ${new Date(this.legacyNotesCachedAt + this.legacyNotesTTL).toISOString()}`
+      );
+    } catch (err) {
+      logger.error(`[penyesuaian.service] Failed to refresh legacy notes cache: ${err.message}`);
+    }
+  }
+
+  /**
    * Invalidate cache manually
    */
   invalidateCache() {
@@ -191,6 +251,7 @@ class PenyesuaianService {
     this.lastLoadTime = null;
     this.isLoading = false;
     this.cacheDetailData.clear();
+    this.invalidateLegacyCache();
     logger.info("Penyesuaian cache invalidated manually");
   }
 
@@ -255,6 +316,10 @@ class PenyesuaianService {
       this.lastLoadTime = Date.now();
 
       logger.info(`[penyesuaian.service] Synced ${this.penyesuaianData.length} records from Summary to JSON for period ${periode}`);
+
+      // 🔄 Force refresh legacy notes cache setelah sync selesai
+      // Ini memastikan data legacy notes selalu up-to-date pasca screening
+      await this.refreshLegacyNotesCache(this.penyesuaianData, periode);
     } catch (error) {
       logger.error(`[penyesuaian.service] Failed to sync data for period ${periode}: ${error.message}`);
       throw error;
@@ -1227,42 +1292,43 @@ class PenyesuaianService {
         };
       });
 
-      // --- FALLBACK LOGIC: Ambil dari table lama jika note kosong ---
+      // --- FALLBACK LOGIC: Ambil dari in-memory cache (bukan langsung DB) ---
       const itemsWithoutNote = enrichedData.filter(item => !item.note);
-      
+
       if (itemsWithoutNote.length > 0) {
-        // Bentuk format IDNOTE dari table lama: CABANG + KDTK + PERIODE (tanpa titik, sesuai permintaan)
-        const missingIdNotes = itemsWithoutNote.map(item => `${item.CABANG}${item.KDTK}${item.PERIODE}`);
-        
-        // Ambil note dari db legacy
-        const legacyNotes = await notesService.getLegacyNotesFallback("web_reporting.sesuaiToko", missingIdNotes);
-        
-        if (legacyNotes && legacyNotes.length > 0) {
-          const legacyNotesMap = new Map(legacyNotes.map(n => [n.legacyIdNote, n]));
-          
-          // Map ulang data dan masukkan legacy notes jika ada
-          enrichedData = enrichedData.map(item => {
-            if (item.note) return item; // Jika sudah punya note dari sistem baru, skip
-            
-            const legacyIdNote = `${item.CABANG}${item.KDTK}${item.PERIODE}`;
-            const legacyNote = legacyNotesMap.get(legacyIdNote);
-            
-            if (legacyNote) {
-              return {
-                ...item,
-                note: {
-                  unixKey: legacyNote.unixKey,
-                  noteText: legacyNote.noteText,
-                  pic: legacyNote.pic,
-                  fullName: legacyNote.fullName,
-                  updated_at: legacyNote.updated_at
-                }
-              };
-            }
-            
-            return item;
-          });
+        // Ambil periode dari data (gunakan elemen pertama sebagai referensi)
+        const periode = data[0]?.PERIODE;
+
+        // ✅ Opsi C: Cek TTL cache dulu. Jika expired → refresh sekali, lalu baca dari cache
+        if (!this.isLegacyCacheValid(periode)) {
+          logger.info(`[penyesuaian.service] Legacy notes cache expired/invalid, refreshing once for periode=${periode}...`);
+          await this.refreshLegacyNotesCache(data, periode);
+        } else {
+          logger.debug(`[penyesuaian.service] Legacy notes cache hit for periode=${periode} (${this.legacyNotesCache.size} entries)`);
         }
+
+        // Map ulang data → baca dari in-memory cache (no DB hit)
+        enrichedData = enrichedData.map(item => {
+          if (item.note) return item; // Sudah punya note dari sistem baru, skip
+
+          const legacyIdNote = `${item.CABANG}${item.KDTK}${item.PERIODE}`;
+          const legacyNote = this.legacyNotesCache.get(legacyIdNote);
+
+          if (legacyNote) {
+            return {
+              ...item,
+              note: {
+                unixKey: legacyNote.unixKey,
+                noteText: legacyNote.noteText,
+                pic: legacyNote.pic,
+                fullName: legacyNote.fullName,
+                updated_at: legacyNote.updated_at,
+              },
+            };
+          }
+
+          return item;
+        });
       }
 
       return enrichedData;

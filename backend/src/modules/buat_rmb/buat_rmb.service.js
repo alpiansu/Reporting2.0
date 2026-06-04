@@ -264,14 +264,16 @@ class BuatRmbService {
               record.PRDCD
             ];
 
+            const qty = parseInt(record.QTY) || 1; // Default to 1 because CSV doesn't have QTY column
+            
             const params = [
               record.TANGGAL,
               record.TANGGAL,
               record.PRDCD,
               record.PRDCD,
-              record.QTY,
-              record.QTY,
-              record.QTY,
+              qty,
+              qty,
+              qty,
               record.NOHP,
               record.KDTK,
               record.PRDCD
@@ -296,7 +298,7 @@ class BuatRmbService {
               kdtk: record.KDTK,
               tgl: record.TANGGAL,
               prdcd: record.PRDCD,
-              qty: parseInt(record.QTY) || 0,
+              qty: qty,
               trxid: record.TRXID || "",
               keter: record.NOHP || "",
               note: "Successfully sent command to store",

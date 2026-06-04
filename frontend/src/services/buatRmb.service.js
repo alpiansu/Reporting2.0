@@ -10,7 +10,7 @@ const buatRmbService = {
       },
     });
   },
-  
+
   getFilters() {
     return api.get("/buat-rmb/filters");
   },
@@ -40,7 +40,34 @@ const buatRmbService = {
         link.click();
         document.body.removeChild(link);
       });
-  }
+  },
+
+  /**
+   * Cek koneksi ke database toko berdasarkan kode toko.
+   * @param {string} kdtk - Kode toko
+   */
+  checkStoreConnection(kdtk) {
+    return api.get("/buat-rmb/check-connection", { params: { kdtk } });
+  },
+
+  /**
+   * Autocomplete produk dari prodmast toko.
+   * Trigger setelah 3 karakter. Prefix search.
+   * @param {string} kdtk - Kode toko
+   * @param {string} q - Query pencarian (minimal 3 karakter)
+   */
+  searchStoreProducts(kdtk, q) {
+    return api.get("/buat-rmb/store-products", { params: { kdtk, q } });
+  },
+
+  /**
+   * Insert RMB secara manual (dari form dialog).
+   * @param {object} payload - { kdtk, tanggal, items: [{prdcd, nohp, trxid}] }
+   */
+  insertManual(payload) {
+    return api.post("/buat-rmb/manual", payload);
+  },
 };
 
 export default buatRmbService;
+

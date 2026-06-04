@@ -4,8 +4,31 @@
       description="Upload file CSV dengan format KDTK, TANGGAL, PRDCD, NOHP, TRXID untuk memproses pembuatan RMB di toko-toko yang ditentukan." />
 
     <div class="content-container">
-      <!-- Template Download Card -->
-      <div class="card template-card">
+      <!-- Mode Selection Cards -->
+      <div class="mode-selection">
+        <div class="mode-card" :class="{ 'active': activeMode === 'csv' }" @click="activeMode = 'csv'">
+          <div class="mode-icon-wrapper csv">
+            <i class="pi pi-file-excel"></i>
+          </div>
+          <div class="mode-content">
+            <h3>Upload CSV</h3>
+            <p>Upload file batch untuk proses RMB banyak toko sekaligus.</p>
+          </div>
+        </div>
+
+        <div class="mode-card" :class="{ 'active': activeMode === 'manual' }" @click="showManualDialog = true; activeMode = 'manual'">
+          <div class="mode-icon-wrapper manual">
+            <i class="pi pi-file-edit"></i>
+          </div>
+          <div class="mode-content">
+            <h3>Input Manual</h3>
+            <p>Isi form langsung tanpa perlu membuat file CSV terlebih dahulu.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Template Download Card (Hanya tampil jika mode CSV aktif) -->
+      <div v-if="activeMode === 'csv'" class="card template-card">
         <div class="template-compact-section">
           <div class="template-header">
             <div class="header-content">
@@ -59,8 +82,8 @@
       <!-- History Report Card -->
       <BuatRmbHistoryReportCard />
 
-      <!-- Upload Card -->
-      <div class="card upload-card">
+      <!-- Upload Card (Hanya tampil jika mode CSV aktif) -->
+      <div v-if="activeMode === 'csv'" class="card upload-card">
         <div class="upload-compact-section">
           <div class="upload-header">
             <div class="upload-header-content">
@@ -341,13 +364,18 @@
         @cancel="handlePreviewCancel"
         @confirm="handlePreviewConfirm"
       />
+
+      <BuatRmbManualInputDialog
+        v-model:visible="showManualDialog"
+        @success="handleManualSuccess"
+      />
     </div>
   </div>
 </template>
 
 <style src="./index.css" scoped></style>
 <script setup>
-import { ref, onBeforeUnmount, watch } from "vue";
+import { ref, onBeforeUnmount, watch, onMounted } from "vue";
 import { useToast } from "primevue/usetoast";
 import { useAuthStore } from '../../stores';
 import DataTable from 'primevue/datatable';
@@ -358,12 +386,10 @@ import buatRmbService from "../../services/buatRmb.service.js";
 import progressService from "../../services/progress.service.js";
 import PageHeader from "../../components/PageHeader.vue";
 import DownloadButton from "../../components/common/DownloadButton.vue";
-// We use a dummy export or create it later if needed. For now assuming adjust exportExcel format works or we create a new one.
-// We'll skip export logic or implement simple fallback for MVP if exportExcel.js doesn't exist in buatRmb. Let's just create a quick export function inline or via service later.
-// We'll import a local exportExcel.js later, but we can comment the import if we write it inline.
 import ProgressBar from "../../components/common/ProgressBar.vue";
 import BuatRmbHistoryReportCard from "./components/BuatRmbHistoryReportCard.vue";
 import BuatRmbCsvPreviewDialog from "./components/BuatRmbCsvPreviewDialog.vue";
+import BuatRmbManualInputDialog from "./components/BuatRmbManualInputDialog.vue";
 import * as XLSX from "xlsx";
 
 const toast = useToast();
@@ -403,6 +429,10 @@ const progress = ref({
   status: "idle",
 });
 let eventSource = null;
+
+// Manual Input State
+const activeMode = ref(null); // 'csv' | 'manual'
+const showManualDialog = ref(false);
 
 // CSV field definitions for the info card
 const csvFields = [
@@ -450,6 +480,20 @@ const formatDateOnly = (dateStr) => {
   return isNaN(date.getTime()) ? dateStr : date.toLocaleDateString('id-ID');
 };
 
+const handleManualSuccess = (results) => {
+  processResults.value = results;
+  const failedCount = results?.failedStores?.length || 0;
+  const successCount = results?.successStores || 0;
+  const totalStores = results?.totalStores || 0;
+
+  toast.add({
+    severity: failedCount > 0 ? "warn" : "success",
+    summary: failedCount > 0 ? "Completed with Issues" : "Success",
+    detail: `Manual RMB processed. ${successCount}/${totalStores} stores processed successfully.`,
+    life: 5000,
+  });
+};
+
 const formatDate = (dateTime) => {
   if (!dateTime) return '-';
   const date = new Date(dateTime);
@@ -476,6 +520,10 @@ watch(isProcessing, (newVal) => {
   } else {
     stopProgressTracking();
   }
+});
+
+onBeforeUnmount(() => {
+  stopProgressTracking();
 });
 
 const startProgressTracking = async () => {

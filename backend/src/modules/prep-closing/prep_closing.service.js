@@ -689,6 +689,8 @@ class PrepClosingService {
       try {
         const timeStart = moment().format("YYYY-MM-DD HH:mm:ss");
         await progressService.startProgress(taskId, storesToProcess.length, {
+          module: "prep_closing",
+          title: "Screening Pra Closing",
           description: "Registering task for prep closing screening",
           startedBy: username,
           status: "registering",

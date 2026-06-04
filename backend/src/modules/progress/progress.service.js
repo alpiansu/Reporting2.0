@@ -142,9 +142,12 @@ class ProgressService extends EventEmitter {
         updatedAt: new Date().toISOString(),
       };
 
-      // Extract module from info if provided as object
+      // Extract module and title from info if provided as object
       if (typeof info === "object" && info.module) {
         task.module = info.module;
+      }
+      if (typeof info === "object" && info.title) {
+        task.title = info.title;
       }
 
       this.progressMap.set(taskId, task);

@@ -431,6 +431,128 @@ class BuatRmbService {
       throw new Error("Failed to generate CSV template");
     }
   }
+
+  /**
+   * Process RMB yang di-input secara manual via form dialog.
+   * Reuses processStoreWithHistory() — tidak ada duplikasi logika.
+   * QTY selalu 1 (hardcoded), karena RMB manual selalu +1.
+   *
+   * @param {Array} records - [{KDTK, TANGGAL, PRDCD, NOHP, TRXID, QTY}]
+   * @param {string} username
+   */
+  async processManualBuatRmb(records, username) {
+    const taskId = `${config.taskProgressName}_${username}`;
+
+    try {
+      const storeCodes = [...new Set(records.map(r => r.KDTK))];
+      const selectedStores = await storeService.getStoresByCodes(storeCodes);
+
+      if (selectedStores.length === 0) {
+        throw new Error("Tidak ada toko valid yang ditemukan untuk kode yang diberikan");
+      }
+
+      const timeStart = moment().format("YYYY-MM-DD HH:mm:ss");
+      try {
+        await progressService.startProgress(taskId, selectedStores.length, {
+          module: "buat_rmb",
+          title: "Manual RMB Process",
+          description: "Processing manual RMB input",
+          startedBy: username,
+          status: "registering",
+          createdAt: timeStart,
+        });
+      } catch (error) {
+        if (error.message.includes("Maximum concurrent")) {
+          throw new Error("System is busy processing other tasks. Please try again later.");
+        }
+        throw new Error("Failed to register progress task");
+      }
+
+      const results = {
+        totalStores: selectedStores.length,
+        processedStores: 0,
+        successStores: 0,
+        failedStores: [],
+        storeResults: [],
+        historyRecords: [],
+      };
+
+      const tempHistoryRecords = [];
+
+      // Manual biasanya hanya 1 toko, tapi handle generik jika lebih
+      for (const store of selectedStores) {
+        const storeRecords = records.filter(r => r.KDTK === store.storeCode);
+
+        await progressService.updateProgress(taskId, results.processedStores + 1, {
+          description: `Processing store ${store.storeCode} (${results.processedStores + 1} of ${selectedStores.length})`,
+          status: "Processing to Stores",
+        });
+
+        try {
+          const storeResult = await this.processStoreWithHistory(store, storeRecords, username);
+          results.processedStores++;
+
+          if (storeResult.success) {
+            results.successStores++;
+          } else {
+            results.failedStores.push({ storeCode: store.storeCode, error: storeResult.error });
+          }
+
+          results.storeResults.push({
+            storeCode: store.storeCode,
+            processed: storeResult.processed,
+            success: storeResult.success,
+            error: storeResult.error,
+            executedAt: storeResult.executedAt,
+          });
+
+          tempHistoryRecords.push(...storeResult.historyRecords);
+        } catch (error) {
+          logger.error(`Error processing store ${store.storeCode} (manual): ${error.message}`);
+          results.processedStores++;
+          results.failedStores.push({ storeCode: store.storeCode, error: error.message });
+
+          const failedRecords = storeRecords.map(r => ({
+            kdtk: r.KDTK,
+            tgl: r.TANGGAL,
+            prdcd: r.PRDCD,
+            trxid: r.TRXID || "",
+            keter: r.NOHP || "",
+            note: `Store connection error: ${error.message}`,
+            pic: username,
+            updtime: new Date(),
+            status: "FAILED",
+          }));
+          tempHistoryRecords.push(...failedRecords);
+        }
+      }
+
+      // Simpan ke history DB
+      try {
+        const bulkResult = await histBuatRmbStagingService.bulkInsert(tempHistoryRecords);
+        results.historyRecords = bulkResult.records || tempHistoryRecords;
+      } catch (histError) {
+        logger.error(`Failed to save manual RMB history: ${histError.message}`);
+        results.historyRecords = tempHistoryRecords;
+      }
+
+      const timeCompleted = moment().format("YYYY-MM-DD HH:mm:ss");
+      await progressService.completeProgress(taskId, {
+        description: "Manual RMB processing completed",
+        status: "completed",
+        completedAt: timeCompleted,
+      });
+
+      return results;
+    } catch (error) {
+      logger.error(`Failed to process manual RMB: ${error.message}`);
+      await progressService.failProgress(taskId, {
+        description: `Task failed: ${error.message}`,
+        status: "failed",
+      }).catch(() => {});
+      throw error;
+    }
+  }
 }
 
 export default new BuatRmbService();

@@ -1,8 +1,12 @@
 import buatRmbService from "./buat_rmb.service.js";
 import histBuatRmbStagingService from "./hist_buat_rmb_staging.service.js";
+import config from "./buat_rmb.config.js";
 import { apiResponse } from "../../utils/index.js";
 import logger from "../../config/logger.js";
 import dayjs from "dayjs";
+import storeService from "../store/storeService.js";
+import dbStore from "../../config/db_store.js";
+import { checkStoreConnection } from "../../utils/storeConnection.utils.js";
 
 class BuatRmbController {
   async uploadCsv(req, res) {
@@ -188,6 +192,127 @@ class BuatRmbController {
     } catch (error) {
       logger.error(`Error in downloadTemplate: ${error.message}`);
       return apiResponse.error(res, "Failed to download template", 500);
+    }
+  }
+
+  /**
+   * Cek koneksi ke database toko.
+   * Menerima kdtk, resolve ke dbHost, lalu panggil utility checkStoreConnection.
+   * Error asli (code + message) dikembalikan ke frontend untuk transparansi.
+   */
+  async checkConnection(req, res) {
+    try {
+      const { kdtk } = req.query;
+      if (!kdtk) return apiResponse.badRequest(res, "kdtk wajib diisi");
+
+      const storeInfo = await storeService.getStoreIPHost(kdtk);
+      if (!storeInfo) {
+        return apiResponse.error(res, `Toko dengan kode ${kdtk} tidak ditemukan`, 404);
+      }
+
+      const result = await checkStoreConnection(storeInfo.dbHost);
+
+      return apiResponse.success(res, {
+        message: result.connected ? "Koneksi berhasil" : "Koneksi gagal",
+        data: {
+          connected: result.connected,
+          storeName: storeInfo.storeName,
+          host: storeInfo.dbHost,
+          // Sertakan error asli agar FE bisa tampilkan pesan teknis yang informatif
+          error: result.error || null,
+          errorCode: result.errorCode || null,
+        },
+      });
+    } catch (error) {
+      logger.error(`Error in checkConnection: ${error.message}`);
+      return apiResponse.error(res, error.message, 500);
+    }
+  }
+
+  /**
+   * Autocomplete produk dari prodmast toko.
+   * Aktif setelah minimal 3 karakter diketik. Prefix search: LIKE 'q%'.
+   * Response include field `merk` agar FE bisa tentukan apakah NOHP perlu ditampilkan.
+   */
+  async searchStoreProducts(req, res) {
+    try {
+      const { kdtk, q } = req.query;
+      if (!kdtk) return apiResponse.badRequest(res, "kdtk wajib diisi");
+      if (!q || String(q).trim().length < 3) {
+        return apiResponse.badRequest(res, "Query pencarian minimal 3 karakter");
+      }
+
+      const storeInfo = await storeService.getStoreIPHost(kdtk);
+      if (!storeInfo) {
+        return apiResponse.error(res, `Toko dengan kode ${kdtk} tidak ditemukan`, 404);
+      }
+
+      let pool;
+      try {
+        pool = await dbStore.createDbStore(storeInfo.dbHost, 1);
+      } catch (connError) {
+        return apiResponse.error(res, `Gagal koneksi ke toko: ${connError.message}`, 503);
+      }
+
+      const catCodes = config.rmbEligibleCatCodes;
+      const searchPattern = `${String(q).trim()}%`;
+
+      const [products] = await pool.query(
+        config.productSearchQuery,
+        [catCodes, searchPattern]
+      );
+
+      await pool.end().catch(() => {});
+
+      return apiResponse.success(res, {
+        message: `Ditemukan ${products.length} produk`,
+        data: products,
+      });
+    } catch (error) {
+      logger.error(`Error in searchStoreProducts: ${error.message}`);
+      return apiResponse.error(res, error.message, 500);
+    }
+  }
+
+  /**
+   * Insert RMB manual dari form dialog.
+   * Menerima body JSON, transform ke format records (QTY = 1), lalu proses.
+   */
+  async insertManual(req, res) {
+    try {
+      const { kdtk, tanggal, items } = req.body;
+      const username = req.user?.username || "system";
+
+      if (!kdtk || !tanggal || !Array.isArray(items) || items.length === 0) {
+        return apiResponse.badRequest(res, "kdtk, tanggal, dan minimal 1 item wajib diisi");
+      }
+
+      // Transform ke format yang dipakai processStoreWithHistory, QTY = 1
+      const records = items.map(item => ({
+        KDTK: String(kdtk).trim().toUpperCase(),
+        TANGGAL: String(tanggal).trim(),
+        PRDCD: String(item.prdcd).trim(),
+        NOHP: item.nohp ? String(item.nohp).trim() : "",
+        TRXID: item.trxid ? String(item.trxid).trim() : "",
+        QTY: "1",
+      }));
+
+      const results = await buatRmbService.processManualBuatRmb(records, username);
+
+      if (results.failedStores && results.failedStores.length > 0) {
+        return apiResponse.success(res, {
+          message: "Process selesai dengan beberapa kegagalan",
+          data: results,
+        }, 207);
+      }
+
+      return apiResponse.success(res, {
+        message: "Manual RMB berhasil diproses",
+        data: results,
+      });
+    } catch (error) {
+      logger.error(`Error in insertManual (BuatRmb): ${error.message}`);
+      return apiResponse.error(res, error.message || "Gagal memproses RMB manual", 500);
     }
   }
 }

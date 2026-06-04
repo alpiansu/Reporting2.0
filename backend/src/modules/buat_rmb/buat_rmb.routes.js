@@ -30,4 +30,9 @@ router.get("/history/export", buatRmbController.exportHistory);
 router.get("/filters", buatRmbController.getFilters);
 router.get("/template/download", buatRmbController.downloadTemplate);
 
+// Manual input routes
+router.get("/check-connection", buatRmbController.checkConnection);
+router.get("/store-products", buatRmbController.searchStoreProducts);
+router.post("/manual", buatRmbController.insertManual);
+
 export default router;

@@ -55,7 +55,7 @@ export default {
               WHERE pm.prdcd = ?                                                      -- prdcd from file
               `,                                                    
       insertTran: `
-        INSERT IGNORE INTO mstran SELECT * FROM mstrmb where prdcd in (SELECT a.prdcd from rmbcek a inner join mstadj b using(prdcd) WHERE a.SALDO != 0) AND PRDCD = ?
+        INSERT IGNORE INTO mstran SELECT * FROM mstrmb where prdcd in (SELECT a.prdcd from rmbcek a inner join mstrmb b using(prdcd) WHERE a.SALDO != 0) AND PRDCD = ?
       `,
       finalize: [
         `UPDATE const SET docno=docno+2 WHERE rkey='BPB'`,
@@ -78,4 +78,24 @@ export default {
   },
 
   taskProgressName: "rmbTask",
+
+  /**
+   * cat_cod eligible untuk RMB — satu-satunya tempat ini didefinisikan.
+   * Ubah di sini jika ada penambahan/pengurangan kategori produk di masa depan.
+   */
+  rmbEligibleCatCodes: ["034203", "034202", "033005", "034205"],
+
+  /**
+   * Query autocomplete produk dari prodmast toko.
+   * Gunakan prefix search (LIKE 'q%') sesuai spesifikasi.
+   * Mengambil field merk untuk membedakan game online vs virtual/pulsa di frontend.
+   */
+  productSearchQuery: `
+    SELECT prdcd, singkatan AS \`desc\`, IFNULL(merk,'') AS merk, cat_cod
+    FROM prodmast
+    WHERE cat_cod IN (?)
+      AND prdcd LIKE ?
+    ORDER BY prdcd ASC
+    LIMIT 50
+  `,
 };

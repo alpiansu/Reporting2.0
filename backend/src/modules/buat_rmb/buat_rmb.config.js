@@ -26,7 +26,7 @@ export default {
       init: `INSERT INTO mstrmb(lokasi,rtype,bukti_no,bukti_tgl,supco,inv_date,prdcd,plu_nas,istype,bkp,sub_bkp,price,gross,ppn,qty,jam,keter)
               SELECT 
                 '01', 'BPB', 
-                (SELECT docno FROM const WHERE rkey = 'BPB')+1,
+                (SELECT docno FROM const WHERE rkey = 'BPB'),
                 COALESCE(NULLIF(?, ''), CURRENT_DATE()), -- tanggal from file
                 IFNULL(pm.supco,''),
                 COALESCE(NULLIF(?, ''), CURRENT_DATE()), -- tanggal from file
@@ -57,9 +57,8 @@ export default {
       insertTran: `
         INSERT IGNORE INTO mstran SELECT * FROM mstrmb where prdcd in (SELECT a.prdcd from rmbcek a inner join mstrmb b using(prdcd) WHERE a.SALDO != 0) AND PRDCD = ?
       `,
-      finalize: [
-        `UPDATE const SET docno=docno+2 WHERE rkey='BPB'`,
-      ],
+      updateConstBPB: 
+        `UPDATE const SET docno=docno+1 WHERE rkey='BPB'`,
     },
   },
 

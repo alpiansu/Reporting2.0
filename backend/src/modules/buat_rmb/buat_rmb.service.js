@@ -284,15 +284,10 @@ class BuatRmbService {
 
             //insert plu ke mstrmb
             logger.info(`[buat_rmb.service] Inserting record for store ${store.storeCode}: ${JSON.stringify(params)}`);
-            logger.info(`[buat_rmb.service] SQL query: ${config.queries.store.init}`);
             await storeConnection.query({ sql: config.queries.store.init, timeout: config.parallelProcessing.queryTimeoutMs }, params);
 
-            // Execute finalize queries sequentially
-            await (async () => {
-              for (const query of config.queries.store.finalize) {
-                await storeConnection.query({ sql: query, timeout: config.parallelProcessing.queryTimeoutMs });
-              }
-            })();
+            //update const bpb
+            await storeConnection.query({ sql: config.queries.store.updateConstBPB, timeout: config.parallelProcessing.queryTimeoutMs });
 
             historyRecords.push({
               kdtk: record.KDTK,
@@ -369,6 +364,7 @@ class BuatRmbService {
                 updtime: executedAt,
                 status: "SUCCESS",
               });
+
             } else {
               // Insert gagal - tidak ada rows yang terpengaruh
               historyRecords.push({

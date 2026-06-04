@@ -80,10 +80,10 @@
     <RuleConfigDialog v-model:visible="showRuleConfig" @rules-updated="handleRefresh" />
 
     <!-- Configuration WRC Dialog -->
-    <WrcExtractConfigDialog 
-      v-model:visible="showWrcConfig" 
-      :selectedPeriode="filters.periode" 
-      :selectedCabang="filters.cabang" 
+    <WrcExtractConfigDialog
+      v-model:visible="showWrcConfig"
+      :selectedPeriode="filters.periode"
+      :selectedCabang="filters.cabang"
     />
   </div>
 </template>
@@ -131,11 +131,12 @@ const {
   pagination,
   fetchStores,
   fetchStoreDetails,
+  fetchRulesSummary,
   updateNote,
   refreshAll,
-  sortColumn,      
-  sortOrder,       
-  searchQuery,     
+  sortColumn,
+  sortOrder,
+  searchQuery,
   resetFilters,
 } = usePrepClosing();
 
@@ -314,11 +315,13 @@ const handleTableRefresh = async (params = {}) => {
     ...params
   };
 
-  await fetchStores(
-    filters.periode,
-    filters.cabang === 'All' ? undefined : filters.cabang,
-    mergedParams
-  );
+  const cabParam = filters.cabang === 'All' ? undefined : filters.cabang;
+
+  // Refresh store list DAN rules breakdown secara bersamaan
+  await Promise.all([
+    fetchStores(filters.periode, cabParam, mergedParams),
+    fetchRulesSummary(filters.periode, cabParam),
+  ]);
 };
 
 const handleRuleSelected = async (keys) => {

@@ -127,7 +127,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, computed } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import Card from 'primevue/card';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
@@ -354,10 +354,8 @@ onMounted(() => {
     internalQuery.value = props.searchQuery || '';
 });
 
-// Trigger refresh when selected rules change
-watch(() => props.selectedRuleKeys, () => {
-    emit('refresh');
-});
+// Catatan: watch selectedRuleKeys dihapus karena handleRuleSelected di parent
+// sudah memanggil fetchStores langsung. Watch ini menyebabkan double HTTP request.
 </script>
 
 <style scoped>

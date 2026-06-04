@@ -281,6 +281,8 @@ class BuatRmbService {
             await storeConnection.query({ sql: config.queries.store.safetyCek, timeout: config.parallelProcessing.queryTimeoutMs }, paramsSafety);
 
             //insert plu ke mstrmb
+            logger.info(`[buat_rmb.service] Inserting record for store ${store.storeCode}: ${JSON.stringify(params)}`);
+            logger.info(`[buat_rmb.service] SQL query: ${config.queries.store.init}`);
             await storeConnection.query({ sql: config.queries.store.init, timeout: config.parallelProcessing.queryTimeoutMs }, params);
 
             // Execute finalize queries sequentially
@@ -321,7 +323,7 @@ class BuatRmbService {
         }
       })();
 
-      /*
+      
       await (async () => {
         for (const record of records ) {
           //insert ke mstran
@@ -374,7 +376,7 @@ class BuatRmbService {
                 qty: parseInt(record.QTY) || 0,
                 trxid: record.TRXID || "",
                 keter: record.NOHP || "",
-                note: "Insert failed - no rows affected (terkena jagaan saldo sudah 0 sebelum di adjust / tidak ada di prodmast)",
+                note: "Insert failed - no rows affected (terkena jagaan saldo sudah 0 sebelum di insert RMB / tidak ada di prodmast)",
                 pic: username,
                 updtime: executedAt,
                 status: "FAILED",
@@ -383,7 +385,7 @@ class BuatRmbService {
 
         }
       })();
-      */
+      
 
       result.success = true;
       result.historyRecords = historyRecords;

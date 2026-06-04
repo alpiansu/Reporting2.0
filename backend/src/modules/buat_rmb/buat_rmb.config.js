@@ -37,8 +37,8 @@ export default {
                 pm.sub_bkp,
                 pm.acost,
                 pm.acost * ?,                                                          -- qty from file
-                CASE WHEN tp.PPN = '1' 
-                  THEN pm.acost * ? * (CASE WHEN tp.PPN_RATE = '1' THEN 0.11 ELSE 0 END) -- qty from file
+                CASE WHEN CAST(tp.PPN AS CHAR) = '1' 
+                  THEN pm.acost * ? * (CASE WHEN CAST(tp.PPN_RATE AS CHAR) = '1' THEN 0.11 ELSE 0 END) -- qty from file
                   ELSE 0 END,                                                          -- ppn
                 ?,                                                                     -- qty from file
                 CURTIME(),
@@ -47,11 +47,11 @@ export default {
               LEFT JOIN supmast sm ON pm.supco = sm.supco
               LEFT JOIN toko tk ON tk.kdtk = ?                                         -- kdtk from file
               LEFT JOIN table_ppn tp 
-                ON tp.TOKO_REG  = IF(LEFT(tk.kdtk,1) = 'T', 'Y', 'N')
-              AND tp.TOKO_PKP  = IFNULL(tk.pkp, 'N')
-              AND tp.SUP_PKP   = IFNULL(sm.pkp, 'N')
-              AND tp.PROD_BKP  = IFNULL(pm.bkp, 'N')
-              AND tp.REGION_BATAM = 'N'                                               
+                ON CAST(tp.TOKO_REG AS CHAR)  = IF(LEFT(tk.kdtk,1) = 'T', 'Y', 'N')
+              AND CAST(tp.TOKO_PKP AS CHAR)  = IFNULL(tk.pkp, 'N')
+              AND CAST(tp.SUP_PKP AS CHAR)   = IFNULL(sm.pkp, 'N')
+              AND CAST(tp.PROD_BKP AS CHAR)  = IFNULL(pm.bkp, 'N')
+              AND CAST(tp.REGION_BATAM AS CHAR) = 'N'                                               
               WHERE pm.prdcd = ?                                                      -- prdcd from file
               `,                                                    
       insertTran: `

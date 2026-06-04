@@ -107,7 +107,7 @@
                     :suggestions="filteredProducts"
                     @complete="searchProduct"
                     @item-select="onProductSelect($event, index)"
-                    optionLabel="desc"
+                    optionLabel="prdcd"
                     placeholder="Ketik kode/nama produk..."
                     :minLength="3"
                     class="w-full"
@@ -121,8 +121,10 @@
                       </div>
                     </template>
                   </AutoComplete>
-                  <small v-if="item.selectedProduct && item.selectedProduct.prdcd" class="block mt-1 text-gray-500">
-                    PLU: {{ item.selectedProduct.prdcd }}
+                  <small v-if="isValidProduct(item)" class="block mt-1 font-semibold text-primary">
+                    {{ item.selectedProduct.desc }}
+                    <Badge v-if="item.selectedProduct.merk === 'GAME ONLINE'" value="Game" severity="info" size="small" class="ml-1" />
+                    <Badge v-else value="Virtual" severity="success" size="small" class="ml-1" />
                   </small>
                 </td>
                 <td>
@@ -131,13 +133,19 @@
                     v-model="item.nohp"
                     placeholder="08xxxxxxxx"
                     class="w-full"
+                    :disabled="!isValidProduct(item)"
                   />
                   <div v-else class="text-gray-400 italic text-sm mt-2 text-center">
                     (Game Online)
                   </div>
                 </td>
                 <td>
-                  <InputText v-model="item.trxid" placeholder="ID Transaksi" class="w-full" />
+                  <InputText 
+                    v-model="item.trxid" 
+                    placeholder="ID Transaksi" 
+                    class="w-full" 
+                    :disabled="!isValidProduct(item)" 
+                  />
                 </td>
                 <td class="text-center">
                   <Button
@@ -476,8 +484,15 @@ export default {
       return dayjs(date).format('YYYY-MM-DD');
     };
 
+    const isValidProduct = (item) => {
+      // Pastikan item.selectedProduct berupa object (hasil klik dari list), bukan text sembarangan
+      return item.selectedProduct && 
+             typeof item.selectedProduct === 'object' && 
+             item.selectedProduct.prdcd;
+    };
+
     const isGameOnline = (item) => {
-      return item.selectedProduct && item.selectedProduct.merk === 'GAME ONLINE';
+      return isValidProduct(item) && item.selectedProduct.merk === 'GAME ONLINE';
     };
 
     // Validation
@@ -571,6 +586,7 @@ export default {
       removeItem,
       getStoreName,
       formatDate,
+      isValidProduct,
       isGameOnline,
       
       isStep1Valid,

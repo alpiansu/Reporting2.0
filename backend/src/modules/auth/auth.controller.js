@@ -14,7 +14,9 @@ export const login = async (req, res, next) => {
     const { username, password } = req.body;
 
     if (!username || !password) {
-      return res.status(400).json({ message: "Username and password are required" });
+      return res
+        .status(400)
+        .json({ message: "Username and password are required" });
     }
 
     const result = await authService.login(username, password);
@@ -35,9 +37,13 @@ export const login = async (req, res, next) => {
     res.status(200).json(result);
   } catch (error) {
     if (error.message === "User not found") {
-      return res.status(401).json({ message: "User not found", field: "username" });
+      return res
+        .status(401)
+        .json({ message: "User not found", field: "username" });
     } else if (error.message === "Invalid password") {
-      return res.status(401).json({ message: "Invalid password", field: "password" });
+      return res
+        .status(401)
+        .json({ message: "Invalid password", field: "password" });
     }
     next(error);
   }
@@ -52,7 +58,9 @@ export const register = async (req, res, next) => {
 
     // Validate required fields
     if (!username || !email || !password) {
-      return res.status(400).json({ message: "Username, email, and password are required" });
+      return res
+        .status(400)
+        .json({ message: "Username, email, and password are required" });
     }
 
     // Create user data object
@@ -83,7 +91,9 @@ export const register = async (req, res, next) => {
   } catch (error) {
     // Handle duplicate username/email
     if (error.name === "SequelizeUniqueConstraintError") {
-      return res.status(409).json({ message: "Username or email already exists" });
+      return res
+        .status(409)
+        .json({ message: "Username or email already exists" });
     }
     next(error);
   }
@@ -97,7 +107,9 @@ export const getProfile = async (req, res, next) => {
     const userId = req.user.id;
     const user = await authService.getProfile(userId);
     if (!user) {
-      logger.warn(`User with id ${userId} not found or inactive when accessing profile`);
+      logger.warn(
+        `User with id ${userId} not found or inactive when accessing profile`,
+      );
       return res.status(401).json({ message: "User not found or inactive" });
     }
     res.status(200).json(user);
@@ -118,11 +130,15 @@ export const changePassword = async (req, res, next) => {
     const { currentPassword, newPassword } = body;
 
     if (!currentPassword || !newPassword) {
-      return res.status(400).json({ message: "Current password and new password are required" });
+      return res
+        .status(400)
+        .json({ message: "Current password and new password are required" });
     }
 
     if (newPassword.length < 6) {
-      return res.status(400).json({ message: "New password must be at least 6 characters long" });
+      return res
+        .status(400)
+        .json({ message: "New password must be at least 6 characters long" });
     }
 
     await authService.changePassword(userId, currentPassword, newPassword);
@@ -219,9 +235,13 @@ export const logout = async (req, res, next) => {
     const ipAddress = req.ip || req.connection.remoteAddress;
     const userAgent = req.headers["user-agent"];
 
-    // Log logout activity
+    // Log logout activity (pass username from JWT so the description is informative)
     if (userId) {
-      await authService.logout(userId, { ipAddress, userAgent });
+      await authService.logout(userId, {
+        ipAddress,
+        userAgent,
+        username: req.user?.username,
+      });
     }
 
     // In a stateless JWT auth system, logout is handled client-side

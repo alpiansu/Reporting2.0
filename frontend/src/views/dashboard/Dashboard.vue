@@ -1,225 +1,209 @@
 <template>
   <div class="dashboard fade-in">
+
     <!-- Page Header -->
     <div class="page-header">
       <div>
-        <h1 class="page-title">Dashboard Overview</h1>
-        <p class="text-sm text-gray-500 mt-1">Welcome back, {{ username }}! Here's what's happening today.</p>
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-subtitle">
+          <i class="pi pi-user"></i>
+          {{ username }}
+          <span class="separator">·</span>
+          <i class="pi pi-calendar"></i>
+          {{ currentDate }}
+        </p>
       </div>
-      <div class="flex gap-2">
-        <Button 
-          icon="pi pi-refresh" 
-          label="Refresh" 
-          outlined 
-          severity="secondary" 
-          @click="fetchData" 
-          :loading="loading" 
-        />
-        <Button 
-          icon="pi pi-cog" 
-          severity="secondary" 
-          text 
-        />
+      <Button
+        icon="pi pi-refresh"
+        label="Refresh"
+        outlined
+        severity="secondary"
+        size="small"
+        @click="fetchData"
+        :loading="loading"
+      />
+    </div>
+
+    <!-- Info Strip -->
+    <div class="info-strip">
+      <!-- Total Stores -->
+      <div class="info-card">
+        <div class="info-icon icon-blue">
+          <i class="pi pi-shopping-bag"></i>
+        </div>
+        <div class="info-body">
+          <div v-if="loading"><Skeleton width="3rem" height="1.6rem" /></div>
+          <div v-else class="info-value">{{ stats.totalStores ?? 0 }}</div>
+          <div class="info-label">Total Toko</div>
+        </div>
+      </div>
+
+      <!-- Database Connection -->
+      <div class="info-card">
+        <div class="info-icon" :class="stats.dbConnected ? 'icon-green' : 'icon-red'">
+          <i class="pi pi-database"></i>
+        </div>
+        <div class="info-body">
+          <div v-if="loading"><Skeleton width="6rem" height="1.6rem" /></div>
+          <template v-else>
+            <div class="info-value db-value">
+              <span class="status-dot" :class="stats.dbConnected ? 'dot-green' : 'dot-red'"></span>
+              {{ stats.dbConnected ? 'Connected' : 'Disconnected' }}
+            </div>
+            <div class="info-label">
+              Database
+              <span class="db-ip-badge">{{ stats.dbHost || 'N/A' }}</span>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- Last Sync -->
+      <div class="info-card">
+        <div class="info-icon icon-orange">
+          <i class="pi pi-sync"></i>
+        </div>
+        <div class="info-body">
+          <div v-if="loading"><Skeleton width="7rem" height="1.6rem" /></div>
+          <div v-else class="info-value info-value--sm">{{ formatDateTime(stats.lastSync) }}</div>
+          <div class="info-label">Last Sync</div>
+        </div>
       </div>
     </div>
 
-    <!-- Statistics Cards -->
-    <div class="dashboard-stats">
-      <div v-if="loading" v-for="i in 4" :key="'skeleton-stat-' + i" class="stat-card-custom">
-        <Skeleton shape="circle" size="3.5rem" class="mr-4" />
-        <div class="flex-grow">
-          <Skeleton width="40%" height="1.5rem" class="mb-2" />
-          <Skeleton width="60%" />
-        </div>
-      </div>
-      
-      <template v-else>
-        <div class="stat-card-custom">
-          <div class="stat-icon icon-blue">
-            <i class="pi pi-shopping-bag"></i>
-          </div>
-          <div class="stat-info">
-            <div class="stat-value">{{ stats.totalStores || 0 }}</div>
-            <div class="stat-label">Total Stores</div>
-          </div>
+    <!-- Main Content -->
+    <div class="dashboard-main">
+
+      <!-- Page Navigator -->
+      <div class="panel page-navigator">
+        <div class="panel-header">
+          <span class="panel-title">
+            <i class="pi pi-th-large"></i>
+            Navigasi Halaman
+          </span>
         </div>
 
-        <div class="stat-card-custom">
-          <div class="stat-icon icon-purple">
-            <i class="pi pi-check-circle"></i>
-          </div>
-          <div class="stat-info">
-            <div class="stat-value">{{ stats.totalPenyesuaian || 0 }}</div>
-            <div class="stat-label">Penyesuaian</div>
-          </div>
+        <div v-if="menuLoading" class="nav-grid">
+          <Skeleton v-for="i in 8" :key="i" height="4.5rem" border-radius="10px" />
         </div>
 
-        <div class="stat-card-custom">
-          <div class="stat-icon icon-orange">
-            <i class="pi pi-chart-bar"></i>
+        <template v-else>
+          <div v-if="menuCategories.length === 0" class="empty-state">
+            <i class="pi pi-info-circle"></i>
+            <p>Tidak ada halaman yang tersedia.</p>
           </div>
-          <div class="stat-info">
-            <div class="stat-value">{{ stats.totalRekonSales || 0 }}</div>
-            <div class="stat-label">Rekon Sales</div>
-          </div>
-        </div>
 
-        <div class="stat-card-custom">
-          <div class="stat-icon icon-green">
-            <i class="pi pi-sync"></i>
-          </div>
-          <div class="stat-info">
-            <div class="stat-value text-sm overflow-hidden text-ellipsis whitespace-nowrap">
-              {{ formatDateTime(stats.lastSync) }}
-            </div>
-            <div class="stat-label">Last Sync</div>
-          </div>
-        </div>
-      </template>
-    </div>
-
-    <div class="dashboard-grid">
-      <!-- Main Content Area -->
-      <div class="flex flex-col gap-6">
-        <!-- Quick Actions -->
-        <Card class="quick-actions-card shadow-sm">
-          <template #title>
-            <div class="flex items-center gap-2">
-              <i class="pi pi-bolt text-yellow-500"></i>
-              <span>Quick Actions</span>
-            </div>
-          </template>
-          <template #content>
-            <div class="actions-grid">
-              <Button icon="pi pi-shopping-bag" label="Stores" severity="primary" outlined class="action-btn" @click="$router.push('/stores')" />
-              <Button icon="pi pi-check-square" label="Screening" severity="info" outlined class="action-btn" @click="$router.push('/prep-closing')" />
-              <Button icon="pi pi-sync" label="Rekon Sales" severity="help" outlined class="action-btn" @click="$router.push('/rekon-sales')" />
-              <Button icon="pi pi-sliders-h" label="Adjust" severity="secondary" outlined class="action-btn" @click="$router.push('/adjust')" />
-            </div>
-          </template>
-        </Card>
-
-        <!-- Data Insights -->
-        <Card class="activity-card shadow-sm">
-          <template #title>
-            <div class="flex items-center gap-2">
-              <i class="pi pi-chart-pie text-indigo-500"></i>
-              <span>Data Insights</span>
-            </div>
-          </template>
-          <template #content>
-            <div class="flex flex-col gap-6">
-              <div class="grid grid-cols-2 gap-4">
-                <div class="insight-item p-4 bg-indigo-50 rounded-xl border border-indigo-100 flex flex-col">
-                  <span class="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-1">Reports Ready</span>
-                  <span class="text-2xl font-black text-indigo-700">{{ stats.totalRekonSales + stats.totalPenyesuaian }}</span>
+          <div v-for="group in menuCategories" :key="group.id || group.label" class="nav-group">
+            <div class="nav-group-label">{{ group.label }}</div>
+            <div class="nav-grid">
+              <div
+                v-for="item in group.items"
+                :key="item.path"
+                class="nav-card"
+                @click="$router.push(item.path)"
+              >
+                <div class="nav-card-icon">
+                  <i :class="['pi', item.icon || 'pi-file']"></i>
                 </div>
-                <div class="insight-item p-4 bg-emerald-50 rounded-xl border border-emerald-100 flex flex-col">
-                  <span class="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1">Active Stores</span>
-                  <span class="text-2xl font-black text-emerald-700">{{ stats.totalStores }}</span>
+                <div class="nav-card-body">
+                  <div class="nav-card-title">{{ item.text }}</div>
+                  <div class="nav-card-desc">{{ getPageDesc(item.path) }}</div>
                 </div>
-              </div>
-
-              <div class="system-summary p-4 bg-gray-50 rounded-xl border border-gray-100">
-                <h4 class="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
-                  <i class="pi pi-server text-gray-400"></i>
-                  System Status
-                </h4>
-                <div class="flex flex-col gap-3">
-                  <div class="flex justify-between items-center text-xs">
-                    <span class="text-gray-500">Database Connection</span>
-                    <Tag severity="success" value="Connected" rounded />
-                  </div>
-                  <div class="flex justify-between items-center text-xs">
-                    <span class="text-gray-500">Last Background Sync</span>
-                    <span class="font-medium text-gray-700">{{ formatActivityDate(stats.lastSync) }}</span>
-                  </div>
-                </div>
+                <i class="pi pi-chevron-right nav-card-arrow"></i>
               </div>
             </div>
-          </template>
-        </Card>
-      </div>
-
-      <!-- Sidebar / Activity Feed -->
-      <Card class="activity-card shadow-sm">
-        <template #title>
-          <div class="flex justify-between items-center">
-            <div class="flex items-center gap-2">
-              <i class="pi pi-history text-purple-500"></i>
-              <span>Recent Activity</span>
-            </div>
-            <Button icon="pi pi-arrow-right" text severity="secondary" @click="$router.push('/user-activities')" size="small" />
           </div>
         </template>
-        <template #content>
-          <div v-if="loading" class="flex flex-col gap-4">
-            <div v-for="i in 5" :key="'skeleton-activity-' + i" class="flex gap-4">
-              <Skeleton shape="circle" size="2.5rem" />
-              <div class="flex-grow">
-                <Skeleton width="80%" class="mb-2" />
-                <Skeleton width="40%" height="0.75rem" />
-              </div>
+      </div>
+
+      <!-- Recent Activity -->
+      <div class="panel activity-panel">
+        <div class="panel-header">
+          <span class="panel-title">
+            <i class="pi pi-history"></i>
+            Aktivitas Terkini
+          </span>
+          <button class="view-all-btn" @click="$router.push('/user-activities')">
+            Lihat Semua <i class="pi pi-arrow-right"></i>
+          </button>
+        </div>
+
+        <!-- Skeleton -->
+        <div v-if="loading" class="activity-list">
+          <div v-for="i in 6" :key="i" class="activity-row">
+            <Skeleton shape="circle" size="2.25rem" class="flex-shrink-0" />
+            <div class="activity-info" style="flex:1">
+              <Skeleton width="65%" height="0.875rem" class="mb-1" />
+              <Skeleton width="80%" height="0.75rem" />
+            </div>
+            <div style="text-align:right">
+              <Skeleton width="3rem" height="1.2rem" border-radius="999px" class="mb-1" />
+              <Skeleton width="2.5rem" height="0.7rem" />
             </div>
           </div>
+        </div>
 
-          <Timeline v-else :value="recentActivities" class="custom-timeline">
-            <template #content="slotProps">
-              <div class="activity-item">
-                <div class="activity-content">
-                  <div class="activity-user">{{ slotProps.item.user?.fullName || 'System' }}</div>
-                  <div class="activity-desc">{{ slotProps.item.description }}</div>
-                  <div class="activity-time">
-                    <i class="pi pi-clock text-[10px] mr-1"></i>
-                    {{ formatActivityDate(slotProps.item.createdAt) }}
-                  </div>
-                </div>
-              </div>
-            </template>
-            <template #marker="slotProps">
-              <Avatar 
-                :label="getInitials(slotProps.item.user?.fullName || 'System')" 
-                shape="circle" 
-                :class="getAvatarClass(slotProps.item.type)"
-              />
-            </template>
-          </Timeline>
-          
-          <div v-if="!loading && recentActivities.length === 0" class="text-center py-8 text-gray-400">
-            <i class="pi pi-inbox text-4xl mb-2 opacity-20"></i>
-            <p>No recent activity</p>
+        <!-- Empty -->
+        <div v-else-if="recentActivities.length === 0" class="empty-state">
+          <i class="pi pi-inbox"></i>
+          <p>Belum ada aktivitas</p>
+        </div>
+
+        <!-- Activity Feed -->
+        <div v-else class="activity-list">
+          <div
+            v-for="activity in recentActivities"
+            :key="activity.id || activity.createdAt"
+            class="activity-row"
+          >
+            <div class="activity-avatar" :class="getAvatarClass(activity.type)">
+              {{ getInitials(activity.user?.fullName || 'S') }}
+            </div>
+            <div class="activity-info">
+              <div class="activity-user">{{ activity.user?.fullName || 'System' }}</div>
+              <div class="activity-desc">{{ activity.description }}</div>
+            </div>
+            <div class="activity-meta">
+              <span class="activity-badge" :class="getBadgeClass(activity.type)">
+                {{ activity.type || 'info' }}
+              </span>
+              <div class="activity-time">{{ formatActivityDate(activity.createdAt) }}</div>
+            </div>
           </div>
-        </template>
-      </Card>
+        </div>
+      </div>
+
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
-import Card from 'primevue/card';
+import { ref, computed, onMounted } from 'vue';
 import Button from 'primevue/button';
-import Timeline from 'primevue/timeline';
 import Skeleton from 'primevue/skeleton';
-import Avatar from 'primevue/avatar';
-import Tag from 'primevue/tag';
 import dashboardService from '@/services/dashboard.service';
+import { useAuthStore, useMenuStore } from '@/stores';
 
+// ── Auth ──────────────────────────────────────────────────────────────────────
+const authStore = useAuthStore();
+const username = computed(() => authStore.user?.fullName || authStore.user?.username || 'User');
+
+// ── Menu store (for page navigator) ──────────────────────────────────────────
+const menuStore = useMenuStore();
+const menuCategories = computed(() => menuStore.menuCategories);
+const menuLoading = computed(() => menuStore.loading);
+
+// ── Data ──────────────────────────────────────────────────────────────────────
 const loading = ref(true);
 const stats = ref({});
 const recentActivities = ref([]);
-
-// Mock user data - normally from a store
-const userJson = localStorage.getItem('user');
-const user = userJson ? JSON.parse(userJson) : { fullName: 'User' };
-const username = computed(() => user.fullName || 'User');
 
 const fetchData = async () => {
   loading.value = true;
   try {
     const [statsData, activityData] = await Promise.all([
       dashboardService.getStats(),
-      dashboardService.getRecentActivity()
+      dashboardService.getRecentActivity(),
     ]);
     stats.value = statsData;
     recentActivities.value = activityData;
@@ -230,58 +214,106 @@ const fetchData = async () => {
   }
 };
 
+onMounted(() => {
+  fetchData();
+});
+
+// ── Current date ──────────────────────────────────────────────────────────────
+const currentDate = computed(() => {
+  return new Date().toLocaleDateString('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+});
+
+// ── Formatters ────────────────────────────────────────────────────────────────
 const formatDateTime = (dateString) => {
-  if (!dateString) return 'Never';
+  if (!dateString) return 'Belum ada';
   const date = new Date(dateString);
-  return date.toLocaleString('id-ID', { 
-    day: '2-digit', 
-    month: 'short', 
-    hour: '2-digit', 
-    minute: '2-digit' 
+  return date.toLocaleString('id-ID', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
   });
 };
 
 const formatActivityDate = (dateString) => {
+  if (!dateString) return '-';
   const date = new Date(dateString);
-  const now = new Date();
-  const diff = now - date;
-  
-  if (diff < 60000) return 'Just now';
-  if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
-  if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
-  
+  const diff = Date.now() - date.getTime();
+  if (diff < 60_000) return 'Baru saja';
+  if (diff < 3_600_000) return Math.floor(diff / 60_000) + 'm lalu';
+  if (diff < 86_400_000) return Math.floor(diff / 3_600_000) + 'j lalu';
   return date.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' });
 };
 
+// ── Avatar helpers ────────────────────────────────────────────────────────────
 const getInitials = (name) => {
   if (!name) return 'S';
   return name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
 };
 
 const getAvatarClass = (type) => {
-  switch (type) {
-    case 'login': return 'bg-blue-100 text-blue-600';
-    case 'sync': return 'bg-orange-100 text-orange-600';
-    case 'store': return 'bg-purple-100 text-purple-600';
-    case 'report': return 'bg-green-100 text-green-600';
-    default: return 'bg-gray-100 text-gray-600';
-  }
+  const map = {
+    login:  'avatar-blue',
+    logout: 'avatar-gray',
+    sync:   'avatar-orange',
+    store:  'avatar-purple',
+    report: 'avatar-green',
+    create: 'avatar-teal',
+    update: 'avatar-indigo',
+    delete: 'avatar-red',
+  };
+  return map[type] || 'avatar-gray';
 };
 
-onMounted(() => {
-  fetchData();
-});
+const getBadgeClass = (type) => {
+  const map = {
+    login:  'badge-blue',
+    logout: 'badge-gray',
+    sync:   'badge-orange',
+    store:  'badge-purple',
+    report: 'badge-green',
+    create: 'badge-teal',
+    update: 'badge-indigo',
+    delete: 'badge-red',
+  };
+  return map[type] || 'badge-gray';
+};
+
+// ── Page descriptions map ─────────────────────────────────────────────────────
+const PAGE_DESCRIPTIONS = {
+  '/stores':                'Kelola data toko dan cabang',
+  '/prep-closing':          'Cek persiapan closing harian toko',
+  '/prep-closing-server':   'Persiapan closing di sisi server',
+  '/rekon-sales':           'Rekonsiliasi data penjualan antar sistem',
+  '/penyesuaian':           'Penyesuaian data transaksi toko',
+  '/adjust':                'Adjustment data persediaan & transaksi',
+  '/cetak-bpb':             'Cetak Bukti Penerimaan Barang',
+  '/rekap-backup':          'Rekap status backup data toko',
+  '/rekon-persediaan':      'Rekonsiliasi data persediaan toko',
+  '/rekon-wt-harian':       'Rekonsiliasi Warehouse Transfer Harian',
+  '/rekon-virtual-margin':  'Rekonsiliasi virtual margin berbasis toko',
+  '/buat-rmb':              'Buat dan kelola dokumen RMB',
+  '/notes':                 'Catatan dan informasi penting',
+  '/note-categories':       'Kelola kategori catatan',
+  '/reports':               'Laporan dan analisa data',
+  '/report-bulanan':        'Laporan bulanan per toko',
+  '/screenings':            'Data screening toko',
+  '/user-activities':       'Log aktivitas seluruh pengguna',
+  '/users':                 'Manajemen akun pengguna',
+  '/admin/menu-manager':    'Pengaturan menu navigasi sistem',
+  '/settings':              'Pengaturan umum aplikasi',
+};
+
+const getPageDesc = (path) => {
+  return PAGE_DESCRIPTIONS[path] || 'Buka halaman ini untuk informasi lebih lanjut';
+};
 </script>
 
 <style>
 @import './Dashboard.style.css';
-
-/* Override PrimeVue PrimeIcons alignment in timeline if needed */
-.custom-timeline .p-timeline-event-opposite {
-  display: none;
-}
-
-.custom-timeline .p-timeline-event-content {
-  padding-bottom: 1.5rem;
-}
 </style>

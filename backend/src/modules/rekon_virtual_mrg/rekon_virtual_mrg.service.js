@@ -57,7 +57,7 @@ class RekonVirtualService {
         const rawData = JSON.parse(data);
 
         // Ensure numeric fields are numbers when loading from JSON
-        this.virtualData = rawData.map(item => ({
+        this.virtualData = rawData.map((item) => ({
           ...item,
           ACOST: Number(item.ACOST) || 0,
           PRICE: Number(item.PRICE) || 0,
@@ -66,7 +66,9 @@ class RekonVirtualService {
           SEL: Number(item.SEL) || 0,
         }));
 
-        logger.info(`Loaded ${this.virtualData.length} rekon_virtual_mrg records for periode ${periode} from JSON`);
+        logger.info(
+          `Loaded ${this.virtualData.length} rekon_virtual_mrg records for periode ${periode} from JSON`,
+        );
       } catch (error) {
         // If file doesn't exist or is invalid, create an empty file
         if (error.code === "ENOENT" || error instanceof SyntaxError) {
@@ -82,7 +84,9 @@ class RekonVirtualService {
       this.loadedPeriod = periode;
       this.initialized = true;
     } catch (error) {
-      logger.error(`Failed to initialize rekon_virtual_mrg service: ${error.message}`);
+      logger.error(
+        `Failed to initialize rekon_virtual_mrg service: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -96,9 +100,13 @@ class RekonVirtualService {
       const jsonPath = this.getJsonPath(periode);
       if (!jsonPath) return;
       await fs.writeFile(jsonPath, JSON.stringify(this.virtualData, null, 2));
-      logger.debug(`Saved ${this.virtualData.length} rekon_virtual_mrg records to JSON file: ${jsonPath}`);
+      logger.debug(
+        `Saved ${this.virtualData.length} rekon_virtual_mrg records to JSON file: ${jsonPath}`,
+      );
     } catch (error) {
-      logger.error(`Failed to save rekon_virtual_mrg to file: ${error.message}`);
+      logger.error(
+        `Failed to save rekon_virtual_mrg to file: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -108,7 +116,11 @@ class RekonVirtualService {
    * @returns {boolean} True if cache is valid, false if expired or period changed
    */
   isCacheValid(periode) {
-    if (!this.initialized || !this.lastLoadTime || this.loadedPeriod !== periode) {
+    if (
+      !this.initialized ||
+      !this.lastLoadTime ||
+      this.loadedPeriod !== periode
+    ) {
       return false;
     }
 
@@ -145,19 +157,23 @@ class RekonVirtualService {
     if (this.isLoading) {
       // Wait for ongoing loading to complete
       while (this.isLoading) {
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
       if (this.isCacheValid(periode)) return;
     }
 
     try {
       this.isLoading = true;
-      logger.info(`Loading rekon_virtual_mrg data from JSON file for periode ${periode} (cache expired or empty)`);
+      logger.info(
+        `Loading rekon_virtual_mrg data from JSON file for periode ${periode} (cache expired or empty)`,
+      );
 
       await this.initialize(periode);
       this.lastLoadTime = Date.now();
 
-      logger.info(`Data loaded successfully. TTL expires at: ${new Date(this.lastLoadTime + this.TTL).toISOString()}`);
+      logger.info(
+        `Data loaded successfully. TTL expires at: ${new Date(this.lastLoadTime + this.TTL).toISOString()}`,
+      );
     } finally {
       this.isLoading = false;
     }
@@ -173,7 +189,9 @@ class RekonVirtualService {
       const year = "20" + periode.substring(0, 2);
       const month = periode.substring(2, 4);
       const startDate = `${year}-${month}-01`;
-      const endDate = moment(`${year}-${month}`, "YYYY-MM").endOf("month").format("YYYY-MM-DD");
+      const endDate = moment(`${year}-${month}`, "YYYY-MM")
+        .endOf("month")
+        .format("YYYY-MM-DD");
 
       // Get data from database specifically for this period
       const dbData = await Promise.race([
@@ -185,12 +203,18 @@ class RekonVirtualService {
           },
         }),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("syncToJsonFile findAll timeout after 60 seconds")), 60000)
+          setTimeout(
+            () =>
+              reject(
+                new Error("syncToJsonFile findAll timeout after 60 seconds"),
+              ),
+            60000,
+          ),
         ),
       ]);
 
       // Convert to plain objects and ensure numeric fields are numbers
-      this.virtualData = dbData.map(item => {
+      this.virtualData = dbData.map((item) => {
         const plainItem = item.get({ plain: true });
 
         return {
@@ -212,12 +236,18 @@ class RekonVirtualService {
       this.lastLoadTime = Date.now();
       this.initialized = true;
 
-      logger.info(`Synchronized ${this.virtualData.length} rekon_virtual_mrg records to JSON file for periode ${periode}`);
-      logger.info(`Cache refreshed. TTL expires at: ${new Date(this.lastLoadTime + this.TTL).toISOString()}`);
+      logger.info(
+        `Synchronized ${this.virtualData.length} rekon_virtual_mrg records to JSON file for periode ${periode}`,
+      );
+      logger.info(
+        `Cache refreshed. TTL expires at: ${new Date(this.lastLoadTime + this.TTL).toISOString()}`,
+      );
 
       return this.virtualData.length;
     } catch (error) {
-      logger.error(`Failed to synchronize rekon_virtual_mrg data: ${error.message}`);
+      logger.error(
+        `Failed to synchronize rekon_virtual_mrg data: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -227,12 +257,14 @@ class RekonVirtualService {
    */
   async syncAllData() {
     try {
-      logger.info("Starting sync all data (Migration) to period-based JSON files...");
+      logger.info(
+        "Starting sync all data (Migration) to period-based JSON files...",
+      );
       const dbData = await SaldoVirtual.findAll();
-      
+
       // Group by periode
       const groupedData = {};
-      
+
       for (const item of dbData) {
         const plainItem = item.get({ plain: true });
         const record = {
@@ -243,18 +275,18 @@ class RekonVirtualService {
           QTY_MTRAN: Number(plainItem.QTY_MTRAN) || 0,
           SEL: Number(plainItem.SEL) || 0,
         };
-        
+
         const periode = moment(record.TANGGAL).format("YYMM");
         if (!groupedData[periode]) {
           groupedData[periode] = [];
         }
         groupedData[periode].push(record);
       }
-      
+
       // Save each group to its file
       let totalFiles = 0;
       let totalRecords = 0;
-      
+
       await fs.mkdir(VIRTUAL_MRG_DATA_DIR, { recursive: true });
       for (const [periode, records] of Object.entries(groupedData)) {
         const jsonPath = this.getJsonPath(periode);
@@ -263,8 +295,10 @@ class RekonVirtualService {
         totalFiles++;
         totalRecords += records.length;
       }
-      
-      logger.info(`Migration complete: Saved ${totalRecords} records across ${totalFiles} period files`);
+
+      logger.info(
+        `Migration complete: Saved ${totalRecords} records across ${totalFiles} period files`,
+      );
       return { totalFiles, totalRecords };
     } catch (error) {
       logger.error(`Error in syncAllData: ${error.message}`);
@@ -283,13 +317,17 @@ class RekonVirtualService {
     const taskId = `${config.taskProgressName}_${username}`;
 
     //set limit btranches and stores
-    const limitBranches = pLimit(config.parallelProcessing.branchConcurrencyLimit);
+    const limitBranches = pLimit(
+      config.parallelProcessing.branchConcurrencyLimit,
+    );
     const limitStores = pLimit(config.parallelProcessing.concurrencyLimit);
 
     const withTimeout = (promise, ms, label) => {
       return Promise.race([
         promise,
-        new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout: ${label}`)), ms)),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`Timeout: ${label}`)), ms),
+        ),
       ]);
     };
 
@@ -299,22 +337,32 @@ class RekonVirtualService {
       let branches = [];
       if (options.cabang === "All" || options.cabang === "ALL") {
         const allStores = storeService.stores;
-        branches = [...new Set(allStores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))];
+        branches = [
+          ...new Set(
+            allStores
+              .filter((s) => s.notes === "INDUK")
+              .map((s) => s.branch || s.cab),
+          ),
+        ];
       } else {
         branches = [options.cabang];
       }
 
-      logger.info(`[rekon_virtual_mrg.service] Branches to process: ${branches.join(", ")}`);
+      logger.info(
+        `[rekon_virtual_mrg.service] Branches to process: ${branches.join(", ")}`,
+      );
 
       // === STEP 2: Collect all stores ===
       const storeGroups = await Promise.all(
-        branches.map(cab =>
+        branches.map((cab) =>
           limitBranches(async () => {
             const stores = await storeService.getStoresByBranch(cab, true);
-            logger.info(`[rekon_virtual_mrg.service] Found ${stores.length} stores for branch ${cab}`);
+            logger.info(
+              `[rekon_virtual_mrg.service] Found ${stores.length} stores for branch ${cab}`,
+            );
 
             // tambahkan info cabang ke tiap store
-            return stores.map(s => ({ ...s, cab }));
+            return stores.map((s) => ({ ...s, cab }));
           }),
         ),
       );
@@ -323,16 +371,18 @@ class RekonVirtualService {
 
       // === NEW: Filter by specific shops if provided ===
       if (options.shops && options.shops.length > 0) {
-        storesToProcess = storesToProcess.filter(s => {
+        storesToProcess = storesToProcess.filter((s) => {
           const code = (s.storeCode || s.kdtk || "").toUpperCase();
-          return options.shops.some(target => target.toUpperCase() === code);
+          return options.shops.some((target) => target.toUpperCase() === code);
         });
         logger.info(
           `[rekon_virtual_mrg.service] Filtered to ${storesToProcess.length} specific stores: ${options.shops.join(", ")}`,
         );
       }
 
-      logger.info(`[rekon_virtual_mrg.service] Total stores to process: ${storesToProcess.length}`);
+      logger.info(
+        `[rekon_virtual_mrg.service] Total stores to process: ${storesToProcess.length}`,
+      );
 
       skipProgress = storesToProcess.length <= 1;
 
@@ -349,7 +399,9 @@ class RekonVirtualService {
             createdAt: timeStart,
           });
 
-          logger.info(`Progress task registered for user ${username}, taskId: ${taskId}`);
+          logger.info(
+            `Progress task registered for user ${username}, taskId: ${taskId}`,
+          );
         } catch (error) {
           logger.error(`Error registering progress task: ${error.message}`);
 
@@ -358,18 +410,24 @@ class RekonVirtualService {
               description: `Task failed: ${error.message}`,
               status: "failed",
             });
-            throw new Error("[service rekon_virtual_mrg] System is busy processing other tasks");
+            throw new Error(
+              "[service rekon_virtual_mrg] System is busy processing other tasks",
+            );
           }
 
           await progressService.failProgress(taskId, {
             description: `Task failed: ${error.message}`,
             status: "failed",
           });
-          throw new Error("[service rekon_virtual_mrg] Failed to register progress task");
+          throw new Error(
+            "[service rekon_virtual_mrg] Failed to register progress task",
+          );
         }
       }
 
-      logger.info(`[rekon_virtual_mrg.service] Starting screening for branches: ${branches.join(", ")}`);
+      logger.info(
+        `[rekon_virtual_mrg.service] Starting screening for branches: ${branches.join(", ")}`,
+      );
 
       // === PREPARE PROCESSING ===
       // Convert from string periode (YYMM)
@@ -395,9 +453,18 @@ class RekonVirtualService {
 
       // step 3, loop each stores asycronously
       await Promise.all(
-        storesToProcess.map(store =>
+        storesToProcess.map((store) =>
           limitStores(async () => {
             const { cab, storeCode } = store;
+
+            // Check if task was cancelled before starting this store
+            if (!skipProgress && progressService.isAborted(taskId)) {
+              logger.info(
+                `[rekon_virtual_mrg] Skipping store ${storeCode} — task aborted`,
+              );
+              await incrementProgress(storeCode, "Dibatalkan ⛔");
+              return;
+            }
 
             try {
               // --- Store info --- //
@@ -419,7 +486,10 @@ class RekonVirtualService {
               }
 
               // --- Create DB connection --- //
-              const storeConnection = await dbStore.createDbStore(storeInfo.dbHost, config.connectionRetry.maxRetries);
+              const storeConnection = await dbStore.createDbStore(
+                storeInfo.dbHost,
+                config.connectionRetry.maxRetries,
+              );
 
               if (!storeConnection) {
                 await RekapRemoteService.addToTemp(
@@ -434,7 +504,13 @@ class RekonVirtualService {
 
               try {
                 const params = `${strYear}-${strMonth}`;
-                const [result] = await storeConnection.query({ sql: config.queries.store, timeout: config.parallelProcessing.queryTimeoutMs }, [params, params, params, params]);
+                const [result] = await storeConnection.query(
+                  {
+                    sql: config.queries.store,
+                    timeout: config.parallelProcessing.queryTimeoutMs,
+                  },
+                  [params, params, params, params],
+                );
 
                 await RekapRemoteService.addToTemp(
                   cab,
@@ -445,27 +521,29 @@ class RekonVirtualService {
 
                 if (result.length > 0) {
                   const startDate = `${strYear}-${strMonth}-01`;
-                  const endDate = moment(`${strYear}-${strMonth}`, "YYYY-MM").endOf("month").format("YYYY-MM-DD");
-                  
+                  const endDate = moment(`${strYear}-${strMonth}`, "YYYY-MM")
+                    .endOf("month")
+                    .format("YYYY-MM-DD");
+
                   // 1. Fetch current local records for this shop & period to compare against
                   const existingRecords = await SaldoVirtual.findAll({
                     where: {
                       CABANG: cab,
                       SHOP: storeCode,
-                      TANGGAL: { [Op.between]: [startDate, endDate] }
+                      TANGGAL: { [Op.between]: [startDate, endDate] },
                     },
-                    attributes: ['TANGGAL', 'PRDCD']
+                    attributes: ["TANGGAL", "PRDCD"],
                   });
 
                   // 2. Build reference set for incoming composite keys (TANGGAL + PRDCD)
                   const incomingKeys = new Set();
-                  result.forEach(r => {
+                  result.forEach((r) => {
                     const dateStr = moment(r.TANGGAL).format("YYYY-MM-DD");
                     incomingKeys.add(`${dateStr}_${r.PRDCD}`);
                   });
 
                   // 3. Identify obsolete records (existing ones whose TANGGAL + PRDCD is not in incoming keys)
-                  const obsoleteRecords = existingRecords.filter(ex => {
+                  const obsoleteRecords = existingRecords.filter((ex) => {
                     const dateStr = moment(ex.TANGGAL).format("YYYY-MM-DD");
                     return !incomingKeys.has(`${dateStr}_${ex.PRDCD}`);
                   });
@@ -478,25 +556,38 @@ class RekonVirtualService {
                         where: {
                           CABANG: cab,
                           SHOP: storeCode,
-                          [Op.or]: chunk.map(obs => ({
+                          [Op.or]: chunk.map((obs) => ({
                             TANGGAL: obs.TANGGAL,
-                            PRDCD: obs.PRDCD
-                          }))
-                        }
+                            PRDCD: obs.PRDCD,
+                          })),
+                        },
                       });
                     }
                   }
 
                   await SaldoVirtual.bulkCreate(result, {
-                    updateOnDuplicate: ["QTY_MSTRAN", "QTY_MTRAN", "SEL", "LASTCATCH"],
+                    updateOnDuplicate: [
+                      "QTY_MSTRAN",
+                      "QTY_MTRAN",
+                      "SEL",
+                      "LASTCATCH",
+                    ],
                   });
 
                   newRecords.push(...result);
                 } else {
-                  await this.deleteStorePeriod(cab, storeCode, strYear, strMonth);
+                  await this.deleteStorePeriod(
+                    cab,
+                    storeCode,
+                    strYear,
+                    strMonth,
+                  );
                 }
 
-                await incrementProgress(storeCode, `Success ✅ (${result.length} rows)`);
+                await incrementProgress(
+                  storeCode,
+                  `Success ✅ (${result.length} rows)`,
+                );
               } finally {
                 await storeConnection.end();
               }
@@ -514,7 +605,17 @@ class RekonVirtualService {
         ),
       );
 
-      logger.info(`[rekon_virtual_mrg.service] Screening process completed for periode ${options.periode}`);
+      logger.info(
+        `[rekon_virtual_mrg.service] Screening process completed for periode ${options.periode}`,
+      );
+
+      // If task was cancelled during store processing, stop before finalizing
+      if (!skipProgress && progressService.isAborted(taskId)) {
+        logger.info(
+          `[rekon_virtual_mrg] Task ${taskId} was cancelled — skipping finalization`,
+        );
+        throw new Error("Proses dibatalkan oleh pengguna");
+      }
 
       //update status to progress service if not skipping
       if (!skipProgress) {
@@ -531,13 +632,16 @@ class RekonVirtualService {
           RekapRemoteService.saveLogsToDatabase(),
           new Promise((_, reject) =>
             setTimeout(
-              () => reject(new Error("saveLogsToDatabase timeout after 2 minutes")),
-              FINALIZE_TIMEOUT_MS
-            )
+              () =>
+                reject(new Error("saveLogsToDatabase timeout after 2 minutes")),
+              FINALIZE_TIMEOUT_MS,
+            ),
           ),
         ]);
       } catch (saveErr) {
-        logger.error(`[rekon_virtual_mrg.service] saveLogsToDatabase error/timeout: ${saveErr.message}`);
+        logger.error(
+          `[rekon_virtual_mrg.service] saveLogsToDatabase error/timeout: ${saveErr.message}`,
+        );
         // Tidak throw - lanjut agar completeProgress tetap terpanggil
       }
 
@@ -553,30 +657,35 @@ class RekonVirtualService {
       if (newRecords.length > 0) {
         try {
           await this.ensureDataLoaded(options.periode);
-          
+
           // Merge newRecords ke virtualData di memory (partial merge)
           // Field yang tidak ada di data store (seperti RECID) dipertahankan dari data lama di JSON
           for (const record of newRecords) {
             const idx = this.virtualData.findIndex(
-              v => v.CABANG === record.CABANG &&
-                   v.SHOP === record.SHOP &&
-                   v.TANGGAL === record.TANGGAL &&
-                   v.PRDCD === record.PRDCD
+              (v) =>
+                v.CABANG === record.CABANG &&
+                v.SHOP === record.SHOP &&
+                v.TANGGAL === record.TANGGAL &&
+                v.PRDCD === record.PRDCD,
             );
             if (idx >= 0) {
               // Pertahankan field lama (misal RECID), timpa dengan data baru
               this.virtualData[idx] = { ...this.virtualData[idx], ...record };
             } else {
               // Record baru: tambahkan default RECID sesuai model (defaultValue: '*')
-              this.virtualData.push({ RECID: '*', ...record });
+              this.virtualData.push({ RECID: "*", ...record });
             }
           }
-          
+
           await this.saveToFile(options.periode);
           this.lastLoadTime = Date.now();
-          logger.info(`[FINALIZE] JSON synced from memory, ${newRecords.length} records merged`);
+          logger.info(
+            `[FINALIZE] JSON synced from memory, ${newRecords.length} records merged`,
+          );
         } catch (syncErr) {
-          logger.error(`[rekon_virtual_mrg.service] syncToJsonFile error: ${syncErr.message}`);
+          logger.error(
+            `[rekon_virtual_mrg.service] syncToJsonFile error: ${syncErr.message}`,
+          );
         }
       }
 
@@ -595,7 +704,9 @@ class RekonVirtualService {
         processedRecords: newRecords.length,
       };
     } catch (error) {
-      logger.error(`[rekon_virtual_mrg.service] Error during screening: ${error.message}`);
+      logger.error(
+        `[rekon_virtual_mrg.service] Error during screening: ${error.message}`,
+      );
 
       if (!skipProgress) {
         await progressService.failProgress(taskId, {
@@ -618,11 +729,16 @@ class RekonVirtualService {
 
       // cari record lama dari memory
       const oldRecords = this.virtualData.filter(
-        item => item.CABANG === cabang && item.SHOP === shop && moment(item.TANGGAL).format("YYYY-MM") === ym,
+        (item) =>
+          item.CABANG === cabang &&
+          item.SHOP === shop &&
+          moment(item.TANGGAL).format("YYYY-MM") === ym,
       );
 
       if (oldRecords.length === 0) {
-        logger.info(`[rekon_virtual_mrg.service - deleteStorePeriod] No old records for ${shop} (${ym})`);
+        logger.info(
+          `[rekon_virtual_mrg.service - deleteStorePeriod] No old records for ${shop} (${ym})`,
+        );
         return 0;
       }
 
@@ -634,7 +750,9 @@ class RekonVirtualService {
           TANGGAL: {
             [Op.between]: [
               `${year}-${month}-01`,
-              moment(`${year}-${month}`, "YYYY-MM").endOf("month").format("YYYY-MM-DD"),
+              moment(`${year}-${month}`, "YYYY-MM")
+                .endOf("month")
+                .format("YYYY-MM-DD"),
             ],
           },
         },
@@ -642,7 +760,12 @@ class RekonVirtualService {
 
       // hapus dari memory
       this.virtualData = this.virtualData.filter(
-        item => !(item.CABANG === cabang && item.SHOP === shop && moment(item.TANGGAL).format("YYYY-MM") === ym),
+        (item) =>
+          !(
+            item.CABANG === cabang &&
+            item.SHOP === shop &&
+            moment(item.TANGGAL).format("YYYY-MM") === ym
+          ),
       );
 
       // simpan ulang file JSON
@@ -654,7 +777,9 @@ class RekonVirtualService {
 
       return oldRecords.length;
     } catch (error) {
-      logger.error(`[rekon_virtual_mrg.service - deleteStorePeriod] Error: ${error.message}`);
+      logger.error(
+        `[rekon_virtual_mrg.service - deleteStorePeriod] Error: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -667,7 +792,7 @@ class RekonVirtualService {
   buildFilterFunction(params = {}) {
     const { cabang, periode, shop } = params;
 
-    return item => {
+    return (item) => {
       // Filter by cabang
       if (cabang && cabang !== "All" && item.CABANG !== cabang) {
         return false;
@@ -683,7 +808,9 @@ class RekonVirtualService {
         const year = "20" + periode.substring(0, 2);
         const month = periode.substring(2, 4);
         const startDate = `${year}-${month}-01`;
-        const endDate = moment(`${year}-${month}`, "YYYY-MM").endOf("month").format("YYYY-MM-DD");
+        const endDate = moment(`${year}-${month}`, "YYYY-MM")
+          .endOf("month")
+          .format("YYYY-MM-DD");
 
         const itemDate = moment(item.TANGGAL).format("YYYY-MM-DD");
         if (itemDate < startDate || itemDate > endDate) {
@@ -714,8 +841,11 @@ class RekonVirtualService {
       const filteredData = this.virtualData.filter(filterFn);
 
       // Calculate summary
-      const uniqueShops = new Set(filteredData.map(item => item.SHOP));
-      const totalSel = filteredData.reduce((sum, item) => sum + (Number(item.SEL) || 0), 0);
+      const uniqueShops = new Set(filteredData.map((item) => item.SHOP));
+      const totalSel = filteredData.reduce(
+        (sum, item) => sum + (Number(item.SEL) || 0),
+        0,
+      );
 
       return {
         data: {
@@ -725,7 +855,9 @@ class RekonVirtualService {
         },
       };
     } catch (error) {
-      logger.error(`[rekon_virtual_mrg.service] Error getting summary: ${error.message}`);
+      logger.error(
+        `[rekon_virtual_mrg.service] Error getting summary: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -754,7 +886,9 @@ class RekonVirtualService {
         data: enrichedData,
       };
     } catch (error) {
-      logger.error(`[rekon_virtual_mrg.service] Error getting all records: ${error.message}`);
+      logger.error(
+        `[rekon_virtual_mrg.service] Error getting all records: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -789,7 +923,7 @@ class RekonVirtualService {
       // Apply search query if provided
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
-        filteredData = filteredData.filter(item => {
+        filteredData = filteredData.filter((item) => {
           return (
             (item.SHOP && item.SHOP.toLowerCase().includes(query)) ||
             (item.CABANG && item.CABANG.toLowerCase().includes(query)) ||
@@ -814,15 +948,21 @@ class RekonVirtualService {
         "SEL",
         "LASTCATCH",
       ];
-      const sanitizedSortColumn = allowedSortColumns.includes(sortColumn) ? sortColumn : "LASTCATCH";
-      const sanitizedSortOrder = sortOrder && sortOrder.toUpperCase() === "ASC" ? "ASC" : "DESC";
+      const sanitizedSortColumn = allowedSortColumns.includes(sortColumn)
+        ? sortColumn
+        : "LASTCATCH";
+      const sanitizedSortOrder =
+        sortOrder && sortOrder.toUpperCase() === "ASC" ? "ASC" : "DESC";
 
       filteredData.sort((a, b) => {
         let aVal = a[sanitizedSortColumn];
         let bVal = b[sanitizedSortColumn];
 
         // Handle dates
-        if (sanitizedSortColumn === "TANGGAL" || sanitizedSortColumn === "LASTCATCH") {
+        if (
+          sanitizedSortColumn === "TANGGAL" ||
+          sanitizedSortColumn === "LASTCATCH"
+        ) {
           aVal = aVal ? new Date(aVal).getTime() : 0;
           bVal = bVal ? new Date(bVal).getTime() : 0;
         }
@@ -856,7 +996,9 @@ class RekonVirtualService {
         totalPages: Math.ceil(totalRecords / parseInt(limit)),
       };
     } catch (error) {
-      logger.error(`[rekon_virtual_mrg.service] Error getting records: ${error.message}`);
+      logger.error(
+        `[rekon_virtual_mrg.service] Error getting records: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -877,7 +1019,9 @@ class RekonVirtualService {
 
       return record;
     } catch (error) {
-      logger.error(`[rekon_virtual_mrg.service] Error getting record: ${error.message}`);
+      logger.error(
+        `[rekon_virtual_mrg.service] Error getting record: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -898,7 +1042,9 @@ class RekonVirtualService {
 
       return record;
     } catch (error) {
-      logger.error(`[rekon_virtual_mrg.service] Error creating record: ${error.message}`);
+      logger.error(
+        `[rekon_virtual_mrg.service] Error creating record: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -927,7 +1073,9 @@ class RekonVirtualService {
 
       return this.getRecord(cabang, shop, tanggal, prdcd);
     } catch (error) {
-      logger.error(`[rekon_virtual_mrg.service] Error updating record: ${error.message}`);
+      logger.error(
+        `[rekon_virtual_mrg.service] Error updating record: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -956,7 +1104,9 @@ class RekonVirtualService {
 
       return true;
     } catch (error) {
-      logger.error(`[rekon_virtual_mrg.service] Error deleting record: ${error.message}`);
+      logger.error(
+        `[rekon_virtual_mrg.service] Error deleting record: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -977,7 +1127,13 @@ class RekonVirtualService {
       storeConnection = await dbStore.createDbStore(storeInfo.dbHost, 2);
 
       // Execute store query
-      const [results] = await storeConnection.query({ sql: config.queries.store, timeout: config.parallelProcessing.queryTimeoutMs }, [month, year]);
+      const [results] = await storeConnection.query(
+        {
+          sql: config.queries.store,
+          timeout: config.parallelProcessing.queryTimeoutMs,
+        },
+        [month, year],
+      );
 
       // Bulk create records to database
       if (results.length > 0) {
@@ -986,7 +1142,8 @@ class RekonVirtualService {
         });
 
         // Sync to JSON file after write operation
-        const periode = year.toString().slice(-2) + month.toString().padStart(2, '0');
+        const periode =
+          year.toString().slice(-2) + month.toString().padStart(2, "0");
         await this.syncToJsonFile(periode);
       }
 
@@ -995,7 +1152,9 @@ class RekonVirtualService {
         processedRecords: results.length,
       };
     } catch (error) {
-      logger.error(`[rekon_virtual_mrg.service] Error inserting from store: ${error.message}`);
+      logger.error(
+        `[rekon_virtual_mrg.service] Error inserting from store: ${error.message}`,
+      );
       throw error;
     } finally {
       if (storeConnection) {
@@ -1022,14 +1181,16 @@ class RekonVirtualService {
       );
 
       // buat lookup map untuk kategori agar cepat
-      const categoryMap = new Map(categories.map(c => [c.id, c]));
+      const categoryMap = new Map(categories.map((c) => [c.id, c]));
       // proses penggabungan data
-      return data.map(item => {
+      return data.map((item) => {
         // bentuk unixKey dari saldo_virtual
         const unixKey = `${item.SHOP}${item.TANGGAL}${item.PRDCD}`;
 
         // ambil semua note yang terkait dengan unixKey ini
-        const note = notes.find(n => n.unixKey === unixKey && n.tableName === `saldovirtual`);
+        const note = notes.find(
+          (n) => n.unixKey === unixKey && n.tableName === `saldovirtual`,
+        );
         if (!note) return { ...item, note: null };
 
         const category = categoryMap.get(note.categoryId) || null;
@@ -1044,7 +1205,9 @@ class RekonVirtualService {
         };
       });
     } catch (err) {
-      logger.error(`[rekon_virtual_mrg.service] Error enriching data with notes: ${err.message}`);
+      logger.error(
+        `[rekon_virtual_mrg.service] Error enriching data with notes: ${err.message}`,
+      );
       return data;
     }
   }

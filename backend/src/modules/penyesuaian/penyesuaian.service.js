@@ -804,6 +804,16 @@ class PenyesuaianService {
           limitStores(async () => {
             const { cab, storeCode } = store;
 
+            // Check if task was cancelled before starting this store
+            if (progressService.isAborted(taskId)) {
+              logger.info(
+                `[penyesuaian] Skipping store ${storeCode} — task aborted`,
+              );
+              screenedStores.add(storeCode); // still mark as processed so counts are correct
+              await incrementProgress(storeCode, "Dibatalkan ⛔");
+              return;
+            }
+
             // Always mark as screened (even if error/timeout)
             screenedStores.add(storeCode);
 
@@ -853,6 +863,14 @@ class PenyesuaianService {
       logger.info(
         `[penyesuaian.service] Screened stores: ${screenedStores.size}, Active stores (has issues): ${activeStores.size}`,
       );
+
+      // If task was cancelled during store processing, stop before finalizing
+      if (progressService.isAborted(taskId)) {
+        logger.info(
+          `[penyesuaian] Task ${taskId} was cancelled — skipping finalization`,
+        );
+        throw new Error("Proses dibatalkan oleh pengguna");
+      }
 
       // ── Finalizing phase ─────────────────────────────────────────────────────
       // Each step below updates progress BEFORE the operation so that `updatedAt`

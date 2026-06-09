@@ -106,6 +106,18 @@ class AdjustService {
       // Process all stores asynchronously using Promise.all
       const storePromises = selectedStores.map((store) =>
         limit(async () => {
+          // Check if task was cancelled before starting this store
+          if (progressService.isAborted(taskId)) {
+            logger.info(
+              `[adjust] Skipping store ${store.storeCode} — task aborted`,
+            );
+            return {
+              type: "cancelled",
+              storeCode: store.storeCode,
+              historyRecords: [],
+            };
+          }
+
           const currentCount = ++processedCount;
           //update progress
           await progressService.updateProgress(taskId, currentCount, {
@@ -165,6 +177,14 @@ class AdjustService {
 
       // Wait for all store processing to complete
       const storeResultsArray = await Promise.all(storePromises);
+
+      // If task was cancelled during processing, stop here
+      if (progressService.isAborted(taskId)) {
+        logger.info(
+          `[adjust] Task ${taskId} was cancelled — skipping finalization`,
+        );
+        throw new Error("Proses dibatalkan oleh pengguna");
+      }
 
       // Process results
       for (const result of storeResultsArray) {

@@ -13,7 +13,7 @@ import {
 } from "./progress.controller.js";
 
 const router = express.Router();
-
+//SEMUA ROUTES DI LINDUNGI aUTHENTICATION JWT DI INDEX.JS, JADI DISINI LANGSUNG DEFINISIKAN ROUTE SAJA
 // SSE stream routes - MULTIPLE ENDPOINTS
 router.get("/stream", streamAllProgress); // All tasks
 router.get("/stream/task/:taskId", streamTaskProgress); // Specific task

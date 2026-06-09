@@ -9,6 +9,7 @@ import {
   getModuleProgress,
   getQueueStatus,
   cleanupProgress,
+  cancelTask,
 } from "./progress.controller.js";
 
 const router = express.Router();
@@ -27,5 +28,6 @@ router.get("/module/:moduleName", getModuleProgress); // Get tasks by module
 
 // Admin routes
 router.post("/cleanup", cleanupProgress); // Manual cleanup
+router.delete("/:taskId", cancelTask); // Cancel / force-stop a specific task
 
 export default router;

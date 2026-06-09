@@ -29,9 +29,12 @@ class ProgressService extends EventEmitter {
 
       // Auto cleanup old tasks periodically
       if (config.cleanup.enabled && !this.cleanupTimer) {
-        this.cleanupTimer = setInterval(() => {
-          this.cleanupOldTasks(config.cleanup.maxAgeHours);
-        }, config.cleanup.intervalMinutes * 60 * 1000);
+        this.cleanupTimer = setInterval(
+          () => {
+            this.cleanupOldTasks(config.cleanup.maxAgeHours);
+          },
+          config.cleanup.intervalMinutes * 60 * 1000,
+        );
       }
 
       this.isInitialized = true;
@@ -57,7 +60,7 @@ class ProgressService extends EventEmitter {
       try {
         const data = await fsPromises.readFile(config.jsonPath, "utf-8");
         const parsed = JSON.parse(data);
-        
+
         // Replace the entire map to ensure consistency with disk
         const newMap = new Map();
         Object.entries(parsed).forEach(([taskId, task]) => {
@@ -67,19 +70,24 @@ class ProgressService extends EventEmitter {
         return;
       } catch (err) {
         lastError = err;
-        if (err.code === 'ENOENT') {
+        if (err.code === "ENOENT") {
           this.progressMap = new Map();
           return;
         }
 
         if (attempt < maxRetries) {
           const waitTime = Math.min(100 * Math.pow(2, attempt - 1), 1000);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-          console.warn(`[ProgressService] Retry loading JSON (attempt ${attempt + 1}): ${err.message}`);
+          await new Promise((resolve) => setTimeout(resolve, waitTime));
+          console.warn(
+            `[ProgressService] Retry loading JSON (attempt ${attempt + 1}): ${err.message}`,
+          );
         }
       }
     }
-    console.error("[ProgressService] Failed to load JSON after retries:", lastError.message);
+    console.error(
+      "[ProgressService] Failed to load JSON after retries:",
+      lastError.message,
+    );
     this.progressMap = new Map();
   }
 
@@ -97,14 +105,23 @@ class ProgressService extends EventEmitter {
         return;
       } catch (error) {
         lastError = error;
-        const isRetryable = error.code === 'EBUSY' || error.code === 'EPERM' || error.code === 'EEXIST';
-        
+        const isRetryable =
+          error.code === "EBUSY" ||
+          error.code === "EPERM" ||
+          error.code === "EEXIST";
+
         if (isRetryable && attempt < maxRetries) {
-          const waitTime = Math.min(100 * Math.pow(2, attempt - 1), 1000) + Math.random() * 50;
-          console.warn(`[ProgressService] File busy/locked during save (${error.code}), retrying attempt ${attempt + 1}/${maxRetries} in ${Math.round(waitTime)}ms...`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
+          const waitTime =
+            Math.min(100 * Math.pow(2, attempt - 1), 1000) + Math.random() * 50;
+          console.warn(
+            `[ProgressService] File busy/locked during save (${error.code}), retrying attempt ${attempt + 1}/${maxRetries} in ${Math.round(waitTime)}ms...`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, waitTime));
         } else {
-          console.error("[ProgressService] Failed to save progress data:", error.message);
+          console.error(
+            "[ProgressService] Failed to save progress data:",
+            error.message,
+          );
           // Don't throw here to avoid crashing the whole operation, but log it
           return;
         }
@@ -123,12 +140,29 @@ class ProgressService extends EventEmitter {
       // Reload data from disk to ensure we have the latest state from all potential workers/processes
       await this._loadProgressData();
 
+      // Auto-expire tasks that have been stuck in-progress for too long before checking capacity.
+      // This ensures crashed/killed processes don't permanently block new ones.
+      await this._expireStaleTasksLocked();
+
       const activeCount = this._activeTaskCount();
       if (activeCount >= config.maxConcurrentTasks) {
+        const activeTasks = this.getActiveTasks();
         console.warn(
-          `[ProgressService] Start task ${taskId} rejected: ${activeCount}/${config.maxConcurrentTasks} tasks active.`
+          `[ProgressService] Start task ${taskId} rejected: ${activeCount}/${config.maxConcurrentTasks} tasks active.`,
         );
-        throw new Error("Maximum concurrent progress reached. Please wait for other tasks to complete.");
+        const err = new Error(
+          "Sistem sedang memproses task lain. Harap tunggu hingga proses selesai.",
+        );
+        err.code = "TASK_BUSY";
+        err.activeTasks = activeTasks.map((t) => ({
+          id: t.id,
+          module: t.module || "unknown",
+          title: t.title || t.id,
+          percentage: t.percentage,
+          status: t.status,
+          updatedAt: t.updatedAt,
+        }));
+        throw err;
       }
 
       const task = {
@@ -153,7 +187,9 @@ class ProgressService extends EventEmitter {
       this.progressMap.set(taskId, task);
       await this._saveProgressData();
 
-      console.log(`[ProgressService] Task started: ${taskId} (${task.module || "no-module"})`);
+      console.log(
+        `[ProgressService] Task started: ${taskId} (${task.module || "no-module"})`,
+      );
       this.emit("progressStart", task);
       return task;
     } finally {
@@ -246,6 +282,61 @@ class ProgressService extends EventEmitter {
   }
 
   /**
+   * Auto-expire in-progress tasks that have been stuck longer than config.maxStaleMinutes.
+   * MUST be called while holding the mutex lock.
+   */
+  async _expireStaleTasksLocked() {
+    const maxStaleMs = (config.maxStaleMinutes || 60) * 60 * 1000;
+    const now = Date.now();
+    let expired = 0;
+
+    for (const [id, task] of this.progressMap.entries()) {
+      if (task.status === "in-progress") {
+        const age = now - new Date(task.updatedAt).getTime();
+        if (age > maxStaleMs) {
+          task.status = "timed_out";
+          task.error = `Task otomatis kadaluarsa setelah tidak ada aktivitas selama ${config.maxStaleMinutes} menit`;
+          task.updatedAt = new Date().toISOString();
+          this.progressMap.set(id, task);
+          expired++;
+          logger.warn(
+            `[ProgressService] Auto-expired stale task: ${id} (module: ${task.module || "unknown"}, last update: ${task.updatedAt})`,
+          );
+        }
+      }
+    }
+
+    if (expired > 0) {
+      await this._saveProgressData();
+      logger.info(`[ProgressService] Auto-expired ${expired} stale task(s)`);
+    }
+  }
+
+  /**
+   * Cancel a specific task by ID (admin/manual override)
+   */
+  async cancelTask(taskId) {
+    const release = await this.mutex.acquire();
+    try {
+      await this._loadProgressData();
+      const task = this.progressMap.get(taskId);
+      if (!task) throw new Error(`Task '${taskId}' tidak ditemukan`);
+
+      task.status = "cancelled";
+      task.error = "Task dibatalkan secara manual";
+      task.updatedAt = new Date().toISOString();
+      this.progressMap.set(taskId, task);
+      await this._saveProgressData();
+
+      logger.info(`[ProgressService] Task cancelled manually: ${taskId}`);
+      this.emit("progressFailed", task);
+      return task;
+    } finally {
+      release();
+    }
+  }
+
+  /**
    * Cleanup old tasks (older than maxAgeHours)
    */
   async cleanupOldTasks(maxAgeHours) {
@@ -276,7 +367,9 @@ class ProgressService extends EventEmitter {
    * Get active task count
    */
   _activeTaskCount() {
-    return [...this.progressMap.values()].filter(t => t.status === "in-progress").length;
+    return [...this.progressMap.values()].filter(
+      (t) => t.status === "in-progress",
+    ).length;
   }
 
   /**
@@ -291,14 +384,18 @@ class ProgressService extends EventEmitter {
    * Get only active tasks (in-progress status)
    */
   getActiveTasks() {
-    return [...this.progressMap.values()].filter(task => task.status === "in-progress");
+    return [...this.progressMap.values()].filter(
+      (task) => task.status === "in-progress",
+    );
   }
 
   /**
    * Get tasks by module name
    */
   getTasksByModule(moduleName) {
-    return [...this.progressMap.values()].filter(task => task.module === moduleName);
+    return [...this.progressMap.values()].filter(
+      (task) => task.module === moduleName,
+    );
   }
 
   /**
@@ -313,7 +410,7 @@ class ProgressService extends EventEmitter {
       maxConcurrent,
       currentActive,
       canAcceptNew: currentActive < maxConcurrent,
-      activeTasks: activeTasks.map(task => ({
+      activeTasks: activeTasks.map((task) => ({
         id: task.id,
         module: task.module,
         percentage: task.percentage,

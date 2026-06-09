@@ -20,14 +20,19 @@ export const uploadAdjustCsv = async (req, res) => {
     const username = req.user?.username || "unknown";
 
     // Log the adjustment attempt
-    logger.info(`User ${username} initiated adjustment process with file: ${req.file.originalname}`);
+    logger.info(
+      `User ${username} initiated adjustment process with file: ${req.file.originalname}`,
+    );
 
     // Process the file synchronously and wait for completion
-    const results = await adjustService.processCsvAdjust(req.file.buffer, username);
+    const results = await adjustService.processCsvAdjust(
+      req.file.buffer,
+      username,
+    );
 
     // Log completion
     logger.info(
-      `Adjustment process completed for user ${username}. Total stores: ${results.totalStores}, Success: ${results.successStores}, Failed: ${results.failedStores.length}`
+      `Adjustment process completed for user ${username}. Total stores: ${results.totalStores}, Success: ${results.successStores}, Failed: ${results.failedStores.length}`,
     );
 
     // Return response based on results
@@ -38,7 +43,7 @@ export const uploadAdjustCsv = async (req, res) => {
           message: "Process completed with some failures",
           data: results,
         },
-        207
+        207,
       ); // Using 207 Multi-Status for partial success
     }
 
@@ -48,7 +53,13 @@ export const uploadAdjustCsv = async (req, res) => {
     });
   } catch (error) {
     logger.error(`Error starting adjust process: ${error.message}`);
-    return apiResponse.error(res, error.message, 500);
+    const statusCode = error.statusCode || 500;
+    return apiResponse.error(
+      res,
+      error.message,
+      statusCode,
+      error.details || null,
+    );
   }
 };
 
@@ -63,7 +74,10 @@ export const downloadCsvTemplate = async (req, res) => {
     const template = adjustService.generateCsvTemplate();
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", 'attachment; filename="adjust_template.csv"');
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="adjust_template.csv"',
+    );
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Expires", "0");
@@ -131,15 +145,23 @@ export const getAdjustHistory = async (req, res) => {
  */
 export const getAdjustFilters = async (req, res) => {
   try {
-    const picRows = await HistAdjust.findAll({ attributes: ["pic"], group: ["pic"], raw: true });
-    const kdtkRows = await HistAdjust.findAll({ attributes: ["kdtk"], group: ["kdtk"], raw: true });
+    const picRows = await HistAdjust.findAll({
+      attributes: ["pic"],
+      group: ["pic"],
+      raw: true,
+    });
+    const kdtkRows = await HistAdjust.findAll({
+      attributes: ["kdtk"],
+      group: ["kdtk"],
+      raw: true,
+    });
 
     const pics = picRows
-      .map(r => r.pic)
+      .map((r) => r.pic)
       .filter(Boolean)
       .sort();
     const kdtks = kdtkRows
-      .map(r => r.kdtk)
+      .map((r) => r.kdtk)
       .filter(Boolean)
       .sort();
 
@@ -185,9 +207,18 @@ export const exportAdjustHistoryCsv = async (req, res) => {
     const result = await histAdjustStagingService.searchHistory(filters);
     const rows = result.data;
 
-    const headers = ["kdtk", "prdcd", "qty_adj", "keter", "note", "pic", "updtime", "status"];
+    const headers = [
+      "kdtk",
+      "prdcd",
+      "qty_adj",
+      "keter",
+      "note",
+      "pic",
+      "updtime",
+      "status",
+    ];
 
-    const escape = value => {
+    const escape = (value) => {
       const v = value == null ? "" : String(value);
       if (v.includes(",") || v.includes("\n") || v.includes('"')) {
         return `"${v.replace(/\"/g, '"')}"`;
@@ -267,7 +298,9 @@ export const syncHistory = async (req, res) => {
     }
 
     return apiResponse.success(res, {
-      message: periode ? `Synchronization for ${periode} completed` : "Full synchronization completed",
+      message: periode
+        ? `Synchronization for ${periode} completed`
+        : "Full synchronization completed",
       data: result,
     });
   } catch (error) {

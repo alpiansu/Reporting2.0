@@ -23,7 +23,10 @@ class AdjustService {
    */
   async processCsvAdjust(fileBuffer, username) {
     const taskId = `${config.taskProgressName}_${username}`;
-    const tempFilePath = path.join(os.tmpdir(), `adjust_history_${Date.now()}.json`);
+    const tempFilePath = path.join(
+      os.tmpdir(),
+      `adjust_history_${Date.now()}.json`,
+    );
 
     try {
       // Ensure temp directory exists
@@ -34,7 +37,7 @@ class AdjustService {
       logger.info(`Parsed ${records.length} records from CSV`);
 
       // Get unique store codes
-      const storeCodes = [...new Set(records.map(record => record.KDTK))];
+      const storeCodes = [...new Set(records.map((record) => record.KDTK))];
       logger.info(`Found ${storeCodes.length} unique stores in CSV`);
 
       // Get valid INDUK stores
@@ -53,29 +56,35 @@ class AdjustService {
           createdAt: timeStart,
         });
 
-        logger.info(`Progress task registered for user ${username}, taskId: ${taskId}`);
+        logger.info(
+          `Progress task registered for user ${username}, taskId: ${taskId}`,
+        );
       } catch (error) {
         logger.error(`Error registering progress task: ${error.message}`);
 
-        if (error.message.includes("Maximum concurrent")) {
-          return apiResponse.error(
-            {
-              message: "System is busy processing other tasks",
-              canProceed: false,
-              suggestion: "Please try again in a few minutes",
-            },
-            429
-          );
+        // Throw a typed error so the controller can return the correct HTTP status.
+        // (Service layer has no access to `res`, so never call apiResponse here.)
+        if (
+          error.code === "TASK_BUSY" ||
+          error.message.includes("Maximum concurrent") ||
+          error.message.includes("Sistem sedang memproses")
+        ) {
+          const busyErr = new Error(error.message);
+          busyErr.statusCode = 409; // 409 Conflict — resource occupied
+          busyErr.details = {
+            canProceed: false,
+            activeTasks: error.activeTasks || [],
+            suggestion:
+              "Cek halaman progress untuk melihat proses yang sedang berjalan, atau tunggu hingga selesai.",
+          };
+          throw busyErr;
         }
 
-        return apiResponse.error(
-          {
-            message: "Failed to register progress task",
-            canProceed: false,
-            error: error.message,
-          },
-          500
+        const regErr = new Error(
+          `Gagal mendaftarkan progress task: ${error.message}`,
         );
+        regErr.statusCode = 500;
+        throw regErr;
       }
 
       // Initialize temporary history array
@@ -95,7 +104,7 @@ class AdjustService {
       const limit = pLimit(config.parallelProcessing.concurrencyLimit);
       let processedCount = 0;
       // Process all stores asynchronously using Promise.all
-      const storePromises = selectedStores.map(store =>
+      const storePromises = selectedStores.map((store) =>
         limit(async () => {
           const currentCount = ++processedCount;
           //update progress
@@ -107,10 +116,16 @@ class AdjustService {
           try {
             logger.info(`Processing store: ${store.storeCode}`);
             // Filter records khusus untuk toko ini
-            const storeRecords = records.filter(record => record.KDTK === store.storeCode);
+            const storeRecords = records.filter(
+              (record) => record.KDTK === store.storeCode,
+            );
 
             // Jalankan proses untuk toko (asynchronous)
-            const storeResult = await this.processStoreWithHistory(store, storeRecords, username);
+            const storeResult = await this.processStoreWithHistory(
+              store,
+              storeRecords,
+              username,
+            );
 
             return {
               type: "success",
@@ -119,11 +134,15 @@ class AdjustService {
               historyRecords: storeResult.historyRecords,
             };
           } catch (error) {
-            logger.error(`Error processing store ${store.storeCode}: ${error.message}`);
+            logger.error(
+              `Error processing store ${store.storeCode}: ${error.message}`,
+            );
 
             // Siapkan record gagal untuk histori
-            const storeRecords = records.filter(record => record.KDTK === store.storeCode);
-            const failedHistoryRecords = storeRecords.map(record => ({
+            const storeRecords = records.filter(
+              (record) => record.KDTK === store.storeCode,
+            );
+            const failedHistoryRecords = storeRecords.map((record) => ({
               kdtk: record.KDTK,
               prdcd: record.PRDCD,
               qty_adj: parseInt(record.QTY_ADJ) || 0,
@@ -141,7 +160,7 @@ class AdjustService {
               historyRecords: failedHistoryRecords,
             };
           }
-        })
+        }),
       );
 
       // Wait for all store processing to complete
@@ -188,17 +207,25 @@ class AdjustService {
       }
 
       // Write temporary history to file
-      await fs.writeFile(tempFilePath, JSON.stringify(tempHistoryRecords, null, 2));
+      await fs.writeFile(
+        tempFilePath,
+        JSON.stringify(tempHistoryRecords, null, 2),
+      );
       await progressService.updateProgress(taskId, processedCount, {
         description: "Writing temporary history file",
         status: "finalizing",
       });
-      logger.info(`Wrote ${tempHistoryRecords.length} history records to temporary file`);
+      logger.info(
+        `Wrote ${tempHistoryRecords.length} history records to temporary file`,
+      );
 
       // Bulk insert history records to database
       try {
-        const bulkResult = await histAdjustStagingService.bulkInsert(tempHistoryRecords);
-        logger.info(`Successfully bulk inserted ${bulkResult.insertedCount} history records`);
+        const bulkResult =
+          await histAdjustStagingService.bulkInsert(tempHistoryRecords);
+        logger.info(
+          `Successfully bulk inserted ${bulkResult.insertedCount} history records`,
+        );
 
         await progressService.updateProgress(taskId, processedCount, {
           description: "Inserting history records to database",
@@ -223,7 +250,9 @@ class AdjustService {
           status: "finalizing",
         });
       } catch (cleanupError) {
-        logger.warn(`Failed to cleanup temporary file: ${cleanupError.message}`);
+        logger.warn(
+          `Failed to cleanup temporary file: ${cleanupError.message}`,
+        );
       }
 
       const timeCompleted = moment().format("YYYY-MM-DD HH:mm:ss");
@@ -262,10 +291,10 @@ class AdjustService {
           csvParser({
             mapHeaders: ({ header }) => header.trim(),
             mapValues: ({ value }) => value.trim(),
-          })
+          }),
         )
-        .on("data", data => records.push(data))
-        .on("error", err => {
+        .on("data", (data) => records.push(data))
+        .on("error", (err) => {
           reject(new Error(`Error parsing CSV: ${err.message}`));
         })
         .on("end", () => {
@@ -294,7 +323,10 @@ class AdjustService {
       }
 
       // Create database connection
-      storeConnection = await dbStore.createDbStoreInterfence(storeInfo.dbHost, 2);
+      storeConnection = await dbStore.createDbStoreInterfence(
+        storeInfo.dbHost,
+        2,
+      );
 
       // Initialize result object
       const result = {
@@ -308,7 +340,10 @@ class AdjustService {
       // Execute init queries
       await (async () => {
         for (const query of config.queries.store.init) {
-          await storeConnection.query({ sql: query, timeout: config.parallelProcessing.queryTimeoutMs });
+          await storeConnection.query({
+            sql: query,
+            timeout: config.parallelProcessing.queryTimeoutMs,
+          });
         }
       })();
 
@@ -340,22 +375,37 @@ class AdjustService {
               record.PRDCD, // prdcd for WHERE clause
             ];
 
-            await storeConnection.query({ sql: config.queries.store.insertPlu, timeout: config.parallelProcessing.queryTimeoutMs }, params);
+            await storeConnection.query(
+              {
+                sql: config.queries.store.insertPlu,
+                timeout: config.parallelProcessing.queryTimeoutMs,
+              },
+              params,
+            );
           } catch (recordError) {
             logger.error(
-              `Error processing record ${record.PRDCD} for store ${store.storeCode}: ${recordError.message}`
+              `Error processing record ${record.PRDCD} for store ${store.storeCode}: ${recordError.message}`,
             );
           }
         }
       })();
 
       // Execute safety check
-      await storeConnection.query({ sql: config.queries.store.safetyCek, timeout: config.parallelProcessing.queryTimeoutMs }, [FILET]);
+      await storeConnection.query(
+        {
+          sql: config.queries.store.safetyCek,
+          timeout: config.parallelProcessing.queryTimeoutMs,
+        },
+        [FILET],
+      );
 
       // Execute finalize queries
       await (async () => {
         for (const query of config.queries.store.finalize) {
-          await storeConnection.query({ sql: query, timeout: config.parallelProcessing.queryTimeoutMs });
+          await storeConnection.query({
+            sql: query,
+            timeout: config.parallelProcessing.queryTimeoutMs,
+          });
         }
       })();
 
@@ -368,19 +418,28 @@ class AdjustService {
               record.PRDCD, // prdcd
             ];
 
-            const [result] = await storeConnection.query({ sql: config.queries.store.insertTran, timeout: config.parallelProcessing.queryTimeoutMs }, params);
+            const [result] = await storeConnection.query(
+              {
+                sql: config.queries.store.insertTran,
+                timeout: config.parallelProcessing.queryTimeoutMs,
+              },
+              params,
+            );
 
             if (result.affectedRows > 0) {
               result.processed++;
 
               // Query untuk mendapatkan detail row yang baru diinsert
               const [insertedRows] = await storeConnection.query(
-                { sql: `SELECT rtype, bukti_no, prdcd, qty, price, gross, gross_jual 
-                FROM mstadj 
-                WHERE prdcd = ? 
-                ORDER BY recid DESC 
-                LIMIT ?`, timeout: config.parallelProcessing.queryTimeoutMs },
-                [record.PRDCD, result.affectedRows]
+                {
+                  sql: `SELECT rtype, bukti_no, prdcd, qty, price, gross, gross_jual
+                FROM mstadj
+                WHERE prdcd = ?
+                ORDER BY recid DESC
+                LIMIT ?`,
+                  timeout: config.parallelProcessing.queryTimeoutMs,
+                },
+                [record.PRDCD, result.affectedRows],
               );
 
               // Format detail informasi
@@ -388,8 +447,8 @@ class AdjustService {
               if (insertedRows && insertedRows.length > 0) {
                 const details = insertedRows
                   .map(
-                    row =>
-                      `Rtype: ${row.rtype}, Docno: ${row.bukti_no}, Qty: ${row.qty}, Gross: ${row.gross}, Gross_jual: ${row.gross_jual}`
+                    (row) =>
+                      `Rtype: ${row.rtype}, Docno: ${row.bukti_no}, Qty: ${row.qty}, Gross: ${row.gross}, Gross_jual: ${row.gross_jual}`,
                   )
                   .join(" | ");
                 detailInfo = ` - Details: ${details}`;
@@ -408,7 +467,11 @@ class AdjustService {
               });
 
               // Execute scalable post-adjustment actions
-              adjustPostActionService.executePostActions(record, store, username);
+              adjustPostActionService.executePostActions(
+                record,
+                store,
+                username,
+              );
             } else {
               // Insert gagal - tidak ada rows yang terpengaruh
               historyRecords.push({
@@ -424,7 +487,7 @@ class AdjustService {
             }
           } catch (recordError) {
             logger.error(
-              `Error processing record ${record.PRDCD} for store ${store.storeCode}: ${recordError.message}`
+              `Error processing record ${record.PRDCD} for store ${store.storeCode}: ${recordError.message}`,
             );
 
             // Create failed history record for this specific product
@@ -446,10 +509,12 @@ class AdjustService {
       result.historyRecords = historyRecords;
       return result;
     } catch (error) {
-      logger.error(`Error processing store ${store.storeCode}: ${error.message}`);
+      logger.error(
+        `Error processing store ${store.storeCode}: ${error.message}`,
+      );
 
       // If store processing failed completely, mark all records as failed
-      const failedRecords = records.map(record => ({
+      const failedRecords = records.map((record) => ({
         kdtk: record.KDTK,
         prdcd: record.PRDCD,
         qty_adj: parseInt(record.QTY_ADJ) || 0,
@@ -491,7 +556,9 @@ class AdjustService {
       ];
 
       // Combine headers and example rows
-      const csvContent = [headers, ...exampleRows].map(row => row.map(field => `"${field}"`).join(",")).join("\n");
+      const csvContent = [headers, ...exampleRows]
+        .map((row) => row.map((field) => `"${field}"`).join(","))
+        .join("\n");
 
       // Add BOM for proper UTF-8 encoding in Excel
       return "\uFEFF" + csvContent;

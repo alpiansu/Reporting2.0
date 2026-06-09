@@ -17,11 +17,11 @@ export const streamAllProgress = async (req, res) => {
   sendEvent("init", progressService.getProgress());
 
   // Listen for ALL updates
-  const onStart = task => sendEvent("start", task);
-  const onUpdate = task => sendEvent("update", task);
-  const onComplete = task => sendEvent("complete", task);
-  const onFail = task => sendEvent("fail", task);
-  const onRemove = taskId => sendEvent("remove", { taskId });
+  const onStart = (task) => sendEvent("start", task);
+  const onUpdate = (task) => sendEvent("update", task);
+  const onComplete = (task) => sendEvent("complete", task);
+  const onFail = (task) => sendEvent("fail", task);
+  const onRemove = (taskId) => sendEvent("remove", { taskId });
 
   progressService.on("progressStart", onStart);
   progressService.on("progressUpdate", onUpdate);
@@ -64,9 +64,9 @@ export const streamTaskProgress = async (req, res) => {
   sendEvent("init", task);
 
   // Listen for updates for THIS SPECIFIC TASK
-  const onStart = task => sendEvent("start", task);
-  const onUpdate = task => sendEvent("update", task);
-  const onComplete = task => {
+  const onStart = (task) => sendEvent("start", task);
+  const onUpdate = (task) => sendEvent("update", task);
+  const onComplete = (task) => {
     if (task.id === taskId) {
       sendEvent("complete", task);
       setTimeout(() => {
@@ -78,7 +78,7 @@ export const streamTaskProgress = async (req, res) => {
       sendEvent("complete", task);
     }
   };
-  const onFail = task => {
+  const onFail = (task) => {
     if (task.id === taskId) {
       sendEvent("fail", task);
       setTimeout(() => {
@@ -90,7 +90,7 @@ export const streamTaskProgress = async (req, res) => {
       sendEvent("fail", task);
     }
   };
-  const onRemove = taskId => sendEvent("remove", { taskId });
+  const onRemove = (taskId) => sendEvent("remove", { taskId });
 
   progressService.on("progressStart", onStart);
   progressService.on("progressUpdate", onUpdate);
@@ -126,11 +126,11 @@ export const streamModuleProgress = async (req, res) => {
   sendEvent("init", moduleTasks);
 
   // Listen for updates for THIS MODULE
-  const onStart = task => sendEvent("start", task);
-  const onUpdate = task => sendEvent("update", task);
-  const onComplete = task => sendEvent("complete", task);
-  const onFail = task => sendEvent("fail", task);
-  const onRemove = taskId => sendEvent("remove", { taskId });
+  const onStart = (task) => sendEvent("start", task);
+  const onUpdate = (task) => sendEvent("update", task);
+  const onComplete = (task) => sendEvent("complete", task);
+  const onFail = (task) => sendEvent("fail", task);
+  const onRemove = (taskId) => sendEvent("remove", { taskId });
 
   progressService.on("progressStart", onStart);
   progressService.on("progressUpdate", onUpdate);
@@ -270,6 +270,24 @@ export const getQueueStatus = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const cancelTask = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const task = await progressService.cancelTask(taskId);
+    res.json({
+      success: true,
+      message: `Task '${taskId}' berhasil dibatalkan`,
+      data: task,
+    });
+  } catch (error) {
+    const statusCode = error.message.includes("tidak ditemukan") ? 404 : 500;
+    res.status(statusCode).json({
       success: false,
       message: error.message,
     });

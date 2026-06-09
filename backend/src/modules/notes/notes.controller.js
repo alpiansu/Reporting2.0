@@ -50,9 +50,49 @@ export const autoNoteVirtMrg = async (req, res) => {
     try {
       logger.info(`[autoNoteVirtMrg] opening DB connection to store DB at store: ${storeInfo.storeCode}`);
       const storeConnection = await dbStore.createDbStore(storeInfo.dbHost, 2);
+      //set unixKey for the note
+      const unixKey = `${kdtk}${tanggal}${prdcd}`;
 
       if (storeConnection) {
         logger.info(`[autoNoteVirtMrg] DB connection established, querying for rekon virtual margin data.`);
+        const [checkRmb] = await storeConnection.query(config.autoNotes.checkQtyRmb, [prdcd, tanggal]);
+        if (checkRmb[0]?.COUNT > 0) {
+          logger.info(`[autoNoteVirtMrg] RMB validation passed: ${checkRmb[0].COUNT} records found!.`);
+
+          //processing auto note
+          const strKeterOri = checkRmb[0].ERROR_MSG;
+          const splitKeter = strKeterOri.split("|");
+          const [codeCategory, noteCategory] = splitKeter.map(s => s.trim());
+
+          const noteData = {
+            Cabang: cabang,
+            unixKey,
+            noteText: noteCategory || "",
+            pic: pic,
+            categoryId: codeCategory || null,
+            tableName: tableName,
+          };
+
+          // call reuse logic
+          const resultupdNote = await service.upsert(noteData);
+          //convert categoryId to integer
+          const strCategoryId = codeCategory ? parseInt(codeCategory) : null;
+
+          let category = null;
+          if (strCategoryId) {
+            const categoryResult = await noteCategoriesService.getAll();
+            const categories = categoryResult.data || [];
+            category = categories.find(c => c.id === strCategoryId) || null;
+          }
+
+          const user = await userService.findByCredentials(pic);
+          const rslt = { ...resultupdNote.toJSON(), category, fullName: user?.fullName || null };
+          return apiResponse.success(res, {
+            message: `Auto note processed successfully for ${kdtk}`,
+            data: rslt,
+          });
+        }
+
         const [result] = await storeConnection.query(config.autoNotes.rekonVirtualMrg, [
           tanggal,
           prdcd,
@@ -68,9 +108,8 @@ export const autoNoteVirtMrg = async (req, res) => {
           const [codeCategory, noteCategory] = splitKeter.map(s => s.trim());
 
           logger.info(
-            `[autoNoteVirtMrg] Preparing to save or update and autonote for kdtk ${kdtk} on prdcd ${prdcd} for date ${tanggal}`
+            `[autoNoteVirtMrg] Preparing to save or update and autonote for kdtk ${kdtk} on prdcd ${prdcd} for date ${tanggal}`,
           );
-          const unixKey = `${kdtk}${tanggal}${prdcd}`;
           const noteData = {
             Cabang: cabang,
             unixKey,
@@ -101,7 +140,7 @@ export const autoNoteVirtMrg = async (req, res) => {
           });
         } else {
           logger.info(
-            `[autoNoteVirtMrg] DB connection established, querying for rekon virtual margin data using query dede sulaiman.`
+            `[autoNoteVirtMrg] DB connection established, querying for rekon virtual margin data using query dede sulaiman.`,
           );
           const [result] = await storeConnection.query(config.autoNotes.rekonVirtualMrgDelon, [
             tanggal,
@@ -112,7 +151,7 @@ export const autoNoteVirtMrg = async (req, res) => {
 
           if (result.length > 0) {
             logger.info(
-              `[autoNoteVirtMrg] Data found from query dede sulaiman: , ${result.length} records. Proceeding to`
+              `[autoNoteVirtMrg] Data found from query dede sulaiman: , ${result.length} records. Proceeding to`,
             );
             //processing auto note
             const strKeterOri = result[0].keterangan;
@@ -120,7 +159,7 @@ export const autoNoteVirtMrg = async (req, res) => {
             const [codeCategory, noteCategory] = splitKeter.map(s => s.trim());
 
             logger.info(
-              `[autoNoteVirtMrg] Preparing to save or update and autonote for kdtk ${kdtk} on prdcd ${prdcd} for date ${tanggal}`
+              `[autoNoteVirtMrg] Preparing to save or update and autonote for kdtk ${kdtk} on prdcd ${prdcd} for date ${tanggal}`,
             );
             const unixKey = `${kdtk}${tanggal}${prdcd}`;
             const noteData = {

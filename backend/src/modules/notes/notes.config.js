@@ -7,6 +7,15 @@ export default {
   jsonPath: path.join(process.cwd(), "data/notes.json"),
   cacheTTL: 60 * 1000, // 1 minute cache
   autoNotes: {
+    checkQtyRmb: `SELECT 
+                        PRDCD, BUKTI_TGL, ISTYPE, QTY, PRICE, GROSS, 
+                        '8| ERROR - Terdapat transaksi dengan ISTYPE RMB yang memiliki QTY tidak sama dengan 1' as ERROR_MSG,
+                        COUNT(*) as COUNT
+                    FROM MSTRAN 
+                    WHERE PRDCD = ? 
+                    AND DATE(BUKTI_TGL) = ? 
+                    AND ISTYPE='RMB' 
+                    AND QTY != 1;`,
     rekonVirtualMrg: `
       SELECT * FROM(SELECT 
       (SELECT KDTK FROM TOKO LIMIT 1) as KDTK,

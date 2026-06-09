@@ -704,6 +704,18 @@ class RekonVirtualService {
         processedRecords: newRecords.length,
       };
     } catch (error) {
+      // If task was cancelled by user, don't call failProgress (already handled by cancelTask)
+      if (!skipProgress && progressService.isAborted(taskId)) {
+        logger.info(
+          `[rekon_virtual_mrg.service] Task ${taskId} was cancelled — skipping failProgress`,
+        );
+        return {
+          success: false,
+          message: "Proses dibatalkan oleh pengguna",
+          cancelled: true,
+        };
+      }
+
       logger.error(
         `[rekon_virtual_mrg.service] Error during screening: ${error.message}`,
       );

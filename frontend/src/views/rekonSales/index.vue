@@ -178,6 +178,12 @@ watch(isReconciling, async (newVal) => {
 
         // Show error message
         toast.showError('Error', errorData?.description || 'Screening gagal, silakan coba lagi');
+      },
+      onCancel: (cancelData) => {
+        console.log('ℹ️ Screening cancelled by user:', cancelData);
+
+        // Reset state without showing error
+        isReconciling.value = false;
       }
     });
   } else {

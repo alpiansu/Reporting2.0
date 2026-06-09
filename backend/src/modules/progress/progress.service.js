@@ -17,6 +17,37 @@ class ProgressService extends EventEmitter {
     this.initializingPromise = null;
     this.cleanupTimer = null;
     this.mutex = new Mutex();
+    // In-memory set of taskIds that have been requested to abort.
+    // Checked by processing loops before starting each new store.
+    this.abortSet = new Set();
+  }
+
+  /**
+   * Signal that a task should be aborted.
+   * Called by cancelTask() so running loops can detect it.
+   */
+  requestAbort(taskId) {
+    this.abortSet.add(taskId);
+    logger.info(`[ProgressService] Abort requested for task: ${taskId}`);
+  }
+
+  /**
+   * Check whether a task has been requested to abort.
+   * Called inside processing loops before starting each store.
+   */
+  isAborted(taskId) {
+    return this.abortSet.has(taskId);
+  }
+
+  /**
+   * Clear the abort flag for a task.
+   * Called when a task finishes (complete / fail / cancel / new start).
+   */
+  clearAbort(taskId) {
+    if (this.abortSet.has(taskId)) {
+      this.abortSet.delete(taskId);
+      logger.info(`[ProgressService] Abort flag cleared for task: ${taskId}`);
+    }
   }
 
   async initialize() {
@@ -144,6 +175,9 @@ class ProgressService extends EventEmitter {
       // This ensures crashed/killed processes don't permanently block new ones.
       await this._expireStaleTasksLocked();
 
+      // Clear any leftover abort flag from a previous run with the same taskId
+      this.clearAbort(taskId);
+
       const activeCount = this._activeTaskCount();
       if (activeCount >= config.maxConcurrentTasks) {
         const activeTasks = this.getActiveTasks();
@@ -183,6 +217,9 @@ class ProgressService extends EventEmitter {
       if (typeof info === "object" && info.title) {
         task.title = info.title;
       }
+      if (typeof info === "object" && info.startedBy) {
+        task.startedBy = info.startedBy;
+      }
 
       this.progressMap.set(taskId, task);
       await this._saveProgressData();
@@ -199,12 +236,20 @@ class ProgressService extends EventEmitter {
 
   /**
    * Update progress
+   * Gracefully returns null if task was deleted (e.g. by cancelTask) instead of throwing.
    */
   async updateProgress(taskId, completed, info = "") {
     const release = await this.mutex.acquire();
     try {
       const task = this.progressMap.get(taskId);
-      if (!task) throw new Error(`Task ${taskId} not found`);
+
+      // Task was deleted (e.g. by cancelTask) — silently skip instead of throwing
+      if (!task) {
+        logger.warn(
+          `[ProgressService] updateProgress('${taskId}'): task not found — likely cancelled. Skipping update.`,
+        );
+        return null;
+      }
 
       task.completed = Math.min(completed, task.total);
       task.percentage = Math.round((task.completed / task.total) * 100);
@@ -238,6 +283,7 @@ class ProgressService extends EventEmitter {
       this.progressMap.set(taskId, task);
       await this._saveProgressData();
 
+      this.clearAbort(taskId);
       this.emit("progressComplete", task);
 
       // Auto remove after short delay - use separate release for the timeout
@@ -265,7 +311,15 @@ class ProgressService extends EventEmitter {
     const release = await this.mutex.acquire();
     try {
       const task = this.progressMap.get(taskId);
-      if (!task) throw new Error(`Task ${taskId} not found`);
+
+      // Task already deleted (e.g. by cancelTask) — don't throw, don't double-emit.
+      if (!task) {
+        this.clearAbort(taskId);
+        logger.warn(
+          `[ProgressService] failProgress('${taskId}'): task not found — already cleaned up by cancelTask. Skipping emit.`,
+        );
+        return null;
+      }
 
       task.status = "failed";
       task.error = errorMessage;
@@ -274,6 +328,7 @@ class ProgressService extends EventEmitter {
       this.progressMap.set(taskId, task);
       await this._saveProgressData();
 
+      this.clearAbort(taskId);
       this.emit("progressFailed", task);
       return task;
     } finally {
@@ -313,7 +368,11 @@ class ProgressService extends EventEmitter {
   }
 
   /**
-   * Cancel a specific task by ID (admin/manual override)
+   * Cancel a specific task by ID (admin/manual override).
+   *
+   * The task is IMMEDIATELY deleted from progressMap so that a new task with
+   * the same ID can be started right away without hitting the concurrency limit.
+   * A snapshot of the task is captured before deletion for the SSE emit.
    */
   async cancelTask(taskId) {
     const release = await this.mutex.acquire();
@@ -322,15 +381,43 @@ class ProgressService extends EventEmitter {
       const task = this.progressMap.get(taskId);
       if (!task) throw new Error(`Task '${taskId}' tidak ditemukan`);
 
-      task.status = "cancelled";
-      task.error = "Task dibatalkan secara manual";
-      task.updatedAt = new Date().toISOString();
-      this.progressMap.set(taskId, task);
+      // Signal running loops to stop
+      this.requestAbort(taskId);
+
+      // Build a rich snapshot for the SSE payload before we delete the task
+      const snapshot = {
+        ...task,
+        status: "cancelled",
+        error: "Task dibatalkan oleh pengguna",
+        info: {
+          ...(typeof task.info === "object" && task.info !== null
+            ? task.info
+            : {}),
+          description: "Proses dibatalkan oleh pengguna",
+          status: "cancelled",
+        },
+        updatedAt: new Date().toISOString(),
+      };
+
+      // Delete immediately — so startProgress for a new run doesn't see "in-progress"
+      this.progressMap.delete(taskId);
       await this._saveProgressData();
 
-      logger.info(`[ProgressService] Task cancelled manually: ${taskId}`);
-      this.emit("progressFailed", task);
-      return task;
+      logger.info(
+        `[ProgressService] Task cancelled and removed from progressMap: ${taskId}`,
+      );
+
+      // NOTE: Do NOT clear the abort flag here. The abort flag must remain set so that
+      // still-running screening loops can detect the cancellation via isAborted().
+      // The flag will be cleared by:
+      //   1. failProgress() — when the loop calls it (task already deleted → clearAbort)
+      //   2. startProgress() — when a new task with the same ID is started (clearAbort on init)
+
+      // Notify all SSE listeners
+      this.emit("progressFailed", snapshot);
+      this.emit("progressRemoved", taskId);
+
+      return snapshot;
     } finally {
       release();
     }

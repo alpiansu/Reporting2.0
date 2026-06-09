@@ -237,10 +237,19 @@ class BuatRmbService {
 
       return results;
     } catch (error) {
-      logger.error(`Failed to process CSV buat_rmb: ${error.message}`);
       try {
         await fs.unlink(tempFilePath);
       } catch (e) {}
+
+      // If task was cancelled by user, don't call failProgress (already handled by cancelTask)
+      if (progressService.isAborted(taskId)) {
+        logger.info(
+          `[buat_rmb] Task ${taskId} was cancelled — skipping failProgress`,
+        );
+        return { success: false, message: "Proses dibatalkan oleh pengguna", cancelled: true };
+      }
+
+      logger.error(`Failed to process CSV buat_rmb: ${error.message}`);
 
       await progressService.failProgress(taskId, {
         description: `Task failed: ${error.message}`,
@@ -658,6 +667,14 @@ class BuatRmbService {
 
       return results;
     } catch (error) {
+      // If task was cancelled by user, don't call failProgress (already handled by cancelTask)
+      if (progressService.isAborted(taskId)) {
+        logger.info(
+          `[buat_rmb_manual] Task ${taskId} was cancelled — skipping failProgress`,
+        );
+        return { success: false, message: "Proses dibatalkan oleh pengguna", cancelled: true };
+      }
+
       logger.error(`Failed to process manual RMB: ${error.message}`);
       await progressService
         .failProgress(taskId, {

@@ -878,6 +878,16 @@ class PrepClosingService {
           limitStores(async () => {
             const { cab, storeCode } = store;
 
+            // Check if task was cancelled before starting this store
+            if (progressService.isAborted(taskId)) {
+              logger.info(
+                `[prep_closing] Skipping store ${storeCode} — task aborted`,
+              );
+              screenedStores.add(storeCode);
+              await incrementProgress(storeCode, "Dibatalkan ⛔");
+              return;
+            }
+
             screenedStores.add(storeCode);
 
             try {
@@ -921,6 +931,14 @@ class PrepClosingService {
           screenedStores.size - activeStores.size
         }`,
       );
+
+      // If task was cancelled during store processing, stop before finalizing
+      if (progressService.isAborted(taskId)) {
+        logger.info(
+          `[prep_closing] Task ${taskId} was cancelled — skipping finalization`,
+        );
+        throw new Error("Proses dibatalkan oleh pengguna");
+      }
 
       // === STEP 6: Update resolved records ===
       await progressService.updateProgress(taskId, processedCount, {
@@ -969,6 +987,18 @@ class PrepClosingService {
         resolvedStores: screenedStores.size - activeStores.size,
       };
     } catch (error) {
+      // If task was cancelled by user, don't call failProgress (already handled by cancelTask)
+      if (progressService.isAborted(taskId)) {
+        logger.info(
+          `[prep_closing.service] Task ${taskId} was cancelled — skipping failProgress`,
+        );
+        return {
+          success: false,
+          message: "Proses dibatalkan oleh pengguna",
+          cancelled: true,
+        };
+      }
+
       logger.error(
         `[prep_closing.service] Error during screening: ${error.message}`,
       );

@@ -284,14 +284,22 @@ class AdjustService {
 
       return results;
     } catch (error) {
-      logger.error(`Failed to process CSV adjust: ${error.message}`);
-
       // Clean up temporary file in case of error
       try {
         await fs.unlink(tempFilePath);
       } catch (cleanupError) {
         // Ignore cleanup errors
       }
+
+      // If task was cancelled by user, don't call failProgress (already handled by cancelTask)
+      if (progressService.isAborted(taskId)) {
+        logger.info(
+          `[adjust] Task ${taskId} was cancelled — skipping failProgress`,
+        );
+        return { success: false, message: "Proses dibatalkan oleh pengguna", cancelled: true };
+      }
+
+      logger.error(`Failed to process CSV adjust: ${error.message}`);
 
       await progressService.failProgress(taskId, {
         description: `Task failed: ${error.message}`,

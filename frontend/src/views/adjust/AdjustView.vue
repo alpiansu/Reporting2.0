@@ -560,6 +560,7 @@ const startDirectProgressMonitoring = (taskId) => {
       };
 
       console.error('❌ Progress error:', errorData);
+      isProcessing.value = false;
 
       toast.add({
         severity: "error",
@@ -567,6 +568,16 @@ const startDirectProgressMonitoring = (taskId) => {
         detail: errorData.description || "Progress monitoring failed",
         life: 5000,
       });
+    },
+    // onCancel callback - user-initiated cancellation, no error display
+    (cancelData) => {
+      console.log('ℹ️ Task cancelled by user:', cancelData);
+      progress.value = {
+        percentage: 0,
+        info: "Proses dibatalkan oleh pengguna",
+        status: "cancelled"
+      };
+      isProcessing.value = false;
     }
   );
 };

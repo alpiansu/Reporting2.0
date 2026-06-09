@@ -996,6 +996,14 @@ class RekonSalesService {
         resolvedStores: screenedStores.size - activeStores.size,
       };
     } catch (error) {
+      // If task was cancelled by user, don't call failProgress (already handled by cancelTask)
+      if (progressService.isAborted(taskId)) {
+        logger.info(
+          `[rekon_sales] Task ${taskId} was cancelled — skipping failProgress`,
+        );
+        return { success: false, message: "Proses dibatalkan oleh pengguna", cancelled: true };
+      }
+
       logger.error(
         `[rekon_sales.service] Error during screening: ${error.message}`,
       );

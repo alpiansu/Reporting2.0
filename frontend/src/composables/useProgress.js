@@ -214,6 +214,26 @@ export function useProgress(options = {}) {
         if (callbacks.onError) {
           callbacks.onError(errorData);
         }
+      },
+      // onCancel callback - user-initiated cancellation, no error display
+      cancelData => {
+        console.log("ℹ️ Task cancelled by user:", cancelData);
+
+        progress.value = {
+          percentage: 0,
+          status: "cancelled",
+          description: "Proses dibatalkan oleh pengguna",
+        };
+
+        progressError.value = null;
+        stopMonitoring();
+        isMonitoring.value = false;
+        isVisible.value = false;
+
+        // Call user's onCancel callback if provided
+        if (callbacks.onCancel) {
+          callbacks.onCancel(cancelData);
+        }
       }
     );
   };

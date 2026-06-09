@@ -924,6 +924,14 @@ class PenyesuaianService {
         resolvedStores: screenedStores.size - activeStores.size,
       };
     } catch (error) {
+      // If task was cancelled by user, don't call failProgress (already handled by cancelTask)
+      if (progressService.isAborted(taskId)) {
+        logger.info(
+          `[penyesuaian] Task ${taskId} was cancelled — skipping failProgress`,
+        );
+        return { success: false, message: "Proses dibatalkan oleh pengguna", cancelled: true };
+      }
+
       logger.error(
         `[penyesuaian.service] Error during screening: ${error.message}`,
       );

@@ -150,6 +150,19 @@ export function useProgress(username) {
 
         progressError.value = errorData?.description || "Progress monitoring failed";
         stopMonitoring();
+      },
+      // onCancel callback - user-initiated cancellation, no error display
+      cancelData => {
+        console.log("ℹ️ Task cancelled by user:", cancelData);
+
+        progress.value = {
+          percentage: 0,
+          status: "cancelled",
+          description: "Proses dibatalkan oleh pengguna",
+        };
+
+        progressError.value = null;
+        stopMonitoring();
       }
     );
   };

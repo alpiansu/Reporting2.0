@@ -1,10 +1,12 @@
 <template>
   <transition name="slide-fade-right">
-    <div v-if="isVisible" class="floating-progress-widget" :class="{ 'minimal': isMinimal }">
+    <div v-if="isVisible" class="floating-progress-widget" :class="{ minimal: isMinimal }">
+
+      <!-- Header -->
       <div class="widget-header">
         <div class="header-main" @click="toggleMode">
-          <div class="process-icon" :class="{ 'error': hasError }">
-            <i class="pi" :class="hasError ? 'pi-exclamation-triangle' : 'pi-spin pi-spinner'"></i>
+          <div class="process-icon" :class="{ error: hasError, cancelling: isCancelling }">
+            <i class="pi" :class="isCancelling ? 'pi-spin pi-spinner' : hasError ? 'pi-exclamation-triangle' : 'pi-spin pi-spinner'"></i>
           </div>
           <div class="title-container" v-if="!isMinimal">
             <span class="widget-title">{{ mainTask?.title || 'Processing...' }}</span>
@@ -13,59 +15,182 @@
             </span>
           </div>
         </div>
-        <div class="widget-actions">
-          <button class="mode-toggle" @click="toggleMode" :title="isMinimal ? 'Show details' : 'Minimize'">
+
+        <div class="widget-actions" v-if="!isMinimal">
+          <!-- Cancel button — only shown to the initiator or admin -->
+          <button
+            v-if="canCancel"
+            class="cancel-btn"
+            :disabled="isCancelling"
+            :title="isCancelling ? 'Membatalkan...' : 'Batalkan proses'"
+            @click.stop="confirmCancel"
+          >
+            <i class="pi" :class="isCancelling ? 'pi-spin pi-spinner' : 'pi-times'"></i>
+          </button>
+
+          <button class="mode-toggle" @click.stop="toggleMode" :title="isMinimal ? 'Show details' : 'Minimize'">
             <i class="pi" :class="isMinimal ? 'pi-chevron-left' : 'pi-chevron-right'"></i>
+          </button>
+        </div>
+
+        <!-- Minimal: only toggle button -->
+        <div class="widget-actions" v-else>
+          <button class="mode-toggle" @click.stop="toggleMode" title="Show details">
+            <i class="pi pi-chevron-left"></i>
           </button>
         </div>
       </div>
 
+      <!-- Expanded content -->
       <div class="widget-content" v-if="!isMinimal">
+        <!-- Status info row -->
         <div class="progress-info">
-          <span class="info-text" :title="mainTask?.info">{{ mainTask?.info || 'Syncing data...' }}</span>
+          <span class="info-text" :title="mainTask?.info">
+            {{ isCancelling ? 'Membatalkan proses...' : (mainTask?.info || 'Syncing data...') }}
+          </span>
           <span class="percentage-text">{{ progressStore.totalPercentage }}%</span>
         </div>
+
+        <!-- Progress bar -->
         <div class="progress-bar-container">
           <div class="progress-bar-track">
-            <div class="progress-bar-fill" :style="{ width: progressStore.totalPercentage + '%' }">
-              <div class="fill-shine"></div>
+            <div
+              class="progress-bar-fill"
+              :class="{ 'fill-cancelling': isCancelling }"
+              :style="{ width: progressStore.totalPercentage + '%' }"
+            >
+              <div class="fill-shine" v-if="!isCancelling"></div>
             </div>
           </div>
         </div>
+
+        <!-- Initiator badge -->
+        <div class="initiator-row" v-if="mainTask?.startedBy">
+          <i class="pi pi-user"></i>
+          <span>{{ mainTask.startedBy }}</span>
+        </div>
       </div>
 
-      <!-- Minimal Mode Progress indicator -->
-      <div class="minimal-progress" v-if="isMinimal" :title="`${progressStore.totalPercentage}% complete`" @click="toggleMode">
+      <!-- Minimal progress indicator -->
+      <div
+        class="minimal-progress"
+        v-if="isMinimal"
+        :title="`${progressStore.totalPercentage}% complete`"
+        @click="toggleMode"
+      >
         <div class="minimal-fill" :style="{ width: progressStore.totalPercentage + '%' }"></div>
       </div>
+
     </div>
   </transition>
+
+  <!-- Confirm Dialog -->
+  <div v-if="showConfirmDialog" class="cancel-overlay" @click.self="showConfirmDialog = false">
+    <div class="cancel-dialog">
+      <div class="dialog-icon">
+        <i class="pi pi-exclamation-triangle"></i>
+      </div>
+      <div class="dialog-body">
+        <h4 class="dialog-title">Batalkan Proses?</h4>
+        <p class="dialog-msg">
+          Proses <strong>{{ mainTask?.title }}</strong> akan dihentikan.
+          Store yang sedang berjalan akan selesai, namun store berikutnya tidak akan diproses.
+        </p>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn-secondary" @click="showConfirmDialog = false">Tidak</button>
+        <button class="btn-danger" @click="executeCancel">Ya, Batalkan</button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useProgressStore } from '../../stores';
+import { useAuthStore } from '../../stores';
 
 const progressStore = useProgressStore();
+const authStore = useAuthStore();
+
 const isMinimal = ref(true);
+const isCancelling = ref(false);
+const showConfirmDialog = ref(false);
+
+// ── Computed ──────────────────────────────────────────────────────────────────
 
 const mainTask = computed(() => progressStore.mainTask);
 const isVisible = computed(() => progressStore.hasActiveTasks);
 const hasError = computed(() => mainTask.value?.status?.toLowerCase() === 'failed');
 
+// Use only the login username, NOT fullName — startedBy is always the login username
+const currentUsername = computed(() => authStore.user?.username ?? null);
+
+const isAdmin = computed(() =>
+  ['admin', 'superadmin'].includes(authStore.user?.role)
+);
+
+const canCancel = computed(() => {
+  if (!mainTask.value || isCancelling.value) return false;
+  if (isAdmin.value) return true;
+
+  const task = mainTask.value;
+  const username = currentUsername.value;
+  if (!username) return false;
+
+  // Primary: compare stored startedBy (case-insensitive)
+  if (task.startedBy) {
+    return task.startedBy.toLowerCase() === username.toLowerCase();
+  }
+
+  // Fallback: extract owner from taskId — format is "<module>Task_<username>"
+  // taskId is guaranteed to embed the initiator's username
+  const tid = task.taskId || '';
+  if (tid.includes('_')) {
+    const taskOwner = tid.substring(tid.lastIndexOf('_') + 1);
+    return taskOwner.toLowerCase() === username.toLowerCase();
+  }
+
+  return false;
+});
+
+// ── Methods ───────────────────────────────────────────────────────────────────
+
 const toggleMode = () => {
   isMinimal.value = !isMinimal.value;
+};
+
+const confirmCancel = () => {
+  showConfirmDialog.value = true;
+};
+
+const executeCancel = async () => {
+  showConfirmDialog.value = false;
+  if (!mainTask.value?.taskId) return;
+
+  isCancelling.value = true;
+  try {
+    await progressStore.cancelTask(mainTask.value.taskId);
+    // Widget will auto-hide once SSE sends the 'fail' event for this task
+  } catch (err) {
+    console.error('Cancel failed:', err);
+    const status = err.response?.status;
+    let msg = 'Gagal membatalkan proses';
+    if (status === 403) msg = err.response.data?.message || 'Tidak memiliki izin untuk membatalkan';
+    if (status === 404) msg = 'Task tidak ditemukan atau sudah selesai';
+    alert(msg);
+    isCancelling.value = false;
+  }
 };
 
 const handleExpand = () => {
   isMinimal.value = false;
 };
 
+// ── Lifecycle ─────────────────────────────────────────────────────────────────
+
 onMounted(() => {
-  // Initialize progress monitoring
   progressStore.initProgressMonitoring();
-  
-  // Listen for auto-expand events
   window.addEventListener('progress-widget-expand', handleExpand);
 });
 
@@ -73,9 +198,18 @@ onBeforeUnmount(() => {
   window.removeEventListener('progress-widget-expand', handleExpand);
 });
 
-// Auto-minimize when tasks finish
+// Reset cancelling state when task is gone (SSE confirmed)
+watch(
+  () => mainTask.value,
+  (newTask) => {
+    if (!newTask) isCancelling.value = false;
+  }
+);
+
+// Auto-minimize when all tasks finish
 watch(isVisible, (newVal) => {
   if (!newVal) {
+    isCancelling.value = false;
     setTimeout(() => {
       isMinimal.value = true;
     }, 500);
@@ -84,18 +218,19 @@ watch(isVisible, (newVal) => {
 </script>
 
 <style scoped>
+/* ── Widget container ──────────────────────────────────────────────────────── */
 .floating-progress-widget {
   position: fixed;
-  top: 74px; /* Perfectly below 64px header + 10px spacing */
+  top: 74px;
   right: 20px;
-  z-index: 9999; /* Ensure high visibility */
-  background: rgba(255, 255, 255, 0.92);
+  z-index: 9999;
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: 12px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
   padding: 12px;
-  width: 280px;
+  width: 290px;
   transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   overflow: hidden;
   user-select: none;
@@ -109,11 +244,12 @@ watch(isVisible, (newVal) => {
   cursor: pointer;
 }
 
+/* ── Header ────────────────────────────────────────────────────────────────── */
 .widget-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
 }
 
 .header-main {
@@ -122,6 +258,7 @@ watch(isVisible, (newVal) => {
   gap: 10px;
   cursor: pointer;
   flex: 1;
+  min-width: 0;
 }
 
 .process-icon {
@@ -142,10 +279,16 @@ watch(isVisible, (newVal) => {
   box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
 }
 
+.process-icon.cancelling {
+  background: linear-gradient(135deg, #f59e0b, #fbbf24);
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+
 .title-container {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 0;
 }
 
 .widget-title {
@@ -163,8 +306,12 @@ watch(isVisible, (newVal) => {
   font-weight: 500;
 }
 
+/* ── Action buttons ────────────────────────────────────────────────────────── */
 .widget-actions {
   display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .mode-toggle {
@@ -179,6 +326,7 @@ watch(isVisible, (newVal) => {
   color: #9ca3af;
   cursor: pointer;
   transition: all 0.2s;
+  padding: 0;
 }
 
 .mode-toggle:hover {
@@ -186,8 +334,36 @@ watch(isVisible, (newVal) => {
   color: #4f46e5;
 }
 
+.cancel-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ef4444;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+  font-size: 0.7rem;
+}
+
+.cancel-btn:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.cancel-btn:disabled {
+  color: #f59e0b;
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+/* ── Content ───────────────────────────────────────────────────────────────── */
 .widget-content {
-  margin-top: 12px;
+  margin-top: 10px;
   animation: fadeIn 0.3s ease;
 }
 
@@ -195,13 +371,13 @@ watch(isVisible, (newVal) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 7px;
 }
 
 .info-text {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: #6b7280;
-  max-width: 180px;
+  max-width: 185px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -213,6 +389,7 @@ watch(isVisible, (newVal) => {
   color: #4f46e5;
 }
 
+/* ── Progress bar ──────────────────────────────────────────────────────────── */
 .progress-bar-container {
   height: 6px;
   width: 100%;
@@ -235,6 +412,10 @@ watch(isVisible, (newVal) => {
   overflow: hidden;
 }
 
+.progress-bar-fill.fill-cancelling {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
 .fill-shine {
   position: absolute;
   top: 0;
@@ -245,7 +426,21 @@ watch(isVisible, (newVal) => {
   animation: shine 1.5s infinite;
 }
 
-/* Minimal Mode Progress indicator - more visible now as a border glow or bottom fill */
+/* ── Initiator badge ───────────────────────────────────────────────────────── */
+.initiator-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 0.68rem;
+  color: #9ca3af;
+}
+
+.initiator-row .pi {
+  font-size: 0.65rem;
+}
+
+/* ── Minimal ───────────────────────────────────────────────────────────────── */
 .minimal-progress {
   position: absolute;
   bottom: 0;
@@ -264,17 +459,120 @@ watch(isVisible, (newVal) => {
   transition: width 0.3s ease;
 }
 
+/* ── Confirm dialog overlay ────────────────────────────────────────────────── */
+.cancel-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.cancel-dialog {
+  background: white;
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  padding: 1.5rem;
+  max-width: 380px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.dialog-icon {
+  width: 3rem;
+  height: 3rem;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ef4444;
+  font-size: 1.3rem;
+  margin: 0 auto;
+}
+
+.dialog-body {
+  text-align: center;
+}
+
+.dialog-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 0.5rem;
+}
+
+.dialog-msg {
+  font-size: 0.82rem;
+  color: #6b7280;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.btn-secondary {
+  flex: 1;
+  padding: 0.6rem 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: white;
+  color: #374151;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-secondary:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.btn-danger {
+  flex: 1;
+  padding: 0.6rem 1rem;
+  border: none;
+  border-radius: 8px;
+  background: #ef4444;
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-danger:hover {
+  background: #dc2626;
+}
+
+/* ── Animations ────────────────────────────────────────────────────────────── */
 @keyframes shine {
   0% { left: -100%; }
   100% { left: 100%; }
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-5px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Transitions */
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* ── Slide transition ──────────────────────────────────────────────────────── */
 .slide-fade-right-enter-active,
 .slide-fade-right-leave-active {
   transition: all 0.4s ease-in-out;
@@ -289,7 +587,7 @@ watch(isVisible, (newVal) => {
 @media (max-width: 768px) {
   .floating-progress-widget {
     top: auto;
-    bottom: 80px; /* Above bottom tabs if any */
+    bottom: 80px;
   }
 }
 </style>

@@ -3,6 +3,7 @@
  * Handles Server-Sent Events (SSE) streaming for real-time updates
  */
 import progressService from "./progress.service.js";
+import logger from "../../config/logger.js";
 
 // SSE for ALL progress updates (global monitor)
 export const streamAllProgress = async (req, res) => {
@@ -17,11 +18,11 @@ export const streamAllProgress = async (req, res) => {
   sendEvent("init", progressService.getProgress());
 
   // Listen for ALL updates
-  const onStart = (task) => sendEvent("start", task);
-  const onUpdate = (task) => sendEvent("update", task);
-  const onComplete = (task) => sendEvent("complete", task);
-  const onFail = (task) => sendEvent("fail", task);
-  const onRemove = (taskId) => sendEvent("remove", { taskId });
+  const onStart = task => sendEvent("start", task);
+  const onUpdate = task => sendEvent("update", task);
+  const onComplete = task => sendEvent("complete", task);
+  const onFail = task => sendEvent("fail", task);
+  const onRemove = taskId => sendEvent("remove", { taskId });
 
   progressService.on("progressStart", onStart);
   progressService.on("progressUpdate", onUpdate);
@@ -64,9 +65,9 @@ export const streamTaskProgress = async (req, res) => {
   sendEvent("init", task);
 
   // Listen for updates for THIS SPECIFIC TASK
-  const onStart = (task) => sendEvent("start", task);
-  const onUpdate = (task) => sendEvent("update", task);
-  const onComplete = (task) => {
+  const onStart = task => sendEvent("start", task);
+  const onUpdate = task => sendEvent("update", task);
+  const onComplete = task => {
     if (task.id === taskId) {
       sendEvent("complete", task);
       setTimeout(() => {
@@ -78,7 +79,7 @@ export const streamTaskProgress = async (req, res) => {
       sendEvent("complete", task);
     }
   };
-  const onFail = (task) => {
+  const onFail = task => {
     if (task.id === taskId) {
       sendEvent("fail", task);
       setTimeout(() => {
@@ -90,7 +91,7 @@ export const streamTaskProgress = async (req, res) => {
       sendEvent("fail", task);
     }
   };
-  const onRemove = (taskId) => sendEvent("remove", { taskId });
+  const onRemove = taskId => sendEvent("remove", { taskId });
 
   progressService.on("progressStart", onStart);
   progressService.on("progressUpdate", onUpdate);
@@ -126,11 +127,11 @@ export const streamModuleProgress = async (req, res) => {
   sendEvent("init", moduleTasks);
 
   // Listen for updates for THIS MODULE
-  const onStart = (task) => sendEvent("start", task);
-  const onUpdate = (task) => sendEvent("update", task);
-  const onComplete = (task) => sendEvent("complete", task);
-  const onFail = (task) => sendEvent("fail", task);
-  const onRemove = (taskId) => sendEvent("remove", { taskId });
+  const onStart = task => sendEvent("start", task);
+  const onUpdate = task => sendEvent("update", task);
+  const onComplete = task => sendEvent("complete", task);
+  const onFail = task => sendEvent("fail", task);
+  const onRemove = taskId => sendEvent("remove", { taskId });
 
   progressService.on("progressStart", onStart);
   progressService.on("progressUpdate", onUpdate);
@@ -279,11 +280,46 @@ export const getQueueStatus = async (req, res) => {
 export const cancelTask = async (req, res) => {
   try {
     const { taskId } = req.params;
-    const task = await progressService.cancelTask(taskId);
+
+    // Check task exists first (read-only, no lock needed)
+    const task = progressService.getProgress(taskId);
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: `Task '${taskId}' tidak ditemukan`,
+      });
+    }
+
+    logger.info(`Check isi variabel req : ${JSON.stringify(req.user)}`);
+
+    // Only the initiator or an admin/superadmin may cancel
+    const requestingUser = req.user?.username;
+    const isAdmin = ["superadmin"].includes(req.user?.role);
+
+    // Primary check: use stored startedBy field (case-insensitive)
+    let isInitiator = task.startedBy && requestingUser && task.startedBy.toLowerCase() === requestingUser.toLowerCase();
+
+    // Fallback: extract owner from taskId — format is always "<module>Task_<username>"
+    // This is reliable because taskId is built from req.user.username in every controller
+    if (!isInitiator && requestingUser && taskId.includes("_")) {
+      const taskOwner = taskId.substring(taskId.lastIndexOf("_") + 1);
+      isInitiator = taskOwner.toLowerCase() === requestingUser.toLowerCase();
+    }
+
+    if (!isInitiator && !isAdmin) {
+      const initiatorHint =
+        task.startedBy || (taskId.includes("_") ? taskId.substring(taskId.lastIndexOf("_") + 1) : "unknown");
+      return res.status(403).json({
+        success: false,
+        message: `Hanya initiator (${initiatorHint}) atau admin yang dapat membatalkan task ini, Anda (${requestingUser}) tidak memiliki izin.`,
+      });
+    }
+
+    const cancelled = await progressService.cancelTask(taskId);
     res.json({
       success: true,
       message: `Task '${taskId}' berhasil dibatalkan`,
-      data: task,
+      data: cancelled,
     });
   } catch (error) {
     const statusCode = error.message.includes("tidak ditemukan") ? 404 : 500;

@@ -21,6 +21,72 @@
             </div>
           </div>
 
+          <!-- Duplicate PLU Alert -->
+          <transition name="slide-fade">
+            <div v-if="duplicateGroups.length" class="duplicate-alert-section">
+              <div class="duplicate-alert-header">
+                <div class="alert-icon-wrapper">
+                  <i class="pi pi-exclamation-circle"></i>
+                </div>
+                <div class="alert-title-group">
+                  <span class="alert-title">Ditemukan data yang duplikat sebanyak {{ duplicateGroups.length }} baris data</span>
+                  <span class="alert-subtitle">Setiap kombinasi KDTK + PRDCD hanya boleh muncul satu kali. Harap perbaiki file CSV Anda.</span>
+                </div>
+                <button class="toggle-dup-btn" @click="showDuplicateDetails = !showDuplicateDetails">
+                  <span>{{ showDuplicateDetails ? 'Sembunyikan' : 'Lihat' }} detail</span>
+                  <i class="pi" :class="showDuplicateDetails ? 'pi-chevron-up' : 'pi-chevron-down'"></i>
+                </button>
+              </div>
+
+              <!-- Duplicate summary chips -->
+              <div class="duplicate-chips">
+                <span v-for="(group, idx) in duplicateGroups.slice(0, 8)" :key="idx" class="dup-chip">
+                  <i class="pi pi-copy"></i>
+                  <span class="dup-chip-kdtk">{{ group.kdtk }}</span>
+                  <span class="dup-chip-sep">/</span>
+                  <span class="dup-chip-prdcd">{{ group.prdcd }}</span>
+                  <span class="dup-chip-count">{{ group.count }}×</span>
+                </span>
+                <span v-if="duplicateGroups.length > 8" class="dup-chip dup-chip-more">
+                  +{{ duplicateGroups.length - 8 }} lainnya
+                </span>
+              </div>
+
+              <!-- Expandable detail table -->
+              <transition name="slide-fade">
+                <div v-if="showDuplicateDetails" class="duplicate-details-table-wrapper">
+                  <table class="duplicate-details-table">
+                    <thead>
+                      <tr>
+                        <th>Baris</th>
+                        <th>PRDCD</th>
+                        <th>KDTK</th>
+                        <th>QTY_ADJ</th>
+                        <th>KETER</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <template v-for="(group, gIdx) in duplicateGroups" :key="gIdx">
+                        <tr v-for="(row, rIdx) in group.rows" :key="`${gIdx}-${rIdx}`"
+                            :class="{ 'group-separator': rIdx === 0 && gIdx > 0 }">
+                          <td class="row-num-cell">
+                            <span class="row-num-badge">{{ row._rowIndex }}</span>
+                          </td>
+                          <td class="prdcd-cell">
+                            <span class="prdcd-badge">{{ row.PRDCD }}</span>
+                          </td>
+                          <td>{{ row.KDTK }}</td>
+                          <td>{{ row.QTY_ADJ }}</td>
+                          <td class="keter-cell" :title="row.KETER">{{ truncate(row.KETER, 40) }}</td>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                </div>
+              </transition>
+            </div>
+          </transition>
+
           <div class="validation-section">
             <div class="validation-header">
               <i class="pi pi-check-circle"></i>
@@ -89,7 +155,7 @@
             <i class="pi pi-times"></i>
             Batal
           </button>
-          <button type="button" class="btn btn-primary" :disabled="missingHeaders.length > 0 || totalRows === 0" @click="handleConfirm">
+          <button type="button" class="btn btn-primary" :disabled="missingHeaders.length > 0 || totalRows === 0 || duplicateGroups.length > 0" :title="duplicateGroups.length > 0 ? 'Terdapat PLU duplikat — perbaiki file CSV terlebih dahulu' : ''" @click="handleConfirm">
             <i class="pi pi-check"></i>
             Setujui & Siap Proses
           </button>
@@ -117,6 +183,7 @@ const emit = defineEmits(['cancel','confirm']);
 
 const showAllColumns = ref(false);
 const searchQuery = ref('');
+const showDuplicateDetails = ref(false);
 
 const missingHeaders = computed(() => props.requiredHeaders.filter(h => !props.headers.includes(h)));
 const extraHeaders = computed(() => props.headers.filter(h => !props.requiredHeaders.includes(h)));
@@ -128,6 +195,29 @@ const blankCounts = computed(() => {
   }
   return counts;
 });
+
+// Detect duplicate entries — each KDTK + PRDCD combination must be unique
+const duplicateGroups = computed(() => {
+  const comboMap = {};
+  props.rows.forEach((row, idx) => {
+    const kdtk = row.KDTK != null ? String(row.KDTK).trim() : '';
+    const prdcd = row.PRDCD != null ? String(row.PRDCD).trim() : '';
+    if (!kdtk || !prdcd) return;
+    const key = `${kdtk}||${prdcd}`;
+    if (!comboMap[key]) comboMap[key] = { kdtk, prdcd, rows: [] };
+    comboMap[key].rows.push({ ...row, _rowIndex: idx + 2 }); // +2 because row 1 is header, 0-based index
+  });
+  return Object.values(comboMap)
+    .filter(g => g.rows.length > 1)
+    .map(g => ({ ...g, count: g.rows.length }))
+    .sort((a, b) => b.count - a.count);
+});
+
+const truncate = (text, max) => {
+  if (!text) return '-';
+  const s = String(text);
+  return s.length > max ? s.substring(0, max) + '...' : s;
+};
 
 // Standalone function for live search
 const calculateFilteredRows = (rows, query) => {
@@ -218,4 +308,40 @@ const handleConfirm = () => emit('confirm');
 .btn-primary { background: var(--primary-color, #0ea5e9); color: #fff; }
 .btn-secondary { background: #e2e8f0; color: #1f2937; }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Duplicate PLU Alert */
+.duplicate-alert-section { border: 1px solid #fecaca; border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1rem; background: linear-gradient(135deg, #fff5f5 0%, #fff 60%); }
+.duplicate-alert-header { display: flex; align-items: flex-start; gap: 0.75rem; flex-wrap: wrap; }
+.alert-icon-wrapper { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: #fee2e2; color: #dc2626; flex-shrink: 0; }
+.alert-icon-wrapper i { font-size: 1.1rem; }
+.alert-title-group { flex: 1; min-width: 0; }
+.alert-title { display: block; font-weight: 700; color: #b91c1c; font-size: 0.95rem; }
+.alert-subtitle { display: block; color: #991b1b; font-size: 0.82rem; margin-top: 0.15rem; opacity: 0.85; }
+.toggle-dup-btn { background: none; border: 1px solid #fecaca; border-radius: 6px; padding: 0.35rem 0.75rem; font-size: 0.8rem; color: #b91c1c; cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem; transition: background 0.2s; white-space: nowrap; }
+.toggle-dup-btn:hover { background: #fee2e2; }
+
+.duplicate-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.75rem; }
+.dup-chip { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.65rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+.dup-chip i { font-size: 0.7rem; opacity: 0.7; }
+.dup-chip-kdtk { font-weight: 700; }
+.dup-chip-sep { opacity: 0.4; margin: 0 0.05rem; }
+.dup-chip-prdcd { font-weight: 600; }
+.dup-chip-count { background: #dc2626; color: #fff; border-radius: 999px; padding: 0.1rem 0.4rem; font-size: 0.7rem; font-weight: 700; margin-left: 0.15rem; }
+.dup-chip-more { background: #fef2f2; color: #b91c1c; border-style: dashed; }
+
+.duplicate-details-table-wrapper { margin-top: 0.75rem; border-radius: 8px; overflow: hidden; border: 1px solid #fecaca; max-height: 240px; overflow-y: auto; }
+.duplicate-details-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.duplicate-details-table th { background: #fef2f2; color: #991b1b; font-weight: 600; padding: 0.5rem 0.75rem; text-align: left; position: sticky; top: 0; z-index: 1; border-bottom: 1px solid #fecaca; }
+.duplicate-details-table td { padding: 0.45rem 0.75rem; border-bottom: 1px solid #f1f5f9; color: #334155; vertical-align: middle; }
+.duplicate-details-table tr:hover td { background: #fafafa; }
+.duplicate-details-table tr.group-separator td { border-top: 2px solid #fecaca; }
+.row-num-cell { text-align: center; }
+.row-num-badge { display: inline-block; background: #f1f5f9; color: #475569; border-radius: 4px; padding: 0.15rem 0.45rem; font-size: 0.75rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.prdcd-cell { font-weight: 600; }
+.prdcd-badge { background: #fee2e2; color: #991b1b; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.8rem; }
+.keter-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.slide-fade-enter-active, .slide-fade-leave-active { transition: all 0.25s ease; }
+.slide-fade-enter-from, .slide-fade-leave-to { opacity: 0; max-height: 0; overflow: hidden; }
+.slide-fade-enter-to, .slide-fade-leave-from { opacity: 1; max-height: 600px; }
 </style>

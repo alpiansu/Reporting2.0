@@ -72,7 +72,11 @@ const rekonVirtualMrgService = {
     };
 
     if (data.shops && data.shops.length > 0) {
-      params.shops = data.shops.join(',');
+      params.shops = data.shops.join(",");
+    }
+
+    if (data.force) {
+      params.force = "true";
     }
 
     const response = await api.get(`/${fixedPattern}/screening`, { params });

@@ -16,13 +16,18 @@ class BuatRmbController {
       }
 
       const username = req.user?.username || "system";
-      const results = await buatRmbService.processCsvBuatRmb(req.file.buffer, username);
+      const fullName = req.user?.fullName || username;
+      const results = await buatRmbService.processCsvBuatRmb(req.file.buffer, username, fullName);
 
       if (results.failedStores && results.failedStores.length > 0) {
-        return apiResponse.success(res, {
-          message: "Process completed with some failures",
-          data: results,
-        }, 207);
+        return apiResponse.success(
+          res,
+          {
+            message: "Process completed with some failures",
+            data: results,
+          },
+          207,
+        );
       }
 
       return apiResponse.success(res, {
@@ -83,15 +88,11 @@ class BuatRmbController {
       const usersRaw = await histBuatRmbStagingService.userService?.getAllUsers();
 
       // Handle berbagai bentuk response
-      const usersArray = Array.isArray(usersRaw)
-        ? usersRaw
-        : Array.isArray(usersRaw?.data)
-          ? usersRaw.data
-          : [];
+      const usersArray = Array.isArray(usersRaw) ? usersRaw : Array.isArray(usersRaw?.data) ? usersRaw.data : [];
 
       const users = usersArray.map(u => ({
         id: u.username,
-        name: u.fullName || u.username
+        name: u.fullName || u.username,
       }));
 
       return apiResponse.success(res, {
@@ -257,10 +258,7 @@ class BuatRmbController {
       const catCodes = config.rmbEligibleCatCodes;
       const searchPattern = `${String(q).trim()}%`;
 
-      const [products] = await pool.query(
-        config.productSearchQuery,
-        [catCodes, searchPattern]
-      );
+      const [products] = await pool.query(config.productSearchQuery, [catCodes, searchPattern]);
 
       await pool.end().catch(() => {});
 
@@ -282,6 +280,7 @@ class BuatRmbController {
     try {
       const { kdtk, tanggal, items } = req.body;
       const username = req.user?.username || "system";
+      const fullName = req.user?.fullName || username;
 
       if (!kdtk || !tanggal || !Array.isArray(items) || items.length === 0) {
         return apiResponse.badRequest(res, "kdtk, tanggal, dan minimal 1 item wajib diisi");
@@ -297,13 +296,17 @@ class BuatRmbController {
         QTY: "1",
       }));
 
-      const results = await buatRmbService.processManualBuatRmb(records, username);
+      const results = await buatRmbService.processManualBuatRmb(records, username, fullName);
 
       if (results.failedStores && results.failedStores.length > 0) {
-        return apiResponse.success(res, {
-          message: "Process selesai dengan beberapa kegagalan",
-          data: results,
-        }, 207);
+        return apiResponse.success(
+          res,
+          {
+            message: "Process selesai dengan beberapa kegagalan",
+            data: results,
+          },
+          207,
+        );
       }
 
       return apiResponse.success(res, {

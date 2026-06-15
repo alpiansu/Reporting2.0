@@ -14,7 +14,7 @@ import UserService from "../user/user.service.js";
  */
 export const screeningByCabang = async (req, res) => {
   try {
-    const { cabang, periode, kdtk } = req.query;
+    const { cabang, periode, kdtk, force } = req.query;
 
     if (!periode) {
       return apiResponse.badRequest(res, "Periode is required");
@@ -26,8 +26,10 @@ export const screeningByCabang = async (req, res) => {
     }
 
     const username = req.user?.username || "system";
+    const fullName = req.user?.fullName || username;
+    const isForce = force === "true";
 
-    // LEVEL 3: Single store screening
+    // LEVEL 3: Single store screening (no guard)
     if (kdtk) {
       logger.info(`Starting screening for store: ${kdtk}, periode: ${periode}`);
 
@@ -35,19 +37,22 @@ export const screeningByCabang = async (req, res) => {
         kdtk,
         periode,
         username,
+        fullName,
       });
 
       return apiResponse.success(res, result);
     }
 
-    // LEVEL 1 & 2: Multi-store screening
+    // LEVEL 1 & 2: Multi-store screening (with daily guard)
     const cabParam = !cabang || cabang === "All" ? "All" : cabang;
-    logger.info(`Starting screening for cabang: ${cabParam}, periode: ${periode}`);
+    logger.info(`Starting screening for cabang: ${cabParam}, periode: ${periode}${isForce ? " [FORCE]" : ""}`);
 
     const result = await penyesuaianService.screening({
       cabang: cabParam,
       periode,
       username,
+      fullName,
+      force: isForce,
     });
 
     return apiResponse.success(res, result);
@@ -131,7 +136,7 @@ export const getAllRecords = async (req, res) => {
     logger.info(
       `[penyesuaian controllers getAllRecords] Getting records: page=${page}, limit=${limit}, cabang=${
         cabang || "All"
-      }, periode=${periode || "All"}, kdtk=${kdtk || "All"}`
+      }, periode=${periode || "All"}, kdtk=${kdtk || "All"}`,
     );
 
     const result = await penyesuaianService.getAllRecords(options);
@@ -193,7 +198,7 @@ export const getResumeByKdtk = async (req, res) => {
     const cabParam = !cabang || cabang === "All" ? "All" : cabang;
 
     logger.info(
-      `[penyesuaian.controller] Get resume by KDTK: cabang=${cabParam}, periode=${periode}, page=${page}, limit=${limit}, sort=${sortColumn} ${sortOrder}`
+      `[penyesuaian.controller] Get resume by KDTK: cabang=${cabParam}, periode=${periode}, page=${page}, limit=${limit}, sort=${sortColumn} ${sortOrder}`,
     );
 
     const result = await penyesuaianService.getResumeByKdtk({

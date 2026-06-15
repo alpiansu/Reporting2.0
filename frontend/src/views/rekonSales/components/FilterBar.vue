@@ -15,6 +15,13 @@
       <Button icon="pi pi-bolt" :label="loading ? 'Please Wait...' : 'Mulai Screening'" class="p-button-success"
         :loading="loading" :disabled="loading" @click="emitStart" />
     </div>
+    <div class="force-toggle">
+      <Checkbox v-model="forceScreening" inputId="forceScreeningRekonSales" :binary="true" :disabled="loading" />
+      <label for="forceScreeningRekonSales" class="ml-2 text-sm text-color-secondary">
+        <i class="pi pi-exclamation-triangle mr-1 text-yellow-500"></i>
+        Force Re-screen (ulang meskipun sudah sukses hari ini)
+      </label>
+    </div>
   </div>
 </template>
 
@@ -23,6 +30,7 @@ import { ref, watch, onMounted } from 'vue';
 import Dropdown from 'primevue/dropdown';
 import Calendar from 'primevue/calendar';
 import Button from 'primevue/button';
+import Checkbox from 'primevue/checkbox';
 
 const props = defineProps({
   cabang: { type: String, default: 'All' },
@@ -37,6 +45,7 @@ const emit = defineEmits(['update:cabang', 'update:month', 'update:year', 'refre
 const localCabang = ref(props.cabang);
 const today = ref(new Date());
 const periodeDate = ref(new Date());
+const forceScreening = ref(false);
 
 const emitMonthYear = () => {
   const month = String(periodeDate.value.getMonth() + 1).padStart(2, '0');
@@ -46,7 +55,7 @@ const emitMonthYear = () => {
 };
 
 const emitRefresh = () => emit('refresh');
-const emitStart = () => emit('start-screening');
+const emitStart = () => emit('start-screening', { force: forceScreening.value });
 
 watch(localCabang, (newVal, oldVal) => { if (oldVal !== undefined && newVal !== oldVal) emit('update:cabang', newVal); });
 watch(periodeDate, (newVal, oldVal) => { if (oldVal !== undefined && newVal !== oldVal) emitMonthYear(); });
@@ -69,4 +78,5 @@ onMounted(() => {
 .filter-bar { display: grid; grid-template-columns: 1fr 1fr auto; gap: 1rem; align-items: end; }
 .field label { display: block; font-weight: 600; font-size: .85rem; color: #374151; margin-bottom: .25rem; }
 .actions { display: flex; gap: .5rem; align-items: end; justify-content: flex-end; }
+.force-toggle { grid-column: 1 / -1; display: flex; align-items: center; margin-top: -0.25rem; }
 </style>

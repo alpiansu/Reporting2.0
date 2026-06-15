@@ -13,12 +13,9 @@ import pLimit from "p-limit";
 import progressService from "../progress/progress.service.js";
 
 class BuatRmbService {
-  async processCsvBuatRmb(fileBuffer, username) {
+  async processCsvBuatRmb(fileBuffer, username, fullName) {
     const taskId = `${config.taskProgressName}_${username}`;
-    const tempFilePath = path.join(
-      os.tmpdir(),
-      `buat_rmb_history_${Date.now()}.json`,
-    );
+    const tempFilePath = path.join(os.tmpdir(), `buat_rmb_history_${Date.now()}.json`);
 
     try {
       await fs.mkdir(path.dirname(tempFilePath), { recursive: true });
@@ -26,7 +23,7 @@ class BuatRmbService {
       const records = await this.parseCsvBuffer(fileBuffer);
       logger.info(`Parsed ${records.length} records from CSV`);
 
-      const storeCodes = [...new Set(records.map((record) => record.KDTK))];
+      const storeCodes = [...new Set(records.map(record => record.KDTK))];
       logger.info(`Found ${storeCodes.length} unique stores in CSV`);
 
       // Filter to only existing INDUK stores
@@ -39,20 +36,16 @@ class BuatRmbService {
           module: "buat_rmb",
           title: "Buat RMB Process",
           description: "registering task & file csv buat rmb being uploaded",
-          startedBy: username,
+          startedBy: fullName || username,
           status: "registering",
           createdAt: timeStart,
         });
 
-        logger.info(
-          `Progress task registered for user ${username}, taskId: ${taskId}`,
-        );
+        logger.info(`Progress task registered for user ${username}, taskId: ${taskId}`);
       } catch (error) {
         logger.error(`Error registering progress task: ${error.message}`);
         if (error.message.includes("Maximum concurrent")) {
-          throw new Error(
-            "System is busy processing other tasks. Please try again later.",
-          );
+          throw new Error("System is busy processing other tasks. Please try again later.");
         }
         throw new Error("Failed to register progress task");
       }
@@ -70,13 +63,11 @@ class BuatRmbService {
       const limit = pLimit(config.parallelProcessing.concurrencyLimit);
       let processedCount = 0;
 
-      const storePromises = selectedStores.map((store) =>
+      const storePromises = selectedStores.map(store =>
         limit(async () => {
           // Check if task was cancelled before starting this store
           if (progressService.isAborted(taskId)) {
-            logger.info(
-              `[buat_rmb] Skipping store ${store.storeCode} — task aborted`,
-            );
+            logger.info(`[buat_rmb] Skipping store ${store.storeCode} — task aborted`);
             return {
               type: "cancelled",
               storeCode: store.storeCode,
@@ -92,14 +83,8 @@ class BuatRmbService {
 
           try {
             logger.info(`Processing store: ${store.storeCode}`);
-            const storeRecords = records.filter(
-              (record) => record.KDTK === store.storeCode,
-            );
-            const storeResult = await this.processStoreWithHistory(
-              store,
-              storeRecords,
-              username,
-            );
+            const storeRecords = records.filter(record => record.KDTK === store.storeCode);
+            const storeResult = await this.processStoreWithHistory(store, storeRecords, username);
 
             return {
               type: "success",
@@ -108,14 +93,10 @@ class BuatRmbService {
               historyRecords: storeResult.historyRecords,
             };
           } catch (error) {
-            logger.error(
-              `Error processing store ${store.storeCode}: ${error.message}`,
-            );
+            logger.error(`Error processing store ${store.storeCode}: ${error.message}`);
 
-            const storeRecords = records.filter(
-              (record) => record.KDTK === store.storeCode,
-            );
-            const failedHistoryRecords = storeRecords.map((record) => ({
+            const storeRecords = records.filter(record => record.KDTK === store.storeCode);
+            const failedHistoryRecords = storeRecords.map(record => ({
               kdtk: record.KDTK,
               tgl: record.TANGGAL,
               prdcd: record.PRDCD,
@@ -141,9 +122,7 @@ class BuatRmbService {
 
       // If task was cancelled, stop before finalizing
       if (progressService.isAborted(taskId)) {
-        logger.info(
-          `[buat_rmb] Task ${taskId} was cancelled — skipping finalization`,
-        );
+        logger.info(`[buat_rmb] Task ${taskId} was cancelled — skipping finalization`);
         throw new Error("Proses dibatalkan oleh pengguna");
       }
 
@@ -185,24 +164,16 @@ class BuatRmbService {
         tempHistoryRecords.push(...result.historyRecords);
       }
 
-      await fs.writeFile(
-        tempFilePath,
-        JSON.stringify(tempHistoryRecords, null, 2),
-      );
+      await fs.writeFile(tempFilePath, JSON.stringify(tempHistoryRecords, null, 2));
       await progressService.updateProgress(taskId, processedCount, {
         description: "Writing temporary history file",
         status: "finalizing",
       });
-      logger.info(
-        `Wrote ${tempHistoryRecords.length} history records to temporary file`,
-      );
+      logger.info(`Wrote ${tempHistoryRecords.length} history records to temporary file`);
 
       try {
-        const bulkResult =
-          await histBuatRmbStagingService.bulkInsert(tempHistoryRecords);
-        logger.info(
-          `Successfully bulk inserted ${bulkResult.insertedCount} history records`,
-        );
+        const bulkResult = await histBuatRmbStagingService.bulkInsert(tempHistoryRecords);
+        logger.info(`Successfully bulk inserted ${bulkResult.insertedCount} history records`);
 
         await progressService.updateProgress(taskId, processedCount, {
           description: "Inserting history records to database",
@@ -223,9 +194,7 @@ class BuatRmbService {
           status: "finalizing",
         });
       } catch (cleanupError) {
-        logger.warn(
-          `Failed to cleanup temporary file: ${cleanupError.message}`,
-        );
+        logger.warn(`Failed to cleanup temporary file: ${cleanupError.message}`);
       }
 
       const timeCompleted = moment().format("YYYY-MM-DD HH:mm:ss");
@@ -243,9 +212,7 @@ class BuatRmbService {
 
       // If task was cancelled by user, don't call failProgress (already handled by cancelTask)
       if (progressService.isAborted(taskId)) {
-        logger.info(
-          `[buat_rmb] Task ${taskId} was cancelled — skipping failProgress`,
-        );
+        logger.info(`[buat_rmb] Task ${taskId} was cancelled — skipping failProgress`);
         return { success: false, message: "Proses dibatalkan oleh pengguna", cancelled: true };
       }
 
@@ -277,10 +244,8 @@ class BuatRmbService {
             mapValues: ({ value }) => value.trim(),
           }),
         )
-        .on("data", (data) => records.push(data))
-        .on("error", (err) =>
-          reject(new Error(`Error parsing CSV: ${err.message}`)),
-        )
+        .on("data", data => records.push(data))
+        .on("error", err => reject(new Error(`Error parsing CSV: ${err.message}`)))
         .on("end", () => resolve(records));
     });
   }
@@ -296,10 +261,7 @@ class BuatRmbService {
         throw new Error(`Store information not found for ${store.storeCode}`);
       }
 
-      storeConnection = await dbStore.createDbStoreInterfence(
-        storeInfo.dbHost,
-        2,
-      );
+      storeConnection = await dbStore.createDbStoreInterfence(storeInfo.dbHost, 2);
 
       const result = {
         processed: 0,
@@ -322,12 +284,7 @@ class BuatRmbService {
       await (async () => {
         for (const record of records) {
           try {
-            const paramsSafety = [
-              record.TANGGAL,
-              record.TANGGAL,
-              record.TANGGAL,
-              record.PRDCD,
-            ];
+            const paramsSafety = [record.TANGGAL, record.TANGGAL, record.TANGGAL, record.PRDCD];
 
             const qty = parseInt(record.QTY) || 1; // Default to 1 because CSV doesn't have QTY column
 
@@ -354,9 +311,7 @@ class BuatRmbService {
             );
 
             //insert plu ke mstrmb
-            logger.info(
-              `[buat_rmb.service] Inserting record for store ${store.storeCode}: ${JSON.stringify(params)}`,
-            );
+            logger.info(`[buat_rmb.service] Inserting record for store ${store.storeCode}: ${JSON.stringify(params)}`);
             await storeConnection.query(
               {
                 sql: config.queries.store.init,
@@ -436,7 +391,7 @@ class BuatRmbService {
             if (insertedRows && insertedRows.length > 0) {
               const details = insertedRows
                 .map(
-                  (row) =>
+                  row =>
                     `Rtype: ${row.rtype}, Docno: ${row.bukti_no}, Qty: ${row.qty}, Gross: ${row.gross}, Gross_jual: ${row.gross_jual}`,
                 )
                 .join(" | ");
@@ -478,11 +433,9 @@ class BuatRmbService {
       result.historyRecords = historyRecords;
       return result;
     } catch (error) {
-      logger.error(
-        `Error processing store ${store.storeCode}: ${error.message}`,
-      );
+      logger.error(`Error processing store ${store.storeCode}: ${error.message}`);
 
-      const failedRecords = records.map((record) => ({
+      const failedRecords = records.map(record => ({
         kdtk: record.KDTK,
         tgl: record.TANGGAL,
         prdcd: record.PRDCD,
@@ -515,9 +468,7 @@ class BuatRmbService {
         // ["TW75", "2024-01-20", "20000459", "081234567890", "TRX-12345"]
       ];
 
-      const csvContent = [headers, ...exampleRows]
-        .map((row) => row.map((field) => `"${field}"`).join(","))
-        .join("\n");
+      const csvContent = [headers, ...exampleRows].map(row => row.map(field => `"${field}"`).join(",")).join("\n");
       return "\uFEFF" + csvContent;
     } catch (error) {
       logger.error(`Error generating CSV template: ${error.message}`);
@@ -533,17 +484,15 @@ class BuatRmbService {
    * @param {Array} records - [{KDTK, TANGGAL, PRDCD, NOHP, TRXID, QTY}]
    * @param {string} username
    */
-  async processManualBuatRmb(records, username) {
+  async processManualBuatRmb(records, username, fullName) {
     const taskId = `${config.taskProgressName}_${username}`;
 
     try {
-      const storeCodes = [...new Set(records.map((r) => r.KDTK))];
+      const storeCodes = [...new Set(records.map(r => r.KDTK))];
       const selectedStores = await storeService.getStoresByCodes(storeCodes);
 
       if (selectedStores.length === 0) {
-        throw new Error(
-          "Tidak ada toko valid yang ditemukan untuk kode yang diberikan",
-        );
+        throw new Error("Tidak ada toko valid yang ditemukan untuk kode yang diberikan");
       }
 
       const timeStart = moment().format("YYYY-MM-DD HH:mm:ss");
@@ -552,15 +501,13 @@ class BuatRmbService {
           module: "buat_rmb",
           title: "Manual RMB Process",
           description: "Processing manual RMB input",
-          startedBy: username,
+          startedBy: fullName || username,
           status: "registering",
           createdAt: timeStart,
         });
       } catch (error) {
         if (error.message.includes("Maximum concurrent")) {
-          throw new Error(
-            "System is busy processing other tasks. Please try again later.",
-          );
+          throw new Error("System is busy processing other tasks. Please try again later.");
         }
         throw new Error("Failed to register progress task");
       }
@@ -580,29 +527,19 @@ class BuatRmbService {
       for (const store of selectedStores) {
         // Check if task was cancelled before starting this store
         if (progressService.isAborted(taskId)) {
-          logger.info(
-            `[buat_rmb_manual] Skipping store ${store.storeCode} — task aborted`,
-          );
+          logger.info(`[buat_rmb_manual] Skipping store ${store.storeCode} — task aborted`);
           break;
         }
 
-        const storeRecords = records.filter((r) => r.KDTK === store.storeCode);
+        const storeRecords = records.filter(r => r.KDTK === store.storeCode);
 
-        await progressService.updateProgress(
-          taskId,
-          results.processedStores + 1,
-          {
-            description: `Processing store ${store.storeCode} (${results.processedStores + 1} of ${selectedStores.length})`,
-            status: "Processing to Stores",
-          },
-        );
+        await progressService.updateProgress(taskId, results.processedStores + 1, {
+          description: `Processing store ${store.storeCode} (${results.processedStores + 1} of ${selectedStores.length})`,
+          status: "Processing to Stores",
+        });
 
         try {
-          const storeResult = await this.processStoreWithHistory(
-            store,
-            storeRecords,
-            username,
-          );
+          const storeResult = await this.processStoreWithHistory(store, storeRecords, username);
           results.processedStores++;
 
           if (storeResult.success) {
@@ -624,16 +561,14 @@ class BuatRmbService {
 
           tempHistoryRecords.push(...storeResult.historyRecords);
         } catch (error) {
-          logger.error(
-            `Error processing store ${store.storeCode} (manual): ${error.message}`,
-          );
+          logger.error(`Error processing store ${store.storeCode} (manual): ${error.message}`);
           results.processedStores++;
           results.failedStores.push({
             storeCode: store.storeCode,
             error: error.message,
           });
 
-          const failedRecords = storeRecords.map((r) => ({
+          const failedRecords = storeRecords.map(r => ({
             kdtk: r.KDTK,
             tgl: r.TANGGAL,
             prdcd: r.PRDCD,
@@ -650,8 +585,7 @@ class BuatRmbService {
 
       // Simpan ke history DB
       try {
-        const bulkResult =
-          await histBuatRmbStagingService.bulkInsert(tempHistoryRecords);
+        const bulkResult = await histBuatRmbStagingService.bulkInsert(tempHistoryRecords);
         results.historyRecords = bulkResult.records || tempHistoryRecords;
       } catch (histError) {
         logger.error(`Failed to save manual RMB history: ${histError.message}`);
@@ -669,9 +603,7 @@ class BuatRmbService {
     } catch (error) {
       // If task was cancelled by user, don't call failProgress (already handled by cancelTask)
       if (progressService.isAborted(taskId)) {
-        logger.info(
-          `[buat_rmb_manual] Task ${taskId} was cancelled — skipping failProgress`,
-        );
+        logger.info(`[buat_rmb_manual] Task ${taskId} was cancelled — skipping failProgress`);
         return { success: false, message: "Proses dibatalkan oleh pengguna", cancelled: true };
       }
 

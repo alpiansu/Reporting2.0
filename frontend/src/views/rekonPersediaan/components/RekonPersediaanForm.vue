@@ -25,6 +25,15 @@
       </template>
     </RekonFormComponent>
 
+    <!-- Force Re-screen Toggle -->
+    <div class="flex align-items-center mb-3 mt-2" style="padding-left: 1rem;">
+      <Checkbox v-model="forceScreening" inputId="forceScreeningRekonPersediaan" :binary="true" :disabled="isReconciling" />
+      <label for="forceScreeningRekonPersediaan" class="ml-2 text-sm text-color-secondary">
+        <i class="pi pi-exclamation-triangle mr-1 text-yellow-500"></i>
+        Force Re-screen (ulang meskipun sudah sukses hari ini)
+      </label>
+    </div>
+
     <!-- card info last screening -->
     <LastScanInfo moduleName="rekon_persediaan" :selectedCabang="formData.cab" v-if="!isReconciling" />
 
@@ -55,6 +64,7 @@ import { useCabangStore, useAuthStore } from '@/stores';
 import Dropdown from 'primevue/dropdown';
 import Calendar from 'primevue/calendar';
 import Button from 'primevue/button';
+import Checkbox from 'primevue/checkbox';
 import ProgressBar from "@/components/common/ProgressBar.vue";
 import RekonFormComponent from "@/components/common/RekonFormComponent.vue";
 import progressService from "@/services/progress.service.js";
@@ -72,6 +82,7 @@ const cabangOptions = ref([]);
 const selectedDate = ref(new Date());
 const maxDate = ref(new Date());
 const isReconciling = ref(false);
+const forceScreening = ref(false);
 
 const formData = reactive({
   cab: 'All',
@@ -194,7 +205,8 @@ const startScreening = async () => {
     
     await rekonPersediaanService.startScreening({
       cabang: formData.cab,
-      periode: formData.periode
+      periode: formData.periode,
+      force: forceScreening.value
     });
     
     emit('screening-started');

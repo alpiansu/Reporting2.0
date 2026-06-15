@@ -19,20 +19,20 @@ export const prepClosingApi = {
   /**
    * Screen a single cabang (Level 2)
    */
-  async screenCabang(periode, cabang) {
-    const response = await api.get(`${BASE_URL}/screening`, {
-      params: { periode, cabang },
-    });
+  async screenCabang(periode, cabang, force = false) {
+    const params = { periode, cabang };
+    if (force) params.force = "true";
+    const response = await api.get(`${BASE_URL}/screening`, { params });
     return response.data;
   },
 
   /**
    * Screen all cabang (Level 1)
    */
-  async screenAllCabang(periode) {
-    const response = await api.get(`${BASE_URL}/screening`, {
-      params: { periode, cabang: "All" },
-    });
+  async screenAllCabang(periode, force = false) {
+    const params = { periode, cabang: "All" };
+    if (force) params.force = "true";
+    const response = await api.get(`${BASE_URL}/screening`, { params });
     return response.data;
   },
 
@@ -139,7 +139,7 @@ export const prepClosingApi = {
     });
     return response.data;
   },
-  
+
   // ==================== WRC EXTRACTOR ENDPOINTS ====================
   async getWrcExtractRules() {
     const response = await api.get(`${BASE_URL}/wrc-extract-rules`);
@@ -155,7 +155,7 @@ export const prepClosingApi = {
     const response = await api.post(`${BASE_URL}/wrc-extract-trigger`, {
       periode,
       cabang,
-      shops
+      shops,
     });
     return response.data;
   },

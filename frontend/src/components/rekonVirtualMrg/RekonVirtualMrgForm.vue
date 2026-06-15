@@ -49,6 +49,15 @@
     </template>
   </RekonFormComponent>
 
+  <!-- Force Re-screen Toggle -->
+  <div class="flex align-items-center mb-3 mt-2" style="padding-left: 1rem;">
+    <Checkbox v-model="forceScreening" inputId="forceScreeningRekonVirtualMrg" :binary="true" :disabled="isReconciling || isSingleLoading" />
+    <label for="forceScreeningRekonVirtualMrg" class="ml-2 text-sm text-color-secondary">
+      <i class="pi pi-exclamation-triangle mr-1 text-yellow-500"></i>
+      Force Re-screen (ulang meskipun sudah sukses hari ini)
+    </label>
+  </div>
+
   <!-- card info last screening -->
   <LastScanInfo moduleName="rekon_virtual_mrg" :selectedCabang="formData.cab" v-if="!isReconciling && !isSingleLoading" />
 
@@ -79,6 +88,7 @@ import Dropdown from 'primevue/dropdown';
 import Calendar from 'primevue/calendar';
 import Button from 'primevue/button';
 import MultiSelect from 'primevue/multiselect';
+import Checkbox from 'primevue/checkbox';
 import rekonVirtualMrgService from '../../services/rekonVirtualMrg.service';
 import ProgressBar from "../../components/common/ProgressBar.vue";
 import RekonFormComponent from "../../components/common/RekonFormComponent.vue";
@@ -98,6 +108,7 @@ const selectedDate = ref(null);
 const today = ref(new Date());
 const isReconciling = ref(false);
 const isSingleLoading = ref(false);
+const forceScreening = ref(false);
 const progress = ref({
   percentage: 0,
   info: "",
@@ -442,7 +453,8 @@ const startReconciliation = async () => {
     const response = await rekonVirtualMrgService.startReconciliation({
       cab: formData.cab,
       periode: formData.periode,
-      shops: formData.shops
+      shops: formData.shops,
+      force: forceScreening.value
     });
     
     toast.showSuccess('Sukses', 'Proses rekonsiliasi selesai');

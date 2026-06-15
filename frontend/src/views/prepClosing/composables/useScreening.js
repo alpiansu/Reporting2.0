@@ -26,11 +26,11 @@ export function useScreening() {
     }
   };
 
-  const screenCabang = async (periode, cabang) => {
+  const screenCabang = async (periode, cabang, force = false) => {
     try {
       isScreening.value = true;
       screeningError.value = null;
-      screeningResult.value = await prepClosingApi.screenCabang(periode, cabang);
+      screeningResult.value = await prepClosingApi.screenCabang(periode, cabang, force);
       return screeningResult.value;
     } catch (err) {
       screeningError.value = err.response?.data?.message || "Gagal melakukan screening cabang";
@@ -41,11 +41,11 @@ export function useScreening() {
     }
   };
 
-  const screenAllCabang = async periode => {
+  const screenAllCabang = async (periode, force = false) => {
     try {
       isScreening.value = true;
       screeningError.value = null;
-      screeningResult.value = await prepClosingApi.screenAllCabang(periode);
+      screeningResult.value = await prepClosingApi.screenAllCabang(periode, force);
       return screeningResult.value;
     } catch (err) {
       screeningError.value = err.response?.data?.message || "Gagal melakukan screening semua cabang";

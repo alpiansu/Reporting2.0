@@ -14,12 +14,9 @@ import moment from "moment-timezone";
 import RekapRemoteService from "../rekap_remote/rekap_remote.service.js";
 import notesService from "../notes/notes.service.js";
 import progressService from "../progress/progress.service.js";
-import {
-  isNumericString,
-  toNumber,
-  formatNumber,
-} from "../../utils/numberUtils.js";
+import { isNumericString, toNumber, formatNumber } from "../../utils/numberUtils.js";
 import { fileUtils } from "../../utils/index.js";
+import screeningGuard from "../../utils/screeningGuard.js";
 
 // Path untuk folder JSON penyesuaian (akan di-split per periode)
 const PENYESUAIAN_DATA_DIR = path.join(process.cwd(), "data/penyesuaian");
@@ -67,9 +64,7 @@ class PenyesuaianService {
         const data = await fileUtils.readFileWithRetry(jsonPath);
         this.penyesuaianData = JSON.parse(data);
         this.loadedPeriod = periode;
-        logger.info(
-          `Loaded ${this.penyesuaianData.length} records for period ${periode} from JSON`,
-        );
+        logger.info(`Loaded ${this.penyesuaianData.length} records for period ${periode} from JSON`);
       } catch (err) {
         if (err.code === "ENOENT") {
           this.penyesuaianData = [];
@@ -78,9 +73,7 @@ class PenyesuaianService {
         } else throw err;
       }
     } catch (error) {
-      logger.error(
-        `[penyesuaian.service] Failed to initialize period ${periode}: ${error.message}`,
-      );
+      logger.error(`[penyesuaian.service] Failed to initialize period ${periode}: ${error.message}`);
       throw error;
     }
   }
@@ -92,17 +85,10 @@ class PenyesuaianService {
     if (!periode) throw new Error("Periode is required to save data");
     try {
       const jsonPath = this.getJsonPath(periode);
-      await fileUtils.writeAtomicWithRetry(
-        jsonPath,
-        JSON.stringify(this.penyesuaianData, null, 2),
-      );
-      logger.debug(
-        `Saved ${this.penyesuaianData.length} records to JSON file: ${jsonPath}`,
-      );
+      await fileUtils.writeAtomicWithRetry(jsonPath, JSON.stringify(this.penyesuaianData, null, 2));
+      logger.debug(`Saved ${this.penyesuaianData.length} records to JSON file: ${jsonPath}`);
     } catch (error) {
-      logger.error(
-        `Failed to save penyesuaian period ${periode} to file: ${error.message}`,
-      );
+      logger.error(`Failed to save penyesuaian period ${periode} to file: ${error.message}`);
       throw error;
     }
   }
@@ -132,11 +118,7 @@ class PenyesuaianService {
     const sequelize = model.sequelize;
     const { Sequelize } = await import("sequelize");
 
-    const whereClauses = [
-      `PERIODE = :periode`,
-      `RECID = '*'`,
-      `ABS(SESUAI) > 1000 `,
-    ];
+    const whereClauses = [`PERIODE = :periode`, `RECID = '*'`, `ABS(SESUAI) > 1000 `];
     const replacements = { periode };
 
     if (kdtk) {
@@ -188,9 +170,7 @@ class PenyesuaianService {
     for (const [key, entry] of this.cacheDetailData.entries()) {
       if (now - entry.lastAccessTime > this.cacheTTL) {
         this.cacheDetailData.delete(key);
-        logger.debug(
-          `[penyesuaian.service] Cache expired & removed for key=${key}`,
-        );
+        logger.debug(`[penyesuaian.service] Cache expired & removed for key=${key}`);
       }
     }
   }
@@ -200,11 +180,7 @@ class PenyesuaianService {
    * @returns {boolean} True if cache is valid, false if expired
    */
   isCacheValid(periode) {
-    if (
-      !this.loadedPeriod ||
-      this.loadedPeriod !== periode ||
-      !this.lastLoadTime
-    ) {
+    if (!this.loadedPeriod || this.loadedPeriod !== periode || !this.lastLoadTime) {
       return false;
     }
 
@@ -227,8 +203,7 @@ class PenyesuaianService {
    * Cek apakah legacy notes cache masih valid untuk periode tertentu
    */
   isLegacyCacheValid(periode) {
-    if (!this.legacyNotesPeriode || this.legacyNotesPeriode !== periode)
-      return false;
+    if (!this.legacyNotesPeriode || this.legacyNotesPeriode !== periode) return false;
     if (this.legacyNotesCachedAt === 0) return false;
     return Date.now() - this.legacyNotesCachedAt < this.legacyNotesTTL;
   }
@@ -249,21 +224,14 @@ class PenyesuaianService {
       }
 
       // Kumpulkan semua idNotes unik (format: CABANG+KDTK+PERIODE)
-      const allIdNotes = data.map(
-        (item) => `${item.CABANG}${item.KDTK}${item.PERIODE}`,
-      );
+      const allIdNotes = data.map(item => `${item.CABANG}${item.KDTK}${item.PERIODE}`);
       const uniqueIdNotes = [...new Set(allIdNotes)];
 
       // Query sekali ke DB legacy secara batch
-      const legacyNotes = await notesService.getLegacyNotesFallback(
-        "web_reporting.sesuaiToko",
-        uniqueIdNotes,
-      );
+      const legacyNotes = await notesService.getLegacyNotesFallback("web_reporting.sesuaiToko", uniqueIdNotes);
 
       // Simpan ke Map
-      this.legacyNotesCache = new Map(
-        legacyNotes.map((n) => [n.legacyIdNote, n]),
-      );
+      this.legacyNotesCache = new Map(legacyNotes.map(n => [n.legacyIdNote, n]));
       this.legacyNotesCachedAt = Date.now();
       this.legacyNotesPeriode = periode;
 
@@ -271,9 +239,7 @@ class PenyesuaianService {
         `[penyesuaian.service] Legacy notes cache refreshed: ${this.legacyNotesCache.size} entries, periode=${periode}, TTL expires at: ${new Date(this.legacyNotesCachedAt + this.legacyNotesTTL).toISOString()}`,
       );
     } catch (err) {
-      logger.error(
-        `[penyesuaian.service] Failed to refresh legacy notes cache: ${err.message}`,
-      );
+      logger.error(`[penyesuaian.service] Failed to refresh legacy notes cache: ${err.message}`);
     }
   }
 
@@ -306,16 +272,14 @@ class PenyesuaianService {
     if (this.isLoading) {
       // Wait for ongoing loading to complete
       while (this.isLoading) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
       return;
     }
 
     try {
       this.isLoading = true;
-      logger.info(
-        `Loading penyesuaian data for period ${periode} (cache expired or wrong period)`,
-      );
+      logger.info(`Loading penyesuaian data for period ${periode} (cache expired or wrong period)`);
 
       await this.initialize(periode);
       this.lastLoadTime = Date.now();
@@ -339,7 +303,7 @@ class PenyesuaianService {
         where: { PERIODE: periode },
       });
 
-      this.penyesuaianData = rows.map((r) => ({
+      this.penyesuaianData = rows.map(r => ({
         CABANG: r.CABANG,
         KDTK: r.KDTK,
         PERIODE: r.PERIODE,
@@ -360,9 +324,7 @@ class PenyesuaianService {
       // Ini memastikan data legacy notes selalu up-to-date pasca screening
       await this.refreshLegacyNotesCache(this.penyesuaianData, periode);
     } catch (error) {
-      logger.error(
-        `[penyesuaian.service] Failed to sync data for period ${periode}: ${error.message}`,
-      );
+      logger.error(`[penyesuaian.service] Failed to sync data for period ${periode}: ${error.message}`);
       throw error;
     }
   }
@@ -378,10 +340,7 @@ class PenyesuaianService {
       const { CABANG, KDTK, PERIODE } = records[0];
 
       // Hitung total SESUAI in-memory
-      const totalSesuai = records.reduce(
-        (sum, rec) => sum + (Number(rec.SESUAI) || 0),
-        0,
-      );
+      const totalSesuai = records.reduce((sum, rec) => sum + (Number(rec.SESUAI) || 0), 0);
       const maxUpdTime = records.reduce((max, rec) => {
         const current = new Date(rec.UPDTIME);
         return current > max ? current : max;
@@ -396,13 +355,9 @@ class PenyesuaianService {
         RECID: "*", // Jika ada records detail, berarti statusnya unresolved
       });
 
-      logger.debug(
-        `[penyesuaian.service] Summary updated for ${KDTK} (${PERIODE}): SESUAI=${totalSesuai}`,
-      );
+      logger.debug(`[penyesuaian.service] Summary updated for ${KDTK} (${PERIODE}): SESUAI=${totalSesuai}`);
     } catch (error) {
-      logger.error(
-        `[penyesuaian.service] Failed to update summary from records: ${error.message}`,
-      );
+      logger.error(`[penyesuaian.service] Failed to update summary from records: ${error.message}`);
     }
   }
 
@@ -420,13 +375,9 @@ class PenyesuaianService {
           where: { PERIODE: periode, KDTK: kdtk },
         },
       );
-      logger.debug(
-        `[penyesuaian.service] Summary marked as RESOLVED for ${kdtk} (${periode})`,
-      );
+      logger.debug(`[penyesuaian.service] Summary marked as RESOLVED for ${kdtk} (${periode})`);
     } catch (error) {
-      logger.error(
-        `[penyesuaian.service] Failed to mark summary as resolved: ${error.message}`,
-      );
+      logger.error(`[penyesuaian.service] Failed to mark summary as resolved: ${error.message}`);
     }
   }
 
@@ -469,20 +420,12 @@ class PenyesuaianService {
       const storeInfo = await storeService.getStoreIPHost(storeCode);
 
       if (!storeInfo) {
-        await RekapRemoteService.addToTemp(
-          cab,
-          storeCode,
-          "penyesuaian",
-          `[${storeCode}] store info not found`,
-        );
+        await RekapRemoteService.addToTemp(cab, storeCode, "penyesuaian", `[${storeCode}] store info not found`);
         return results;
       }
 
       // --- Create DB connection --- //
-      const storeConnection = await dbStore.createDbStore(
-        storeInfo.dbHost,
-        config.connectionRetry.maxRetries,
-      );
+      const storeConnection = await dbStore.createDbStore(storeInfo.dbHost, config.connectionRetry.maxRetries);
 
       if (!storeConnection) {
         await RekapRemoteService.addToTemp(
@@ -499,18 +442,8 @@ class PenyesuaianService {
         const filetToko = this.getFiletTokoTableName(storeCode, strPeriode);
 
         // STEP 1: Run filter query to check if store has data exceeding threshold
-        const filterQuery = config.queries.filter(
-          filetToko,
-          strPeriode,
-          strMonth,
-          strYear,
-        );
-        const [filterResult] = await storeConnection.query(filterQuery, [
-          strMonth,
-          strYear,
-          strMonth,
-          strYear,
-        ]);
+        const filterQuery = config.queries.filter(filetToko, strPeriode, strMonth, strYear);
+        const [filterResult] = await storeConnection.query(filterQuery, [strMonth, strYear, strMonth, strYear]);
 
         await RekapRemoteService.addToTemp(
           cab,
@@ -526,18 +459,8 @@ class PenyesuaianService {
 
         // STEP 2: If threshold exceeded, run detail query
         if (filterResult.length > 0) {
-          const detailQuery = config.queries.detail(
-            filetToko,
-            strPeriode,
-            strMonth,
-            strYear,
-          );
-          const [detailResult] = await storeConnection.query(detailQuery, [
-            strMonth,
-            strYear,
-            strMonth,
-            strYear,
-          ]);
+          const detailQuery = config.queries.detail(filetToko, strPeriode, strMonth, strYear);
+          const [detailResult] = await storeConnection.query(detailQuery, [strMonth, strYear, strMonth, strYear]);
 
           await RekapRemoteService.addToTemp(
             cab,
@@ -548,7 +471,7 @@ class PenyesuaianService {
 
           if (detailResult.length > 0) {
             // Normalize field names to match model (uppercase)
-            const normalizedRecords = detailResult.map((record) => ({
+            const normalizedRecords = detailResult.map(record => ({
               RECID: "*", // Default value for tracking
               CABANG: record.CAB,
               PERIODE: record.PERIODE,
@@ -600,12 +523,7 @@ class PenyesuaianService {
         await storeConnection.end();
       }
     } catch (err) {
-      await RekapRemoteService.addToTemp(
-        cab,
-        storeCode,
-        "penyesuaian",
-        `[${storeCode}] ERROR: ${err.message}`,
-      );
+      await RekapRemoteService.addToTemp(cab, storeCode, "penyesuaian", `[${storeCode}] ERROR: ${err.message}`);
     }
 
     return results;
@@ -619,20 +537,16 @@ class PenyesuaianService {
     // Ensure storeService is initialized
     await storeService.ensureInitialized();
 
-    const { cabang, periode, kdtk, username } = options;
+    const { cabang, periode, kdtk, username, fullName, force } = options;
 
     // === LEVEL 3: Single Store Screening (No Progress Task) ===
     if (kdtk) {
-      logger.info(
-        `[penyesuaian.service] Starting single store screening: ${kdtk}, periode: ${periode}`,
-      );
+      logger.info(`[penyesuaian.service] Starting single store screening: ${kdtk}, periode: ${periode}`);
 
       try {
         // Get store info to determine cabang
         const storeInfo = await storeService.getStoreByCode(kdtk);
-        const storeCab = storeInfo
-          ? storeInfo.branch || storeInfo.cab
-          : "UNKNOWN";
+        const storeCab = storeInfo ? storeInfo.branch || storeInfo.cab : "UNKNOWN";
 
         // Convert periode
         const strPeriode = periode;
@@ -640,12 +554,7 @@ class PenyesuaianService {
         const strMonth = moment(periode, "YYMM").format("MM");
 
         // Process single store
-        const result = await this.processSingleStore(
-          { storeCode: kdtk, cab: storeCab },
-          strPeriode,
-          strYear,
-          strMonth,
-        );
+        const result = await this.processSingleStore({ storeCode: kdtk, cab: storeCab }, strPeriode, strYear, strMonth);
 
         // Save logs to database
         await RekapRemoteService.saveLogsToDatabase();
@@ -671,26 +580,20 @@ class PenyesuaianService {
           processedRecords: result.records.length,
         };
       } catch (error) {
-        logger.error(
-          `[penyesuaian.service] Error during single store screening: ${error.message}`,
-        );
+        logger.error(`[penyesuaian.service] Error during single store screening: ${error.message}`);
         throw error;
       }
     }
 
     // === LEVEL 1 & 2: Multi-Store Screening (With Progress Task) ===
     const taskId = `${config.taskProgressName}_${username}`;
-    const limitBranches = pLimit(
-      config.parallelProcessing.branchConcurrencyLimit,
-    );
+    const limitBranches = pLimit(config.parallelProcessing.branchConcurrencyLimit);
     const limitStores = pLimit(config.parallelProcessing.concurrencyLimit);
 
     const withTimeout = (promise, ms, label) => {
       return Promise.race([
         promise,
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error(`Timeout: ${label}`)), ms),
-        ),
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout: ${label}`)), ms)),
       ]);
     };
 
@@ -699,40 +602,28 @@ class PenyesuaianService {
       let branches = [];
       if (cabang === "All" || cabang === "ALL") {
         const allStores = storeService.stores;
-        branches = [
-          ...new Set(
-            allStores
-              .filter((s) => s.notes === "INDUK")
-              .map((s) => s.branch || s.cab),
-          ),
-        ];
+        branches = [...new Set(allStores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))];
       } else {
         branches = [cabang];
       }
 
-      logger.info(
-        `[penyesuaian.service] Branches to process: ${branches.join(", ")}`,
-      );
+      logger.info(`[penyesuaian.service] Branches to process: ${branches.join(", ")}`);
 
       // === STEP 2: Collect all stores ===
       const storeGroups = await Promise.all(
-        branches.map((cab) =>
+        branches.map(cab =>
           limitBranches(async () => {
             const stores = await storeService.getStoresByBranch(cab, true);
-            logger.info(
-              `[penyesuaian.service] Found ${stores.length} stores for branch ${cab}`,
-            );
+            logger.info(`[penyesuaian.service] Found ${stores.length} stores for branch ${cab}`);
             // tambahkan info cabang ke tiap store
-            return stores.map((s) => ({ ...s, cab }));
+            return stores.map(s => ({ ...s, cab }));
           }),
         ),
       );
 
       const storesToProcess = storeGroups.flat();
 
-      logger.info(
-        `[penyesuaian.service] Total stores to process: ${storesToProcess.length}`,
-      );
+      logger.info(`[penyesuaian.service] Total stores to process: ${storesToProcess.length}`);
 
       // Register progress task
       try {
@@ -741,14 +632,12 @@ class PenyesuaianService {
           module: "penyesuaian",
           title: "Screening Penyesuaian",
           description: "registering task",
-          startedBy: username,
+          startedBy: fullName || username,
           status: "registering",
           createdAt: timeStart,
         });
 
-        logger.info(
-          `Progress task registered for user ${username}, taskId: ${taskId}`,
-        );
+        logger.info(`Progress task registered for user ${username}, taskId: ${taskId}`);
       } catch (error) {
         logger.error(`Error registering progress task: ${error.message}`);
 
@@ -757,23 +646,17 @@ class PenyesuaianService {
             description: `Task failed: ${error.message}`,
             status: "failed",
           });
-          throw new Error(
-            "[service penyesuaian] System is busy processing other tasks",
-          );
+          throw new Error("[service penyesuaian] System is busy processing other tasks");
         }
 
         await progressService.failProgress(taskId, {
           description: `Task failed: ${error.message}`,
           status: "failed",
         });
-        throw new Error(
-          "[service penyesuaian] Failed to register progress task",
-        );
+        throw new Error("[service penyesuaian] Failed to register progress task");
       }
 
-      logger.info(
-        `[penyesuaian.service] Starting screening for branches: ${branches.join(", ")}`,
-      );
+      logger.info(`[penyesuaian.service] Starting screening for branches: ${branches.join(", ")}`);
 
       // === PREPARE PROCESSING ===
       // Convert from string periode (YYMM)
@@ -800,18 +683,26 @@ class PenyesuaianService {
 
       // step 3, loop each stores asynchronously
       await Promise.all(
-        storesToProcess.map((store) =>
+        storesToProcess.map(store =>
           limitStores(async () => {
             const { cab, storeCode } = store;
 
             // Check if task was cancelled before starting this store
             if (progressService.isAborted(taskId)) {
-              logger.info(
-                `[penyesuaian] Skipping store ${storeCode} — task aborted`,
-              );
+              logger.info(`[penyesuaian] Skipping store ${storeCode} — task aborted`);
               screenedStores.add(storeCode); // still mark as processed so counts are correct
               await incrementProgress(storeCode, "Dibatalkan ⛔");
               return;
+            }
+
+            // === DAILY GUARD: Skip toko yang sudah sukses screening hari ini ===
+            if (!force) {
+              const guard = await screeningGuard.isSuccessToday("penyesuaian", storeCode);
+              if (guard.screened) {
+                screenedStores.add(storeCode);
+                await incrementProgress(storeCode, `Skip (sudah screen ${guard.updtime})`);
+                return;
+              }
             }
 
             // Always mark as screened (even if error/timeout)
@@ -830,45 +721,30 @@ class PenyesuaianService {
                   // Store has issues
                   activeStores.add(storeCode);
                   newRecords.push(...result.records);
-                  await incrementProgress(
-                    storeCode,
-                    `Success ✅ (${result.records.length} rows)`,
-                  );
+                  await incrementProgress(storeCode, `Success ✅ (${result.records.length} rows)`);
                 } else {
                   // Store below threshold (no issues)
-                  await incrementProgress(
-                    storeCode,
-                    "Masih Dibawah Nilai Toleransi ✓",
-                  );
+                  await incrementProgress(storeCode, "Masih Dibawah Nilai Toleransi ✓");
                 }
               } else {
                 await incrementProgress(storeCode, "Error ❌");
               }
             } catch (err) {
-              await RekapRemoteService.addToTemp(
-                cab,
-                storeCode,
-                "penyesuaian",
-                `[${storeCode}] ERROR: ${err.message}`,
-              );
+              await RekapRemoteService.addToTemp(cab, storeCode, "penyesuaian", `[${storeCode}] ERROR: ${err.message}`);
               await incrementProgress(storeCode, "Error ❌");
             }
           }),
         ),
       );
 
-      logger.info(
-        `[penyesuaian.service] Screening process completed for periode ${periode}`,
-      );
+      logger.info(`[penyesuaian.service] Screening process completed for periode ${periode}`);
       logger.info(
         `[penyesuaian.service] Screened stores: ${screenedStores.size}, Active stores (has issues): ${activeStores.size}`,
       );
 
       // If task was cancelled during store processing, stop before finalizing
       if (progressService.isAborted(taskId)) {
-        logger.info(
-          `[penyesuaian] Task ${taskId} was cancelled — skipping finalization`,
-        );
+        logger.info(`[penyesuaian] Task ${taskId} was cancelled — skipping finalization`);
         throw new Error("Proses dibatalkan oleh pengguna");
       }
 
@@ -904,9 +780,7 @@ class PenyesuaianService {
       });
       // Sync database to JSON file after write operations
       await this.syncToJsonFile(strPeriode);
-      logger.info(
-        `Synchronized ${newRecords.length} new records from database to JSON file`,
-      );
+      logger.info(`Synchronized ${newRecords.length} new records from database to JSON file`);
 
       const timeCompleted = moment().format("YYYY-MM-DD HH:mm:ss");
       await progressService.completeProgress(taskId, {
@@ -926,15 +800,11 @@ class PenyesuaianService {
     } catch (error) {
       // If task was cancelled by user, don't call failProgress (already handled by cancelTask)
       if (progressService.isAborted(taskId)) {
-        logger.info(
-          `[penyesuaian] Task ${taskId} was cancelled — skipping failProgress`,
-        );
+        logger.info(`[penyesuaian] Task ${taskId} was cancelled — skipping failProgress`);
         return { success: false, message: "Proses dibatalkan oleh pengguna", cancelled: true };
       }
 
-      logger.error(
-        `[penyesuaian.service] Error during screening: ${error.message}`,
-      );
+      logger.error(`[penyesuaian.service] Error during screening: ${error.message}`);
 
       await progressService.failProgress(taskId, {
         description: `Task failed: ${error.message}`,
@@ -959,15 +829,7 @@ class PenyesuaianService {
    * @param {Array<string>} [params.activeStores] - Stores that still have issues (for level 1 & 2)
    */
   async updateResolvedRecords(params) {
-    const {
-      periode,
-      level,
-      cabang,
-      kdtk,
-      hasIssue,
-      screenedStores,
-      activeStores,
-    } = params;
+    const { periode, level, cabang, kdtk, hasIssue, screenedStores, activeStores } = params;
 
     try {
       // Get the database instance
@@ -979,18 +841,14 @@ class PenyesuaianService {
       // LEVEL 3: Single Store
       if (level === 3) {
         if (hasIssue) {
-          logger.info(
-            `[penyesuaian.service] Level 3: Store ${kdtk} has issues, skip resolve update`,
-          );
+          logger.info(`[penyesuaian.service] Level 3: Store ${kdtk} has issues, skip resolve update`);
           return 0;
         } else {
           // Hapus data detail
           await SesuaiToko.destroy({ where: { PERIODE: periode, KDTK: kdtk } });
           // Mark summary as resolved
           await this.markSummaryAsResolved({ periode, kdtk });
-          logger.info(
-            `[penyesuaian.service] Level 3: Resolved store ${kdtk} (details deleted, summary status '1')`,
-          );
+          logger.info(`[penyesuaian.service] Level 3: Resolved store ${kdtk} (details deleted, summary status '1')`);
           return 1;
         }
       }
@@ -1048,9 +906,7 @@ class PenyesuaianService {
       );
       return totalUpdated;
     } catch (error) {
-      logger.error(
-        `[penyesuaian.service] Error updating resolved records: ${error.message}`,
-      );
+      logger.error(`[penyesuaian.service] Error updating resolved records: ${error.message}`);
       throw error;
     }
   }
@@ -1064,7 +920,7 @@ class PenyesuaianService {
   buildFilterFunction(params = {}) {
     const { cabang, periode, kdtk } = params;
 
-    return (item) => {
+    return item => {
       // CRITICAL: Always filter for RECID='*' (unresolved records only)
       if (item.RECID !== "*") {
         return false;
@@ -1109,11 +965,8 @@ class PenyesuaianService {
       const filteredData = this.penyesuaianData.filter(filterFn);
 
       // Calculate summary
-      const uniqueStores = new Set(filteredData.map((item) => item.KDTK));
-      const totalSesuai = filteredData.reduce(
-        (sum, item) => sum + (Number(item.SESUAI) || 0),
-        0,
-      );
+      const uniqueStores = new Set(filteredData.map(item => item.KDTK));
+      const totalSesuai = filteredData.reduce((sum, item) => sum + (Number(item.SESUAI) || 0), 0);
 
       return {
         data: {
@@ -1123,9 +976,7 @@ class PenyesuaianService {
         },
       };
     } catch (error) {
-      logger.error(
-        `[penyesuaian.service] Error getting summary: ${error.message}`,
-      );
+      logger.error(`[penyesuaian.service] Error getting summary: ${error.message}`);
       throw error;
     }
   }
@@ -1151,10 +1002,7 @@ class PenyesuaianService {
       await storeService.ensureInitialized();
 
       let filtered = this.penyesuaianData.filter(
-        (i) =>
-          i.PERIODE === periode &&
-          (cabang === "All" || i.CABANG === cabang) &&
-          i.RECID === "*",
+        i => i.PERIODE === periode && (cabang === "All" || i.CABANG === cabang) && i.RECID === "*",
       );
 
       // Ambil nama toko dari storeService
@@ -1165,9 +1013,7 @@ class PenyesuaianService {
           const storeInfo = await storeService.getStoreByCode(item.KDTK);
           if (storeInfo?.storeName) storeName = storeInfo.storeName;
         } catch {
-          logger.warn(
-            `[penyesuaian.service] Nama toko tidak ditemukan untuk ${item.KDTK}`,
-          );
+          logger.warn(`[penyesuaian.service] Nama toko tidak ditemukan untuk ${item.KDTK}`);
         }
         results.push({
           CABANG: item.CABANG,
@@ -1184,24 +1030,19 @@ class PenyesuaianService {
       // 🔍 Search (optional)
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
-        results = results.filter((item) => {
+        results = results.filter(item => {
           // fields biasa
           const fields = ["CABANG", "KDTK", "NAMA", "SESUAI"];
 
           // cocokkan field normal
-          const matchNormal = fields.some(
-            (field) =>
-              item[field] && item[field].toString().toLowerCase().includes(q),
-          );
+          const matchNormal = fields.some(field => item[field] && item[field].toString().toLowerCase().includes(q));
 
           // cocokkan field di dalam note
           const matchNote =
             item.note &&
-            ((item.note.noteText &&
-              item.note.noteText.toLowerCase().includes(q)) ||
+            ((item.note.noteText && item.note.noteText.toLowerCase().includes(q)) ||
               (item.note.pic && item.note.pic.toLowerCase().includes(q)) ||
-              (item.note.fullName &&
-                item.note.fullName.toLowerCase().includes(q)));
+              (item.note.fullName && item.note.fullName.toLowerCase().includes(q)));
 
           return matchNormal || matchNote;
         });
@@ -1223,17 +1064,7 @@ class PenyesuaianService {
           av = Number(av);
           bv = Number(bv);
         }
-        return order === "ASC"
-          ? av > bv
-            ? 1
-            : av < bv
-              ? -1
-              : 0
-          : av < bv
-            ? 1
-            : av > bv
-              ? -1
-              : 0;
+        return order === "ASC" ? (av > bv ? 1 : av < bv ? -1 : 0) : av < bv ? 1 : av > bv ? -1 : 0;
       });
 
       // Pagination
@@ -1249,9 +1080,7 @@ class PenyesuaianService {
         totalPages: Math.ceil(totalRecords / limit),
       };
     } catch (error) {
-      logger.error(
-        `[penyesuaian.service] Error getResumeByKdtk: ${error.message}`,
-      );
+      logger.error(`[penyesuaian.service] Error getResumeByKdtk: ${error.message}`);
       throw error;
     }
   }
@@ -1266,9 +1095,7 @@ class PenyesuaianService {
       await this.ensureDataLoaded(periode);
       await storeService.ensureInitialized();
 
-      let filtered = this.penyesuaianData.filter(
-        (i) => i.PERIODE === periode && i.KDTK === kdtk,
-      );
+      let filtered = this.penyesuaianData.filter(i => i.PERIODE === periode && i.KDTK === kdtk);
 
       // Ambil nama toko dari storeService
       let results = [];
@@ -1278,9 +1105,7 @@ class PenyesuaianService {
           const storeInfo = await storeService.getStoreByCode(item.KDTK);
           if (storeInfo?.storeName) storeName = storeInfo.storeName;
         } catch {
-          logger.warn(
-            `[penyesuaian.service] Nama toko tidak ditemukan untuk ${item.KDTK}`,
-          );
+          logger.warn(`[penyesuaian.service] Nama toko tidak ditemukan untuk ${item.KDTK}`);
         }
         results.push({
           CABANG: item.CABANG,
@@ -1296,9 +1121,7 @@ class PenyesuaianService {
 
       return results;
     } catch (error) {
-      logger.error(
-        `[penyesuaian.service] Error getSingleResumeKdtk: ${error.message}`,
-      );
+      logger.error(`[penyesuaian.service] Error getSingleResumeKdtk: ${error.message}`);
       throw error;
     }
   }
@@ -1328,9 +1151,7 @@ class PenyesuaianService {
         data: enrichedData,
       };
     } catch (error) {
-      logger.error(
-        `[penyesuaian.service] Error getting all records: ${error.message}`,
-      );
+      logger.error(`[penyesuaian.service] Error getting all records: ${error.message}`);
       throw error;
     }
   }
@@ -1389,10 +1210,9 @@ class PenyesuaianService {
       // 🔍 Search (optional)
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
-        filteredData = filteredData.filter((item) =>
+        filteredData = filteredData.filter(item =>
           ["PRDCD", "SINGKATAN", "SESUAI"].some(
-            (field) =>
-              item[field] && item[field].toString().toLowerCase().includes(q),
+            field => item[field] && item[field].toString().toLowerCase().includes(q),
           ),
         );
       }
@@ -1423,9 +1243,7 @@ class PenyesuaianService {
         "UPDTIME",
       ];
 
-      const col = allowedSortColumns.includes(sortColumn)
-        ? sortColumn
-        : "UPDTIME";
+      const col = allowedSortColumns.includes(sortColumn) ? sortColumn : "UPDTIME";
       const order = sortOrder?.toUpperCase() === "ASC" ? "ASC" : "DESC";
 
       filteredData.sort((a, b) => {
@@ -1453,13 +1271,10 @@ class PenyesuaianService {
       const paginated = filteredData.slice(start, start + limit);
 
       // 🔢 Format numbering di tahap akhir (tanpa ubah logic sorting)
-      const formattedData = paginated.map((row) => {
+      const formattedData = paginated.map(row => {
         const formattedRow = {};
         for (const [key, value] of Object.entries(row)) {
-          formattedRow[key] =
-            isNumericString(value) && key !== `PRDCD`
-              ? formatNumber(value)
-              : value;
+          formattedRow[key] = isNumericString(value) && key !== `PRDCD` ? formatNumber(value) : value;
         }
         return formattedRow;
       });
@@ -1474,9 +1289,7 @@ class PenyesuaianService {
         fromCache: true,
       };
     } catch (error) {
-      logger.error(
-        `[penyesuaian.service] Error in getAllRecords: ${error.message}`,
-      );
+      logger.error(`[penyesuaian.service] Error in getAllRecords: ${error.message}`);
       throw error;
     }
   }
@@ -1497,9 +1310,7 @@ class PenyesuaianService {
 
       return record;
     } catch (error) {
-      logger.error(
-        `[penyesuaian.service] Error getting record: ${error.message}`,
-      );
+      logger.error(`[penyesuaian.service] Error getting record: ${error.message}`);
       throw error;
     }
   }
@@ -1511,13 +1322,9 @@ class PenyesuaianService {
     try {
       const notes = await notesService.getAll();
 
-      const notesByKey = new Map(
-        notes
-          .filter((n) => n.tableName === "sesuai_toko")
-          .map((n) => [n.unixKey, n]),
-      );
+      const notesByKey = new Map(notes.filter(n => n.tableName === "sesuai_toko").map(n => [n.unixKey, n]));
 
-      let enrichedData = data.map((item) => {
+      let enrichedData = data.map(item => {
         const unixKey = `${item.KDTK}${item.PERIODE}`;
         const note = notesByKey.get(unixKey) || null;
 
@@ -1538,7 +1345,7 @@ class PenyesuaianService {
       });
 
       // --- FALLBACK LOGIC: Ambil dari in-memory cache (bukan langsung DB) ---
-      const itemsWithoutNote = enrichedData.filter((item) => !item.note);
+      const itemsWithoutNote = enrichedData.filter(item => !item.note);
 
       if (itemsWithoutNote.length > 0) {
         // Ambil periode dari data (gunakan elemen pertama sebagai referensi)
@@ -1557,7 +1364,7 @@ class PenyesuaianService {
         }
 
         // Map ulang data → baca dari in-memory cache (no DB hit)
-        enrichedData = enrichedData.map((item) => {
+        enrichedData = enrichedData.map(item => {
           if (item.note) return item; // Sudah punya note dari sistem baru, skip
 
           const legacyIdNote = `${item.CABANG}${item.KDTK}${item.PERIODE}`;
@@ -1582,9 +1389,7 @@ class PenyesuaianService {
 
       return enrichedData;
     } catch (err) {
-      logger.error(
-        `[penyesuaian.service] Error enriching data with notes: ${err.message}`,
-      );
+      logger.error(`[penyesuaian.service] Error enriching data with notes: ${err.message}`);
       return data;
     }
   }

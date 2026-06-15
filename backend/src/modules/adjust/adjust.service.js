@@ -21,12 +21,9 @@ class AdjustService {
    * @param {string} username - Username of the user performing adjustment
    * @returns {Promise<Object>} Processing results with history
    */
-  async processCsvAdjust(fileBuffer, username) {
+  async processCsvAdjust(fileBuffer, username, fullName) {
     const taskId = `${config.taskProgressName}_${username}`;
-    const tempFilePath = path.join(
-      os.tmpdir(),
-      `adjust_history_${Date.now()}.json`,
-    );
+    const tempFilePath = path.join(os.tmpdir(), `adjust_history_${Date.now()}.json`);
 
     try {
       // Ensure temp directory exists
@@ -37,7 +34,7 @@ class AdjustService {
       logger.info(`Parsed ${records.length} records from CSV`);
 
       // Get unique store codes
-      const storeCodes = [...new Set(records.map((record) => record.KDTK))];
+      const storeCodes = [...new Set(records.map(record => record.KDTK))];
       logger.info(`Found ${storeCodes.length} unique stores in CSV`);
 
       // Get valid INDUK stores
@@ -51,14 +48,12 @@ class AdjustService {
           module: "adjust",
           title: "Adjustment Process",
           description: "registering task & file csv adjust being uploaded",
-          startedBy: username,
+          startedBy: fullName || username,
           status: "registering",
           createdAt: timeStart,
         });
 
-        logger.info(
-          `Progress task registered for user ${username}, taskId: ${taskId}`,
-        );
+        logger.info(`Progress task registered for user ${username}, taskId: ${taskId}`);
       } catch (error) {
         logger.error(`Error registering progress task: ${error.message}`);
 
@@ -74,15 +69,12 @@ class AdjustService {
           busyErr.details = {
             canProceed: false,
             activeTasks: error.activeTasks || [],
-            suggestion:
-              "Cek halaman progress untuk melihat proses yang sedang berjalan, atau tunggu hingga selesai.",
+            suggestion: "Cek halaman progress untuk melihat proses yang sedang berjalan, atau tunggu hingga selesai.",
           };
           throw busyErr;
         }
 
-        const regErr = new Error(
-          `Gagal mendaftarkan progress task: ${error.message}`,
-        );
+        const regErr = new Error(`Gagal mendaftarkan progress task: ${error.message}`);
         regErr.statusCode = 500;
         throw regErr;
       }
@@ -104,13 +96,11 @@ class AdjustService {
       const limit = pLimit(config.parallelProcessing.concurrencyLimit);
       let processedCount = 0;
       // Process all stores asynchronously using Promise.all
-      const storePromises = selectedStores.map((store) =>
+      const storePromises = selectedStores.map(store =>
         limit(async () => {
           // Check if task was cancelled before starting this store
           if (progressService.isAborted(taskId)) {
-            logger.info(
-              `[adjust] Skipping store ${store.storeCode} — task aborted`,
-            );
+            logger.info(`[adjust] Skipping store ${store.storeCode} — task aborted`);
             return {
               type: "cancelled",
               storeCode: store.storeCode,
@@ -128,16 +118,10 @@ class AdjustService {
           try {
             logger.info(`Processing store: ${store.storeCode}`);
             // Filter records khusus untuk toko ini
-            const storeRecords = records.filter(
-              (record) => record.KDTK === store.storeCode,
-            );
+            const storeRecords = records.filter(record => record.KDTK === store.storeCode);
 
             // Jalankan proses untuk toko (asynchronous)
-            const storeResult = await this.processStoreWithHistory(
-              store,
-              storeRecords,
-              username,
-            );
+            const storeResult = await this.processStoreWithHistory(store, storeRecords, username);
 
             return {
               type: "success",
@@ -146,15 +130,11 @@ class AdjustService {
               historyRecords: storeResult.historyRecords,
             };
           } catch (error) {
-            logger.error(
-              `Error processing store ${store.storeCode}: ${error.message}`,
-            );
+            logger.error(`Error processing store ${store.storeCode}: ${error.message}`);
 
             // Siapkan record gagal untuk histori
-            const storeRecords = records.filter(
-              (record) => record.KDTK === store.storeCode,
-            );
-            const failedHistoryRecords = storeRecords.map((record) => ({
+            const storeRecords = records.filter(record => record.KDTK === store.storeCode);
+            const failedHistoryRecords = storeRecords.map(record => ({
               kdtk: record.KDTK,
               prdcd: record.PRDCD,
               qty_adj: parseInt(record.QTY_ADJ) || 0,
@@ -180,9 +160,7 @@ class AdjustService {
 
       // If task was cancelled during processing, stop here
       if (progressService.isAborted(taskId)) {
-        logger.info(
-          `[adjust] Task ${taskId} was cancelled — skipping finalization`,
-        );
+        logger.info(`[adjust] Task ${taskId} was cancelled — skipping finalization`);
         throw new Error("Proses dibatalkan oleh pengguna");
       }
 
@@ -227,25 +205,17 @@ class AdjustService {
       }
 
       // Write temporary history to file
-      await fs.writeFile(
-        tempFilePath,
-        JSON.stringify(tempHistoryRecords, null, 2),
-      );
+      await fs.writeFile(tempFilePath, JSON.stringify(tempHistoryRecords, null, 2));
       await progressService.updateProgress(taskId, processedCount, {
         description: "Writing temporary history file",
         status: "finalizing",
       });
-      logger.info(
-        `Wrote ${tempHistoryRecords.length} history records to temporary file`,
-      );
+      logger.info(`Wrote ${tempHistoryRecords.length} history records to temporary file`);
 
       // Bulk insert history records to database
       try {
-        const bulkResult =
-          await histAdjustStagingService.bulkInsert(tempHistoryRecords);
-        logger.info(
-          `Successfully bulk inserted ${bulkResult.insertedCount} history records`,
-        );
+        const bulkResult = await histAdjustStagingService.bulkInsert(tempHistoryRecords);
+        logger.info(`Successfully bulk inserted ${bulkResult.insertedCount} history records`);
 
         await progressService.updateProgress(taskId, processedCount, {
           description: "Inserting history records to database",
@@ -270,9 +240,7 @@ class AdjustService {
           status: "finalizing",
         });
       } catch (cleanupError) {
-        logger.warn(
-          `Failed to cleanup temporary file: ${cleanupError.message}`,
-        );
+        logger.warn(`Failed to cleanup temporary file: ${cleanupError.message}`);
       }
 
       const timeCompleted = moment().format("YYYY-MM-DD HH:mm:ss");
@@ -293,9 +261,7 @@ class AdjustService {
 
       // If task was cancelled by user, don't call failProgress (already handled by cancelTask)
       if (progressService.isAborted(taskId)) {
-        logger.info(
-          `[adjust] Task ${taskId} was cancelled — skipping failProgress`,
-        );
+        logger.info(`[adjust] Task ${taskId} was cancelled — skipping failProgress`);
         return { success: false, message: "Proses dibatalkan oleh pengguna", cancelled: true };
       }
 
@@ -321,8 +287,8 @@ class AdjustService {
             mapValues: ({ value }) => value.trim(),
           }),
         )
-        .on("data", (data) => records.push(data))
-        .on("error", (err) => {
+        .on("data", data => records.push(data))
+        .on("error", err => {
           reject(new Error(`Error parsing CSV: ${err.message}`));
         })
         .on("end", () => {
@@ -351,10 +317,7 @@ class AdjustService {
       }
 
       // Create database connection
-      storeConnection = await dbStore.createDbStoreInterfence(
-        storeInfo.dbHost,
-        2,
-      );
+      storeConnection = await dbStore.createDbStoreInterfence(storeInfo.dbHost, 2);
 
       // Initialize result object
       const result = {
@@ -475,7 +438,7 @@ class AdjustService {
               if (insertedRows && insertedRows.length > 0) {
                 const details = insertedRows
                   .map(
-                    (row) =>
+                    row =>
                       `Rtype: ${row.rtype}, Docno: ${row.bukti_no}, Qty: ${row.qty}, Gross: ${row.gross}, Gross_jual: ${row.gross_jual}`,
                   )
                   .join(" | ");
@@ -495,11 +458,7 @@ class AdjustService {
               });
 
               // Execute scalable post-adjustment actions
-              adjustPostActionService.executePostActions(
-                record,
-                store,
-                username,
-              );
+              adjustPostActionService.executePostActions(record, store, username);
             } else {
               // Insert gagal - tidak ada rows yang terpengaruh
               historyRecords.push({
@@ -537,12 +496,10 @@ class AdjustService {
       result.historyRecords = historyRecords;
       return result;
     } catch (error) {
-      logger.error(
-        `Error processing store ${store.storeCode}: ${error.message}`,
-      );
+      logger.error(`Error processing store ${store.storeCode}: ${error.message}`);
 
       // If store processing failed completely, mark all records as failed
-      const failedRecords = records.map((record) => ({
+      const failedRecords = records.map(record => ({
         kdtk: record.KDTK,
         prdcd: record.PRDCD,
         qty_adj: parseInt(record.QTY_ADJ) || 0,
@@ -584,9 +541,7 @@ class AdjustService {
       ];
 
       // Combine headers and example rows
-      const csvContent = [headers, ...exampleRows]
-        .map((row) => row.map((field) => `"${field}"`).join(","))
-        .join("\n");
+      const csvContent = [headers, ...exampleRows].map(row => row.map(field => `"${field}"`).join(",")).join("\n");
 
       // Add BOM for proper UTF-8 encoding in Excel
       return "\uFEFF" + csvContent;

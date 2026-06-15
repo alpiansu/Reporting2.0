@@ -6,9 +6,10 @@ import api from "./api";
 const rekonPersediaanService = {
   /**
    * Start reconciliation process
-   * @param {Object} params { cabang, periode }
+   * @param {Object} params { cabang, periode, force? }
    */
   async startScreening(params) {
+    if (params.force) params.force = "true";
     const response = await api.get("/rekon-persediaan/screening", { params });
     return response.data;
   },

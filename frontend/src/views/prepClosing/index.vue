@@ -24,6 +24,15 @@
         </template>
       </RekonFormComponent>
 
+      <!-- Force Re-screen Toggle -->
+      <div class="flex align-items-center mb-3 mt-2">
+        <Checkbox v-model="forceScreening" inputId="forceScreening" :binary="true" :disabled="isScreening" />
+        <label for="forceScreening" class="ml-2 text-sm text-color-secondary">
+          <i class="pi pi-exclamation-triangle mr-1 text-yellow-500"></i>
+          Force Re-screen (ulang screening meskipun sudah sukses hari ini)
+        </label>
+      </div>
+
       <!-- Advanced Config Toolbar -->
       <div class="flex justify-content-end align-items-center mb-4">
         <span class="text-color-secondary mr-3 text-sm" style="margin-top: 5px;">
@@ -96,6 +105,7 @@ import PageHeader from '@/components/PageHeader.vue';
 import Calendar from 'primevue/calendar';
 import Dropdown from 'primevue/dropdown';
 import Button from 'primevue/button';
+import Checkbox from 'primevue/checkbox';
 import RekonFormComponent from '@/components/common/RekonFormComponent.vue';
 import { useCabangStore } from '@/stores';
 import Dashboard from './components/Dashboard.vue';
@@ -161,6 +171,7 @@ const {
 } = useProgress(username);
 
 // State
+const forceScreening = ref(false);
 const filters = reactive({
   periode: '',
   cabang: 'All',
@@ -417,11 +428,11 @@ const handleStartScreening = async () => {
     if (filters.cabang === 'All') {
       console.log('🌍 Screening all cabang');
       toast.showInfo('Info', 'Memulai screening semua cabang...');
-      await screenAllCabang(filters.periode);
+      await screenAllCabang(filters.periode, forceScreening.value);
     } else {
       console.log(`🏢 Screening cabang: ${filters.cabang}`);
       toast.showInfo('Info', `Memulai screening cabang ${filters.cabang}...`);
-      await screenCabang(filters.periode, filters.cabang);
+      await screenCabang(filters.periode, filters.cabang, forceScreening.value);
     }
 
     // Progress monitoring akan dimulai otomatis oleh watch isScreening

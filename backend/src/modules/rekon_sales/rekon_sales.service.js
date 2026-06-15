@@ -15,6 +15,7 @@ import moment from "moment-timezone";
 import RekapRemoteService from "../rekap_remote/rekap_remote.service.js";
 import notesService from "../notes/notes.service.js";
 import progressService from "../progress/progress.service.js";
+import screeningGuard from "../../utils/screeningGuard.js";
 
 // Import helper modules
 import StoreQueryHelper from "./helpers/store.query.helper.js";
@@ -42,9 +43,7 @@ class RekonSalesService {
       this.initialized = true;
       logger.info("[rekon_sales.service] Service initialized");
     } catch (error) {
-      logger.error(
-        `[rekon_sales.service] Failed to initialize: ${error.message}`,
-      );
+      logger.error(`[rekon_sales.service] Failed to initialize: ${error.message}`);
       throw error;
     }
   }
@@ -121,7 +120,7 @@ class RekonSalesService {
         },
       );
 
-      const formattedData = rows.map((r) => ({
+      const formattedData = rows.map(r => ({
         RECID: r.RECID,
         CAB: r.CAB,
         KDTK: r.KDTK,
@@ -149,15 +148,11 @@ class RekonSalesService {
       const cacheKey = this.getCacheKey(year, month);
       this.cacheManager.set(cacheKey, formattedData, config.cache.summaryTTL);
 
-      logger.info(
-        `[rekon_sales.service] Synced ${formattedData.length} records to JSON for ${year}-${month}`,
-      );
+      logger.info(`[rekon_sales.service] Synced ${formattedData.length} records to JSON for ${year}-${month}`);
 
       return formattedData;
     } catch (error) {
-      logger.error(
-        `[rekon_sales.service] Failed to sync to JSON: ${error.message}`,
-      );
+      logger.error(`[rekon_sales.service] Failed to sync to JSON: ${error.message}`);
       throw error;
     }
   }
@@ -175,9 +170,7 @@ class RekonSalesService {
       let data = this.cacheManager.get(cacheKey, config.cache.summaryTTL);
 
       if (data) {
-        logger.debug(
-          `[rekon_sales.service] Data loaded from memory cache for ${year}-${month}`,
-        );
+        logger.debug(`[rekon_sales.service] Data loaded from memory cache for ${year}-${month}`);
         return data;
       }
 
@@ -187,23 +180,17 @@ class RekonSalesService {
       if (data && data.length > 0) {
         // Store in memory cache
         this.cacheManager.set(cacheKey, data, config.cache.summaryTTL);
-        logger.info(
-          `[rekon_sales.service] Data loaded from file cache for ${year}-${month}`,
-        );
+        logger.info(`[rekon_sales.service] Data loaded from file cache for ${year}-${month}`);
         return data;
       }
 
       // No cache available, sync from database
-      logger.info(
-        `[rekon_sales.service] No cache available, syncing from database for ${year}-${month}`,
-      );
+      logger.info(`[rekon_sales.service] No cache available, syncing from database for ${year}-${month}`);
       data = await this.syncToJsonFile(year, month);
 
       return data;
     } catch (error) {
-      logger.error(
-        `[rekon_sales.service] Error loading data: ${error.message}`,
-      );
+      logger.error(`[rekon_sales.service] Error loading data: ${error.message}`);
       throw error;
     }
   }
@@ -222,20 +209,12 @@ class RekonSalesService {
       const storeInfo = await storeService.getStoreIPHost(storeCode);
 
       if (!storeInfo) {
-        await RekapRemoteService.addToTemp(
-          cab,
-          storeCode,
-          "rekon_sales",
-          `[${storeCode}] store info not found`,
-        );
+        await RekapRemoteService.addToTemp(cab, storeCode, "rekon_sales", `[${storeCode}] store info not found`);
         return results;
       }
 
       // Create DB connection
-      const storeConnection = await dbStore.createDbStore(
-        storeInfo.dbHost,
-        config.connectionRetry.maxRetries,
-      );
+      const storeConnection = await dbStore.createDbStore(storeInfo.dbHost, config.connectionRetry.maxRetries);
 
       if (!storeConnection) {
         await RekapRemoteService.addToTemp(
@@ -248,27 +227,13 @@ class RekonSalesService {
       }
 
       try {
-        await RekapRemoteService.addToTemp(
-          cab,
-          storeCode,
-          "rekon_sales",
-          `[${storeCode}] fetching mtran data...`,
-        );
+        await RekapRemoteService.addToTemp(cab, storeCode, "rekon_sales", `[${storeCode}] fetching mtran data...`);
 
         // STEP 1: Fetch mtran vs closing detail using helper
-        const mtranData = await StoreQueryHelper.fetchMtranVsCD(
-          storeConnection,
-          strMonth,
-          strYear,
-        );
+        const mtranData = await StoreQueryHelper.fetchMtranVsCD(storeConnection, strMonth, strYear);
 
         if (mtranData.length === 0) {
-          await RekapRemoteService.addToTemp(
-            cab,
-            storeCode,
-            "rekon_sales",
-            `[${storeCode}] no data found`,
-          );
+          await RekapRemoteService.addToTemp(cab, storeCode, "rekon_sales", `[${storeCode}] no data found`);
           results.success = true;
           results.hasIssue = false;
           return results;
@@ -295,41 +260,23 @@ class RekonSalesService {
 
         // STEP 3: Check kode pesanan differences
         // Ini adalah pemeriksaan tambahan untuk order codes yang berbeda
-        const detailIssues = await this.rekonKodePesanan(
-          cab,
-          storeCode,
-          mtranData,
-          dataGL,
-        );
+        const detailIssues = await this.rekonKodePesanan(cab, storeCode, mtranData, dataGL);
         // logger.info(`[rekon_sales.service] value of rekonResults: ${JSON.stringify(rekonResults)}`);
         if (rekonResults.length > 0 || detailIssues.length > 0) {
           let diffData = [];
 
           // Only fetch detail differences if there are NET/PPN discrepancies
           const hasDifferences = rekonResults.some(
-            (r) =>
-              Math.abs(r.SEL_NET_CD) > config.tolerance ||
-              Math.abs(r.SEL_PPN_CD) > config.tolerance,
+            r => Math.abs(r.SEL_NET_CD) > config.tolerance || Math.abs(r.SEL_PPN_CD) > config.tolerance,
           );
 
           if (hasDifferences) {
-            diffData = await StoreQueryHelper.cekSelisihMtranVsCD(
-              storeConnection,
-              strMonth,
-              strYear,
-            );
+            diffData = await StoreQueryHelper.cekSelisihMtranVsCD(storeConnection, strMonth, strYear);
           }
 
           // Save immediately if not deferred (single store mode)
           if (!deferSave) {
-            await this.saveRekonResults(
-              cab,
-              storeCode,
-              strMonth,
-              strYear,
-              rekonResults,
-              diffData,
-            );
+            await this.saveRekonResults(cab, storeCode, strMonth, strYear, rekonResults, diffData);
 
             if (detailIssues.length > 0) {
               await this.saveDetailRekonSales(detailIssues);
@@ -358,15 +305,8 @@ class RekonSalesService {
         await storeConnection.end();
       }
     } catch (err) {
-      await RekapRemoteService.addToTemp(
-        cab,
-        storeCode,
-        "rekon_sales",
-        `[${storeCode}] ERROR: ${err.message}`,
-      );
-      logger.error(
-        `[rekon_sales.service] Error processing store ${storeCode}: ${err.message}`,
-      );
+      await RekapRemoteService.addToTemp(cab, storeCode, "rekon_sales", `[${storeCode}] ERROR: ${err.message}`);
+      logger.error(`[rekon_sales.service] Error processing store ${storeCode}: ${err.message}`);
     }
 
     return results;
@@ -377,24 +317,16 @@ class RekonSalesService {
    */
   async rekonKodePesanan(cab, kdtk, mtranData, dataGL) {
     try {
-      logger.info(
-        `[rekon_sales.service] Starting rekonKodePesanan for store ${kdtk}`,
-      );
+      logger.info(`[rekon_sales.service] Starting rekonKodePesanan for store ${kdtk}`);
 
       const cariData = async (kodeToko, tglGL) => {
-        return dataGL.filter(
-          (item) => item.KODE_TOKO === kodeToko && item.TGL_GL === tglGL,
-        );
+        return dataGL.filter(item => item.KODE_TOKO === kodeToko && item.TGL_GL === tglGL);
       };
 
       const valResume = {};
-      const dataResume = mtranData.map(async (item) => {
+      const dataResume = mtranData.map(async item => {
         const dataGLItem = await cariData(item.SHOP, item.TANGGAL);
-        const kodePesananGL = await WrcDataHelper.tarikKodePesanan(
-          cab,
-          item.SHOP,
-          item.TANGGAL,
-        );
+        const kodePesananGL = await WrcDataHelper.tarikKodePesanan(cab, item.SHOP, item.TANGGAL);
         const keyData = `${item.SHOP}-${item.TANGGAL}`;
 
         if (!valResume[keyData]) {
@@ -426,13 +358,10 @@ class RekonSalesService {
 
         if (kodePesananGL && kodePesananToko) {
           if (kodePesananToko !== "" || kodePesananGL !== "") {
-            const missingValues = this.findMissingValues(
-              kodePesananToko,
-              kodePesananGL,
-            );
+            const missingValues = this.findMissingValues(kodePesananToko, kodePesananGL);
 
             if (missingValues && missingValues.length > 0) {
-              missingValues.forEach((value) => {
+              missingValues.forEach(value => {
                 if (value !== "") {
                   finalData.push({
                     CAB: item.CAB,
@@ -449,14 +378,10 @@ class RekonSalesService {
       }
 
       // Kembalikan daftar isu detail untuk disimpan di tahap final (mass screening)
-      logger.info(
-        `[rekon_sales.service] Completed rekonKodePesanan, found ${finalData.length} issues`,
-      );
+      logger.info(`[rekon_sales.service] Completed rekonKodePesanan, found ${finalData.length} issues`);
       return finalData;
     } catch (error) {
-      logger.error(
-        `[rekon_sales.service] Error in rekonKodePesanan: ${error.message}`,
-      );
+      logger.error(`[rekon_sales.service] Error in rekonKodePesanan: ${error.message}`);
       throw error;
     }
   }
@@ -480,7 +405,7 @@ class RekonSalesService {
     const set1 = new Set(array1);
     const set2 = new Set(array2);
 
-    const difference = new Set([...set1].filter((x) => !set2.has(x)));
+    const difference = new Set([...set1].filter(x => !set2.has(x)));
     const differenceArray = Array.from(difference);
 
     return differenceArray.length === 0 ? false : differenceArray;
@@ -498,12 +423,7 @@ class RekonSalesService {
       const netCD = item.NET_ClosingDetail;
       const ppnCD = item.PPN_CD;
 
-      if (
-        Math.abs(selGLNet) > tolerance ||
-        Math.abs(selGLPpn) > tolerance ||
-        netCD !== 0 ||
-        ppnCD !== 0
-      ) {
+      if (Math.abs(selGLNet) > tolerance || Math.abs(selGLPpn) > tolerance || netCD !== 0 || ppnCD !== 0) {
         dataFixed.push(item);
       }
     }
@@ -523,7 +443,7 @@ class RekonSalesService {
       // Field names sesuai output RekonCalculator.aggregateByDate:
       // KDTK (bukan SHOP), TGL (bukan TANGGAL), NET_TOKO (bukan NET_MTRAN),
       // NET_CLOSINGDETAIL (bukan NET_ClosingDetail), PPN_TOKO (bukan PPN_MTRAN)
-      const rekonSalesData = rekonResults.map((item) => ({
+      const rekonSalesData = rekonResults.map(item => ({
         RECID: "*",
         CAB: item.CAB,
         KDTK: item.KDTK,
@@ -571,13 +491,9 @@ class RekonSalesService {
         await this.saveMtranVsCd(diffData);
       }
 
-      logger.info(
-        `[rekon_sales.service] Saved rekon results for store ${kdtk}`,
-      );
+      logger.info(`[rekon_sales.service] Saved rekon results for store ${kdtk}`);
     } catch (error) {
-      logger.error(
-        `[rekon_sales.service] Error saving rekon results: ${error.message}`,
-      );
+      logger.error(`[rekon_sales.service] Error saving rekon results: ${error.message}`);
       throw error;
     }
   }
@@ -590,39 +506,25 @@ class RekonSalesService {
     // Ensure services are initialized
     await storeService.ensureInitialized();
 
-    const { cabang, periode, kdtk, username } = options;
+    const { cabang, periode, kdtk, username, fullName, force } = options;
 
     // Parse periode (YYYY-MM format)
     const [strYear, strMonth] = periode.split("-");
 
     // === LEVEL 3: Single Store Screening (No Progress Task) ===
     if (kdtk) {
-      logger.info(
-        `[rekon_sales.service] Starting single store screening: ${kdtk}, periode: ${periode}`,
-      );
+      logger.info(`[rekon_sales.service] Starting single store screening: ${kdtk}, periode: ${periode}`);
 
       try {
         // Get store info to determine cabang
         const storeInfo = await storeService.getStoreByCode(kdtk);
-        const storeCab = storeInfo
-          ? storeInfo.branch || storeInfo.cab
-          : "UNKNOWN";
+        const storeCab = storeInfo ? storeInfo.branch || storeInfo.cab : "UNKNOWN";
 
         // Get GL data from WRC
-        const { data: dataGL } = await WrcDataHelper.openDataGLWrc(
-          storeCab,
-          kdtk,
-          strMonth,
-          strYear,
-        );
+        const { data: dataGL } = await WrcDataHelper.openDataGLWrc(storeCab, kdtk, strMonth, strYear);
 
         // Process single store
-        const result = await this.processSingleStore(
-          { storeCode: kdtk, cab: storeCab },
-          strMonth,
-          strYear,
-          dataGL,
-        );
+        const result = await this.processSingleStore({ storeCode: kdtk, cab: storeCab }, strMonth, strYear, dataGL);
 
         // Save logs to database
         await RekapRemoteService.saveLogsToDatabase();
@@ -647,26 +549,20 @@ class RekonSalesService {
           issuesCount: result.records ? result.records.length : 0,
         };
       } catch (error) {
-        logger.error(
-          `[rekon_sales.service] Error during single store screening: ${error.message}`,
-        );
+        logger.error(`[rekon_sales.service] Error during single store screening: ${error.message}`);
         throw error;
       }
     }
 
     // === LEVEL 1 & 2: Multi-Store Screening (With Progress Task) ===
     const taskId = `${config.taskProgressName}_${username}`;
-    const limitBranches = pLimit(
-      config.parallelProcessing.branchConcurrencyLimit,
-    );
+    const limitBranches = pLimit(config.parallelProcessing.branchConcurrencyLimit);
     const limitStores = pLimit(config.parallelProcessing.concurrencyLimit);
 
     const withTimeout = (promise, ms, label) => {
       return Promise.race([
         promise,
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error(`Timeout: ${label}`)), ms),
-        ),
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout: ${label}`)), ms)),
       ]);
     };
 
@@ -675,39 +571,27 @@ class RekonSalesService {
       let branches = [];
       if (cabang === "All" || cabang === "ALL") {
         const allStores = storeService.stores;
-        branches = [
-          ...new Set(
-            allStores
-              .filter((s) => s.notes === "INDUK")
-              .map((s) => s.branch || s.cab),
-          ),
-        ];
+        branches = [...new Set(allStores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))];
       } else {
         branches = [cabang];
       }
 
-      logger.info(
-        `[rekon_sales.service] Branches to process: ${branches.join(", ")}`,
-      );
+      logger.info(`[rekon_sales.service] Branches to process: ${branches.join(", ")}`);
 
       // === STEP 2: Collect all stores ===
       const storeGroups = await Promise.all(
-        branches.map((cab) =>
+        branches.map(cab =>
           limitBranches(async () => {
             const stores = await storeService.getStoresByBranch(cab, true);
-            logger.info(
-              `[rekon_sales.service] Found ${stores.length} stores for branch ${cab}`,
-            );
-            return stores.map((s) => ({ ...s, cab }));
+            logger.info(`[rekon_sales.service] Found ${stores.length} stores for branch ${cab}`);
+            return stores.map(s => ({ ...s, cab }));
           }),
         ),
       );
 
       const storesToProcess = storeGroups.flat();
 
-      logger.info(
-        `[rekon_sales.service] Total stores to process: ${storesToProcess.length}`,
-      );
+      logger.info(`[rekon_sales.service] Total stores to process: ${storesToProcess.length}`);
 
       // === STEP 3: Register progress task ===
       try {
@@ -716,64 +600,43 @@ class RekonSalesService {
           module: "rekon_sales",
           title: "Screening Rekon Sales",
           description: "Registering task for rekon sales screening",
-          startedBy: username,
+          startedBy: fullName || username,
           status: "registering",
           createdAt: timeStart,
         });
 
-        logger.info(
-          `[rekon_sales.service] Progress task registered: ${taskId}`,
-        );
+        logger.info(`[rekon_sales.service] Progress task registered: ${taskId}`);
       } catch (error) {
-        logger.error(
-          `[rekon_sales.service] Error registering progress: ${error.message}`,
-        );
+        logger.error(`[rekon_sales.service] Error registering progress: ${error.message}`);
 
         if (error.message.includes("Maximum concurrent")) {
           await progressService.failProgress(taskId, {
             description: `Task failed: ${error.message}`,
             status: "failed",
           });
-          throw new Error(
-            "[rekon_sales.service] System is busy processing other tasks",
-          );
+          throw new Error("[rekon_sales.service] System is busy processing other tasks");
         }
 
         await progressService.failProgress(taskId, {
           description: `Task failed: ${error.message}`,
           status: "failed",
         });
-        throw new Error(
-          "[rekon_sales.service] Failed to register progress task",
-        );
+        throw new Error("[rekon_sales.service] Failed to register progress task");
       }
 
-      logger.info(
-        `[rekon_sales.service] Starting screening for branches: ${branches.join(", ")}`,
-      );
+      logger.info(`[rekon_sales.service] Starting screening for branches: ${branches.join(", ")}`);
 
       // === STEP 4: Get GL data for all branches ===
       const glDataByBranch = {};
       for (const cab of branches) {
-        logger.info(
-          `[rekon_sales.service] Fetching GL data for branch: ${cab}`,
-        );
-        const { data: glData } = await WrcDataHelper.openDataGLWrc(
-          cab,
-          "ALL",
-          strMonth,
-          strYear,
-        );
+        logger.info(`[rekon_sales.service] Fetching GL data for branch: ${cab}`);
+        const { data: glData } = await WrcDataHelper.openDataGLWrc(cab, "ALL", strMonth, strYear);
         if (!glData || glData.length === 0) {
-          logger.warn(
-            `[rekon_sales.service] No GL data returned for branch ${cab}`,
-          );
+          logger.warn(`[rekon_sales.service] No GL data returned for branch ${cab}`);
           glDataByBranch[cab] = [];
         } else {
           glDataByBranch[cab] = glData;
-          logger.info(
-            `[rekon_sales.service] Branch ${cab}: ${glData.length} GL records fetched`,
-          );
+          logger.info(`[rekon_sales.service] Branch ${cab}: ${glData.length} GL records fetched`);
         }
       }
 
@@ -798,31 +661,33 @@ class RekonSalesService {
       const allDiffData = [];
       const allDetailData = [];
       await Promise.all(
-        storesToProcess.map((store) =>
+        storesToProcess.map(store =>
           limitStores(async () => {
             const { cab, storeCode } = store;
 
             // Check if task was cancelled before starting this store
             if (progressService.isAborted(taskId)) {
-              logger.info(
-                `[rekon_sales] Skipping store ${storeCode} — task aborted`,
-              );
+              logger.info(`[rekon_sales] Skipping store ${storeCode} — task aborted`);
               screenedStores.add(storeCode);
               await incrementProgress(storeCode, "Dibatalkan ⛔");
               return;
+            }
+
+            // === DAILY GUARD: Skip toko yang sudah sukses screening hari ini ===
+            if (!force) {
+              const guard = await screeningGuard.isSuccessToday("rekon_sales", storeCode);
+              if (guard.screened) {
+                screenedStores.add(storeCode);
+                await incrementProgress(storeCode, `Skip (sudah screen ${guard.updtime})`);
+                return;
+              }
             }
 
             screenedStores.add(storeCode);
 
             try {
               const result = await withTimeout(
-                this.processSingleStore(
-                  store,
-                  strMonth,
-                  strYear,
-                  glDataByBranch[cab],
-                  { deferSave: true },
-                ),
+                this.processSingleStore(store, strMonth, strYear, glDataByBranch[cab], { deferSave: true }),
                 config.parallelProcessing.storeTimeoutMs,
                 `process store ${storeCode}`,
               );
@@ -830,12 +695,9 @@ class RekonSalesService {
               if (result.success) {
                 if (result.hasIssue) {
                   activeStores.add(storeCode);
-                  if (
-                    Array.isArray(result.records) &&
-                    result.records.length > 0
-                  ) {
+                  if (Array.isArray(result.records) && result.records.length > 0) {
                     allRekonResults.push(
-                      ...result.records.map((item) => ({
+                      ...result.records.map(item => ({
                         RECID: "*",
                         CAB: item.CAB,
                         KDTK: item.KDTK,
@@ -857,22 +719,13 @@ class RekonSalesService {
                       })),
                     );
                   }
-                  if (
-                    Array.isArray(result.diffData) &&
-                    result.diffData.length > 0
-                  ) {
+                  if (Array.isArray(result.diffData) && result.diffData.length > 0) {
                     allDiffData.push(...result.diffData);
                   }
-                  if (
-                    Array.isArray(result.detailData) &&
-                    result.detailData.length > 0
-                  ) {
+                  if (Array.isArray(result.detailData) && result.detailData.length > 0) {
                     allDetailData.push(...result.detailData);
                   }
-                  await incrementProgress(
-                    storeCode,
-                    `Has Issues ⚠️ (${result.records.length} dates)`,
-                  );
+                  await incrementProgress(storeCode, `Has Issues ⚠️ (${result.records.length} dates)`);
                 } else {
                   await incrementProgress(storeCode, "No Issues ✅");
                 }
@@ -880,21 +733,14 @@ class RekonSalesService {
                 await incrementProgress(storeCode, "Error ❌");
               }
             } catch (err) {
-              await RekapRemoteService.addToTemp(
-                cab,
-                storeCode,
-                "rekon_sales",
-                `[${storeCode}] ERROR: ${err.message}`,
-              );
+              await RekapRemoteService.addToTemp(cab, storeCode, "rekon_sales", `[${storeCode}] ERROR: ${err.message}`);
               await incrementProgress(storeCode, "Error ❌");
             }
           }),
         ),
       );
 
-      logger.info(
-        `[rekon_sales.service] Screening completed for periode ${periode}`,
-      );
+      logger.info(`[rekon_sales.service] Screening completed for periode ${periode}`);
       logger.info(
         `[rekon_sales.service] Screened: ${screenedStores.size}, Active (has issues): ${activeStores.size}, Ready: ${
           screenedStores.size - activeStores.size
@@ -903,9 +749,7 @@ class RekonSalesService {
 
       // If task was cancelled during store processing, stop before finalizing
       if (progressService.isAborted(taskId)) {
-        logger.info(
-          `[rekon_sales] Task ${taskId} was cancelled — skipping finalization`,
-        );
+        logger.info(`[rekon_sales] Task ${taskId} was cancelled — skipping finalization`);
         throw new Error("Proses dibatalkan oleh pengguna");
       }
 
@@ -998,15 +842,11 @@ class RekonSalesService {
     } catch (error) {
       // If task was cancelled by user, don't call failProgress (already handled by cancelTask)
       if (progressService.isAborted(taskId)) {
-        logger.info(
-          `[rekon_sales] Task ${taskId} was cancelled — skipping failProgress`,
-        );
+        logger.info(`[rekon_sales] Task ${taskId} was cancelled — skipping failProgress`);
         return { success: false, message: "Proses dibatalkan oleh pengguna", cancelled: true };
       }
 
-      logger.error(
-        `[rekon_sales.service] Error during screening: ${error.message}`,
-      );
+      logger.error(`[rekon_sales.service] Error during screening: ${error.message}`);
 
       await progressService.failProgress(taskId, {
         description: `Task failed: ${error.message}`,
@@ -1021,16 +861,7 @@ class RekonSalesService {
    * Update resolved records
    */
   async updateResolvedRecords(params) {
-    const {
-      month,
-      year,
-      level,
-      cabang,
-      kdtk,
-      hasIssue,
-      screenedStores,
-      activeStores,
-    } = params;
+    const { month, year, level, cabang, kdtk, hasIssue, screenedStores, activeStores } = params;
 
     try {
       const model = await RekonSales.getModel();
@@ -1043,9 +874,7 @@ class RekonSalesService {
       // LEVEL 3: Single Store
       if (level === 3) {
         if (hasIssue) {
-          logger.info(
-            `[rekon_sales.service] Level 3: Store ${kdtk} has issues, no RECID update`,
-          );
+          logger.info(`[rekon_sales.service] Level 3: Store ${kdtk} has issues, no RECID update`);
           return 0;
         } else {
           query = `
@@ -1058,17 +887,13 @@ class RekonSalesService {
           `;
           replacements.kdtk = kdtk;
 
-          logger.info(
-            `[rekon_sales.service] Level 3: Updating RECID='1' for store ${kdtk}`,
-          );
+          logger.info(`[rekon_sales.service] Level 3: Updating RECID='1' for store ${kdtk}`);
         }
       }
       // LEVEL 2: Single Branch
       else if (level === 2) {
         if (!screenedStores || screenedStores.length === 0) {
-          logger.info(
-            `[rekon_sales.service] Level 2: No stores screened, skipping`,
-          );
+          logger.info(`[rekon_sales.service] Level 2: No stores screened, skipping`);
           return 0;
         }
 
@@ -1098,9 +923,7 @@ class RekonSalesService {
       // LEVEL 1: All Branches
       else if (level === 1) {
         if (!screenedStores || screenedStores.length === 0) {
-          logger.info(
-            `[rekon_sales.service] Level 1: No stores screened, skipping`,
-          );
+          logger.info(`[rekon_sales.service] Level 1: No stores screened, skipping`);
           return 0;
         }
 
@@ -1132,15 +955,11 @@ class RekonSalesService {
         type: Sequelize.QueryTypes.UPDATE,
       });
 
-      logger.info(
-        `[rekon_sales.service] Updated ${metadata} records to RECID='1'`,
-      );
+      logger.info(`[rekon_sales.service] Updated ${metadata} records to RECID='1'`);
 
       return metadata;
     } catch (error) {
-      logger.error(
-        `[rekon_sales.service] Error updating resolved records: ${error.message}`,
-      );
+      logger.error(`[rekon_sales.service] Error updating resolved records: ${error.message}`);
       throw error;
     }
   }
@@ -1159,9 +978,7 @@ class RekonSalesService {
         },
       );
     } catch (error) {
-      logger.error(
-        `[rekon_sales.service] Error resetting detail RECID: ${error.message}`,
-      );
+      logger.error(`[rekon_sales.service] Error resetting detail RECID: ${error.message}`);
     }
   }
 
@@ -1169,7 +986,7 @@ class RekonSalesService {
     try {
       if (data.length === 0) return;
 
-      const detailData = data.map((item) => ({
+      const detailData = data.map(item => ({
         RECID: "*",
         CAB: item.CAB,
         KDTK: item.SHOP,
@@ -1182,9 +999,7 @@ class RekonSalesService {
         updateOnDuplicate: ["VALSUBKEY", "RECID"],
       });
     } catch (error) {
-      logger.error(
-        `[rekon_sales.service] Error saving detail rekon sales: ${error.message}`,
-      );
+      logger.error(`[rekon_sales.service] Error saving detail rekon sales: ${error.message}`);
       throw error;
     }
   }
@@ -1196,21 +1011,13 @@ class RekonSalesService {
         where: {
           KDTK: kdtk,
           [model.sequelize.Sequelize.Op.and]: [
-            model.sequelize.where(
-              model.sequelize.fn("MONTH", model.sequelize.col("TANGGAL")),
-              month,
-            ),
-            model.sequelize.where(
-              model.sequelize.fn("YEAR", model.sequelize.col("TANGGAL")),
-              year,
-            ),
+            model.sequelize.where(model.sequelize.fn("MONTH", model.sequelize.col("TANGGAL")), month),
+            model.sequelize.where(model.sequelize.fn("YEAR", model.sequelize.col("TANGGAL")), year),
           ],
         },
       });
     } catch (error) {
-      logger.error(
-        `[rekon_sales.service] Error deleting rekon sales: ${error.message}`,
-      );
+      logger.error(`[rekon_sales.service] Error deleting rekon sales: ${error.message}`);
     }
   }
 
@@ -1222,9 +1029,7 @@ class RekonSalesService {
         updateOnDuplicate: Object.keys(data[0]),
       });
     } catch (error) {
-      logger.error(
-        `[rekon_sales.service] Error saving mtran vs cd: ${error.message}`,
-      );
+      logger.error(`[rekon_sales.service] Error saving mtran vs cd: ${error.message}`);
       throw error;
     }
   }
@@ -1240,9 +1045,7 @@ class RekonSalesService {
         },
       });
     } catch (error) {
-      logger.error(
-        `[rekon_sales.service] Error deleting mtran vs cd: ${error.message}`,
-      );
+      logger.error(`[rekon_sales.service] Error deleting mtran vs cd: ${error.message}`);
     }
   }
 
@@ -1252,7 +1055,7 @@ class RekonSalesService {
   buildFilterFunction(params = {}) {
     const { cabang, month, year, kdtk } = params;
 
-    return (item) => {
+    return item => {
       // Robust cabang check
       if (cabang && cabang !== "All" && cabang !== "ALL") {
         const itemCab = String(item.CAB || "")
@@ -1300,24 +1103,12 @@ class RekonSalesService {
       const filteredData = this.rekonSalesData.filter(filterFn);
 
       // Calculate statistics
-      const uniqueStores = new Set(filteredData.map((item) => item.KDTK));
+      const uniqueStores = new Set(filteredData.map(item => item.KDTK));
       const totalIssues = filteredData.length;
-      const totalSelNetGL = filteredData.reduce(
-        (sum, item) => sum + Math.abs(item.SEL_NET_GL || 0),
-        0,
-      );
-      const totalSelNetCD = filteredData.reduce(
-        (sum, item) => sum + Math.abs(item.SEL_NET_CD || 0),
-        0,
-      );
-      const totalSelPpnGL = filteredData.reduce(
-        (sum, item) => sum + Math.abs(item.SEL_PPN_GL || 0),
-        0,
-      );
-      const totalSelPpnCD = filteredData.reduce(
-        (sum, item) => sum + Math.abs(item.SEL_PPN_CD || 0),
-        0,
-      );
+      const totalSelNetGL = filteredData.reduce((sum, item) => sum + Math.abs(item.SEL_NET_GL || 0), 0);
+      const totalSelNetCD = filteredData.reduce((sum, item) => sum + Math.abs(item.SEL_NET_CD || 0), 0);
+      const totalSelPpnGL = filteredData.reduce((sum, item) => sum + Math.abs(item.SEL_PPN_GL || 0), 0);
+      const totalSelPpnCD = filteredData.reduce((sum, item) => sum + Math.abs(item.SEL_PPN_CD || 0), 0);
 
       return {
         data: {
@@ -1330,9 +1121,7 @@ class RekonSalesService {
         },
       };
     } catch (error) {
-      logger.error(
-        `[rekon_sales.service] Error getting summary: ${error.message}`,
-      );
+      logger.error(`[rekon_sales.service] Error getting summary: ${error.message}`);
       throw error;
     }
   }
@@ -1358,7 +1147,7 @@ class RekonSalesService {
       await this.ensureDataLoaded(year, month, cabang);
       await storeService.ensureInitialized();
 
-      let filtered = this.rekonSalesData.filter((i) => {
+      let filtered = this.rekonSalesData.filter(i => {
         // Since ensureDataLoaded already filtered by year/month from the filename,
         // we mainly need to filter by cabang here if NOT "All"
         if (cabang && cabang !== "All" && cabang !== "ALL") {
@@ -1373,7 +1162,7 @@ class RekonSalesService {
 
       // Aggregate by store
       const aggregated = {};
-      filtered.forEach((item) => {
+      filtered.forEach(item => {
         if (!aggregated[item.KDTK]) {
           aggregated[item.KDTK] = {
             CAB: item.CAB,
@@ -1388,24 +1177,12 @@ class RekonSalesService {
           };
         }
         aggregated[item.KDTK].TOTAL_ISSUES++;
-        aggregated[item.KDTK].TOTAL_SEL_NET_GL += Math.abs(
-          item.SEL_NET_GL || 0,
-        );
-        aggregated[item.KDTK].TOTAL_SEL_NET_CD += Math.abs(
-          item.SEL_NET_CD || 0,
-        );
-        aggregated[item.KDTK].TOTAL_SEL_PPN_GL += Math.abs(
-          item.SEL_PPN_GL || 0,
-        );
-        aggregated[item.KDTK].TOTAL_SEL_PPN_CD += Math.abs(
-          item.SEL_PPN_CD || 0,
-        );
-        if (
-          !aggregated[item.KDTK].UPDTIME_LATEST ||
-          aggregated[item.KDTK].UPDTIME_LATEST < item.UPDTIME
-        ) {
-          aggregated[item.KDTK].UPDTIME_LATEST =
-            item.UPDTIME || aggregated[item.KDTK].UPDTIME_LATEST;
+        aggregated[item.KDTK].TOTAL_SEL_NET_GL += Math.abs(item.SEL_NET_GL || 0);
+        aggregated[item.KDTK].TOTAL_SEL_NET_CD += Math.abs(item.SEL_NET_CD || 0);
+        aggregated[item.KDTK].TOTAL_SEL_PPN_GL += Math.abs(item.SEL_PPN_GL || 0);
+        aggregated[item.KDTK].TOTAL_SEL_PPN_CD += Math.abs(item.SEL_PPN_CD || 0);
+        if (!aggregated[item.KDTK].UPDTIME_LATEST || aggregated[item.KDTK].UPDTIME_LATEST < item.UPDTIME) {
+          aggregated[item.KDTK].UPDTIME_LATEST = item.UPDTIME || aggregated[item.KDTK].UPDTIME_LATEST;
         }
         aggregated[item.KDTK].DATES.push(item.TANGGAL);
       });
@@ -1423,12 +1200,8 @@ class RekonSalesService {
         results.push({
           ...aggregated[kdtk],
           NAMA: storeName,
-          TOTAL_SEL_NET:
-            (aggregated[kdtk].TOTAL_SEL_NET_GL || 0) +
-            (aggregated[kdtk].TOTAL_SEL_NET_CD || 0),
-          TOTAL_SEL_PPN:
-            (aggregated[kdtk].TOTAL_SEL_PPN_GL || 0) +
-            (aggregated[kdtk].TOTAL_SEL_PPN_CD || 0),
+          TOTAL_SEL_NET: (aggregated[kdtk].TOTAL_SEL_NET_GL || 0) + (aggregated[kdtk].TOTAL_SEL_NET_CD || 0),
+          TOTAL_SEL_PPN: (aggregated[kdtk].TOTAL_SEL_PPN_GL || 0) + (aggregated[kdtk].TOTAL_SEL_PPN_CD || 0),
           TOTAL_DATES: Array.isArray(aggregated[kdtk].DATES)
             ? aggregated[kdtk].DATES.length
             : aggregated[kdtk].TOTAL_ISSUES,
@@ -1438,11 +1211,7 @@ class RekonSalesService {
       // Enrich with notes
       try {
         const notes = await notesService.getAll();
-        const notesByKey = new Map(
-          notes
-            .filter((n) => n.tableName === "rekon_sales")
-            .map((n) => [n.unixKey, n]),
-        );
+        const notesByKey = new Map(notes.filter(n => n.tableName === "rekon_sales").map(n => [n.unixKey, n]));
 
         for (let i = 0; i < results.length; i++) {
           // Use first date as key (or aggregate all dates)
@@ -1463,28 +1232,21 @@ class RekonSalesService {
           };
         }
       } catch (err) {
-        logger.warn(
-          `[rekon_sales.service] Failed to enrich with notes: ${err.message}`,
-        );
+        logger.warn(`[rekon_sales.service] Failed to enrich with notes: ${err.message}`);
       }
 
       // Search
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
-        results = results.filter((item) => {
+        results = results.filter(item => {
           const fields = ["CAB", "KDTK", "NAMA"];
-          const matchNormal = fields.some(
-            (field) =>
-              item[field] && item[field].toString().toLowerCase().includes(q),
-          );
+          const matchNormal = fields.some(field => item[field] && item[field].toString().toLowerCase().includes(q));
 
           const matchNote =
             item.note &&
-            ((item.note.noteText &&
-              item.note.noteText.toLowerCase().includes(q)) ||
+            ((item.note.noteText && item.note.noteText.toLowerCase().includes(q)) ||
               (item.note.pic && item.note.pic.toLowerCase().includes(q)) ||
-              (item.note.fullName &&
-                item.note.fullName.toLowerCase().includes(q)));
+              (item.note.fullName && item.note.fullName.toLowerCase().includes(q)));
 
           return matchNormal || matchNote;
         });
@@ -1516,17 +1278,7 @@ class RekonSalesService {
           bv = Number(bv);
         }
 
-        return order === "ASC"
-          ? av > bv
-            ? 1
-            : av < bv
-              ? -1
-              : 0
-          : av < bv
-            ? 1
-            : av > bv
-              ? -1
-              : 0;
+        return order === "ASC" ? (av > bv ? 1 : av < bv ? -1 : 0) : av < bv ? 1 : av > bv ? -1 : 0;
       });
 
       // Pagination
@@ -1542,9 +1294,7 @@ class RekonSalesService {
         totalPages: Math.ceil(totalRecords / limit),
       };
     } catch (error) {
-      logger.error(
-        `[rekon_sales.service] Error getResumeByKdtk: ${error.message}`,
-      );
+      logger.error(`[rekon_sales.service] Error getResumeByKdtk: ${error.message}`);
       throw error;
     }
   }
@@ -1622,9 +1372,7 @@ class RekonSalesService {
           : null,
       };
     } catch (error) {
-      logger.error(
-        `[rekon_sales.service] Error getStoreDetails: ${error.message}`,
-      );
+      logger.error(`[rekon_sales.service] Error getStoreDetails: ${error.message}`);
       throw error;
     }
   }
@@ -1659,9 +1407,7 @@ class RekonSalesService {
         totalPages: Math.ceil(count / parseInt(limit)),
       };
     } catch (error) {
-      logger.error(
-        `[rekon_sales.service] Error getDifferences: ${error.message}`,
-      );
+      logger.error(`[rekon_sales.service] Error getDifferences: ${error.message}`);
       throw error;
     }
   }
@@ -1687,9 +1433,7 @@ class RekonSalesService {
         data: records,
       };
     } catch (error) {
-      logger.error(
-        `[rekon_sales.service] Error getKodePesananIssues: ${error.message}`,
-      );
+      logger.error(`[rekon_sales.service] Error getKodePesananIssues: ${error.message}`);
       throw error;
     }
   }
@@ -1708,10 +1452,7 @@ class RekonSalesService {
       const model = await RekonSales.getModel();
 
       const start = moment
-        .tz(
-          { year: parseInt(year), month: parseInt(month) - 1, day: 1 },
-          "Asia/Jakarta",
-        )
+        .tz({ year: parseInt(year), month: parseInt(month) - 1, day: 1 }, "Asia/Jakarta")
         .startOf("day");
       const end = start.clone().endOf("month").endOf("day");
 
@@ -1719,10 +1460,7 @@ class RekonSalesService {
         where: {
           KDTK: kdtk,
           TGL: {
-            [Op.between]: [
-              start.format("YYYY-MM-DD"),
-              end.format("YYYY-MM-DD"),
-            ],
+            [Op.between]: [start.format("YYYY-MM-DD"), end.format("YYYY-MM-DD")],
           },
           RECID: "*",
         },
@@ -1730,7 +1468,7 @@ class RekonSalesService {
       });
 
       // Build daily array
-      const daily = rows.map((r) => ({
+      const daily = rows.map(r => ({
         tanggal: r.TGL,
         net_mtran: parseFloat(r.NET_TOKO) || 0,
         net_gl: parseFloat(r.NET_GL) || 0,
@@ -1742,9 +1480,7 @@ class RekonSalesService {
         ppn_cd: parseFloat(r.PPN_CD) || 0,
         sel_ppn_gl: parseFloat(r.SEL_PPN_GL) || 0,
         sel_ppn_cd: parseFloat(r.SEL_PPN_CD) || 0,
-        updatetime: r.UPDTIME
-          ? moment(r.UPDTIME).format("YYYY-MM-DD HH:mm:ss")
-          : null,
+        updatetime: r.UPDTIME ? moment(r.UPDTIME).format("YYYY-MM-DD HH:mm:ss") : null,
       }));
 
       // Summary totals
@@ -1752,27 +1488,11 @@ class RekonSalesService {
         KDTK: kdtk,
         month,
         year,
-        total_sel_net_gl: daily.reduce(
-          (s, i) => s + Math.abs(i.sel_net_gl || 0),
-          0,
-        ),
-        total_sel_net_cd: daily.reduce(
-          (s, i) => s + Math.abs(i.sel_net_cd || 0),
-          0,
-        ),
-        total_sel_ppn_gl: daily.reduce(
-          (s, i) => s + Math.abs(i.sel_ppn_gl || 0),
-          0,
-        ),
-        total_sel_ppn_cd: daily.reduce(
-          (s, i) => s + Math.abs(i.sel_ppn_cd || 0),
-          0,
-        ),
-        updatetime_latest: daily.reduce(
-          (latest, i) =>
-            latest && latest > i.updatetime ? latest : i.updatetime,
-          null,
-        ),
+        total_sel_net_gl: daily.reduce((s, i) => s + Math.abs(i.sel_net_gl || 0), 0),
+        total_sel_net_cd: daily.reduce((s, i) => s + Math.abs(i.sel_net_cd || 0), 0),
+        total_sel_ppn_gl: daily.reduce((s, i) => s + Math.abs(i.sel_ppn_gl || 0), 0),
+        total_sel_ppn_cd: daily.reduce((s, i) => s + Math.abs(i.sel_ppn_cd || 0), 0),
+        updatetime_latest: daily.reduce((latest, i) => (latest && latest > i.updatetime ? latest : i.updatetime), null),
       };
 
       // Store name
@@ -1789,13 +1509,9 @@ class RekonSalesService {
       let notes = [];
       try {
         const allNotes = await notesService.getAll();
-        const notesByKey = new Map(
-          allNotes
-            .filter((n) => n.tableName === "rekon_sales")
-            .map((n) => [n.unixKey, n]),
-        );
+        const notesByKey = new Map(allNotes.filter(n => n.tableName === "rekon_sales").map(n => [n.unixKey, n]));
         notes = daily
-          .map((d) => {
+          .map(d => {
             const key = `${kdtk}${d.tanggal}`;
             const note = notesByKey.get(key);
             return note
@@ -1811,16 +1527,12 @@ class RekonSalesService {
           })
           .filter(Boolean);
       } catch (err) {
-        logger.warn(
-          `[rekon_sales.service] Failed to load notes: ${err.message}`,
-        );
+        logger.warn(`[rekon_sales.service] Failed to load notes: ${err.message}`);
       }
 
       return { summary, daily, notes };
     } catch (error) {
-      logger.error(
-        `[rekon_sales.service] Error getStoreDetailsByMonth: ${error.message}`,
-      );
+      logger.error(`[rekon_sales.service] Error getStoreDetailsByMonth: ${error.message}`);
       throw error;
     }
   }
@@ -1838,10 +1550,7 @@ class RekonSalesService {
     try {
       const model = await MtranVsCd.getModel();
       const start = moment
-        .tz(
-          { year: parseInt(year), month: parseInt(month) - 1, day: 1 },
-          "Asia/Jakarta",
-        )
+        .tz({ year: parseInt(year), month: parseInt(month) - 1, day: 1 }, "Asia/Jakarta")
         .startOf("day");
       const end = start.clone().endOf("month").endOf("day");
 
@@ -1849,10 +1558,7 @@ class RekonSalesService {
         where: {
           SHOP: kdtk.trim().toUpperCase(),
           TANGGAL: {
-            [Op.between]: [
-              start.format("YYYY-MM-DD"),
-              end.format("YYYY-MM-DD"),
-            ],
+            [Op.between]: [start.format("YYYY-MM-DD"), end.format("YYYY-MM-DD")],
           },
         },
         order: [
@@ -1863,7 +1569,7 @@ class RekonSalesService {
       });
 
       const grouped = new Map();
-      rows.forEach((r) => {
+      rows.forEach(r => {
         const tgl = r.TANGGAL;
         if (!grouped.has(tgl)) grouped.set(tgl, []);
 
@@ -1884,9 +1590,7 @@ class RekonSalesService {
       }));
       return { daily };
     } catch (error) {
-      logger.error(
-        `[rekon_sales.service] Error getDifferencesByMonth: ${error.message}`,
-      );
+      logger.error(`[rekon_sales.service] Error getDifferencesByMonth: ${error.message}`);
       throw error;
     }
   }
@@ -1904,10 +1608,7 @@ class RekonSalesService {
     try {
       const model = await DetailRekonSales.getModel();
       const start = moment
-        .tz(
-          { year: parseInt(year), month: parseInt(month) - 1, day: 1 },
-          "Asia/Jakarta",
-        )
+        .tz({ year: parseInt(year), month: parseInt(month) - 1, day: 1 }, "Asia/Jakarta")
         .startOf("day");
       const end = start.clone().endOf("month").endOf("day");
 
@@ -1915,10 +1616,7 @@ class RekonSalesService {
         where: {
           KDTK: kdtk.trim().toUpperCase(),
           TGL: {
-            [Op.between]: [
-              start.format("YYYY-MM-DD"),
-              end.format("YYYY-MM-DD"),
-            ],
+            [Op.between]: [start.format("YYYY-MM-DD"), end.format("YYYY-MM-DD")],
           },
           SUBKEY: "SEL_KODEPESANAN",
         },
@@ -1926,7 +1624,7 @@ class RekonSalesService {
       });
 
       const grouped = new Map();
-      records.forEach((r) => {
+      records.forEach(r => {
         const tgl = r.TGL;
         if (!grouped.has(tgl)) grouped.set(tgl, []);
 
@@ -1945,9 +1643,7 @@ class RekonSalesService {
       }));
       return { daily };
     } catch (error) {
-      logger.error(
-        `[rekon_sales.service] Error getKodePesananIssuesByMonth: ${error.message}`,
-      );
+      logger.error(`[rekon_sales.service] Error getKodePesananIssuesByMonth: ${error.message}`);
       throw error;
     }
   }
@@ -1981,9 +1677,7 @@ class RekonSalesService {
         stores: resumeData.data,
       };
     } catch (error) {
-      logger.error(
-        `[rekon_sales.service] Error getExportData: ${error.message}`,
-      );
+      logger.error(`[rekon_sales.service] Error getExportData: ${error.message}`);
       throw error;
     }
   }
@@ -1996,20 +1690,14 @@ class RekonSalesService {
     }
 
     // If already loaded for the same period, skip
-    if (
-      this.loadedPeriod &&
-      this.loadedPeriod.year === year &&
-      this.loadedPeriod.month === month
-    ) {
+    if (this.loadedPeriod && this.loadedPeriod.year === year && this.loadedPeriod.month === month) {
       return;
     }
 
     const data = await this.loadData(year, month, cabang);
     this.rekonSalesData = Array.isArray(data) ? data : [];
     this.loadedPeriod = { year, month, cabang };
-    logger.debug(
-      `[rekon_sales.service] Data loaded for ${year}-${month}: ${this.rekonSalesData.length} records found`,
-    );
+    logger.debug(`[rekon_sales.service] Data loaded for ${year}-${month}: ${this.rekonSalesData.length} records found`);
   }
 }
 

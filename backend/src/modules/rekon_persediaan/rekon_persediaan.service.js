@@ -11,12 +11,10 @@ import pLimit from "p-limit";
 import moment from "moment-timezone";
 import progressService from "../progress/progress.service.js";
 import RekapRemoteService from "../rekap_remote/rekap_remote.service.js";
+import screeningGuard from "../../utils/screeningGuard.js";
 import { Op } from "sequelize";
 
-const REKON_PERSEDIAAN_JSON_PATH = path.join(
-  process.cwd(),
-  "data/rekon_persediaan.json",
-);
+const REKON_PERSEDIAAN_JSON_PATH = path.join(process.cwd(), "data/rekon_persediaan.json");
 const wrcService = new wrcBulananService();
 
 class RekonPersediaanService {
@@ -50,10 +48,7 @@ class RekonPersediaanService {
 
   async saveToFile() {
     try {
-      await fs.writeFile(
-        REKON_PERSEDIAAN_JSON_PATH,
-        JSON.stringify(this.rekonData, null, 2),
-      );
+      await fs.writeFile(REKON_PERSEDIAAN_JSON_PATH, JSON.stringify(this.rekonData, null, 2));
     } catch (error) {
       logger.error(`Save failed: ${error.message}`);
       throw error;
@@ -61,14 +56,9 @@ class RekonPersediaanService {
   }
 
   async ensureDataLoaded() {
-    if (
-      this.initialized &&
-      this.lastLoadTime &&
-      Date.now() - this.lastLoadTime < this.TTL
-    )
-      return;
+    if (this.initialized && this.lastLoadTime && Date.now() - this.lastLoadTime < this.TTL) return;
     if (this.isLoading) {
-      while (this.isLoading) await new Promise((r) => setTimeout(r, 100));
+      while (this.isLoading) await new Promise(r => setTimeout(r, 100));
       return;
     }
     try {
@@ -86,7 +76,7 @@ class RekonPersediaanService {
       const dbData = await SaldoRekonPersediaan.findAll({
         where: { RECID: "*" },
       });
-      this.rekonData = dbData.map((item) => item.get({ plain: true }));
+      this.rekonData = dbData.map(item => item.get({ plain: true }));
       await this.saveToFile();
       this.lastLoadTime = Date.now();
       this.initialized = true;
@@ -99,7 +89,7 @@ class RekonPersediaanService {
 
   async screening(options) {
     await storeService.ensureInitialized();
-    const { cabang, periode, shops, username } = options;
+    const { cabang, periode, shops, username, fullName, force } = options;
     const taskId = `${config.taskProgressName}_${username}`;
 
     if (!/^\d{4}$/.test(periode)) throw new Error("Invalid period YYMM");
@@ -111,51 +101,28 @@ class RekonPersediaanService {
     const targetMoment = moment(`${year}-${month}`, "YYYY-MM");
     const today = moment();
     const isCurrentMonth = targetMoment.isSame(today, "month");
-    const lastDay = isCurrentMonth
-      ? today.date() - 1
-      : targetMoment.daysInMonth();
+    const lastDay = isCurrentMonth ? today.date() - 1 : targetMoment.daysInMonth();
 
     for (let i = 1; i <= lastDay; i++) {
-      dates.push(
-        moment(`${year}-${month}-${i.toString().padStart(2, "0")}`).format(
-          "YYYY-MM-DD",
-        ),
-      );
+      dates.push(moment(`${year}-${month}-${i.toString().padStart(2, "0")}`).format("YYYY-MM-DD"));
     }
-    if (dates.length === 0)
-      throw new Error("No dates to process (cannot process future dates)");
+    if (dates.length === 0) throw new Error("No dates to process (cannot process future dates)");
 
     // === STEP 1: Collect Stores ===
     let storesToProcess = [];
     if (shops && shops.length > 0) {
       const allStores = storeService.stores;
       storesToProcess = allStores
-        .filter((s) =>
-          shops.some(
-            (code) =>
-              code.toUpperCase() ===
-              (s.storeCode || s.kdtk || "").toUpperCase(),
-          ),
-        )
-        .map((s) => ({ ...s, cab: s.branch || s.cab }));
+        .filter(s => shops.some(code => code.toUpperCase() === (s.storeCode || s.kdtk || "").toUpperCase()))
+        .map(s => ({ ...s, cab: s.branch || s.cab }));
     } else {
       const branches =
         cabang === "All" || cabang === "ALL"
-          ? [
-              ...new Set(
-                storeService.stores
-                  .filter((s) => s.notes === "INDUK")
-                  .map((s) => s.branch || s.cab),
-              ),
-            ]
+          ? [...new Set(storeService.stores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))]
           : [cabang];
 
       const groups = await Promise.all(
-        branches.map((cab) =>
-          storeService
-            .getStoresByBranch(cab, true)
-            .then((ss) => ss.map((s) => ({ ...s, cab }))),
-        ),
+        branches.map(cab => storeService.getStoresByBranch(cab, true).then(ss => ss.map(s => ({ ...s, cab })))),
       );
       storesToProcess = groups.flat();
     }
@@ -169,18 +136,13 @@ class RekonPersediaanService {
         module: "rekon_persediaan",
         title: "Screening Rekon Persediaan",
         description: "registering task",
-        startedBy: username,
+        startedBy: fullName || username,
         status: "registering",
       });
     }
 
     const withTimeout = (promise, ms, label) =>
-      Promise.race([
-        promise,
-        new Promise((_, r) =>
-          setTimeout(() => r(new Error(`Timeout: ${label}`)), ms),
-        ),
-      ]);
+      Promise.race([promise, new Promise((_, r) => setTimeout(() => r(new Error(`Timeout: ${label}`)), ms))]);
     const limitStores = pLimit(config.parallelProcessing.concurrencyLimit);
     const wrcPools = new Map();
     const wrcDataCache = new Map(); // branch -> Map<storeCode_date, hppData>
@@ -194,7 +156,7 @@ class RekonPersediaanService {
 
       // 1. Get existing tables
       const [tables] = await pool.query("SHOW TABLES LIKE 'glslp_%'");
-      const existingTableNames = tables.map((t) => Object.values(t)[0]);
+      const existingTableNames = tables.map(t => Object.values(t)[0]);
 
       // 2. Build UNION ALL query
       const queries = [];
@@ -234,15 +196,13 @@ class RekonPersediaanService {
     try {
       // === STEP 2: Flat Parallel Loop ===
       await Promise.all(
-        storesToProcess.map((store) =>
+        storesToProcess.map(store =>
           limitStores(async () => {
             const { storeCode, cab } = store;
 
             // Check if task was cancelled before starting this store
             if (!skipProgress && progressService.isAborted(taskId)) {
-              logger.info(
-                `[rekon_persediaan] Skipping store ${storeCode} — task aborted`,
-              );
+              logger.info(`[rekon_persediaan] Skipping store ${storeCode} — task aborted`);
               processedStores++;
               if (!skipProgress)
                 await progressService.updateProgress(taskId, processedStores, {
@@ -252,14 +212,25 @@ class RekonPersediaanService {
               return;
             }
 
+            // === DAILY GUARD: Skip toko yang sudah sukses screening hari ini ===
+            if (!force) {
+              const guard = await screeningGuard.isSuccessToday("rekon_persediaan", storeCode);
+              if (guard.screened) {
+                processedStores++;
+                if (!skipProgress)
+                  await progressService.updateProgress(taskId, processedStores, {
+                    description: `Store ${storeCode} → Skip (sudah screen ${guard.updtime})`,
+                    status: "Processing",
+                  });
+                return;
+              }
+            }
+
             try {
               // Initialize Pool & Cache Batch WRC
               if (!wrcPools.has(cab)) {
                 const wrcConfig = await wrcService.getConnWRC(cab);
-                wrcPools.set(
-                  cab,
-                  mysql.createPool({ ...wrcConfig, connectionLimit: 10 }),
-                );
+                wrcPools.set(cab, mysql.createPool({ ...wrcConfig, connectionLimit: 10 }));
               }
               const wrcPool = wrcPools.get(cab);
               const branchWrcMap = await fetchWrcBatch(cab, wrcPool);
@@ -268,14 +239,10 @@ class RekonPersediaanService {
               if (!storeInfo) {
                 processedStores++;
                 if (!skipProgress)
-                  await progressService.updateProgress(
-                    taskId,
-                    processedStores,
-                    {
-                      description: `Store ${storeCode} → Info not found`,
-                      status: "Processing",
-                    },
-                  );
+                  await progressService.updateProgress(taskId, processedStores, {
+                    description: `Store ${storeCode} → Info not found`,
+                    status: "Processing",
+                  });
                 return;
               }
 
@@ -287,14 +254,10 @@ class RekonPersediaanService {
               if (!storeConn) {
                 processedStores++;
                 if (!skipProgress)
-                  await progressService.updateProgress(
-                    taskId,
-                    processedStores,
-                    {
-                      description: `Store ${storeCode} → Connection failed`,
-                      status: "Processing",
-                    },
-                  );
+                  await progressService.updateProgress(taskId, processedStores, {
+                    description: `Store ${storeCode} → Connection failed`,
+                    status: "Processing",
+                  });
                 return;
               }
 
@@ -302,18 +265,11 @@ class RekonPersediaanService {
                 for (const date of dates) {
                   try {
                     // Fetch Store HPP
-                    const [rows] = await storeConn.query(config.queries.store, [
-                      date,
-                      date,
-                      date,
-                      date,
-                      date,
-                    ]);
+                    const [rows] = await storeConn.query(config.queries.store, [date, date, date, date, date]);
                     const sData = rows[0] || {};
 
                     // Lookup WRC HPP from Cache
-                    const wData =
-                      branchWrcMap.get(`${storeCode}_${date}`) || {};
+                    const wData = branchWrcMap.get(`${storeCode}_${date}`) || {};
 
                     const h_s = [
                       Number(sData.HPP_DRY) || 0,
@@ -330,7 +286,7 @@ class RekonPersediaanService {
                       Number(wData.HPP_SPC_STORE) || 0,
                     ];
                     const diffs = h_s.map((v, i) => v - h_w[i]);
-                    const hasDiff = diffs.some((d) => Math.abs(d) > 100);
+                    const hasDiff = diffs.some(d => Math.abs(d) > 100);
 
                     if (hasDiff) {
                       await SaldoRekonPersediaan.bulkCreate(
@@ -396,35 +352,22 @@ class RekonPersediaanService {
                       );
                     }
                   } catch (e) {
-                    logger.error(
-                      `[rekon_persediaan] Step Error ${storeCode} ${date}: ${e.message}`,
-                    );
+                    logger.error(`[rekon_persediaan] Step Error ${storeCode} ${date}: ${e.message}`);
                   }
                 }
 
                 processedStores++;
                 if (!skipProgress)
-                  await progressService.updateProgress(
-                    taskId,
-                    processedStores,
-                    {
-                      description: `Store ${storeCode} processed`,
-                      status: "Processing",
-                    },
-                  );
+                  await progressService.updateProgress(taskId, processedStores, {
+                    description: `Store ${storeCode} processed`,
+                    status: "Processing",
+                  });
               } finally {
                 await storeConn.end();
               }
             } catch (err) {
-              logger.error(
-                `[rekon_persediaan] Store Error ${storeCode}: ${err.message}`,
-              );
-              await RekapRemoteService.addToTemp(
-                cab,
-                storeCode,
-                "rekon_persediaan",
-                `Error: ${err.message}`,
-              );
+              logger.error(`[rekon_persediaan] Store Error ${storeCode}: ${err.message}`);
+              await RekapRemoteService.addToTemp(cab, storeCode, "rekon_persediaan", `Error: ${err.message}`);
               processedStores++;
               if (!skipProgress)
                 await progressService.updateProgress(taskId, processedStores, {
@@ -439,9 +382,7 @@ class RekonPersediaanService {
       // === STEP 3: Finalization ===
       // If task was cancelled during store processing, stop before finalizing
       if (!skipProgress && progressService.isAborted(taskId)) {
-        logger.info(
-          `[rekon_persediaan] Task ${taskId} was cancelled — skipping finalization`,
-        );
+        logger.info(`[rekon_persediaan] Task ${taskId} was cancelled — skipping finalization`);
         throw new Error("Proses dibatalkan oleh pengguna");
       }
 
@@ -462,9 +403,7 @@ class RekonPersediaanService {
     } catch (error) {
       // If task was cancelled by user, don't call failProgress (already handled by cancelTask)
       if (!skipProgress && progressService.isAborted(taskId)) {
-        logger.info(
-          `[rekon_persediaan] Task ${taskId} was cancelled — skipping failProgress`,
-        );
+        logger.info(`[rekon_persediaan] Task ${taskId} was cancelled — skipping failProgress`);
         return {
           success: false,
           message: "Proses dibatalkan oleh pengguna",
@@ -486,13 +425,13 @@ class RekonPersediaanService {
   async getSummary(opts = {}) {
     await this.ensureDataLoaded();
     const filtered = this.rekonData.filter(
-      (i) =>
+      i =>
         (!opts.cabang || opts.cabang === "All" || i.CABANG === opts.cabang) &&
         (!opts.periode || moment(i.TANGGAL).format("YYMM") === opts.periode),
     );
     return {
       data: {
-        jml_toko: new Set(filtered.map((i) => i.SHOP)).size,
+        jml_toko: new Set(filtered.map(i => i.SHOP)).size,
         total_selisih: filtered.reduce(
           (a, i) =>
             a +
@@ -510,26 +449,16 @@ class RekonPersediaanService {
 
   async getAllRecords(opts = {}) {
     await this.ensureDataLoaded();
-    const {
-      page = 1,
-      limit = 10,
-      cabang,
-      periode,
-      searchQuery,
-      sortColumn = "TANGGAL",
-      sortOrder = "DESC",
-    } = opts;
+    const { page = 1, limit = 10, cabang, periode, searchQuery, sortColumn = "TANGGAL", sortOrder = "DESC" } = opts;
     let filtered = this.rekonData.filter(
-      (i) =>
+      i =>
         (!cabang || cabang === "All" || i.CABANG === cabang) &&
         (!periode || moment(i.TANGGAL).format("YYMM") === periode) &&
         (!searchQuery ||
           i.SHOP.toLowerCase().includes(searchQuery.toLowerCase()) ||
           i.CABANG.toLowerCase().includes(searchQuery.toLowerCase())),
     );
-    const col = ["CABANG", "SHOP", "TANGGAL", "LASTCATCH"].includes(sortColumn)
-      ? sortColumn
-      : "TANGGAL";
+    const col = ["CABANG", "SHOP", "TANGGAL", "LASTCATCH"].includes(sortColumn) ? sortColumn : "TANGGAL";
     filtered.sort((a, b) => {
       let vA = a[col],
         vB = b[col];

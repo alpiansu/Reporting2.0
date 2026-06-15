@@ -15,7 +15,7 @@ import { wrcExtractorService } from "./wrc_extractor.service.js";
  */
 export const screeningByCabang = async (req, res) => {
   try {
-    const { cabang, periode, kdtk } = req.query;
+    const { cabang, periode, kdtk, force } = req.query;
 
     if (!periode) {
       return apiResponse.badRequest(res, "Periode is required");
@@ -27,8 +27,10 @@ export const screeningByCabang = async (req, res) => {
     }
 
     const username = req.user?.username || "system";
+    const fullName = req.user?.fullName || username;
+    const isForce = force === "true";
 
-    // LEVEL 3: Single store screening
+    // LEVEL 3: Single store screening (no guard)
     if (kdtk) {
       logger.info(`[prep_closing.controller] Starting screening for store: ${kdtk}, periode: ${periode}`);
 
@@ -36,19 +38,24 @@ export const screeningByCabang = async (req, res) => {
         kdtk,
         periode,
         username,
+        fullName,
       });
 
       return apiResponse.success(res, result);
     }
 
-    // LEVEL 1 & 2: Multi-store screening
+    // LEVEL 1 & 2: Multi-store screening (with daily guard)
     const cabParam = !cabang || cabang === "All" ? "All" : cabang;
-    logger.info(`[prep_closing.controller] Starting screening for cabang: ${cabParam}, periode: ${periode}`);
+    logger.info(
+      `[prep_closing.controller] Starting screening for cabang: ${cabParam}, periode: ${periode}${isForce ? " [FORCE]" : ""}`,
+    );
 
     const result = await prepClosingService.screening({
       cabang: cabParam,
       periode,
       username,
+      fullName,
+      force: isForce,
     });
 
     return apiResponse.success(res, result);
@@ -130,7 +137,7 @@ export const getResumeByKdtk = async (req, res) => {
     const cabParam = !cabang || cabang === "All" ? "All" : cabang;
 
     logger.info(
-      `[prep_closing.controller] Get resume by KDTK: cabang=${cabParam}, periode=${periode}, page=${page}, limit=${limit}`
+      `[prep_closing.controller] Get resume by KDTK: cabang=${cabParam}, periode=${periode}, page=${page}, limit=${limit}`,
     );
 
     let parsedRuleKeys = undefined;
@@ -393,11 +400,11 @@ export const triggerWrcExtraction = async (req, res) => {
     if (!periode) {
       return apiResponse.badRequest(res, "Periode is required to extract WRC data");
     }
-    
+
     // Asynchronous Execution inside
     const cabParam = !cabang || cabang === "All" ? "All" : cabang;
     const result = await wrcExtractorService.triggerExtraction(cabParam, periode, shops);
-    
+
     return apiResponse.success(res, { message: "WRC extraction completed successfully", cache_manifest: result });
   } catch (error) {
     logger.error(`[prep_closing.controller] Error triggering wrc extract: ${error.message}`);

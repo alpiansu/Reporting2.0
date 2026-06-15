@@ -14,7 +14,7 @@ import UserService from "../user/user.service.js";
  */
 export const screeningByCabang = async (req, res) => {
   try {
-    const { cabang, periode, kdtk } = req.query;
+    const { cabang, periode, kdtk, force } = req.query;
 
     if (!periode) {
       return apiResponse.badRequest(res, "Periode is required");
@@ -26,8 +26,10 @@ export const screeningByCabang = async (req, res) => {
     }
 
     const username = req.user?.username || "system";
+    const fullName = req.user?.fullName || username;
+    const isForce = force === "true";
 
-    // LEVEL 3: Single store screening
+    // LEVEL 3: Single store screening (no guard)
     if (kdtk) {
       logger.info(`[rekon_sales.controller] Starting screening for store: ${kdtk}, periode: ${periode}`);
 
@@ -35,14 +37,17 @@ export const screeningByCabang = async (req, res) => {
         kdtk,
         periode,
         username,
+        fullName,
       });
 
       return apiResponse.success(res, result);
     }
 
-    // LEVEL 1 & 2: Multi-store screening
+    // LEVEL 1 & 2: Multi-store screening (with daily guard)
     const cabParam = !cabang || cabang === "All" ? "All" : cabang;
-    logger.info(`[rekon_sales.controller] Starting screening for cabang: ${cabParam}, periode: ${periode}`);
+    logger.info(
+      `[rekon_sales.controller] Starting screening for cabang: ${cabParam}, periode: ${periode}${isForce ? " [FORCE]" : ""}`,
+    );
 
     const { default: config } = await import("./rekon_sales.config.js");
     const taskId = `${config.taskProgressName}_${username}`;
@@ -51,6 +56,8 @@ export const screeningByCabang = async (req, res) => {
       cabang: cabParam,
       periode,
       username,
+      fullName,
+      force: isForce,
     });
 
     return apiResponse.success(res, { ...result, taskId });
@@ -109,7 +116,7 @@ export const getResumeByKdtk = async (req, res) => {
     const cabParam = !cabang || cabang === "All" ? "All" : cabang;
 
     logger.info(
-      `[rekon_sales.controller] Get resume by KDTK: cabang=${cabParam}, month=${month}, year=${year}, page=${page}, limit=${limit}`
+      `[rekon_sales.controller] Get resume by KDTK: cabang=${cabParam}, month=${month}, year=${year}, page=${page}, limit=${limit}`,
     );
 
     const result = await rekonSalesService.getResumeByKdtk({
@@ -189,7 +196,7 @@ export const getKodePesananIssues = async (req, res) => {
     }
 
     logger.info(
-      `[rekon_sales.controller] Get kode pesanan issues (monthly): kdtk=${kdtk}, month=${month}, year=${year}`
+      `[rekon_sales.controller] Get kode pesanan issues (monthly): kdtk=${kdtk}, month=${month}, year=${year}`,
     );
 
     const result = await rekonSalesService.getKodePesananIssuesByMonth({ kdtk, month, year });

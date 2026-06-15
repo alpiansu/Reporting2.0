@@ -5,6 +5,7 @@ const BASE_URL = "/rekon-sales";
 export default {
   async screening(params) {
     try {
+      if (params.force) params.force = "true";
       return (await api.get(`${BASE_URL}/screening`, { params })).data;
     } catch (err) {
       console.log(`error when trying to do screening on rekon_sales: ${err.message}`);

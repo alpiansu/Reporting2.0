@@ -81,6 +81,9 @@ class PenyesuaianService {
       params.kdtk = data.kdtk;
       delete params.cabang;
     }
+    if (data.force) {
+      params.force = "true";
+    }
     const response = await api.get(`/${this.fixedPattern}/screening`, { params });
     return response.data;
   }

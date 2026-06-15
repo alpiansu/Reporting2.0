@@ -8,6 +8,7 @@
         <FilterBar v-model:cabang="filters.cabang" v-model:month="filters.month" v-model:year="filters.year"
           :cabangOptions="cabangOptions" :loading="isReconciling" @refresh="refreshAll"
           @start-screening="handleStartScreening" />
+
       </div>
 
       <ProgressBar v-if="isMassScreening && progressVisible" :visible="progressVisible"
@@ -126,10 +127,10 @@ watch([() => filters.month, () => filters.year, () => filters.cabang], async () 
   }
 });
 
-const handleStartScreening = async () => {
-  console.log('🎬 Trigger mass screening:', { cabang: filters.cabang, periode: `${filters.year}-${filters.month}` });
+const handleStartScreening = async (options = {}) => {
+  console.log('🎬 Trigger mass screening:', { cabang: filters.cabang, periode: `${filters.year}-${filters.month}`, force: options.force });
 
-  await screenCabang({ cabang: filters.cabang, periode: `${filters.year}-${filters.month}` });
+  await screenCabang({ cabang: filters.cabang, periode: `${filters.year}-${filters.month}`, force: options.force });
 };
 
 // Cleanup saat component unmount

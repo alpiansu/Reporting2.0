@@ -123,7 +123,8 @@ const mainTask = computed(() => progressStore.mainTask);
 const isVisible = computed(() => progressStore.hasActiveTasks);
 const hasError = computed(() => mainTask.value?.status?.toLowerCase() === 'failed');
 
-// Use only the login username, NOT fullName — startedBy is always the login username
+// Use login username for cancel permission check (fallback via taskId always works)
+// startedBy now contains the user's display name (fullName) for UI display
 const currentUsername = computed(() => authStore.user?.username ?? null);
 
 const isAdmin = computed(() =>

@@ -13,7 +13,7 @@ import rekonPersediaanService from "./rekon_persediaan.service.js";
  */
 export const startScreening = async (req, res) => {
   try {
-    const { cabang, periode, shops } = req.query;
+    const { cabang, periode, shops, force } = req.query;
 
     if (!periode) {
       return apiResponse.badRequest(res, "Periode (YYMM) is required");
@@ -28,22 +28,31 @@ export const startScreening = async (req, res) => {
     if (shops) {
       if (Array.isArray(shops)) {
         shopList = shops;
-      } else if (typeof shops === 'string') {
-        shopList = shops.split(',').map(s => s.trim()).filter(Boolean);
+      } else if (typeof shops === "string") {
+        shopList = shops
+          .split(",")
+          .map(s => s.trim())
+          .filter(Boolean);
       }
     }
 
     const username = req.user?.username || "system";
+    const fullName = req.user?.fullName || username;
     const cabParam = !cabang || cabang === "All" ? "All" : cabang;
+    const isForce = force === "true";
 
-    logger.info(`[rekon_persediaan_controller] Starting Rekon Persediaan screening: cabang=${cabParam}, periode=${periode}${shopList.length > 0 ? `, shops=${shopList.join(',')}` : ''}`);
+    logger.info(
+      `[rekon_persediaan_controller] Starting Rekon Persediaan screening: cabang=${cabParam}, periode=${periode}${shopList.length > 0 ? `, shops=${shopList.join(",")}` : ""}${isForce ? " [FORCE]" : ""}`,
+    );
 
     // Screening process (returns only when complete)
-    const result = await rekonPersediaanService.screening({ 
-        cabang: cabParam, 
-        periode, 
-        username,
-        shops: shopList
+    const result = await rekonPersediaanService.screening({
+      cabang: cabParam,
+      periode,
+      username,
+      fullName,
+      shops: shopList,
+      force: isForce,
     });
 
     return apiResponse.success(res, result);
@@ -85,7 +94,7 @@ export const getAllRecords = async (req, res) => {
       periode,
       searchQuery,
       sortColumn,
-      sortOrder
+      sortOrder,
     });
     return apiResponse.success(res, result);
   } catch (error) {

@@ -15,6 +15,7 @@ import RekapRemoteService from "../rekap_remote/rekap_remote.service.js";
 import notesService from "../notes/notes.service.js";
 import progressService from "../progress/progress.service.js";
 import { wrcExtractorService } from "./wrc_extractor.service.js";
+import screeningGuard from "../../utils/screeningGuard.js";
 
 // Path untuk file JSON
 const PREP_CLOSING_DATA_DIR = path.join(process.cwd(), "data/prep_closing");
@@ -72,9 +73,7 @@ class PrepClosingService {
         const data = await fs.readFile(jsonPath, "utf8");
         this.prepClosingData = JSON.parse(data);
         this.loadedPeriod = periode;
-        logger.info(
-          `[prep_closing.service] Loaded ${this.prepClosingData.length} records from ${jsonPath}`,
-        );
+        logger.info(`[prep_closing.service] Loaded ${this.prepClosingData.length} records from ${jsonPath}`);
       } catch (err) {
         if (err.code === "ENOENT") {
           this.prepClosingData = [];
@@ -85,9 +84,7 @@ class PrepClosingService {
 
       this.initialized = true;
     } catch (error) {
-      logger.error(
-        `[prep_closing.service] Failed to initialize: ${error.message}`,
-      );
+      logger.error(`[prep_closing.service] Failed to initialize: ${error.message}`);
       throw error;
     }
   }
@@ -98,17 +95,10 @@ class PrepClosingService {
   async saveToFile(periode) {
     try {
       const jsonPath = this.getJsonPath(periode);
-      await fs.writeFile(
-        jsonPath,
-        JSON.stringify(this.prepClosingData, null, 2),
-      );
-      logger.debug(
-        `[prep_closing.service] Saved ${this.prepClosingData.length} records to ${jsonPath}`,
-      );
+      await fs.writeFile(jsonPath, JSON.stringify(this.prepClosingData, null, 2));
+      logger.debug(`[prep_closing.service] Saved ${this.prepClosingData.length} records to ${jsonPath}`);
     } catch (error) {
-      logger.error(
-        `[prep_closing.service] Failed to save to file: ${error.message}`,
-      );
+      logger.error(`[prep_closing.service] Failed to save to file: ${error.message}`);
       throw error;
     }
   }
@@ -133,11 +123,7 @@ class PrepClosingService {
    * Check if summary cache is valid
    */
   isCacheValid(periode) {
-    if (
-      !this.initialized ||
-      !this.lastLoadTime ||
-      this.loadedPeriod !== periode
-    ) {
+    if (!this.initialized || !this.lastLoadTime || this.loadedPeriod !== periode) {
       return false;
     }
     const now = Date.now();
@@ -176,16 +162,14 @@ class PrepClosingService {
 
     if (this.isLoading) {
       while (this.isLoading) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
       if (this.isCacheValid(periode)) return;
     }
 
     try {
       this.isLoading = true;
-      logger.info(
-        `[prep_closing.service] Loading data for periode ${periode} (cache expired or period changed)`,
-      );
+      logger.info(`[prep_closing.service] Loading data for periode ${periode} (cache expired or period changed)`);
 
       await this.initialize(periode);
       this.lastLoadTime = Date.now();
@@ -200,8 +184,7 @@ class PrepClosingService {
 
   // --- TASK 1: issuesCache ---
   isIssuesCacheValid(periode) {
-    if (this.issuesCachePeriode !== periode || this.issuesCache.size === 0)
-      return false;
+    if (this.issuesCachePeriode !== periode || this.issuesCache.size === 0) return false;
     const now = Date.now();
     return now - this.issuesCacheLoadTime < this.issuesCacheTTL;
   }
@@ -228,10 +211,7 @@ class PrepClosingService {
         this.issuesCachePeriode = periode;
 
         for (const rec of records) {
-          this.issuesCache.set(
-            rec.KDTK,
-            Array.isArray(rec.ISSUES) ? rec.ISSUES : [],
-          );
+          this.issuesCache.set(rec.KDTK, Array.isArray(rec.ISSUES) ? rec.ISSUES : []);
         }
 
         this.issuesCacheLoadTime = Date.now();
@@ -239,9 +219,7 @@ class PrepClosingService {
           `[prep_closing.service] issuesCache loaded for periode ${periode}. Stores cached: ${this.issuesCache.size}`,
         );
       } catch (error) {
-        logger.error(
-          `[prep_closing.service] Error in loadIssuesCache: ${error.message}`,
-        );
+        logger.error(`[prep_closing.service] Error in loadIssuesCache: ${error.message}`);
       } finally {
         this.issuesCachePromise = null;
       }
@@ -256,10 +234,7 @@ class PrepClosingService {
       this.storeNameMap = new Map();
       if (storeService.stores && Array.isArray(storeService.stores)) {
         for (const s of storeService.stores) {
-          this.storeNameMap.set(
-            s.storeCode || s.kdtk,
-            s.storeName || s.namaToko || "-",
-          );
+          this.storeNameMap.set(s.storeCode || s.kdtk, s.storeName || s.namaToko || "-");
         }
       }
     }
@@ -319,7 +294,7 @@ class PrepClosingService {
         { replacements: { periode } },
       );
 
-      this.prepClosingData = rows.map((r) => ({
+      this.prepClosingData = rows.map(r => ({
         RECID: r.RECID,
         CAB: r.CAB,
         KDTK: r.KDTK,
@@ -338,9 +313,7 @@ class PrepClosingService {
       this.loadedPeriod = periode;
       this.initialized = true;
 
-      logger.info(
-        `[prep_closing.service] Synced ${this.prepClosingData.length} records to JSON`,
-      );
+      logger.info(`[prep_closing.service] Synced ${this.prepClosingData.length} records to JSON`);
 
       // TASK 1: Force reload issuesCache dari DB setelah sync agar data selalu fresh
       if (rows.length > 0 && rows[0].PRD_CLOSING) {
@@ -384,31 +357,21 @@ class PrepClosingService {
       if (!wrcExtractorService.cacheData?.last_extracted_at) {
         await wrcExtractorService.loadCache();
       }
-      const branchData =
-        wrcExtractorService.cacheData?.data_by_cabang?.[cab]
-          ?.branch_level_data || {};
-      const storeData =
-        wrcExtractorService.cacheData?.data_by_cabang?.[cab]?.stores?.[kdtk] ||
-        {};
+      const branchData = wrcExtractorService.cacheData?.data_by_cabang?.[cab]?.branch_level_data || {};
+      const storeData = wrcExtractorService.cacheData?.data_by_cabang?.[cab]?.stores?.[kdtk] || {};
 
       // Gabungkan data dengan urutan: Branch data sebagai base, Store data menimpa jika ada spesifik per toko
       const combinedWrcData = { ...branchData, ...storeData };
 
       return {
-        saldoBlnQty: storeData.saldo_akh_wrc_toko
-          ? parseFloat(storeData.saldo_akh_wrc_toko)
-          : 0,
-        saldoBlnRp: storeData.rp_saldo_akh_wrc_toko
-          ? parseFloat(storeData.rp_saldo_akh_wrc_toko)
-          : 0,
+        saldoBlnQty: storeData.saldo_akh_wrc_toko ? parseFloat(storeData.saldo_akh_wrc_toko) : 0,
+        saldoBlnRp: storeData.rp_saldo_akh_wrc_toko ? parseFloat(storeData.rp_saldo_akh_wrc_toko) : 0,
         strBlnSlsWrc: branchData.bln_sls_wrc || null, // Ambil eksklusif dari branch level
         strMaxBlnAktWrc: branchData.terakhir_bln_akt_wrc || null, // Ambil eksklusif dari branch level
         ...combinedWrcData,
       };
     } catch (e) {
-      logger.warn(
-        `[prep_closing.service] Legacy WRC mapping error proxy for ${kdtk}, using default values`,
-      );
+      logger.warn(`[prep_closing.service] Legacy WRC mapping error proxy for ${kdtk}, using default values`);
       return {
         saldoBlnQty: 0,
         saldoBlnRp: 0,
@@ -430,20 +393,12 @@ class PrepClosingService {
       const storeInfo = await storeService.getStoreIPHost(storeCode);
 
       if (!storeInfo) {
-        await RekapRemoteService.addToTemp(
-          cab,
-          storeCode,
-          "prep_closing",
-          `[${storeCode}] store info not found`,
-        );
+        await RekapRemoteService.addToTemp(cab, storeCode, "prep_closing", `[${storeCode}] store info not found`);
         return results;
       }
 
       // Create DB connection
-      const storeConnection = await dbStore.createDbStore(
-        storeInfo.dbHost,
-        config.connectionRetry.maxRetries,
-      );
+      const storeConnection = await dbStore.createDbStore(storeInfo.dbHost, config.connectionRetry.maxRetries);
 
       if (!storeConnection) {
         await RekapRemoteService.addToTemp(
@@ -457,10 +412,7 @@ class PrepClosingService {
 
       try {
         // Generate table names
-        const { tblFilet, tblFiletMaju } = this.getFiletTableNames(
-          storeCode,
-          strPeriode,
-        );
+        const { tblFilet, tblFiletMaju } = this.getFiletTableNames(storeCode, strPeriode);
 
         // Get saldo data from WRC directly from new Cache
         const saldoData = await this.getSaldoFromWrc(storeCode, cab);
@@ -475,26 +427,16 @@ class PrepClosingService {
           year: strYear, // alias untuk konsistensi dengan WRC
           strMonth,
           month: strMonth, // alias sinkronisasi WRC Extractor
-          strPrd: moment(`${strYear}-${strMonth}-01`)
-            .subtract(1, "month")
-            .format("YYYYMM"),
+          strPrd: moment(`${strYear}-${strMonth}-01`).subtract(1, "month").format("YYYYMM"),
           tblFilet,
           tblFiletMaju,
           ...saldoData,
         };
 
-        await RekapRemoteService.addToTemp(
-          cab,
-          storeCode,
-          "prep_closing",
-          `[${storeCode}] executing rules...`,
-        );
+        await RekapRemoteService.addToTemp(cab, storeCode, "prep_closing", `[${storeCode}] executing rules...`);
 
         // Execute all rules
-        const ruleResults = await ruleEngine.executeRules(
-          storeConnection,
-          context,
-        );
+        const ruleResults = await ruleEngine.executeRules(storeConnection, context);
 
         await RekapRemoteService.addToTemp(
           cab,
@@ -533,15 +475,8 @@ class PrepClosingService {
         await storeConnection.end();
       }
     } catch (err) {
-      await RekapRemoteService.addToTemp(
-        cab,
-        storeCode,
-        "prep_closing",
-        `[${storeCode}] ERROR: ${err.message}`,
-      );
-      logger.error(
-        `[prep_closing.service] Error processing store ${storeCode}: ${err.message}`,
-      );
+      await RekapRemoteService.addToTemp(cab, storeCode, "prep_closing", `[${storeCode}] ERROR: ${err.message}`);
+      logger.error(`[prep_closing.service] Error processing store ${storeCode}: ${err.message}`);
     }
 
     return results;
@@ -551,15 +486,7 @@ class PrepClosingService {
    * Update resolved records
    */
   async updateResolvedRecords(params) {
-    const {
-      periode,
-      level,
-      cabang,
-      kdtk,
-      hasIssue,
-      screenedStores,
-      activeStores,
-    } = params;
+    const { periode, level, cabang, kdtk, hasIssue, screenedStores, activeStores } = params;
 
     try {
       const model = await ScreeningPraClosing.getModel();
@@ -572,9 +499,7 @@ class PrepClosingService {
       // LEVEL 3: Single Store
       if (level === 3) {
         if (hasIssue) {
-          logger.info(
-            `[prep_closing.service] Level 3: Store ${kdtk} has issues, no RECID update`,
-          );
+          logger.info(`[prep_closing.service] Level 3: Store ${kdtk} has issues, no RECID update`);
           return 0;
         } else {
           query = `
@@ -586,17 +511,13 @@ class PrepClosingService {
           `;
           replacements.kdtk = kdtk;
 
-          logger.info(
-            `[prep_closing.service] Level 3: Updating RECID='1' for store ${kdtk}`,
-          );
+          logger.info(`[prep_closing.service] Level 3: Updating RECID='1' for store ${kdtk}`);
         }
       }
       // LEVEL 2: Single Branch
       else if (level === 2) {
         if (!screenedStores || screenedStores.length === 0) {
-          logger.info(
-            `[prep_closing.service] Level 2: No stores screened, skipping`,
-          );
+          logger.info(`[prep_closing.service] Level 2: No stores screened, skipping`);
           return 0;
         }
 
@@ -625,9 +546,7 @@ class PrepClosingService {
       // LEVEL 1: All Branches
       else if (level === 1) {
         if (!screenedStores || screenedStores.length === 0) {
-          logger.info(
-            `[prep_closing.service] Level 1: No stores screened, skipping`,
-          );
+          logger.info(`[prep_closing.service] Level 1: No stores screened, skipping`);
           return 0;
         }
 
@@ -658,15 +577,11 @@ class PrepClosingService {
         type: Sequelize.QueryTypes.UPDATE,
       });
 
-      logger.info(
-        `[prep_closing.service] Updated ${metadata} records to RECID='1'`,
-      );
+      logger.info(`[prep_closing.service] Updated ${metadata} records to RECID='1'`);
 
       return metadata;
     } catch (error) {
-      logger.error(
-        `[prep_closing.service] Error updating resolved records: ${error.message}`,
-      );
+      logger.error(`[prep_closing.service] Error updating resolved records: ${error.message}`);
       throw error;
     }
   }
@@ -683,20 +598,16 @@ class PrepClosingService {
     await storeService.ensureInitialized();
     await ruleEngine.ensureInitialized();
 
-    const { cabang, periode, kdtk, username } = options;
+    const { cabang, periode, kdtk, username, fullName, force } = options;
 
     // === LEVEL 3: Single Store Screening (No Progress Task) ===
     if (kdtk) {
-      logger.info(
-        `[prep_closing.service] Starting single store screening: ${kdtk}, periode: ${periode}`,
-      );
+      logger.info(`[prep_closing.service] Starting single store screening: ${kdtk}, periode: ${periode}`);
 
       try {
         // Get store info to determine cabang
         const storeInfo = await storeService.getStoreByCode(kdtk);
-        const storeCab = storeInfo
-          ? storeInfo.branch || storeInfo.cab
-          : "UNKNOWN";
+        const storeCab = storeInfo ? storeInfo.branch || storeInfo.cab : "UNKNOWN";
 
         // Convert periode
         const strPeriode = periode;
@@ -704,12 +615,7 @@ class PrepClosingService {
         const strMonth = moment(periode, "YYMM").format("MM");
 
         // Process single store
-        const result = await this.processSingleStore(
-          { storeCode: kdtk, cab: storeCab },
-          strPeriode,
-          strYear,
-          strMonth,
-        );
+        const result = await this.processSingleStore({ storeCode: kdtk, cab: storeCab }, strPeriode, strYear, strMonth);
 
         // Save logs to database
         await RekapRemoteService.saveLogsToDatabase();
@@ -738,26 +644,20 @@ class PrepClosingService {
           criticalIssues: result.records?.CRITICAL_ISSUES || 0,
         };
       } catch (error) {
-        logger.error(
-          `[prep_closing.service] Error during single store screening: ${error.message}`,
-        );
+        logger.error(`[prep_closing.service] Error during single store screening: ${error.message}`);
         throw error;
       }
     }
 
     // === LEVEL 1 & 2: Multi-Store Screening (With Progress Task) ===
     const taskId = `${config.taskProgressName}_${username}`;
-    const limitBranches = pLimit(
-      config.parallelProcessing.branchConcurrencyLimit,
-    );
+    const limitBranches = pLimit(config.parallelProcessing.branchConcurrencyLimit);
     const limitStores = pLimit(config.parallelProcessing.concurrencyLimit);
 
     const withTimeout = (promise, ms, label) => {
       return Promise.race([
         promise,
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error(`Timeout: ${label}`)), ms),
-        ),
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout: ${label}`)), ms)),
       ]);
     };
 
@@ -766,42 +666,30 @@ class PrepClosingService {
       let branches = [];
       if (cabang === "All" || cabang === "ALL") {
         const allStores = storeService.stores;
-        branches = [
-          ...new Set(
-            allStores
-              .filter((s) => s.notes === "INDUK")
-              .map((s) => s.branch || s.cab),
-          ),
-        ];
+        branches = [...new Set(allStores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))];
       } else {
         branches = [cabang];
       }
 
-      logger.info(
-        `[prep_closing.service] Branches to process: ${branches.join(", ")}`,
-      );
+      logger.info(`[prep_closing.service] Branches to process: ${branches.join(", ")}`);
 
       // === STEP 2: Collect all stores ===
       const storeGroups = await Promise.all(
-        branches.map((cab) =>
+        branches.map(cab =>
           limitBranches(async () => {
             const stores = await storeService.getStoresByBranch(cab, true, {
               validateWRC: true,
               period: periode,
             });
-            logger.info(
-              `[prep_closing.service] Found ${stores.length} stores for branch ${cab}`,
-            );
-            return stores.map((s) => ({ ...s, cab }));
+            logger.info(`[prep_closing.service] Found ${stores.length} stores for branch ${cab}`);
+            return stores.map(s => ({ ...s, cab }));
           }),
         ),
       );
 
       const storesToProcess = storeGroups.flat();
 
-      logger.info(
-        `[prep_closing.service] Total stores to process: ${storesToProcess.length}`,
-      );
+      logger.info(`[prep_closing.service] Total stores to process: ${storesToProcess.length}`);
 
       // === STEP 3: Register progress task ===
       try {
@@ -810,41 +698,31 @@ class PrepClosingService {
           module: "prep_closing",
           title: "Screening Pra Closing",
           description: "Registering task for prep closing screening",
-          startedBy: username,
+          startedBy: fullName || username,
           status: "registering",
           createdAt: timeStart,
         });
 
-        logger.info(
-          `[prep_closing.service] Progress task registered: ${taskId}`,
-        );
+        logger.info(`[prep_closing.service] Progress task registered: ${taskId}`);
       } catch (error) {
-        logger.error(
-          `[prep_closing.service] Error registering progress: ${error.message}`,
-        );
+        logger.error(`[prep_closing.service] Error registering progress: ${error.message}`);
 
         if (error.message.includes("Maximum concurrent")) {
           await progressService.failProgress(taskId, {
             description: `Task failed: ${error.message}`,
             status: "failed",
           });
-          throw new Error(
-            "[prep_closing.service] System is busy processing other tasks",
-          );
+          throw new Error("[prep_closing.service] System is busy processing other tasks");
         }
 
         await progressService.failProgress(taskId, {
           description: `Task failed: ${error.message}`,
           status: "failed",
         });
-        throw new Error(
-          "[prep_closing.service] Failed to register progress task",
-        );
+        throw new Error("[prep_closing.service] Failed to register progress task");
       }
 
-      logger.info(
-        `[prep_closing.service] Starting screening for branches: ${branches.join(", ")}`,
-      );
+      logger.info(`[prep_closing.service] Starting screening for branches: ${branches.join(", ")}`);
 
       // === STEP 4: Prepare processing ===
       const strPeriode = periode;
@@ -874,18 +752,26 @@ class PrepClosingService {
 
       // === STEP 5: Process each store ===
       await Promise.all(
-        storesToProcess.map((store) =>
+        storesToProcess.map(store =>
           limitStores(async () => {
             const { cab, storeCode } = store;
 
             // Check if task was cancelled before starting this store
             if (progressService.isAborted(taskId)) {
-              logger.info(
-                `[prep_closing] Skipping store ${storeCode} — task aborted`,
-              );
+              logger.info(`[prep_closing] Skipping store ${storeCode} — task aborted`);
               screenedStores.add(storeCode);
               await incrementProgress(storeCode, "Dibatalkan ⛔");
               return;
+            }
+
+            // === DAILY GUARD: Skip toko yang sudah sukses screening hari ini ===
+            if (!force) {
+              const guard = await screeningGuard.isSuccessToday("prep_closing", storeCode);
+              if (guard.screened) {
+                screenedStores.add(storeCode);
+                await incrementProgress(storeCode, `Skip (sudah screen ${guard.updtime})`);
+                return;
+              }
             }
 
             screenedStores.add(storeCode);
@@ -900,10 +786,7 @@ class PrepClosingService {
               if (result.success) {
                 if (result.hasIssue) {
                   activeStores.add(storeCode);
-                  await incrementProgress(
-                    storeCode,
-                    `Has Issues ⚠️ (${result.records.CRITICAL_ISSUES} critical)`,
-                  );
+                  await incrementProgress(storeCode, `Has Issues ⚠️ (${result.records.CRITICAL_ISSUES} critical)`);
                 } else {
                   await incrementProgress(storeCode, "Ready for Closing ✅");
                 }
@@ -923,9 +806,7 @@ class PrepClosingService {
         ),
       );
 
-      logger.info(
-        `[prep_closing.service] Screening completed for periode ${periode}`,
-      );
+      logger.info(`[prep_closing.service] Screening completed for periode ${periode}`);
       logger.info(
         `[prep_closing.service] Screened: ${screenedStores.size}, Active (has issues): ${activeStores.size}, Ready: ${
           screenedStores.size - activeStores.size
@@ -934,9 +815,7 @@ class PrepClosingService {
 
       // If task was cancelled during store processing, stop before finalizing
       if (progressService.isAborted(taskId)) {
-        logger.info(
-          `[prep_closing] Task ${taskId} was cancelled — skipping finalization`,
-        );
+        logger.info(`[prep_closing] Task ${taskId} was cancelled — skipping finalization`);
         throw new Error("Proses dibatalkan oleh pengguna");
       }
 
@@ -989,9 +868,7 @@ class PrepClosingService {
     } catch (error) {
       // If task was cancelled by user, don't call failProgress (already handled by cancelTask)
       if (progressService.isAborted(taskId)) {
-        logger.info(
-          `[prep_closing.service] Task ${taskId} was cancelled — skipping failProgress`,
-        );
+        logger.info(`[prep_closing.service] Task ${taskId} was cancelled — skipping failProgress`);
         return {
           success: false,
           message: "Proses dibatalkan oleh pengguna",
@@ -999,9 +876,7 @@ class PrepClosingService {
         };
       }
 
-      logger.error(
-        `[prep_closing.service] Error during screening: ${error.message}`,
-      );
+      logger.error(`[prep_closing.service] Error during screening: ${error.message}`);
 
       await progressService.failProgress(taskId, {
         description: `Task failed: ${error.message}`,
@@ -1018,7 +893,7 @@ class PrepClosingService {
   buildFilterFunction(params = {}) {
     const { cabang, periode, kdtk } = params;
 
-    return (item) => {
+    return item => {
       if (cabang && cabang !== "All" && item.CAB !== cabang) {
         return false;
       }
@@ -1047,12 +922,9 @@ class PrepClosingService {
       const filterFn = this.buildFilterFunction({ cabang, periode });
       const filteredData = this.prepClosingData.filter(filterFn);
       // Calculate statistics
-      const uniqueStores = new Set(filteredData.map((item) => item.KDTK));
-      const readyStores = filteredData.filter((item) => item.IS_READY).length;
-      const criticalIssues = filteredData.reduce(
-        (sum, item) => sum + (item.CRITICAL_ISSUES || 0),
-        0,
-      );
+      const uniqueStores = new Set(filteredData.map(item => item.KDTK));
+      const readyStores = filteredData.filter(item => item.IS_READY).length;
+      const criticalIssues = filteredData.reduce((sum, item) => sum + (item.CRITICAL_ISSUES || 0), 0);
 
       return {
         data: {
@@ -1063,9 +935,7 @@ class PrepClosingService {
         },
       };
     } catch (error) {
-      logger.error(
-        `[prep_closing.service] Error getting summary: ${error.message}`,
-      );
+      logger.error(`[prep_closing.service] Error getting summary: ${error.message}`);
       throw error;
     }
   }
@@ -1120,8 +990,7 @@ class PrepClosingService {
           if (entry.severityBreakdown[sev] !== undefined) {
             entry.severityBreakdown[sev] += 1;
           }
-          if (!storeSets.has(issue.ruleKey))
-            storeSets.set(issue.ruleKey, new Set());
+          if (!storeSets.has(issue.ruleKey)) storeSets.set(issue.ruleKey, new Set());
           storeSets.get(issue.ruleKey).add(kdtk);
         }
       }
@@ -1137,15 +1006,11 @@ class PrepClosingService {
         else entry.severity = null;
       }
 
-      const result = Array.from(aggMap.values()).sort(
-        (a, b) => b.totalStores - a.totalStores,
-      );
+      const result = Array.from(aggMap.values()).sort((a, b) => b.totalStores - a.totalStores);
 
       return { data: result };
     } catch (error) {
-      logger.error(
-        `[prep_closing.service] Error getRulesSummary: ${error.message}`,
-      );
+      logger.error(`[prep_closing.service] Error getRulesSummary: ${error.message}`);
       throw error;
     }
   }
@@ -1172,20 +1037,17 @@ class PrepClosingService {
       await storeService.ensureInitialized();
 
       let filtered = this.prepClosingData.filter(
-        (i) =>
-          i.PRD_CLOSING === periode &&
-          (cabang === "All" || i.CAB === cabang) &&
-          i.IS_READY == false,
+        i => i.PRD_CLOSING === periode && (cabang === "All" || i.CAB === cabang) && i.IS_READY == false,
       );
 
       if (Array.isArray(ruleKeys) && ruleKeys.length > 0) {
         await this.loadIssuesCache(periode);
         const includeSet = new Set();
         for (const [kdtk, issues] of this.issuesCache.entries()) {
-          const hasAny = issues.some((iss) => ruleKeys.includes(iss.ruleKey));
+          const hasAny = issues.some(iss => ruleKeys.includes(iss.ruleKey));
           if (hasAny) includeSet.add(kdtk);
         }
-        filtered = filtered.filter((i) => includeSet.has(i.KDTK));
+        filtered = filtered.filter(i => includeSet.has(i.KDTK));
       }
 
       // Enrich with store name
@@ -1212,11 +1074,7 @@ class PrepClosingService {
       // Enrich with notes
       try {
         const notes = await this.getCachedNotes();
-        const notesByKey = new Map(
-          notes
-            .filter((n) => n.tableName === "screening_praclosing")
-            .map((n) => [n.unixKey, n]),
-        );
+        const notesByKey = new Map(notes.filter(n => n.tableName === "screening_praclosing").map(n => [n.unixKey, n]));
 
         for (let i = 0; i < results.length; i++) {
           const key = `${results[i].KDTK}${results[i].PRD_CLOSING}`;
@@ -1235,9 +1093,7 @@ class PrepClosingService {
           };
         }
       } catch (err) {
-        logger.warn(
-          `[prep_closing.service] Failed to enrich with notes: ${err.message}`,
-        );
+        logger.warn(`[prep_closing.service] Failed to enrich with notes: ${err.message}`);
       }
 
       // Preload issues map for search and rule filter
@@ -1246,41 +1102,26 @@ class PrepClosingService {
         await this.loadIssuesCache(periode);
         issuesByStore = this.issuesCache;
       } catch (err) {
-        logger.warn(
-          `[prep_closing.service] Unable to preload issues for search: ${err.message}`,
-        );
+        logger.warn(`[prep_closing.service] Unable to preload issues for search: ${err.message}`);
       }
 
       // Search
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
-        results = results.filter((item) => {
-          const fields = [
-            "CAB",
-            "KDTK",
-            "NAMA",
-            "PASSED_RULES",
-            "FAILED_RULES",
-            "CRITICAL_ISSUES",
-            "IS_READY",
-          ];
-          const matchNormal = fields.some(
-            (field) =>
-              item[field] && item[field].toString().toLowerCase().includes(q),
-          );
+        results = results.filter(item => {
+          const fields = ["CAB", "KDTK", "NAMA", "PASSED_RULES", "FAILED_RULES", "CRITICAL_ISSUES", "IS_READY"];
+          const matchNormal = fields.some(field => item[field] && item[field].toString().toLowerCase().includes(q));
 
           const matchNote =
             item.note &&
-            ((item.note.noteText &&
-              item.note.noteText.toLowerCase().includes(q)) ||
+            ((item.note.noteText && item.note.noteText.toLowerCase().includes(q)) ||
               (item.note.pic && item.note.pic.toLowerCase().includes(q)) ||
-              (item.note.fullName &&
-                item.note.fullName.toLowerCase().includes(q)));
+              (item.note.fullName && item.note.fullName.toLowerCase().includes(q)));
 
           let matchIssue = false;
           const storeIssues = issuesByStore.get(item.KDTK) || [];
           if (storeIssues.length > 0) {
-            matchIssue = storeIssues.some((iss) => {
+            matchIssue = storeIssues.some(iss => {
               const msg = (iss.message || "").toString().toLowerCase();
               const rname = (iss.ruleName || "").toLowerCase();
               return msg.includes(q) || rname.includes(q);
@@ -1319,17 +1160,7 @@ class PrepClosingService {
           bv = Number(bv);
         }
 
-        return order === "ASC"
-          ? av > bv
-            ? 1
-            : av < bv
-              ? -1
-              : 0
-          : av < bv
-            ? 1
-            : av > bv
-              ? -1
-              : 0;
+        return order === "ASC" ? (av > bv ? 1 : av < bv ? -1 : 0) : av < bv ? 1 : av > bv ? -1 : 0;
       });
 
       // Pagination
@@ -1345,9 +1176,7 @@ class PrepClosingService {
         totalPages: Math.ceil(totalRecords / limit),
       };
     } catch (error) {
-      logger.error(
-        `[prep_closing.service] Error getResumeByKdtk: ${error.message}`,
-      );
+      logger.error(`[prep_closing.service] Error getResumeByKdtk: ${error.message}`);
       throw error;
     }
   }
@@ -1391,11 +1220,7 @@ class PrepClosingService {
       try {
         const unixKey = `${kdtk}${periode}`;
         const notes = await this.getCachedNotes();
-        note =
-          notes.find(
-            (n) =>
-              n.unixKey === unixKey && n.tableName === "screening_praclosing",
-          ) || null;
+        note = notes.find(n => n.unixKey === unixKey && n.tableName === "screening_praclosing") || null;
       } catch {
         // Note not found
       }
@@ -1431,9 +1256,7 @@ class PrepClosingService {
 
       return result;
     } catch (error) {
-      logger.error(
-        `[prep_closing.service] Error getStoreDetails: ${error.message}`,
-      );
+      logger.error(`[prep_closing.service] Error getStoreDetails: ${error.message}`);
       throw error;
     }
   }
@@ -1456,14 +1279,14 @@ class PrepClosingService {
 
       let eligibleKdtk = null;
       if (cabang && cabang !== "All") {
-        eligibleKdtk = new Set(filteredData.map((d) => d.KDTK));
+        eligibleKdtk = new Set(filteredData.map(d => d.KDTK));
       }
 
       // Group issues by category
       const categories = ruleEngine.getCategories();
       const issuesByCategory = {};
 
-      Object.keys(categories).forEach((catKey) => {
+      Object.keys(categories).forEach(catKey => {
         issuesByCategory[catKey] = {
           ...categories[catKey],
           count: 0,
@@ -1474,7 +1297,7 @@ class PrepClosingService {
       for (const [kdtk, issues] of this.issuesCache.entries()) {
         if (eligibleKdtk && !eligibleKdtk.has(kdtk)) continue;
 
-        issues.forEach((issue) => {
+        issues.forEach(issue => {
           if (issuesByCategory[issue.category]) {
             issuesByCategory[issue.category].count++;
             if (!issuesByCategory[issue.category].stores.includes(kdtk)) {
@@ -1488,9 +1311,7 @@ class PrepClosingService {
         data: Object.values(issuesByCategory).sort((a, b) => a.order - b.order),
       };
     } catch (error) {
-      logger.error(
-        `[prep_closing.service] Error getIssuesByCategory: ${error.message}`,
-      );
+      logger.error(`[prep_closing.service] Error getIssuesByCategory: ${error.message}`);
       throw error;
     }
   }
@@ -1509,26 +1330,18 @@ class PrepClosingService {
       await this.loadIssuesCache(periode);
       this.ensureStoreNameMap();
 
-      const getName = (k) => {
+      const getName = k => {
         return this.storeNameMap.get(k) || "-";
       };
 
       const notes = await this.getCachedNotes().catch(() => []);
-      const notesByKey = new Map(
-        notes
-          .filter((n) => n.tableName === "screening_praclosing")
-          .map((n) => [n.unixKey, n]),
-      );
+      const notesByKey = new Map(notes.filter(n => n.tableName === "screening_praclosing").map(n => [n.unixKey, n]));
 
       const allStores = this.prepClosingData.filter(
-        (i) =>
-          i.PRD_CLOSING === periode && (cabang === "All" || i.CAB === cabang),
+        i => i.PRD_CLOSING === periode && (cabang === "All" || i.CAB === cabang),
       );
 
-      const ruleKeySet =
-        Array.isArray(ruleKeys) && ruleKeys.length > 0
-          ? new Set(ruleKeys)
-          : null;
+      const ruleKeySet = Array.isArray(ruleKeys) && ruleKeys.length > 0 ? new Set(ruleKeys) : null;
 
       const stores = [];
       const issuesBreakdown = [];
@@ -1545,9 +1358,7 @@ class PrepClosingService {
         const cab = storeCabMap.get(kdtk);
         if (!cab) continue; // Skip if no cab mapped (meaning out of loop/cabang filter scope)
 
-        const filteredIssues = ruleKeySet
-          ? issues.filter((iss) => ruleKeySet.has(iss.ruleKey))
-          : issues;
+        const filteredIssues = ruleKeySet ? issues.filter(iss => ruleKeySet.has(iss.ruleKey)) : issues;
         issuesMapByStore.set(kdtk, filteredIssues);
         for (const iss of filteredIssues) {
           issuesBreakdown.push({
@@ -1600,29 +1411,16 @@ class PrepClosingService {
         stores.splice(
           0,
           stores.length,
-          ...stores.filter((item) => {
-            const fields = [
-              "CAB",
-              "KDTK",
-              "NAMA",
-              "PASSED_RULES",
-              "FAILED_RULES",
-              "CRITICAL_ISSUES",
-              "IS_READY",
-            ];
-            const matchNormal = fields.some(
-              (field) =>
-                item[field] && item[field].toString().toLowerCase().includes(q),
-            );
+          ...stores.filter(item => {
+            const fields = ["CAB", "KDTK", "NAMA", "PASSED_RULES", "FAILED_RULES", "CRITICAL_ISSUES", "IS_READY"];
+            const matchNormal = fields.some(field => item[field] && item[field].toString().toLowerCase().includes(q));
             const matchNote =
               item.note &&
-              ((item.note.noteText &&
-                item.note.noteText.toLowerCase().includes(q)) ||
+              ((item.note.noteText && item.note.noteText.toLowerCase().includes(q)) ||
                 (item.note.pic && item.note.pic.toLowerCase().includes(q)) ||
-                (item.note.fullName &&
-                  item.note.fullName.toLowerCase().includes(q)));
+                (item.note.fullName && item.note.fullName.toLowerCase().includes(q)));
             const storeIssues = issuesMapByStore.get(item.KDTK) || [];
-            let matchIssue = storeIssues.some((iss) => {
+            let matchIssue = storeIssues.some(iss => {
               const msg = (iss.message || "").toString().toLowerCase();
               const rname = (iss.ruleName || "").toLowerCase();
               return msg.includes(q) || rname.includes(q);
@@ -1641,9 +1439,7 @@ class PrepClosingService {
         rulesSummary: rulesSummary.data,
       };
     } catch (error) {
-      logger.error(
-        `[prep_closing.service] Error getExportData: ${error.message}`,
-      );
+      logger.error(`[prep_closing.service] Error getExportData: ${error.message}`);
       throw error;
     }
   }
@@ -1657,9 +1453,7 @@ class PrepClosingService {
       const data = await fs.readFile(rulesPath, "utf8");
       return JSON.parse(data);
     } catch (error) {
-      logger.error(
-        `[prep_closing.service] Failed to get rules config: ${error.message}`,
-      );
+      logger.error(`[prep_closing.service] Failed to get rules config: ${error.message}`);
       throw error;
     }
   }
@@ -1676,15 +1470,11 @@ class PrepClosingService {
 
       // Force reload the rule engine so the next execution picks up new rules
       await ruleEngine.forceReload();
-      logger.info(
-        `[prep_closing.service] Rules configuration updated by ${username}`,
-      );
+      logger.info(`[prep_closing.service] Rules configuration updated by ${username}`);
 
       return rulesData;
     } catch (error) {
-      logger.error(
-        `[prep_closing.service] Failed to update rules config: ${error.message}`,
-      );
+      logger.error(`[prep_closing.service] Failed to update rules config: ${error.message}`);
       throw error;
     }
   }

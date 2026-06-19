@@ -411,9 +411,10 @@ class PenyesuaianService {
    * @param {string} strMonth - Month in MM format
    * @returns {Promise<Object>} Result with success status, records, and hasIssue flag
    */
-  async processSingleStore(store, strPeriode, strYear, strMonth) {
+  async processSingleStore(store, strPeriode, strYear, strMonth, sharedConnection = null) {
     const { storeCode, cab } = store;
     const results = { success: false, records: [], hasIssue: false };
+    const isShared = !!sharedConnection;
 
     try {
       // --- Store info --- //
@@ -424,8 +425,10 @@ class PenyesuaianService {
         return results;
       }
 
-      // --- Create DB connection --- //
-      const storeConnection = await dbStore.createDbStore(storeInfo.dbHost, config.connectionRetry.maxRetries);
+      // --- Create DB connection (or use shared) --- //
+      const storeConnection = isShared
+        ? sharedConnection
+        : await dbStore.createDbStore(storeInfo.dbHost, config.connectionRetry.maxRetries);
 
       if (!storeConnection) {
         await RekapRemoteService.addToTemp(
@@ -520,7 +523,9 @@ class PenyesuaianService {
           results.hasIssue = false; // No issues
         }
       } finally {
-        await storeConnection.end();
+        if (!isShared && storeConnection) {
+          await storeConnection.end();
+        }
       }
     } catch (err) {
       await RekapRemoteService.addToTemp(cab, storeCode, "penyesuaian", `[${storeCode}] ERROR: ${err.message}`);

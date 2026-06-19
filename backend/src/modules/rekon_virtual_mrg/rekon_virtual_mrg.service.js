@@ -421,111 +421,19 @@ class RekonVirtualService {
             }
 
             try {
-              // --- Store info --- //
-              const storeInfo = await withTimeout(
-                storeService.getStoreIPHost(storeCode),
-                10000,
-                `get store info ${storeCode}`,
+              const result = await withTimeout(
+                this.processSingleStore(store, strYear, strMonth),
+                config.parallelProcessing.storeTimeoutMs,
+                `process store ${storeCode}`,
               );
 
-              if (!storeInfo) {
-                await RekapRemoteService.addToTemp(
-                  cab,
-                  storeCode,
-                  "rekon_virtual_mrg",
-                  `[${storeCode}] store info not found`,
-                );
-                await incrementProgress(storeCode, "Store info not found ❌");
-                return;
-              }
-
-              // --- Create DB connection --- //
-              const storeConnection = await dbStore.createDbStore(storeInfo.dbHost, config.connectionRetry.maxRetries);
-
-              if (!storeConnection) {
-                await RekapRemoteService.addToTemp(
-                  cab,
-                  storeCode,
-                  "rekon_virtual_mrg",
-                  `[${storeCode}] failed to connect after ${config.connectionRetry.maxRetries} attempts`,
-                );
-                await incrementProgress(storeCode, "DB connection failed ❌");
-                return;
-              }
-
-              try {
-                const params = `${strYear}-${strMonth}`;
-                const [result] = await storeConnection.query(
-                  {
-                    sql: config.queries.store,
-                    timeout: config.parallelProcessing.queryTimeoutMs,
-                  },
-                  [params, params, params, params],
-                );
-
-                await RekapRemoteService.addToTemp(
-                  cab,
-                  storeCode,
-                  "rekon_virtual_mrg",
-                  `[${storeCode}] query completed, got ${result.length} records`,
-                );
-
-                if (result.length > 0) {
-                  const startDate = `${strYear}-${strMonth}-01`;
-                  const endDate = moment(`${strYear}-${strMonth}`, "YYYY-MM").endOf("month").format("YYYY-MM-DD");
-
-                  // 1. Fetch current local records for this shop & period to compare against
-                  const existingRecords = await SaldoVirtual.findAll({
-                    where: {
-                      CABANG: cab,
-                      SHOP: storeCode,
-                      TANGGAL: { [Op.between]: [startDate, endDate] },
-                    },
-                    attributes: ["TANGGAL", "PRDCD"],
-                  });
-
-                  // 2. Build reference set for incoming composite keys (TANGGAL + PRDCD)
-                  const incomingKeys = new Set();
-                  result.forEach(r => {
-                    const dateStr = moment(r.TANGGAL).format("YYYY-MM-DD");
-                    incomingKeys.add(`${dateStr}_${r.PRDCD}`);
-                  });
-
-                  // 3. Identify obsolete records (existing ones whose TANGGAL + PRDCD is not in incoming keys)
-                  const obsoleteRecords = existingRecords.filter(ex => {
-                    const dateStr = moment(ex.TANGGAL).format("YYYY-MM-DD");
-                    return !incomingKeys.has(`${dateStr}_${ex.PRDCD}`);
-                  });
-
-                  // 4. Safely destroy obsolete records in chunks to prevent SQL param exhaustion
-                  if (obsoleteRecords.length > 0) {
-                    for (let i = 0; i < obsoleteRecords.length; i += 100) {
-                      const chunk = obsoleteRecords.slice(i, i + 100);
-                      await SaldoVirtual.destroy({
-                        where: {
-                          CABANG: cab,
-                          SHOP: storeCode,
-                          [Op.or]: chunk.map(obs => ({
-                            TANGGAL: obs.TANGGAL,
-                            PRDCD: obs.PRDCD,
-                          })),
-                        },
-                      });
-                    }
-                  }
-
-                  await SaldoVirtual.bulkCreate(result, {
-                    updateOnDuplicate: ["QTY_MSTRAN", "QTY_MTRAN", "SEL", "LASTCATCH"],
-                  });
-
-                  newRecords.push(...result);
-                } else {
-                  await this.deleteStorePeriod(cab, storeCode, strYear, strMonth);
+              if (result.success) {
+                if (result.newRecords.length > 0) {
+                  newRecords.push(...result.newRecords);
                 }
-
-                await incrementProgress(storeCode, `Success ✅ (${result.length} rows)`);
-              } finally {
-                await storeConnection.end();
+                await incrementProgress(storeCode, `Success ✅ (${result.newRecords.length} rows)`);
+              } else {
+                await incrementProgress(storeCode, "Error ❌");
               }
             } catch (err) {
               await RekapRemoteService.addToTemp(
@@ -647,6 +555,127 @@ class RekonVirtualService {
 
       throw error;
     }
+  }
+
+  /**
+   * Process single store for rekon virtual margin screening
+   * @param {Object} store - Store object with storeCode and cab
+   * @param {string} strYear - Year in YYYY format
+   * @param {string} strMonth - Month in MM format
+   * @param {Object|null} sharedConnection - Shared DB connection from combined screening
+   * @returns {Promise<Object>} Result with success status and newRecords
+   */
+  async processSingleStore(store, strYear, strMonth, sharedConnection = null) {
+    const { storeCode, cab } = store;
+    const results = { success: false, newRecords: [] };
+    const isShared = !!sharedConnection;
+
+    try {
+      // --- Store info --- //
+      const storeInfo = await storeService.getStoreIPHost(storeCode);
+
+      if (!storeInfo) {
+        await RekapRemoteService.addToTemp(cab, storeCode, "rekon_virtual_mrg", `[${storeCode}] store info not found`);
+        return results;
+      }
+
+      // --- Create DB connection (or use shared) --- //
+      const storeConnection = isShared
+        ? sharedConnection
+        : await dbStore.createDbStore(storeInfo.dbHost, config.connectionRetry.maxRetries);
+
+      if (!storeConnection) {
+        await RekapRemoteService.addToTemp(
+          cab,
+          storeCode,
+          "rekon_virtual_mrg",
+          `[${storeCode}] failed to connect after ${config.connectionRetry.maxRetries} attempts`,
+        );
+        return results;
+      }
+
+      try {
+        const params = `${strYear}-${strMonth}`;
+        const [result] = await storeConnection.query(
+          {
+            sql: config.queries.store,
+            timeout: config.parallelProcessing.queryTimeoutMs,
+          },
+          [params, params, params, params],
+        );
+
+        await RekapRemoteService.addToTemp(
+          cab,
+          storeCode,
+          "rekon_virtual_mrg",
+          `[${storeCode}] query completed, got ${result.length} records`,
+        );
+
+        if (result.length > 0) {
+          const startDate = `${strYear}-${strMonth}-01`;
+          const endDate = moment(`${strYear}-${strMonth}`, "YYYY-MM").endOf("month").format("YYYY-MM-DD");
+
+          // 1. Fetch current local records for this shop & period to compare against
+          const existingRecords = await SaldoVirtual.findAll({
+            where: {
+              CABANG: cab,
+              SHOP: storeCode,
+              TANGGAL: { [Op.between]: [startDate, endDate] },
+            },
+            attributes: ["TANGGAL", "PRDCD"],
+          });
+
+          // 2. Build reference set for incoming composite keys (TANGGAL + PRDCD)
+          const incomingKeys = new Set();
+          result.forEach(r => {
+            const dateStr = moment(r.TANGGAL).format("YYYY-MM-DD");
+            incomingKeys.add(`${dateStr}_${r.PRDCD}`);
+          });
+
+          // 3. Identify obsolete records (existing ones whose TANGGAL + PRDCD is not in incoming keys)
+          const obsoleteRecords = existingRecords.filter(ex => {
+            const dateStr = moment(ex.TANGGAL).format("YYYY-MM-DD");
+            return !incomingKeys.has(`${dateStr}_${ex.PRDCD}`);
+          });
+
+          // 4. Safely destroy obsolete records in chunks to prevent SQL param exhaustion
+          if (obsoleteRecords.length > 0) {
+            for (let i = 0; i < obsoleteRecords.length; i += 100) {
+              const chunk = obsoleteRecords.slice(i, i + 100);
+              await SaldoVirtual.destroy({
+                where: {
+                  CABANG: cab,
+                  SHOP: storeCode,
+                  [Op.or]: chunk.map(obs => ({
+                    TANGGAL: obs.TANGGAL,
+                    PRDCD: obs.PRDCD,
+                  })),
+                },
+              });
+            }
+          }
+
+          await SaldoVirtual.bulkCreate(result, {
+            updateOnDuplicate: ["QTY_MSTRAN", "QTY_MTRAN", "SEL", "LASTCATCH"],
+          });
+
+          results.newRecords = result;
+        } else {
+          await this.deleteStorePeriod(cab, storeCode, strYear, strMonth);
+        }
+
+        results.success = true;
+      } finally {
+        // Only close connection if we opened it
+        if (!isShared && storeConnection) {
+          await storeConnection.end();
+        }
+      }
+    } catch (err) {
+      await RekapRemoteService.addToTemp(cab, storeCode, "rekon_virtual_mrg", `[${storeCode}] ERROR: ${err.message}`);
+    }
+
+    return results;
   }
 
   async deleteStorePeriod(cabang, shop, year, month) {

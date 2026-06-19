@@ -384,9 +384,10 @@ class PrepClosingService {
   /**
    * Process single store screening
    */
-  async processSingleStore(store, strPeriode, strYear, strMonth) {
+  async processSingleStore(store, strPeriode, strYear, strMonth, sharedConnection = null) {
     const { storeCode, cab } = store;
     const results = { success: false, records: null, hasIssue: false };
+    const isShared = !!sharedConnection;
 
     try {
       // Get store info
@@ -397,8 +398,10 @@ class PrepClosingService {
         return results;
       }
 
-      // Create DB connection
-      const storeConnection = await dbStore.createDbStore(storeInfo.dbHost, config.connectionRetry.maxRetries);
+      // Create DB connection (or use shared)
+      const storeConnection = isShared
+        ? sharedConnection
+        : await dbStore.createDbStore(storeInfo.dbHost, config.connectionRetry.maxRetries);
 
       if (!storeConnection) {
         await RekapRemoteService.addToTemp(
@@ -472,7 +475,9 @@ class PrepClosingService {
         results.hasIssue = !ruleResults.isReady; // Has issue if not ready
         results.success = true;
       } finally {
-        await storeConnection.end();
+        if (!isShared && storeConnection) {
+          await storeConnection.end();
+        }
       }
     } catch (err) {
       await RekapRemoteService.addToTemp(cab, storeCode, "prep_closing", `[${storeCode}] ERROR: ${err.message}`);

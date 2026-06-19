@@ -199,10 +199,11 @@ class RekonSalesService {
    * Process single store screening
    * FIXED: Properly handle detailIssues from rekonKodePesanan
    */
-  async processSingleStore(store, strMonth, strYear, dataGL, options = {}) {
+  async processSingleStore(store, strMonth, strYear, dataGL, options = {}, sharedConnection = null) {
     const { deferSave = false } = options;
     const { storeCode, cab } = store;
     const results = { success: false, records: null, hasIssue: false };
+    const isShared = !!sharedConnection;
 
     try {
       // Get store info
@@ -213,8 +214,10 @@ class RekonSalesService {
         return results;
       }
 
-      // Create DB connection
-      const storeConnection = await dbStore.createDbStore(storeInfo.dbHost, config.connectionRetry.maxRetries);
+      // Create DB connection (or use shared)
+      const storeConnection = isShared
+        ? sharedConnection
+        : await dbStore.createDbStore(storeInfo.dbHost, config.connectionRetry.maxRetries);
 
       if (!storeConnection) {
         await RekapRemoteService.addToTemp(
@@ -302,7 +305,9 @@ class RekonSalesService {
           results.hasIssue = false;
         }
       } finally {
-        await storeConnection.end();
+        if (!isShared && storeConnection) {
+          await storeConnection.end();
+        }
       }
     } catch (err) {
       await RekapRemoteService.addToTemp(cab, storeCode, "rekon_sales", `[${storeCode}] ERROR: ${err.message}`);

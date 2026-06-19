@@ -87,6 +87,146 @@ class RekonPersediaanService {
     }
   }
 
+  /**
+   * Process single store for rekon persediaan screening
+   * @param {Object} store - Store object with storeCode and cab
+   * @param {string} strPeriode - Period in YYMM format
+   * @param {string} strYear - Year in YYYY format
+   * @param {string} strMonth - Month in MM format
+   * @param {Array} dates - Array of date strings to process
+   * @param {Object} wrcContext - Pre-computed WRC context { wrcPool, branchWrcMap }
+   * @param {Object|null} sharedConnection - Shared DB connection from combined screening
+   * @returns {Promise<Object>} Result with success status and newRecordsCount
+   */
+  async processSingleStore(store, strPeriode, strYear, strMonth, dates, wrcContext, sharedConnection = null) {
+    const { storeCode, cab } = store;
+    const results = { success: false, newRecordsCount: 0 };
+    const isShared = !!sharedConnection;
+    const { branchWrcMap } = wrcContext || {};
+
+    try {
+      const storeInfo = await storeService.getStoreIPHost(storeCode);
+      if (!storeInfo) {
+        await RekapRemoteService.addToTemp(cab, storeCode, "rekon_persediaan", `[${storeCode}] store info not found`);
+        return results;
+      }
+
+      const storeConn = isShared ? sharedConnection : await dbStore.createDbStore(storeInfo.dbHost, 2);
+
+      if (!storeConn) {
+        await RekapRemoteService.addToTemp(cab, storeCode, "rekon_persediaan", `[${storeCode}] failed to connect`);
+        return results;
+      }
+
+      try {
+        for (const date of dates) {
+          try {
+            // Fetch Store HPP
+            const [rows] = await storeConn.query(config.queries.store, [date, date, date, date, date]);
+            const sData = rows[0] || {};
+
+            // Lookup WRC HPP from Cache
+            const wData = (branchWrcMap && branchWrcMap.get(`${storeCode}_${date}`)) || {};
+
+            const h_s = [
+              Number(sData.HPP_DRY) || 0,
+              Number(sData.HPP_ISTORE) || 0,
+              Number(sData.HPP_RESTO) || 0,
+              Number(sData.HPP_VIRTUAL) || 0,
+              Number(sData.HPP_SPC_STORE) || 0,
+            ];
+            const h_w = [
+              Number(wData.HPP_DRY) || 0,
+              Number(wData.HPP_ISTORE) || 0,
+              Number(wData.HPP_RESTO) || 0,
+              Number(wData.HPP_VIRTUAL) || 0,
+              Number(wData.HPP_SPC_STORE) || 0,
+            ];
+            const diffs = h_s.map((v, i) => v - h_w[i]);
+            const hasDiff = diffs.some(d => Math.abs(d) > 100);
+
+            if (hasDiff) {
+              await SaldoRekonPersediaan.bulkCreate(
+                [
+                  {
+                    CABANG: cab,
+                    SHOP: storeCode,
+                    TANGGAL: date,
+                    RECID: "*",
+                    HPP_DRY_STORE: h_s[0],
+                    HPP_ISTORE_STORE: h_s[1],
+                    HPP_RESTO_STORE: h_s[2],
+                    HPP_VIRTUAL_STORE: h_s[3],
+                    HPP_SPC_STORE_STORE: h_s[4],
+                    HPP_DRY_WRC: h_w[0],
+                    HPP_ISTORE_WRC: h_w[1],
+                    HPP_RESTO_WRC: h_w[2],
+                    HPP_VIRTUAL_WRC: h_w[3],
+                    HPP_SPC_STORE_WRC: h_w[4],
+                    SELISIH_DRY: diffs[0],
+                    SELISIH_ISTORE: diffs[1],
+                    SELISIH_RESTO: diffs[2],
+                    SELISIH_VIRTUAL: diffs[3],
+                    SELISIH_SPC: diffs[4],
+                    LASTCATCH: new Date(),
+                  },
+                ],
+                {
+                  updateOnDuplicate: [
+                    "HPP_DRY_STORE",
+                    "HPP_ISTORE_STORE",
+                    "HPP_RESTO_STORE",
+                    "HPP_VIRTUAL_STORE",
+                    "HPP_SPC_STORE_STORE",
+                    "HPP_DRY_WRC",
+                    "HPP_ISTORE_WRC",
+                    "HPP_RESTO_WRC",
+                    "HPP_VIRTUAL_WRC",
+                    "HPP_SPC_STORE_WRC",
+                    "SELISIH_DRY",
+                    "SELISIH_ISTORE",
+                    "SELISIH_RESTO",
+                    "SELISIH_VIRTUAL",
+                    "SELISIH_SPC",
+                    "RECID",
+                    "LASTCATCH",
+                  ],
+                },
+              );
+              results.newRecordsCount++;
+            } else {
+              // Resolve if previously existed but now matches
+              await SaldoRekonPersediaan.update(
+                { RECID: "1", LASTCATCH: new Date() },
+                {
+                  where: {
+                    CABANG: cab,
+                    SHOP: storeCode,
+                    TANGGAL: date,
+                    RECID: "*",
+                  },
+                },
+              );
+            }
+          } catch (e) {
+            logger.error(`[rekon_persediaan] Step Error ${storeCode} ${date}: ${e.message}`);
+          }
+        }
+
+        results.success = true;
+      } finally {
+        if (!isShared && storeConn) {
+          await storeConn.end();
+        }
+      }
+    } catch (err) {
+      logger.error(`[rekon_persediaan] Store Error ${storeCode}: ${err.message}`);
+      await RekapRemoteService.addToTemp(cab, storeCode, "rekon_persediaan", `Error: ${err.message}`);
+    }
+
+    return results;
+  }
+
   async screening(options) {
     await storeService.ensureInitialized();
     const { cabang, periode, shops, username, fullName, force } = options;
@@ -235,136 +375,21 @@ class RekonPersediaanService {
               const wrcPool = wrcPools.get(cab);
               const branchWrcMap = await fetchWrcBatch(cab, wrcPool);
 
-              const storeInfo = await storeService.getStoreIPHost(storeCode);
-              if (!storeInfo) {
-                processedStores++;
-                if (!skipProgress)
-                  await progressService.updateProgress(taskId, processedStores, {
-                    description: `Store ${storeCode} → Info not found`,
-                    status: "Processing",
-                  });
-                return;
+              const result = await this.processSingleStore(store, periode, year, month, dates, {
+                wrcPool,
+                branchWrcMap,
+              });
+
+              if (result.success) {
+                newRecordsCount += result.newRecordsCount;
               }
 
-              const storeConn = await withTimeout(
-                dbStore.createDbStore(storeInfo.dbHost, 2),
-                15000,
-                `connect ${storeCode}`,
-              );
-              if (!storeConn) {
-                processedStores++;
-                if (!skipProgress)
-                  await progressService.updateProgress(taskId, processedStores, {
-                    description: `Store ${storeCode} → Connection failed`,
-                    status: "Processing",
-                  });
-                return;
-              }
-
-              try {
-                for (const date of dates) {
-                  try {
-                    // Fetch Store HPP
-                    const [rows] = await storeConn.query(config.queries.store, [date, date, date, date, date]);
-                    const sData = rows[0] || {};
-
-                    // Lookup WRC HPP from Cache
-                    const wData = branchWrcMap.get(`${storeCode}_${date}`) || {};
-
-                    const h_s = [
-                      Number(sData.HPP_DRY) || 0,
-                      Number(sData.HPP_ISTORE) || 0,
-                      Number(sData.HPP_RESTO) || 0,
-                      Number(sData.HPP_VIRTUAL) || 0,
-                      Number(sData.HPP_SPC_STORE) || 0,
-                    ];
-                    const h_w = [
-                      Number(wData.HPP_DRY) || 0,
-                      Number(wData.HPP_ISTORE) || 0,
-                      Number(wData.HPP_RESTO) || 0,
-                      Number(wData.HPP_VIRTUAL) || 0,
-                      Number(wData.HPP_SPC_STORE) || 0,
-                    ];
-                    const diffs = h_s.map((v, i) => v - h_w[i]);
-                    const hasDiff = diffs.some(d => Math.abs(d) > 100);
-
-                    if (hasDiff) {
-                      await SaldoRekonPersediaan.bulkCreate(
-                        [
-                          {
-                            CABANG: cab,
-                            SHOP: storeCode,
-                            TANGGAL: date,
-                            RECID: "*",
-                            HPP_DRY_STORE: h_s[0],
-                            HPP_ISTORE_STORE: h_s[1],
-                            HPP_RESTO_STORE: h_s[2],
-                            HPP_VIRTUAL_STORE: h_s[3],
-                            HPP_SPC_STORE_STORE: h_s[4],
-                            HPP_DRY_WRC: h_w[0],
-                            HPP_ISTORE_WRC: h_w[1],
-                            HPP_RESTO_WRC: h_w[2],
-                            HPP_VIRTUAL_WRC: h_w[3],
-                            HPP_SPC_STORE_WRC: h_w[4],
-                            SELISIH_DRY: diffs[0],
-                            SELISIH_ISTORE: diffs[1],
-                            SELISIH_RESTO: diffs[2],
-                            SELISIH_VIRTUAL: diffs[3],
-                            SELISIH_SPC: diffs[4],
-                            LASTCATCH: new Date(),
-                          },
-                        ],
-                        {
-                          updateOnDuplicate: [
-                            "HPP_DRY_STORE",
-                            "HPP_ISTORE_STORE",
-                            "HPP_RESTO_STORE",
-                            "HPP_VIRTUAL_STORE",
-                            "HPP_SPC_STORE_STORE",
-                            "HPP_DRY_WRC",
-                            "HPP_ISTORE_WRC",
-                            "HPP_RESTO_WRC",
-                            "HPP_VIRTUAL_WRC",
-                            "HPP_SPC_STORE_WRC",
-                            "SELISIH_DRY",
-                            "SELISIH_ISTORE",
-                            "SELISIH_RESTO",
-                            "SELISIH_VIRTUAL",
-                            "SELISIH_SPC",
-                            "RECID",
-                            "LASTCATCH",
-                          ],
-                        },
-                      );
-                      newRecordsCount++;
-                    } else {
-                      // Resolve if previously existed but now matches
-                      await SaldoRekonPersediaan.update(
-                        { RECID: "1", LASTCATCH: new Date() },
-                        {
-                          where: {
-                            CABANG: cab,
-                            SHOP: storeCode,
-                            TANGGAL: date,
-                            RECID: "*",
-                          },
-                        },
-                      );
-                    }
-                  } catch (e) {
-                    logger.error(`[rekon_persediaan] Step Error ${storeCode} ${date}: ${e.message}`);
-                  }
-                }
-
-                processedStores++;
-                if (!skipProgress)
-                  await progressService.updateProgress(taskId, processedStores, {
-                    description: `Store ${storeCode} processed`,
-                    status: "Processing",
-                  });
-              } finally {
-                await storeConn.end();
-              }
+              processedStores++;
+              if (!skipProgress)
+                await progressService.updateProgress(taskId, processedStores, {
+                  description: `Store ${storeCode} ${result.success ? "processed" : "→ Error"}`,
+                  status: "Processing",
+                });
             } catch (err) {
               logger.error(`[rekon_persediaan] Store Error ${storeCode}: ${err.message}`);
               await RekapRemoteService.addToTemp(cab, storeCode, "rekon_persediaan", `Error: ${err.message}`);

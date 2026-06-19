@@ -124,7 +124,7 @@ export default {
   // Parallel processing configuration
   parallelProcessing: {
     // Maximum number of stores to process concurrently
-    concurrencyLimit: 10,
+    concurrencyLimit: 5,
     // Maximum number of branches to process concurrently
     branchConcurrencyLimit: 3,
     // Timeout for individual store processing (milliseconds)

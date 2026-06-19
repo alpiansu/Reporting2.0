@@ -37,6 +37,9 @@ router.delete("/:cabang/:shop/:tanggal/:prdcd", rekonVirtualController.deleteRec
 // Insert records from store
 router.post("/insert-from-store", rekonVirtualController.insertFromStore);
 
+// Sync JSON staging from database
+router.post("/sync-json", rekonVirtualController.syncJson);
+
 // Sync all data (Migration)
 router.post("/sync-all", rekonVirtualController.syncAllData);
 

@@ -323,6 +323,8 @@ class PenyesuaianService {
       // 🔄 Force refresh legacy notes cache setelah sync selesai
       // Ini memastikan data legacy notes selalu up-to-date pasca screening
       await this.refreshLegacyNotesCache(this.penyesuaianData, periode);
+
+      return this.penyesuaianData.length;
     } catch (error) {
       logger.error(`[penyesuaian.service] Failed to sync data for period ${periode}: ${error.message}`);
       throw error;
@@ -333,6 +335,40 @@ class PenyesuaianService {
    * 🛠️ Fungsi baru untuk mengupdate tabel summary berdasarkan data detail (Upsert)
    * Berfungsi sebagai "Single Source of Truth" untuk resume per toko.
    */
+  /**
+   * Sync semua periode yang tersedia di tabel summary ke file JSON per periode.
+   */
+  async syncAllData() {
+    try {
+      logger.info("[penyesuaian.service] Starting full JSON sync from DB summary");
+
+      const model = await SesuaiTokoSummary.getModel();
+      const sequelize = model.sequelize;
+      const [rows] = await sequelize.query(`
+        SELECT DISTINCT PERIODE
+        FROM sesuai_toko_summary
+        WHERE PERIODE IS NOT NULL AND PERIODE <> ''
+        ORDER BY PERIODE
+      `);
+
+      let totalFiles = 0;
+      let totalRecords = 0;
+
+      for (const row of rows) {
+        const periode = row.PERIODE;
+        const recordCount = await this.syncToJsonFile(periode);
+        totalFiles++;
+        totalRecords += recordCount;
+      }
+
+      logger.info(`[penyesuaian.service] Full JSON sync completed: ${totalRecords} records, ${totalFiles} files`);
+      return { totalFiles, totalRecords };
+    } catch (error) {
+      logger.error(`[penyesuaian.service] Failed full JSON sync: ${error.message}`);
+      throw error;
+    }
+  }
+
   async updateSummaryFromRecords(records) {
     if (!records || records.length === 0) return;
 

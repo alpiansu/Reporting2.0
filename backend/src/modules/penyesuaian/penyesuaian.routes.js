@@ -10,6 +10,9 @@ router.use(authenticateJWT);
 // Screening routes (supports 3 levels: All cabang, 1 cabang, 1 store)
 router.get("/screening", penyesuaianController.screeningByCabang);
 
+// Sync JSON staging from database
+router.post("/sync-json", penyesuaianController.syncJson);
+
 // Get summary statistics (RECID='*' only)
 router.get("/summary", penyesuaianController.getSummary);
 

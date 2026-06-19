@@ -322,8 +322,43 @@ class PrepClosingService {
         this.issuesCacheLoadTime = 0;
         await this.loadIssuesCache(rows[0].PRD_CLOSING);
       }
+
+      return this.prepClosingData.length;
     } catch (error) {
       logger.error(`[prep_closing.service] Failed to sync: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Sync semua periode yang tersedia di tabel screening_praclosing ke file JSON per periode.
+   */
+  async syncAllData() {
+    try {
+      logger.info("[prep_closing.service] Starting full JSON sync from DB");
+
+      const model = await ScreeningPraClosing.getModel();
+      const sequelize = model.sequelize;
+      const [rows] = await sequelize.query(`
+        SELECT DISTINCT PRD_CLOSING AS periode
+        FROM screening_praclosing
+        WHERE PRD_CLOSING IS NOT NULL AND PRD_CLOSING <> ''
+        ORDER BY PRD_CLOSING
+      `);
+
+      let totalFiles = 0;
+      let totalRecords = 0;
+
+      for (const row of rows) {
+        const recordCount = await this.syncToJsonFile(row.periode);
+        totalFiles++;
+        totalRecords += recordCount;
+      }
+
+      logger.info(`[prep_closing.service] Full JSON sync completed: ${totalRecords} records, ${totalFiles} files`);
+      return { totalFiles, totalRecords };
+    } catch (error) {
+      logger.error(`[prep_closing.service] Failed full JSON sync: ${error.message}`);
       throw error;
     }
   }

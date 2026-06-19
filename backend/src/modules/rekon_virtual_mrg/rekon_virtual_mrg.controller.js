@@ -271,6 +271,33 @@ export const syncAllData = async (req, res) => {
 };
 
 /**
+ * Sync ulang JSON staging dari database.
+ * POST /api/rekon-virtual-mrg/sync-json
+ * Body/query opsional: periode (YYMM). Jika kosong, sync semua periode dari DB.
+ */
+export const syncJson = async (req, res) => {
+  try {
+    const periode = req.body?.periode || req.query?.periode;
+
+    if (periode && !/^\d{4}$/.test(periode)) {
+      return apiResponse.badRequest(res, "Format periode tidak valid. Gunakan format YYMM (contoh: 2511)");
+    }
+
+    const result = periode
+      ? { periode, totalRecords: await rekonVirtualService.syncToJsonFile(periode), totalFiles: 1 }
+      : await rekonVirtualService.syncAllData();
+
+    return apiResponse.success(res, {
+      message: "Sync JSON rekon virtual margin dari database berhasil",
+      ...result,
+    });
+  } catch (error) {
+    logger.error(`Error in syncJson: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+/**
  * Update or create note for a specific record
  * PUT /api/rekon-virtual-mrg/note/:cabang/:shop/:tanggal/:prdcd
  */

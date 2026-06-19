@@ -66,6 +66,33 @@ export const screeningByCabang = async (req, res) => {
 };
 
 /**
+ * Sync ulang JSON staging dari database.
+ * POST /api/prep-closing/sync-json
+ * Body/query opsional: periode (YYMM). Jika kosong, sync semua periode dari DB.
+ */
+export const syncJson = async (req, res) => {
+  try {
+    const periode = req.body?.periode || req.query?.periode;
+
+    if (periode && !/^\d{4}$/.test(periode)) {
+      return apiResponse.badRequest(res, "Format periode tidak valid. Gunakan format YYMM (contoh: 2511)");
+    }
+
+    const result = periode
+      ? { periode, totalRecords: await prepClosingService.syncToJsonFile(periode), totalFiles: 1 }
+      : await prepClosingService.syncAllData();
+
+    return apiResponse.success(res, {
+      message: "Sync JSON prep-closing dari database berhasil",
+      ...result,
+    });
+  } catch (error) {
+    logger.error(`[prep_closing.controller] Error syncing JSON: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+/**
  * Get summary statistics
  * GET /api/prep-closing/summary
  */

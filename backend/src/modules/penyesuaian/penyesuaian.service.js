@@ -113,12 +113,15 @@ class PenyesuaianService {
    * Load data langsung dari database sesuai filter
    * Jika kdtk ada → abaikan cabang, else filter by cabang
    */
-  async loadRecordsDetailFromDb({ periode, cabang, kdtk }) {
+  async loadRecordsDetailFromDb({ periode, cabang, kdtk }, hasRefreshed = false) {
     const model = await SesuaiToko.getModel();
     const sequelize = model.sequelize;
     const { Sequelize } = await import("sequelize");
+    const strYear = moment(periode, "YYMM").format("YYYY");
+    const strMonth = moment(periode, "YYMM").format("MM");
 
-    const whereClauses = [`PERIODE = :periode`, `RECID = '*'`, `ABS(SESUAI) > 1000 `];
+    const whereClauses = [`PERIODE = :periode`, `RECID = '*'`, `ABS(SESUAI) > 1000`];
+
     const replacements = { periode };
 
     if (kdtk) {
@@ -130,23 +133,34 @@ class PenyesuaianService {
     }
 
     const query = `
-    SELECT RECID_PRODMAST AS RECID, PRDCD, SINGKATAN, PTAG,
-    CAST(SESUAI AS SIGNED) AS SESUAI,
-    CAST(BEGBAL AS SIGNED) AS BEGBAL,
-    CAST(TRFIN AS SIGNED) AS TRFIN,
-    CAST(TRFOUT AS SIGNED) AS TRFOUT,
-    CAST(RP_SALES AS SIGNED) AS RP_SALES,
-    CAST(RP_RETUR_SALES AS SIGNED) AS RP_RETUR_SALES,
-    CAST(ADJ AS SIGNED) AS ADJ,
-    CAST(BA AS SIGNED) AS BA,
-    CAST(BS AS SIGNED) AS BS,
-    CAST(ACOST AS SIGNED) AS ACOST,
-    CAST(LCOST AS SIGNED) AS LCOST,
-    CAST(STOCK AS SIGNED) AS STOCK,
-    CAST(RP_STOCK AS SIGNED) AS RP_STOCK
-    FROM sesuai_toko
+    SELECT
+      RECID_PRODMAST AS RECID,
+      PRDCD,
+      SINGKATAN,
+      PTAG,
+      CAST(a.SESUAI AS SIGNED) AS SESUAI,
+      CAST(BEGBAL AS SIGNED) AS BEGBAL,
+      CAST(TRFIN AS SIGNED) AS TRFIN,
+      CAST(TRFOUT AS SIGNED) AS TRFOUT,
+      CAST(RP_SALES AS SIGNED) AS RP_SALES,
+      CAST(RP_RETUR_SALES AS SIGNED) AS RP_RETUR_SALES,
+      CAST(ADJ AS SIGNED) AS ADJ,
+      CAST(BA AS SIGNED) AS BA,
+      CAST(BS AS SIGNED) AS BS,
+      CAST(ACOST AS SIGNED) AS ACOST,
+      CAST(LCOST AS SIGNED) AS LCOST,
+      CAST(STOCK AS SIGNED) AS STOCK,
+      CAST(RP_STOCK AS SIGNED) AS RP_STOCK,
+      CASE
+        WHEN DATE(a.UPDTIME) = DATE(b.UPDTIME) THEN 'OK'
+        WHEN DATE(a.UPDTIME) > DATE(b.UPDTIME) THEN 'UPD-SUMMARY'
+        WHEN DATE(a.UPDTIME) < DATE(b.UPDTIME) THEN 'UPD'
+        ELSE 'UNKNOWN'
+    END AS STATUS_UPDTIME
+    FROM sesuai_toko a left join 
+    (SELECT cabang, periode, kdtk, updtime FROM sesuai_toko_summary) b USING(cabang, periode, kdtk)
     WHERE ${whereClauses.join(" AND ")}
-    ORDER BY SESUAI DESC
+    ORDER BY a.SESUAI DESC
   `;
 
     const records = await sequelize.query(query, {
@@ -154,11 +168,30 @@ class PenyesuaianService {
       type: Sequelize.QueryTypes.SELECT,
     });
 
-    logger.info(
-      `[penyesuaian.service] Loaded ${records.length} records from DB for periode=${periode}, cabang=${
-        cabang || "-"
-      }, kdtk=${kdtk || "-"}`,
-    );
+    if (records.length == 0 || records[0]?.STATUS_UPDTIME != "OK") {
+      // ✅ Bug 2 fix: Guard rekursi dipindah ke DALAM if block
+      if (hasRefreshed) {
+        logger.warn(`[penyesuaian.service] Data tetap kosong/tidak valid setelah refresh toko ${kdtk}`);
+        return [];
+      }
+
+      // ✅ Bug 1 fix: Gunakan optional chaining + fallback value
+      const statusUpdtime = records[0]?.STATUS_UPDTIME ?? "EMPTY";
+      logger.info(
+        `[penyesuaian.service] status updtime ${statusUpdtime} tarik data detail penyesuaian toko ${kdtk} terlebih dahulu!`,
+      );
+
+      await this.getDetailFromStore(kdtk, periode);
+
+      // ✅ Bug 3 fix: length dicek duluan, gunakan ===
+      if (records.length > 0 && statusUpdtime === "UPD-SUMMARY") {
+        await this.processSingleStore({ storeCode: kdtk, cabang }, periode, strYear, strMonth);
+      }
+
+      return await this.loadRecordsDetailFromDb({ periode, cabang, kdtk }, true);
+    }
+
+    // Blok hasRefreshed yang lama di sini sudah tidak perlu → hapus
     return records;
   }
 
@@ -447,8 +480,9 @@ class PenyesuaianService {
    * @param {string} strMonth - Month in MM format
    * @returns {Promise<Object>} Result with success status, records, and hasIssue flag
    */
-  async processSingleStore(store, strPeriode, strYear, strMonth, sharedConnection = null) {
+  async processSingleStore(store, strPeriode, strYear, strMonth, sharedConnection = null, sessionId) {
     const { storeCode, cab } = store;
+
     const results = { success: false, records: [], hasIssue: false };
     const isShared = !!sharedConnection;
 
@@ -483,7 +517,6 @@ class PenyesuaianService {
         // STEP 1: Run filter query to check if store has data exceeding threshold
         const filterQuery = config.queries.filter(filetToko, strPeriode, strMonth, strYear);
         const [filterResult] = await storeConnection.query(filterQuery, [strMonth, strYear, strMonth, strYear]);
-
         await RekapRemoteService.addToTemp(
           cab,
           storeCode,
@@ -491,70 +524,14 @@ class PenyesuaianService {
           `[${storeCode}] filter query completed, threshold check: ${filterResult.length > 0 ? "EXCEEDED" : "OK"}`,
         );
 
-        // 🛑 ALUR BARU: Hapus data lama berdasarkan KDTK & PERIODE sebelum proses lebih lanjut
-        await SesuaiToko.destroy({
-          where: { KDTK: storeCode, PERIODE: strPeriode },
-        });
-
         // STEP 2: If threshold exceeded, run detail query
         if (filterResult.length > 0) {
-          const detailQuery = config.queries.detail(filetToko, strPeriode, strMonth, strYear);
-          const [detailResult] = await storeConnection.query(detailQuery, [strMonth, strYear, strMonth, strYear]);
-
-          await RekapRemoteService.addToTemp(
-            cab,
-            storeCode,
-            "penyesuaian",
-            `[${storeCode}] detail query completed, got ${detailResult.length} records`,
-          );
-
-          if (detailResult.length > 0) {
-            // Normalize field names to match model (uppercase)
-            const normalizedRecords = detailResult.map(record => ({
-              RECID: "*", // Default value for tracking
-              CABANG: record.CAB,
-              PERIODE: record.PERIODE,
-              KDTK: record.KDTK,
-              PRDCD: record.PRDCD,
-              SINGKATAN: record.SINGKATAN,
-              RECID_PRODMAST: record.RECID_PRODMAST,
-              PTAG: record.PTAG,
-              BEGBAL: record.BEGBAL,
-              TRFIN: record.TRFIN,
-              TRFOUT: record.TRFOUT,
-              RP_SALES: record.RP_SALES,
-              RP_RETUR_SALES: record.RP_RETUR_SALES,
-              ADJ: record.ADJ,
-              BA: record.BA,
-              BS: record.BS,
-              ACOST: record.ACOST,
-              LCOST: record.lcost,
-              STOCK: record.stock,
-              RP_STOCK: record.rp_stock,
-              SESUAI: record.sesuai,
-              UPDTIME: new Date(),
-            }));
-
-            // Bulk create records to database (detail table)
-            await SesuaiToko.bulkCreate(normalizedRecords);
-
-            // 🛠️ ALUR BARU: Update Summary dari records (status '*')
-            await this.updateSummaryFromRecords(normalizedRecords);
-
-            results.records = normalizedRecords;
-            results.hasIssue = true; // Store has issues
-            results.success = true;
-          }
+          // console.log(filterResult[0]);
+          // console.log(`-----`);
+          // console.log(result);
+          //langsung insert summary ke sesuaiSummary
+          await SesuaiTokoSummary.upsert(filterResult[0]);
         } else {
-          // 🛠️ ALUR BARU: Toko dibawah threshold (Bersih)
-          // 1. Hapus data detail (sdh dilakukan diatas via SesuaiToko.destroy)
-          // 2. Mark status summary as Resolved ('1'), tapi nilai SEUSAI & UPDTIME lama tetap dipertahankan
-          await this.markSummaryAsResolved({
-            periode: strPeriode,
-            kdtk: storeCode,
-            cabang: cab,
-          });
-
           results.success = true; // Below threshold is still success
           results.hasIssue = false; // No issues
         }
@@ -579,6 +556,7 @@ class PenyesuaianService {
     await storeService.ensureInitialized();
 
     const { cabang, periode, kdtk, username, fullName, force } = options;
+    const sessionId = await SesuaiToko.startScreeningSession();
 
     // === LEVEL 3: Single Store Screening (No Progress Task) ===
     if (kdtk) {
@@ -595,23 +573,22 @@ class PenyesuaianService {
         const strMonth = moment(periode, "YYMM").format("MM");
 
         // Process single store
-        const result = await this.processSingleStore({ storeCode: kdtk, cab: storeCab }, strPeriode, strYear, strMonth);
+        const result = await this.processSingleStore(
+          { storeCode: kdtk, cab: storeCab },
+          strPeriode,
+          strYear,
+          strMonth,
+          null,
+          sessionId,
+        );
+
+        // ✅ FINALIZING
 
         // Save logs to database
         await RekapRemoteService.saveLogsToDatabase();
 
-        // Update resolved records for this specific store
-        // Level 3: Update all records of this store that are not in current screening result
-        await this.updateResolvedRecords({
-          periode: strPeriode,
-          level: 3,
-          kdtk: kdtk,
-          hasIssue: result.hasIssue,
-        });
-
         // Invalidate cache to force reload from JSON file on next request
         this.invalidateCache();
-
         // Sync to JSON file
         await this.syncToJsonFile(strPeriode);
 
@@ -751,7 +728,7 @@ class PenyesuaianService {
 
             try {
               const result = await withTimeout(
-                this.processSingleStore(store, strPeriode, strYear, strMonth),
+                this.processSingleStore(store, strPeriode, strYear, strMonth, null, sessionId),
                 config.parallelProcessing.storeTimeoutMs,
                 `process store ${storeCode}`,
               );
@@ -795,31 +772,24 @@ class PenyesuaianService {
       // detector from incorrectly expiring an actively finalizing task.
 
       await progressService.updateProgress(taskId, processedCount, {
-        description: "Updating resolved records (RECID = 1)…",
+        description: "Merging staging data & cleaning up resolved stores…",
         status: "finalizing",
       });
-      // Update resolved records
-      // Level 1 or 2: Update stores that were screened but no longer have issues
-      await this.updateResolvedRecords({
-        periode: strPeriode,
-        level: cabang === "All" || cabang === "ALL" ? 1 : 2,
-        cabang: cabang === "All" || cabang === "ALL" ? null : cabang,
-        screenedStores: Array.from(screenedStores),
-        activeStores: Array.from(activeStores),
-      });
 
+      // ✅ Hitung resolved stores (yang di-screen tapi tidak punya issue)
+      const resolvedStores = Array.from(screenedStores).filter(store => !activeStores.has(store));
+
+      // ── Sisa finalizing ──
       await progressService.updateProgress(taskId, processedCount, {
         description: "Saving logs to database…",
         status: "finalizing",
       });
-      // Save logs to database
       await RekapRemoteService.saveLogsToDatabase();
 
       await progressService.updateProgress(taskId, processedCount, {
         description: "Syncing data to JSON file, please wait…",
         status: "finalizing",
       });
-      // Sync database to JSON file after write operations
       await this.syncToJsonFile(strPeriode);
       logger.info(`Synchronized ${newRecords.length} new records from database to JSON file`);
 
@@ -836,7 +806,7 @@ class PenyesuaianService {
         processedRecords: newRecords.length,
         screenedStores: screenedStores.size,
         activeStores: activeStores.size,
-        resolvedStores: screenedStores.size - activeStores.size,
+        resolvedStores: resolvedStores.length,
       };
     } catch (error) {
       // If task was cancelled by user, don't call failProgress (already handled by cancelTask)
@@ -853,6 +823,10 @@ class PenyesuaianService {
       });
 
       throw error;
+    } finally {
+      // Cleanup: Invalidate cache to force reload from JSON file on next request
+      await SesuaiToko.cleanupScreeningSession(sessionId);
+      this.invalidateCache();
     }
   }
 
@@ -917,7 +891,7 @@ class PenyesuaianService {
         const chunk = storesToResolve.slice(i, i + BATCH_SIZE);
 
         // 1. Hapus dari tabel detail
-        const deleteCount = await SesuaiToko.destroy({
+        await SesuaiToko.destroy({
           where: {
             PERIODE: periode,
             KDTK: { [Sequelize.Op.in]: chunk },
@@ -1193,6 +1167,76 @@ class PenyesuaianService {
       };
     } catch (error) {
       logger.error(`[penyesuaian.service] Error getting all records: ${error.message}`);
+      throw error;
+    }
+  }
+
+  //buat function untuk melihat detail langsung open connection ke store, tanpa cache, tanpa json file, tanpa summary, langsung query ke store
+  async getDetailFromStore(kdtk, strPeriode) {
+    try {
+      const strYear = moment(strPeriode, "YYMM").format("YYYY");
+      const strMonth = moment(strPeriode, "YYMM").format("MM");
+      const results = { success: false, records: [], hasIssue: false };
+      const filetToko = this.getFiletTokoTableName(kdtk, strPeriode);
+      const query = config.queries.fullDetail(filetToko, strPeriode);
+      await storeService.ensureInitialized();
+      const storeIp = await storeService.getStoreIPHost(kdtk);
+
+      if (!storeIp) {
+        throw new Error(`Store IP info not found for ${kdtk}`);
+      }
+      const storeConnection = await dbStore.createDbStore(storeIp.dbHost, config.connectionRetry.maxRetries);
+
+      if (!storeConnection) {
+        throw new Error(`Connection to store ${kdtk} has failed to open!`);
+      }
+      const [detailResult] = await storeConnection.query(query, [strMonth, strYear, strMonth, strYear]);
+      //insert detail ke table sesuai_toko
+      if (detailResult.length > 0) {
+        // Normalize field names to match model (uppercase)
+        const normalizedRecords = detailResult.map(record => ({
+          RECID: "*", // Default value for tracking
+          CABANG: record.CAB,
+          PERIODE: record.PERIODE,
+          KDTK: record.KDTK,
+          PRDCD: record.PRDCD,
+          SINGKATAN: record.SINGKATAN,
+          RECID_PRODMAST: record.RECID_PRODMAST,
+          PTAG: record.PTAG,
+          BEGBAL: record.BEGBAL,
+          TRFIN: record.TRFIN,
+          TRFOUT: record.TRFOUT,
+          RP_SALES: record.RP_SALES,
+          RP_RETUR_SALES: record.RP_RETUR_SALES,
+          ADJ: record.ADJ,
+          BA: record.BA,
+          BS: record.BS,
+          ACOST: record.ACOST,
+          LCOST: record.lcost,
+          STOCK: record.stock,
+          RP_STOCK: record.rp_stock,
+          SESUAI: record.sesuai,
+          UPDTIME: new Date(),
+        }));
+
+        //hapus dulu data detail di sesuai_toko
+        await SesuaiToko.destroy({
+          where: { kdtk: kdtk, periode: strPeriode },
+        });
+
+        // Bulk create records to database (detail table)
+        await SesuaiToko.bulkCreate(normalizedRecords);
+
+        results.records = normalizedRecords;
+        results.hasIssue = true; // Store has issues
+        results.success = true;
+      } else {
+        results.success = true; // Below threshold is still success
+        results.hasIssue = false; // No issues
+      }
+      return results;
+    } catch (error) {
+      logger.error(`[penyesuaian.service] Error getting detail from store: ${error.message}`);
       throw error;
     }
   }

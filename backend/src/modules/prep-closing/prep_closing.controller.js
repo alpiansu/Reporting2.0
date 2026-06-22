@@ -429,7 +429,7 @@ export const getWrcSyncStatus = async (req, res) => {
     }
 
     const result = await prepClosingService.getWrcSyncStatus(periode);
-    return apiResponse.success(res, { data: result });
+    return apiResponse.success(res, result);
   } catch (error) {
     logger.error(`[prep_closing.controller] Error getting WRC sync status: ${error.message}`);
     return apiResponse.error(res, error.message);

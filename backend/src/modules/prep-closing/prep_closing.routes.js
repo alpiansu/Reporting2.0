@@ -46,6 +46,9 @@ router.get("/wrc-extract-rules", prepClosingController.getWrcExtractRules);
 // WRC Extractor - Update Rules
 router.put("/wrc-extract-rules", prepClosingController.updateWrcExtractRules);
 
+// WRC Extractor - Get Sync Status per cabang
+router.get("/wrc-sync-status", prepClosingController.getWrcSyncStatus);
+
 // WRC Extractor - Trigger Sync Data
 router.post("/wrc-extract-trigger", prepClosingController.triggerWrcExtraction);
 

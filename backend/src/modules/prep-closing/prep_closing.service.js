@@ -31,29 +31,37 @@ class PrepClosingService {
     this.TTL = 60 * 60 * 1000; // 1 hour
     this.isLoading = false;
 
-    // Multi-key cache for detailed records
-    this.cacheDetailData = new Map();
-    this.cacheTTL = 5 * 60 * 1000; // 5 minutes
+    // Issues data (loaded from JSON staging)
+    this.issuesData = null; // Map: KDTK → issues[]
+    this.issuesDataPeriode = null;
 
-    // Task 1: issuesCache in-process
-    this.issuesCache = new Map();
-    this.issuesCachePeriode = null;
-    this.issuesCacheTTL = 30 * 60 * 1000; // 30 menit
-    this.issuesCacheLoadTime = 0; // timestamp terakhir issuesCache diload dari DB
-    this.issuesCachePromise = null;
+    // Detail data (loaded from JSON staging)
+    this.detailData = null; // Map: KDTK → full record
+    this.detailDataPeriode = null;
 
-    // Task 2: storeNameMap sync lookup
+    // storeNameMap sync lookup
     this.storeNameMap = null;
 
-    // Task 3: notesCache
+    // notesCache
     this.notesCache = null;
     this.notesCacheTime = 0;
     this.notesCacheTTL = 5 * 60 * 1000; // 5 menit
     this.notesCachePromise = null;
+
+    // Buffer for bulk upsert (accumulated during screening loop)
+    this.pendingRecords = [];
   }
 
   getJsonPath(periode) {
     return path.join(PREP_CLOSING_DATA_DIR, `prep_closing_${periode}.json`);
+  }
+
+  getIssuesJsonPath(periode) {
+    return path.join(PREP_CLOSING_DATA_DIR, `prep_closing_issues_${periode}.json`);
+  }
+
+  getDetailJsonPath(periode) {
+    return path.join(PREP_CLOSING_DATA_DIR, `prep_closing_detail_${periode}.json`);
   }
 
   async ensureDataDir() {
@@ -104,22 +112,6 @@ class PrepClosingService {
   }
 
   /**
-   * Generate cache key
-   */
-  generateCacheKey(periode, cabang, kdtk) {
-    return JSON.stringify({ periode, cabang, kdtk });
-  }
-
-  /**
-   * Check if cache is valid
-   */
-  isCacheFromDbValid(entry) {
-    if (!entry) return false;
-    const now = Date.now();
-    return now - entry.lastAccessTime < this.cacheTTL;
-  }
-
-  /**
    * Check if summary cache is valid
    */
   isCacheValid(periode) {
@@ -139,13 +131,14 @@ class PrepClosingService {
     this.loadedPeriod = null;
     this.lastLoadTime = null;
     this.isLoading = false;
-    this.cacheDetailData.clear();
-
-    this.issuesCache.clear();
-    this.issuesCachePeriode = null;
+    this.issuesData = null;
+    this.issuesDataPeriode = null;
+    this.detailData = null;
+    this.detailDataPeriode = null;
     this.storeNameMap = null;
     this.notesCache = null;
     this.notesCacheTime = 0;
+    this.pendingRecords = [];
 
     logger.info("[prep_closing.service] Cache invalidated");
   }
@@ -182,50 +175,29 @@ class PrepClosingService {
     }
   }
 
-  // --- TASK 1: issuesCache ---
-  isIssuesCacheValid(periode) {
-    if (this.issuesCachePeriode !== periode || this.issuesCache.size === 0) return false;
-    const now = Date.now();
-    return now - this.issuesCacheLoadTime < this.issuesCacheTTL;
+  // --- Issues data (JSON staging) ---
+  isIssuesDataValid(periode) {
+    return this.issuesData && this.issuesDataPeriode === periode && this.isCacheValid(periode);
   }
 
-  async loadIssuesCache(periode) {
-    if (this.isIssuesCacheValid(periode)) {
-      return;
+  async ensureIssuesLoaded(periode) {
+    if (this.isIssuesDataValid(periode)) return;
+
+    await this.ensureDataLoaded(periode);
+
+    const jsonPath = this.getIssuesJsonPath(periode);
+    try {
+      const raw = await fs.readFile(jsonPath, "utf8");
+      const parsed = JSON.parse(raw);
+      this.issuesData = new Map(Object.entries(parsed));
+      this.issuesDataPeriode = periode;
+      logger.info(`[prep_closing.service] Issues loaded from JSON: ${this.issuesData.size} stores`);
+    } catch (err) {
+      if (err.code === "ENOENT") {
+        this.issuesData = new Map();
+        this.issuesDataPeriode = periode;
+      } else throw err;
     }
-
-    if (this.issuesCachePromise) {
-      await this.issuesCachePromise;
-      return;
-    }
-
-    this.issuesCachePromise = (async () => {
-      try {
-        const model = await ScreeningPraClosing.getModel();
-        const records = await model.findAll({
-          where: { PRD_CLOSING: periode, RECID: "*" },
-          attributes: ["KDTK", "ISSUES"],
-        });
-
-        this.issuesCache.clear();
-        this.issuesCachePeriode = periode;
-
-        for (const rec of records) {
-          this.issuesCache.set(rec.KDTK, Array.isArray(rec.ISSUES) ? rec.ISSUES : []);
-        }
-
-        this.issuesCacheLoadTime = Date.now();
-        logger.info(
-          `[prep_closing.service] issuesCache loaded for periode ${periode}. Stores cached: ${this.issuesCache.size}`,
-        );
-      } catch (error) {
-        logger.error(`[prep_closing.service] Error in loadIssuesCache: ${error.message}`);
-      } finally {
-        this.issuesCachePromise = null;
-      }
-    })();
-
-    await this.issuesCachePromise;
   }
 
   // --- TASK 2: storeNameMap ---
@@ -265,7 +237,7 @@ class PrepClosingService {
   }
 
   /**
-   * Sync aggregated data to JSON file
+   * Sync aggregated data to JSON staging files (summary, issues, detail)
    */
   async syncToJsonFile(periode) {
     if (!periode) throw new Error("periode is required for syncToJsonFile");
@@ -273,27 +245,17 @@ class PrepClosingService {
       const model = await ScreeningPraClosing.getModel();
       const sequelize = model.sequelize;
 
-      // Query agregasi
+      // Single query: ambil semua field termasuk ISSUES
       const [rows] = await sequelize.query(
-        `
-        SELECT
-          RECID,
-          CAB,
-          KDTK,
-          PRD_CLOSING,
-          TOTAL_RULES,
-          PASSED_RULES,
-          FAILED_RULES,
-          CRITICAL_ISSUES,
-          IS_READY,
-          LAST_SCREENED,
-          UPDTIME
-        FROM screening_praclosing
-        WHERE PRD_CLOSING = :periode
-      `,
+        `SELECT RECID, CAB, KDTK, PRD_CLOSING, ISSUES,
+                TOTAL_RULES, PASSED_RULES, FAILED_RULES, CRITICAL_ISSUES,
+                IS_READY, LAST_SCREENED, UPDTIME
+         FROM screening_praclosing
+         WHERE PRD_CLOSING = :periode`,
         { replacements: { periode } },
       );
 
+      // 1. Summary file (tanpa ISSUES)
       this.prepClosingData = rows.map(r => ({
         RECID: r.RECID,
         CAB: r.CAB,
@@ -307,22 +269,47 @@ class PrepClosingService {
         LAST_SCREENED: r.LAST_SCREENED,
         UPDTIME: r.UPDTIME,
       }));
-
       await this.saveToFile(periode);
+
+      // 2. Issues Map file (KDTK -> ISSUES)
+      const issuesMap = {};
+      for (const r of rows) {
+        if (Array.isArray(r.ISSUES) && r.ISSUES.length > 0) {
+          issuesMap[r.KDTK] = r.ISSUES;
+        }
+      }
+      await fs.writeFile(this.getIssuesJsonPath(periode), JSON.stringify(issuesMap));
+
+      // 3. Detail Map file (KDTK -> full record termasuk ISSUES)
+      const detailMap = {};
+      for (const r of rows) {
+        detailMap[r.KDTK] = {
+          RECID: r.RECID,
+          CAB: r.CAB,
+          KDTK: r.KDTK,
+          PRD_CLOSING: r.PRD_CLOSING,
+          ISSUES: r.ISSUES || [],
+          TOTAL_RULES: r.TOTAL_RULES || 0,
+          PASSED_RULES: r.PASSED_RULES || 0,
+          FAILED_RULES: r.FAILED_RULES || 0,
+          CRITICAL_ISSUES: r.CRITICAL_ISSUES || 0,
+          IS_READY: r.IS_READY || false,
+          LAST_SCREENED: r.LAST_SCREENED,
+          UPDTIME: r.UPDTIME,
+        };
+      }
+      await fs.writeFile(this.getDetailJsonPath(periode), JSON.stringify(detailMap));
+
+      // Reset cache agar reload dari file baru
+      this.issuesData = null;
+      this.issuesDataPeriode = null;
+      this.detailData = null;
+      this.detailDataPeriode = null;
       this.lastLoadTime = Date.now();
       this.loadedPeriod = periode;
       this.initialized = true;
 
-      logger.info(`[prep_closing.service] Synced ${this.prepClosingData.length} records to JSON`);
-
-      // TASK 1: Force reload issuesCache dari DB setelah sync agar data selalu fresh
-      if (rows.length > 0 && rows[0].PRD_CLOSING) {
-        this.issuesCache.clear();
-        this.issuesCachePeriode = null;
-        this.issuesCacheLoadTime = 0;
-        await this.loadIssuesCache(rows[0].PRD_CLOSING);
-      }
-
+      logger.info(`[prep_closing.service] Synced ${this.prepClosingData.length} records to JSON (3 files)`);
       return this.prepClosingData.length;
     } catch (error) {
       logger.error(`[prep_closing.service] Failed to sync: ${error.message}`);
@@ -501,11 +488,7 @@ class PrepClosingService {
           UPDTIME: new Date(),
         };
 
-        // Save to database
-        await ScreeningPraClosing.upsert(recordData, {
-          conflictFields: ["ID"],
-        });
-
+        // Record will be bulk-upserted later (not per-store)
         results.records = recordData;
         results.hasIssue = !ruleResults.isReady; // Has issue if not ready
         results.success = true;
@@ -520,6 +503,42 @@ class PrepClosingService {
     }
 
     return results;
+  }
+
+  /**
+   * Bulk upsert all pending records to MySQL in a single query
+   */
+  async bulkUpsertRecords() {
+    if (this.pendingRecords.length === 0) {
+      logger.info("[prep_closing.service] No pending records to upsert");
+      return 0;
+    }
+
+    try {
+      const model = await ScreeningPraClosing.getModel();
+      await model.bulkCreate(this.pendingRecords, {
+        updateOnDuplicate: [
+          "RECID",
+          "ISSUES",
+          "TOTAL_RULES",
+          "PASSED_RULES",
+          "FAILED_RULES",
+          "CRITICAL_ISSUES",
+          "IS_READY",
+          "LAST_SCREENED",
+          "UPDTIME",
+        ],
+      });
+
+      const count = this.pendingRecords.length;
+      logger.info(`[prep_closing.service] Bulk upserted ${count} records to MySQL`);
+      this.pendingRecords = [];
+      return count;
+    } catch (error) {
+      logger.error(`[prep_closing.service] Bulk upsert failed: ${error.message}`);
+      this.pendingRecords = [];
+      throw error;
+    }
   }
 
   /**
@@ -649,6 +668,20 @@ class PrepClosingService {
         const storeInfo = await storeService.getStoreByCode(kdtk);
         const storeCab = storeInfo ? storeInfo.branch || storeInfo.cab : "UNKNOWN";
 
+        // === WRC GUARD: Check WRC data for this store's cabang ===
+        await wrcExtractorService.loadCache();
+        const wrcBranchCache = wrcExtractorService.cacheData?.data_by_cabang?.[storeCab];
+        const wrcHasData = !!(
+          wrcBranchCache &&
+          (Object.keys(wrcBranchCache.branch_level_data || {}).length > 0 ||
+            Object.keys(wrcBranchCache.stores || {}).length > 0)
+        );
+        if (!wrcHasData) {
+          throw new Error(
+            `Data WRC cabang ${storeCab} belum di-sync untuk periode ini. Silakan lakukan Sync WRC terlebih dahulu.`,
+          );
+        }
+
         // Convert periode
         const strPeriode = periode;
         const strYear = moment(periode, "YYMM").format("YYYY");
@@ -657,8 +690,16 @@ class PrepClosingService {
         // Process single store
         const result = await this.processSingleStore({ storeCode: kdtk, cab: storeCab }, strPeriode, strYear, strMonth);
 
+        // Accumulate record for bulk upsert
+        if (result.records) {
+          this.pendingRecords = [result.records];
+        }
+
         // Save logs to database
         await RekapRemoteService.saveLogsToDatabase();
+
+        // Bulk upsert (1 record)
+        await this.bulkUpsertRecords();
 
         // Update resolved records
         await this.updateResolvedRecords({
@@ -670,9 +711,6 @@ class PrepClosingService {
 
         // Sync to JSON file
         await this.syncToJsonFile(strPeriode);
-
-        const cacheKey = `detail_${strPeriode}_${kdtk}`;
-        this.cacheDetailData.delete(cacheKey);
 
         return {
           success: true,
@@ -712,6 +750,38 @@ class PrepClosingService {
       }
 
       logger.info(`[prep_closing.service] Branches to process: ${branches.join(", ")}`);
+
+      // === WRC GUARD: Skip cabang yang belum sync WRC JSON ===
+      await wrcExtractorService.loadCache();
+      const wrcCache = wrcExtractorService.cacheData;
+      const unsyncedBranches = [];
+      const validBranches = [];
+
+      for (const cab of branches) {
+        const branchCache = wrcCache.data_by_cabang?.[cab];
+        const hasData = !!(
+          branchCache &&
+          (Object.keys(branchCache.branch_level_data || {}).length > 0 ||
+            Object.keys(branchCache.stores || {}).length > 0)
+        );
+        if (hasData) {
+          validBranches.push(cab);
+        } else {
+          unsyncedBranches.push(cab);
+        }
+      }
+
+      if (unsyncedBranches.length > 0) {
+        logger.warn(`[prep_closing.service] WRC Guard: Skipping unsynced branches: ${unsyncedBranches.join(", ")}`);
+      }
+
+      if (validBranches.length === 0) {
+        throw new Error(
+          `Data WRC belum di-sync untuk cabang: ${unsyncedBranches.join(", ")}. Silakan lakukan Sync WRC terlebih dahulu.`,
+        );
+      }
+
+      branches = validBranches;
 
       // === STEP 2: Collect all stores ===
       const storeGroups = await Promise.all(
@@ -772,7 +842,8 @@ class PrepClosingService {
       // Reload WRC Extractor Cache before massive screening loop
       await wrcExtractorService.loadCache();
 
-      // Skip manual WRC pulling loop (Moved to decoupled Cache System)
+      // Initialize pending records buffer for bulk upsert
+      this.pendingRecords = [];
 
       // Track stores
       const screenedStores = new Set();
@@ -824,6 +895,9 @@ class PrepClosingService {
               );
 
               if (result.success) {
+                if (result.records) {
+                  this.pendingRecords.push(result.records);
+                }
                 if (result.hasIssue) {
                   activeStores.add(storeCode);
                   await incrementProgress(storeCode, `Has Issues ⚠️ (${result.records.CRITICAL_ISSUES} critical)`);
@@ -858,6 +932,14 @@ class PrepClosingService {
         logger.info(`[prep_closing] Task ${taskId} was cancelled — skipping finalization`);
         throw new Error("Proses dibatalkan oleh pengguna");
       }
+
+      // === STEP 5.5: Bulk upsert all records to MySQL ===
+      await progressService.updateProgress(taskId, processedCount, {
+        description: `Bulk upserting ${this.pendingRecords.length} records to database...`,
+        status: "finalizing",
+      });
+
+      await this.bulkUpsertRecords();
 
       // === STEP 6: Update resolved records ===
       await progressService.updateProgress(taskId, processedCount, {
@@ -904,6 +986,7 @@ class PrepClosingService {
         screenedStores: screenedStores.size,
         activeStores: activeStores.size,
         resolvedStores: screenedStores.size - activeStores.size,
+        skippedBranches: unsyncedBranches,
       };
     } catch (error) {
       // If task was cancelled by user, don't call failProgress (already handled by cancelTask)
@@ -986,7 +1069,7 @@ class PrepClosingService {
     try {
       await ruleEngine.ensureInitialized();
       await this.ensureDataLoaded(periode);
-      await this.loadIssuesCache(periode);
+      await this.ensureIssuesLoaded(periode);
 
       let eligibleKdtk = new Set();
       if (cabang && cabang !== "All") {
@@ -1018,7 +1101,7 @@ class PrepClosingService {
 
       const storeSets = new Map();
 
-      for (const [kdtk, issues] of this.issuesCache.entries()) {
+      for (const [kdtk, issues] of this.issuesData.entries()) {
         if (cabang && cabang !== "All" && !eligibleKdtk.has(kdtk)) {
           continue;
         }
@@ -1081,9 +1164,9 @@ class PrepClosingService {
       );
 
       if (Array.isArray(ruleKeys) && ruleKeys.length > 0) {
-        await this.loadIssuesCache(periode);
+        await this.ensureIssuesLoaded(periode);
         const includeSet = new Set();
-        for (const [kdtk, issues] of this.issuesCache.entries()) {
+        for (const [kdtk, issues] of this.issuesData.entries()) {
           const hasAny = issues.some(iss => ruleKeys.includes(iss.ruleKey));
           if (hasAny) includeSet.add(kdtk);
         }
@@ -1139,8 +1222,8 @@ class PrepClosingService {
       // Preload issues map for search and rule filter
       let issuesByStore = new Map();
       try {
-        await this.loadIssuesCache(periode);
-        issuesByStore = this.issuesCache;
+        await this.ensureIssuesLoaded(periode);
+        issuesByStore = this.issuesData;
       } catch (err) {
         logger.warn(`[prep_closing.service] Unable to preload issues for search: ${err.message}`);
       }
@@ -1222,7 +1305,7 @@ class PrepClosingService {
   }
 
   /**
-   * Get detailed issues for a specific store
+   * Get detailed issues for a specific store (from JSON staging)
    */
   async getStoreDetails(options = {}) {
     const { kdtk, periode } = options;
@@ -1231,29 +1314,29 @@ class PrepClosingService {
       throw new Error("kdtk and periode are required");
     }
 
-    const cacheKey = `detail_${periode}_${kdtk}`;
-    const cachedEntry = this.cacheDetailData.get(cacheKey);
-    if (this.isCacheFromDbValid(cachedEntry)) {
-      return cachedEntry.data;
-    }
-
     try {
-      const model = await ScreeningPraClosing.getModel();
-
-      const record = await model.findOne({
-        where: {
-          KDTK: kdtk,
-          PRD_CLOSING: periode,
-        },
-      });
-
-      if (!record) {
-        return null;
+      // Ensure detail data loaded from JSON
+      if (!this.detailData || this.detailDataPeriode !== periode) {
+        await this.ensureDataLoaded(periode);
+        const jsonPath = this.getDetailJsonPath(periode);
+        try {
+          const raw = await fs.readFile(jsonPath, "utf8");
+          this.detailData = new Map(Object.entries(JSON.parse(raw)));
+          this.detailDataPeriode = periode;
+        } catch (err) {
+          if (err.code === "ENOENT") {
+            this.detailData = new Map();
+            this.detailDataPeriode = periode;
+          } else throw err;
+        }
       }
+
+      const record = this.detailData.get(kdtk);
+      if (!record) return null;
 
       // Get store name
       this.ensureStoreNameMap();
-      let storeName = this.storeNameMap.get(kdtk) || "-";
+      const storeName = this.storeNameMap.get(kdtk) || "-";
 
       // Get note
       let note = null;
@@ -1265,7 +1348,7 @@ class PrepClosingService {
         // Note not found
       }
 
-      const result = {
+      return {
         CAB: record.CAB,
         KDTK: record.KDTK,
         NAMA: storeName,
@@ -1288,13 +1371,6 @@ class PrepClosingService {
             }
           : null,
       };
-
-      this.cacheDetailData.set(cacheKey, {
-        lastAccessTime: Date.now(),
-        data: result,
-      });
-
-      return result;
     } catch (error) {
       logger.error(`[prep_closing.service] Error getStoreDetails: ${error.message}`);
       throw error;
@@ -1315,7 +1391,7 @@ class PrepClosingService {
       const filteredData = this.prepClosingData.filter(filterFn);
 
       // Get all issues from cache instead of DB
-      await this.loadIssuesCache(periode);
+      await this.ensureIssuesLoaded(periode);
 
       let eligibleKdtk = null;
       if (cabang && cabang !== "All") {
@@ -1334,7 +1410,7 @@ class PrepClosingService {
         };
       });
 
-      for (const [kdtk, issues] of this.issuesCache.entries()) {
+      for (const [kdtk, issues] of this.issuesData.entries()) {
         if (eligibleKdtk && !eligibleKdtk.has(kdtk)) continue;
 
         issues.forEach(issue => {
@@ -1367,7 +1443,7 @@ class PrepClosingService {
 
       const summary = await this.getSummary({ cabang, periode });
 
-      await this.loadIssuesCache(periode);
+      await this.ensureIssuesLoaded(periode);
       this.ensureStoreNameMap();
 
       const getName = k => {
@@ -1394,7 +1470,7 @@ class PrepClosingService {
         storeCabMap.set(s.KDTK, s.CAB);
       }
 
-      for (const [kdtk, issues] of this.issuesCache.entries()) {
+      for (const [kdtk, issues] of this.issuesData.entries()) {
         const cab = storeCabMap.get(kdtk);
         if (!cab) continue; // Skip if no cab mapped (meaning out of loop/cabang filter scope)
 
@@ -1482,6 +1558,28 @@ class PrepClosingService {
       logger.error(`[prep_closing.service] Error getExportData: ${error.message}`);
       throw error;
     }
+  }
+
+  /**
+   * Get WRC sync status per cabang
+   */
+  async getWrcSyncStatus(periode) {
+    await wrcExtractorService.loadCache();
+    await storeService.ensureInitialized();
+    const cacheData = wrcExtractorService.cacheData;
+    const allBranches = [...new Set(storeService.stores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))];
+
+    const result = allBranches.map(cab => {
+      const branchCache = cacheData.data_by_cabang?.[cab];
+      const hasData = !!(
+        branchCache &&
+        (Object.keys(branchCache.branch_level_data || {}).length > 0 ||
+          Object.keys(branchCache.stores || {}).length > 0)
+      );
+      return { cab, synced: hasData };
+    });
+
+    return result;
   }
 
   /**

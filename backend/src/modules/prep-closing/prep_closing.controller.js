@@ -418,6 +418,25 @@ export const updateWrcExtractRules = async (req, res) => {
 };
 
 /**
+ * Get WRC Sync Status per cabang
+ * GET /api/prep-closing/wrc-sync-status
+ */
+export const getWrcSyncStatus = async (req, res) => {
+  try {
+    const { periode } = req.query;
+    if (!periode) {
+      return apiResponse.badRequest(res, "Periode is required");
+    }
+
+    const result = await prepClosingService.getWrcSyncStatus(periode);
+    return apiResponse.success(res, { data: result });
+  } catch (error) {
+    logger.error(`[prep_closing.controller] Error getting WRC sync status: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+/**
  * Trigger WRC Extraction logic
  * POST /api/prep-closing/wrc-extract-trigger
  */

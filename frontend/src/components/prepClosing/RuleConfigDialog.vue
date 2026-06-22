@@ -2,124 +2,134 @@
   <div>
     <Dialog
       v-model:visible="visible"
-      header="Konfigurasi Rule Engine (Prep Closing)"
       :modal="true"
-      :style="{ width: '80vw', minWidth: '600px' }"
+      :style="{ width: '80vw', minWidth: '680px' }"
       :maximizable="true"
+      :breakpoints="{ '960px': '92vw', '640px': '100vw' }"
       class="rule-config-dialog"
+      :draggable="false"
     >
-      <div v-if="loading" class="flex justify-content-center align-items-center p-5">
-        <i class="pi pi-spin pi-spinner text-4xl text-primary"></i>
-      </div>
-      <div v-else>
-        <div class="mb-3 flex justify-content-between align-items-center">
-          <div>
-            <h5 class="m-0 text-gray-700">Manajemen Rule Screening</h5>
-            <small class="text-gray-500">
-              Total: {{ rules.length }} Rule Aktif | Last Update: {{ formatDate(lastUpdated) }}
-            </small>
+      <template #header>
+        <div class="dialog-custom-header">
+          <div class="header-icon-wrapper">
+            <i class="pi pi-cog text-xl"></i>
           </div>
-          <div class="flex gap-2">
-            <Button 
-              type="button" 
-              label="Panduan" 
-              icon="pi pi-book" 
-              class="p-button-outlined p-button-info" 
-              @click="showGuide = true"
-            />
-            <Button 
-              type="button" 
-              label="Tambah Rule" 
-              icon="pi pi-plus" 
-              class="p-button-success" 
-              @click="openAddRule"
-            />
+          <div class="header-text">
+            <h3 class="header-title">Rule Engine Configuration</h3>
+            <span class="header-subtitle">Kelola rule screening untuk validasi kesiapan closing</span>
+          </div>
+        </div>
+      </template>
+
+      <div v-if="loading" class="loading-state">
+        <i class="pi pi-spin pi-spinner text-4xl text-primary"></i>
+        <p class="mt-3 text-color-secondary">Memuat konfigurasi rule...</p>
+      </div>
+
+      <div v-else class="dialog-body">
+        <!-- Stats Bar -->
+        <div class="stats-bar">
+          <div class="stat-chip">
+            <i class="pi pi-list-check"></i>
+            <span>{{ rules.length }} Rule Aktif</span>
+          </div>
+          <div class="stat-chip stat-chip-muted">
+            <i class="pi pi-clock"></i>
+            <span>Update: {{ formatDate(lastUpdated) }}</span>
+          </div>
+          <div class="stat-actions">
+            <Button type="button" label="Panduan" icon="pi pi-book" class="p-button-outlined p-button-sm p-button-info" @click="showGuide = true" />
+            <Button type="button" label="Tambah Rule" icon="pi pi-plus" class="p-button-success p-button-sm" @click="openAddRule" />
           </div>
         </div>
 
-        <DataTable 
-          :value="rules" 
-          v-model:filters="filters" 
+        <!-- Rules Table -->
+        <DataTable
+          :value="rules"
+          v-model:filters="filters"
           dataKey="key"
-          :paginator="true" 
-          :rows="10" 
+          :paginator="true"
+          :rows="8"
           :globalFilterFields="['name', 'key', 'category', 'description']"
-          class="p-datatable-sm"
+          class="p-datatable-sm rules-table"
           responsiveLayout="scroll"
           stripedRows
+          :showGridlines="false"
         >
           <template #header>
-            <div class="flex justify-content-end">
+            <div class="flex justify-content-between align-items-center w-full">
               <span class="p-input-icon-left">
                 <i class="pi pi-search" />
-                <InputText v-model="filters['global'].value" placeholder="Cari Rule..." />
+                <InputText v-model="filters['global'].value" placeholder="Cari rule..." class="p-inputtext-sm" />
               </span>
             </div>
           </template>
 
-          <Column field="enabled" header="Aktif" style="width: 5%">
+          <Column field="enabled" header="Aktif" style="width: 6%; text-align: center">
             <template #body="slotProps">
-              <InputSwitch 
-                v-model="slotProps.data.enabled" 
-                @change="toggleRuleStatus(slotProps.data)" 
-              />
+              <InputSwitch v-model="slotProps.data.enabled" @change="toggleRuleStatus(slotProps.data)" />
             </template>
           </Column>
 
-          <Column field="name" header="Nama Rule" style="width: 25%" sortable>
+          <Column field="name" header="Rule" style="width: 28%" sortable>
             <template #body="slotProps">
-              <div class="font-bold">{{ slotProps.data.name }}</div>
-              <small class="text-gray-500">{{ slotProps.data.key }}</small>
-            </template>
-          </Column>
-
-          <Column field="category" header="Kategori" style="width: 15%" sortable>
-            <template #body="slotProps">
-              <Badge :value="getCategoryLabel(slotProps.data.category)" severity="info" />
-            </template>
-          </Column>
-
-          <Column field="severity" header="Severity" style="width: 15%" sortable>
-            <template #body="slotProps">
-              <Badge 
-                :value="getSeverityLabel(slotProps.data.severity)" 
-                :severity="getSeverityBadge(slotProps.data.severity)" 
-              />
-            </template>
-          </Column>
-          
-          <Column field="validation.operator" header="Logika" style="width: 20%">
-            <template #body="slotProps">
-              <div class="flex align-items-center gap-1 text-sm border-1 border-300 p-1 border-round surface-100">
-                <span class="font-bold text-xs">{{ slotProps.data.validation.operator }}</span>
-                <span class="text-xs" v-if="slotProps.data.validation.expected">({{ slotProps.data.validation.expected }})</span>
+              <div class="rule-name-cell">
+                <span class="rule-name">{{ slotProps.data.name }}</span>
+                <small class="rule-key">{{ slotProps.data.key }}</small>
               </div>
             </template>
           </Column>
 
-          <Column header="Ops" style="width: 10%; text-align: center">
+          <Column field="category" header="Kategori" style="width: 14%" sortable>
+            <template #body="slotProps">
+              <Tag :value="getCategoryLabel(slotProps.data.category)" severity="info" class="text-xs" />
+            </template>
+          </Column>
+
+          <Column field="severity" header="Severity" style="width: 13%" sortable>
+            <template #body="slotProps">
+              <Tag
+                :value="getSeverityLabel(slotProps.data.severity)"
+                :severity="getSeverityBadge(slotProps.data.severity)"
+                class="text-xs"
+              />
+            </template>
+          </Column>
+
+          <Column field="validation.operator" header="Logika" style="width: 22%">
+            <template #body="slotProps">
+              <div class="logic-chip">
+                <span class="logic-operator">{{ slotProps.data.validation.operator }}</span>
+                <span v-if="slotProps.data.validation.expected" class="logic-expected">{{ slotProps.data.validation.expected }}</span>
+              </div>
+            </template>
+          </Column>
+
+          <Column header="Aksi" style="width: 10%; text-align: center">
             <template #body="slotProps">
               <div class="flex gap-1 justify-content-center">
-                <Button icon="pi pi-pencil" class="p-button-rounded p-button-text p-button-primary" @click="openEditRule(slotProps.data)" v-tooltip.top="'Edit Rule'" />
-                <Button icon="pi pi-trash" class="p-button-rounded p-button-text p-button-danger" @click="confirmDeleteRule(slotProps.data)" v-tooltip.top="'Hapus Rule'" />
+                <Button icon="pi pi-pencil" class="p-button-rounded p-button-text p-button-primary p-button-sm" @click="openEditRule(slotProps.data)" v-tooltip.top="'Edit'" />
+                <Button icon="pi pi-trash" class="p-button-rounded p-button-text p-button-danger p-button-sm" @click="confirmDeleteRule(slotProps.data)" v-tooltip.top="'Hapus'" />
               </div>
             </template>
           </Column>
 
           <template #empty>
-            <div class="text-center p-4 text-gray-500">
-              Tidak ada aturan yang ditemukan.
+            <div class="empty-state">
+              <i class="pi pi-inbox text-4xl text-300"></i>
+              <p>Tidak ada rule yang ditemukan</p>
             </div>
           </template>
         </DataTable>
       </div>
 
-      <!-- Footer Actions for Save Main Config -->
       <template #footer>
-        <div class="flex justify-content-between w-full mt-2">
-          <small class="text-orange-500 font-italic">* Perubahan langsung dapat di sinkronasikan ke screening selanjutnya</small>
-          <div class="flex gap-2">
-            <Button label="Tutup" icon="pi pi-times" class="p-button-text" @click="closeConfig" :disabled="saving" />
+        <div class="dialog-footer">
+          <small class="footer-hint">
+            <i class="pi pi-info-circle"></i> Perubahan langsung disinkronkan ke screening selanjutnya
+          </small>
+          <div class="footer-actions">
+            <Button label="Tutup" icon="pi pi-times" class="p-button-text p-button-secondary" @click="closeConfig" :disabled="saving" />
             <Button label="Simpan Semua" icon="pi pi-save" class="p-button-primary" @click="saveAllRules" :loading="saving" />
           </div>
         </div>
@@ -127,15 +137,24 @@
     </Dialog>
 
     <!-- Sub Components -->
-    <RuleEditorModal 
-      v-model:visible="showEditor" 
+    <RuleEditorModal
+      v-model:visible="showEditor"
       :ruleData="selectedRule"
       :categories="categories"
       :severities="severities"
       :operators="operators"
-      @save="handleSaveRule" 
+      @save="handleSaveRule"
     />
     <RuleGuideSidebar v-model:visible="showGuide" />
+
+    <!-- Delete Confirmation -->
+    <ConfirmDialog
+      v-model="showDeleteConfirm"
+      title="Hapus Rule"
+      :message="`Apakah Anda yakin ingin menghapus rule '${ruleToDelete?.name || ''}'?`"
+      confirm-text="Hapus"
+      @confirm="executeDeleteRule"
+    />
   </div>
 </template>
 
@@ -151,7 +170,8 @@ import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import InputText from 'primevue/inputtext';
 import InputSwitch from 'primevue/inputswitch';
-import Badge from 'primevue/badge';
+import Tag from 'primevue/tag';
+import ConfirmDialog from '../common/ConfirmDialog.vue';
 
 // Sub Components
 import RuleEditorModal from './RuleEditorModal.vue';
@@ -178,6 +198,8 @@ const lastUpdated = ref(null);
 const showEditor = ref(false);
 const showGuide = ref(false);
 const selectedRule = ref(null);
+const showDeleteConfirm = ref(false);
+const ruleToDelete = ref(null);
 
 const filters = ref({
   global: { value: null, matchMode: 'contains' },
@@ -254,10 +276,15 @@ const openEditRule = (ruleItem) => {
 };
 
 const confirmDeleteRule = (ruleItem) => {
-  if (window.confirm(`Anda yakin ingin menghapus aturan ${ruleItem.name}?`)) {
-     rules.value = rules.value.filter(r => r.key !== ruleItem.key);
-     toast.showSuccess('Sukses Hapus', 'Aturan telah dihapus sementara, tekan Simpan Semua untuk permanenkan.');
-  }
+  ruleToDelete.value = ruleItem;
+  showDeleteConfirm.value = true;
+};
+
+const executeDeleteRule = () => {
+  if (!ruleToDelete.value) return;
+  rules.value = rules.value.filter(r => r.key !== ruleToDelete.value.key);
+  toast.showSuccess('Sukses Hapus', 'Aturan telah dihapus sementara, tekan Simpan Semua untuk permanenkan.');
+  ruleToDelete.value = null;
 };
 
 const handleSaveRule = (savedRule) => {
@@ -300,11 +327,211 @@ const formatDate = (dateString) => {
 </script>
 
 <style scoped>
-:deep(.p-datatable-sm .p-datatable-tbody > tr > td) {
-  padding: 0.5rem 0.5rem;
+/* === Custom Header === */
+.dialog-custom-header {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
 }
-.rule-config-dialog :deep(.p-dialog-footer) {
-  border-top: 1px solid #e0e0e0;
-  padding-top: 1rem;
+
+.header-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.625rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.header-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.header-subtitle {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+/* === Loading === */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+}
+
+/* === Stats Bar === */
+.stats-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: #f8fafc;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.stat-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #3b82f6;
+  padding: 0.25rem 0.625rem;
+  background: #eff6ff;
+  border-radius: 1rem;
+}
+
+.stat-chip i {
+  font-size: 0.8rem;
+}
+
+.stat-chip-muted {
+  color: #64748b;
+  background: #f1f5f9;
+}
+
+.stat-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* === Rule Name Cell === */
+.rule-name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.rule-name {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #1e293b;
+}
+
+.rule-key {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-family: 'Courier New', monospace;
+}
+
+/* === Logic Chip === */
+.logic-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.375rem;
+  font-size: 0.78rem;
+}
+
+.logic-operator {
+  font-weight: 700;
+  color: #475569;
+}
+
+.logic-expected {
+  color: #64748b;
+}
+
+.logic-expected::before {
+  content: '(';
+}
+.logic-expected::after {
+  content: ')';
+}
+
+/* === Empty State === */
+.empty-state {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: #94a3b8;
+}
+
+.empty-state i {
+  display: block;
+  margin-bottom: 0.75rem;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+/* === Footer === */
+.dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding-top: 0.5rem;
+}
+
+.footer-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: #94a3b8;
+  font-size: 0.78rem;
+}
+
+.footer-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* === Table overrides === */
+:deep(.rules-table .p-datatable-tbody > tr > td) {
+  padding: 0.625rem 0.75rem;
+}
+
+:deep(.rules-table .p-datatable-thead > tr > th) {
+  padding: 0.625rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #475569;
+  background: #f8fafc;
+}
+
+:deep(.p-dialog-footer) {
+  border-top: 1px solid #f1f5f9;
+}
+
+@media (max-width: 768px) {
+  .stats-bar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .stat-actions {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .dialog-footer {
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: stretch;
+  }
+  .footer-actions {
+    justify-content: flex-end;
+  }
 }
 </style>

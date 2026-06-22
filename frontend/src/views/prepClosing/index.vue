@@ -118,6 +118,7 @@ import WrcExtractConfigDialog from '@/components/prepClosing/WrcExtractConfigDia
 import { usePrepClosing } from './composables/usePrepClosing';
 import { useScreening } from './composables/useScreening';
 import { useProgress } from './composables/useProgress';
+import { prepClosingApi } from '@/services/prepClosing.service';
 import dayjs from 'dayjs';
 import timezone from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
@@ -420,6 +421,33 @@ const handleStartScreening = async () => {
   try {
     // Reset progress sebelum memulai screening baru
     resetProgress();
+
+    // === WRC GUARD: cek sync status sebelum screening ===
+    let statusList = [];
+    try {
+      statusList = await prepClosingApi.getWrcSyncStatus(filters.periode);
+    } catch (err) {
+      console.warn('⚠️ Failed to fetch WRC sync status, proceeding without guard:', err.message);
+    }
+
+    if (filters.cabang === 'All') {
+      const unsynced = statusList.filter(s => !s.synced);
+      if (unsynced.length > 0) {
+        const syncedCount = statusList.length - unsynced.length;
+        if (syncedCount === 0) {
+          toast.showError('Error', 'Data WRC belum di-sync untuk semua cabang. Silakan buka Config WRC Engine dan lakukan Sync terlebih dahulu.');
+          return;
+        }
+        const msg = `${unsynced.length} cabang belum sync WRC: ${unsynced.map(s => s.cab).join(', ')}\n\nScreening hanya akan diproses untuk ${syncedCount} cabang yang sudah sync. Lanjutkan?`;
+        if (!window.confirm(msg)) return;
+      }
+    } else {
+      const cabStatus = statusList.find(s => s.cab === filters.cabang);
+      if (!cabStatus || !cabStatus.synced) {
+        toast.showError('Error', `Data WRC cabang ${filters.cabang} belum di-sync. Silakan buka Config WRC Engine dan lakukan Sync terlebih dahulu.`);
+        return;
+      }
+    }
 
     // Pastikan ini mass screening
     isMassScreening.value = true;

@@ -1,103 +1,109 @@
 <template>
-    <Dialog v-model:visible="localVisible" :header="dialogTitle" :modal="true" :closable="true" :dismissableMask="true"
-        :style="{ width: '90vw', maxWidth: '1200px' }" @hide="handleClose">
+    <Dialog v-model:visible="localVisible" :modal="true" :closable="true" :dismissableMask="true"
+        :style="{ width: '90vw', maxWidth: '1100px' }" :breakpoints="{ '960px': '95vw', '640px': '100vw' }"
+        class="store-detail-dialog" :draggable="false" @hide="handleClose">
+
         <template #header>
             <div class="detail-header">
-                <div class="header-title">
+                <div class="header-icon-wrap">
                     <i class="pi pi-shop"></i>
-                    <div>
-                        <h3>{{ store?.KDTK }} - {{ store?.NAMA }} ({{ store?.CAB }})</h3>
-                        <Badge :value="store?.IS_READY ? 'SIAP' : 'BELUM SIAP'"
-                            :severity="store?.IS_READY ? 'success' : 'danger'" />
+                </div>
+                <div class="header-info">
+                    <div class="header-title-row">
+                        <h3 class="header-title">{{ store?.KDTK }} — {{ store?.NAMA }}</h3>
+                        <Tag :value="store?.IS_READY ? 'SIAP' : 'BELUM SIAP'"
+                            :severity="store?.IS_READY ? 'success' : 'danger'"
+                            class="status-tag" />
                     </div>
+                    <span class="header-sub">{{ store?.CAB }}</span>
                 </div>
             </div>
         </template>
 
-        <div v-if="loading" class="loading-container">
+        <div v-if="loading" class="loading-state">
             <ProgressSpinner />
-            <p>Memuat detail toko...</p>
+            <p class="loading-text">Memuat detail toko...</p>
         </div>
 
-        <div v-else-if="store" class="detail-content">
-            <!-- Summary Section -->
-            <div class="summary-section">
-                <Card>
-                    <template #content>
-                        <div class="summary-grid">
-                            <div class="summary-item">
-                                <i class="pi pi-list-check"></i>
-                                <div>
-                                    <div class="summary-label">Total Rules</div>
-                                    <div class="summary-value">{{ store.TOTAL_RULES }}</div>
-                                </div>
-                            </div>
-                            <div class="summary-item">
-                                <i class="pi pi-check"></i>
-                                <div>
-                                    <div class="summary-label">Passed</div>
-                                    <div class="summary-value text-success">{{ store.PASSED_RULES }}</div>
-                                </div>
-                            </div>
-                            <div class="summary-item">
-                                <i class="pi pi-times"></i>
-                                <div>
-                                    <div class="summary-label">Failed</div>
-                                    <div class="summary-value text-danger">{{ store.FAILED_RULES }}</div>
-                                </div>
-                            </div>
-                            <div class="summary-item">
-                                <i class="pi pi-exclamation-triangle"></i>
-                                <div>
-                                    <div class="summary-label">Critical</div>
-                                    <div class="summary-value text-warning">{{ store.CRITICAL_ISSUES }}</div>
-                                </div>
-                            </div>
-                        </div>
-                    </template>
-                </Card>
+        <div v-else-if="store" class="detail-body">
+            <!-- Summary Stats -->
+            <div class="stats-row">
+                <div class="stat-card stat-blue">
+                    <div class="stat-icon"><i class="pi pi-list-check"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-number">{{ store.TOTAL_RULES }}</span>
+                        <span class="stat-label">Total Rules</span>
+                    </div>
+                </div>
+                <div class="stat-card stat-green">
+                    <div class="stat-icon"><i class="pi pi-check-circle"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-number">{{ store.PASSED_RULES }}</span>
+                        <span class="stat-label">Passed</span>
+                    </div>
+                </div>
+                <div class="stat-card stat-red">
+                    <div class="stat-icon"><i class="pi pi-times-circle"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-number">{{ store.FAILED_RULES }}</span>
+                        <span class="stat-label">Failed</span>
+                    </div>
+                </div>
+                <div class="stat-card stat-amber">
+                    <div class="stat-icon"><i class="pi pi-exclamation-triangle"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-number">{{ store.CRITICAL_ISSUES }}</span>
+                        <span class="stat-label">Critical</span>
+                    </div>
+                </div>
             </div>
 
             <!-- Issues Section -->
-            <div v-if="store.ISSUES && store.ISSUES.length > 0" class="issues-section">
-                <h4 class="section-title">
-                    <i class="pi pi-exclamation-circle"></i>
-                    Issues Ditemukan
-                </h4>
+            <div v-if="store.ISSUES && store.ISSUES.length > 0" class="section-block">
+                <div class="section-block-header">
+                    <i class="pi pi-exclamation-circle section-icon-red"></i>
+                    <span>Issues Ditemukan</span>
+                    <Badge :value="store.ISSUES.length" severity="danger" class="ml-auto" />
+                </div>
                 <IssuesAccordion :issues="groupedIssues" />
             </div>
 
+            <!-- No Issues State -->
+            <div v-else-if="store.ISSUES && store.ISSUES.length === 0" class="no-issues-card">
+                <i class="pi pi-check-circle"></i>
+                <div>
+                    <p class="no-issues-title">Semua Rule Passed</p>
+                    <p class="no-issues-sub">Toko ini memenuhi semua kriteria kesiapan closing.</p>
+                </div>
+            </div>
+
             <!-- Note Section -->
-            <div class="note-section">
-                <Card>
-                    <template #header>
-                        <div class="note-header">
-                            <i class="pi pi-comment"></i>
-                            <span>Catatan</span>
+            <div class="section-block">
+                <div class="section-block-header">
+                    <i class="pi pi-comment section-icon-blue"></i>
+                    <span>Catatan</span>
+                </div>
+                <div v-if="store.note" class="note-card">
+                    <div class="note-card-body">
+                        <p class="note-text">{{ store.note.noteText }}</p>
+                        <div class="note-meta-row">
+                            <span class="note-meta-item"><i class="pi pi-user"></i> {{ store.note.fullName || store.note.pic }}</span>
+                            <span class="note-meta-item"><i class="pi pi-clock"></i> {{ formatDateTime(store.note.updated_at) }}</span>
                         </div>
-                    </template>
-                    <template #content>
-                        <div v-if="store.note" class="note-display">
-                            <p>{{ store.note.noteText }}</p>
-                            <div class="note-meta">
-                                <span><i class="pi pi-user"></i> {{ store.note.fullName || store.note.pic }}</span>
-                                <span><i class="pi pi-clock"></i> {{ formatDateTime(store.note.updated_at) }}</span>
-                            </div>
-                        </div>
-                        <div v-else class="no-note">
-                            <i class="pi pi-info-circle"></i>
-                            <p>Belum ada catatan untuk toko ini</p>
-                        </div>
-                    </template>
-                </Card>
+                    </div>
+                </div>
+                <div v-else class="empty-note">
+                    <i class="pi pi-info-circle"></i>
+                    <span>Belum ada catatan untuk toko ini.</span>
+                </div>
             </div>
         </div>
 
         <template #footer>
-            <div class="footer-actions">
-                <Button :label="store?.note ? 'Edit Note' : 'Tambah Note'" icon="pi pi-comment" class="p-button-info"
-                    @click="handleEditNote" />
-                <Button label="Tutup" icon="pi pi-times" class="p-button-secondary" @click="handleClose" />
+            <div class="detail-footer">
+                <Button :label="store?.note ? 'Edit Catatan' : 'Tambah Catatan'" icon="pi pi-comment"
+                    class="p-button-outlined p-button-info p-button-sm" @click="handleEditNote" />
+                <Button label="Tutup" icon="pi pi-times" class="p-button-text p-button-secondary" @click="handleClose" />
             </div>
         </template>
     </Dialog>
@@ -106,8 +112,8 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
 import Dialog from 'primevue/dialog';
-import Card from 'primevue/card';
 import Badge from 'primevue/badge';
+import Tag from 'primevue/tag';
 import Button from 'primevue/button';
 import ProgressSpinner from 'primevue/progressspinner';
 import IssuesAccordion from './IssuesAccordion.vue';
@@ -131,11 +137,6 @@ watch(() => props.visible, (newVal) => {
 
 watch(localVisible, (newVal) => {
     emit('update:visible', newVal);
-});
-
-const dialogTitle = computed(() => {
-    if (!props.store) return 'Detail Toko';
-    return `Detail - ${props.store.KDTK}`;
 });
 
 const groupedIssues = computed(() => {
@@ -175,167 +176,277 @@ const handleEditNote = () => {
 </script>
 
 <style scoped>
+/* === Header === */
 .detail-header {
-    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.header-icon-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 0.75rem;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.header-icon-wrap i {
+    font-size: 1.4rem;
+}
+
+.header-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.header-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
 }
 
 .header-title {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-}
-
-.header-title i {
-    font-size: 2rem;
-    color: #3b82f6;
-}
-
-.header-title h3 {
     margin: 0;
-    font-size: 1.25rem;
-    color: #111827;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #1e293b;
 }
 
-.loading-container {
-    text-align: center;
-    padding: 3rem;
-    color: #6b7280;
+.status-tag {
+    font-size: 0.72rem;
+    font-weight: 700;
 }
 
-.detail-content {
+.header-sub {
+    font-size: 0.82rem;
+    color: #64748b;
+}
+
+/* === Loading === */
+.loading-state {
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    align-items: center;
+    padding: 3rem;
 }
 
-.summary-section {
-    margin-bottom: 1rem;
+.loading-text {
+    color: #64748b;
+    font-size: 0.9rem;
+    margin-top: 0.75rem;
 }
 
-.summary-grid {
+/* === Body === */
+.detail-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+/* === Stats Row === */
+.stats-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.75rem;
 }
 
-.summary-item {
+.stat-card {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    padding: 1rem;
-    background: #f9fafb;
-    border-radius: 8px;
+    gap: 0.75rem;
+    padding: 0.875rem 1rem;
+    border-radius: 0.625rem;
+    border: 1px solid transparent;
 }
 
-.summary-item i {
-    font-size: 2rem;
-    color: #3b82f6;
+.stat-blue {
+    background: #eff6ff;
+    border-color: #dbeafe;
 }
 
-.summary-label {
-    font-size: 0.875rem;
-    color: #6b7280;
-    margin-bottom: 0.25rem;
+.stat-green {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
 }
 
-.summary-value {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #111827;
+.stat-red {
+    background: #fef2f2;
+    border-color: #fecaca;
 }
 
-.text-success {
-    color: #10b981 !important;
+.stat-amber {
+    background: #fffbeb;
+    border-color: #fde68a;
 }
 
-.text-danger {
-    color: #ef4444 !important;
+.stat-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.5rem;
+    background: rgba(255, 255, 255, 0.7);
+    flex-shrink: 0;
 }
 
-.text-warning {
-    color: #f59e0b !important;
+.stat-blue .stat-icon { color: #3b82f6; }
+.stat-green .stat-icon { color: #10b981; }
+.stat-red .stat-icon { color: #ef4444; }
+.stat-amber .stat-icon { color: #f59e0b; }
+
+.stat-info {
+    display: flex;
+    flex-direction: column;
 }
 
-.section-title {
+.stat-number {
+    font-size: 1.35rem;
+    font-weight: 800;
+    line-height: 1;
+    color: #1e293b;
+}
+
+.stat-label {
+    font-size: 0.72rem;
+    color: #64748b;
+    font-weight: 500;
+    margin-top: 0.125rem;
+}
+
+/* === Section Block === */
+.section-block {
+    border: 1px solid #e2e8f0;
+    border-radius: 0.625rem;
+    overflow: hidden;
+}
+
+.section-block-header {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 1.125rem;
+    padding: 0.75rem 1rem;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
     font-weight: 600;
-    color: #111827;
-    margin-bottom: 1rem;
+    font-size: 0.88rem;
+    color: #1e293b;
 }
 
-.section-title i {
+.section-icon-red {
     color: #ef4444;
 }
 
-.note-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-weight: 600;
-    color: #111827;
-}
-
-.note-header i {
+.section-icon-blue {
     color: #3b82f6;
 }
 
-.note-display {
-    padding: 1rem;
-    background: #f9fafb;
-    border-radius: 8px;
-    border-left: 4px solid #3b82f6;
-}
-
-.note-display p {
-    margin: 0 0 1rem 0;
-    color: #374151;
-    line-height: 1.6;
-}
-
-.note-meta {
+/* === No Issues === */
+.no-issues-card {
     display: flex;
-    gap: 1.5rem;
-    font-size: 0.875rem;
-    color: #6b7280;
+    align-items: center;
+    gap: 0.875rem;
+    padding: 1.25rem;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 0.625rem;
 }
 
-.note-meta span {
+.no-issues-card i {
+    font-size: 2rem;
+    color: #10b981;
+    flex-shrink: 0;
+}
+
+.no-issues-title {
+    margin: 0;
+    font-weight: 700;
+    color: #065f46;
+    font-size: 0.95rem;
+}
+
+.no-issues-sub {
+    margin: 0.125rem 0 0 0;
+    font-size: 0.8rem;
+    color: #047857;
+}
+
+/* === Note Card === */
+.note-card {
+    padding: 0;
+}
+
+.note-card-body {
+    padding: 1rem;
+}
+
+.note-text {
+    margin: 0 0 0.625rem 0;
+    color: #334155;
+    line-height: 1.6;
+    font-size: 0.88rem;
+}
+
+.note-meta-row {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.75rem;
+    color: #94a3b8;
+}
+
+.note-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+/* === Empty Note === */
+.empty-note {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    padding: 1rem;
+    color: #94a3b8;
+    font-size: 0.85rem;
 }
 
-.no-note {
-    text-align: center;
-    padding: 2rem;
-    color: #9ca3af;
+.empty-note i {
+    color: #cbd5e1;
 }
 
-.no-note i {
-    font-size: 2rem;
-    margin-bottom: 0.5rem;
-    display: block;
-}
-
-.footer-actions {
+/* === Footer === */
+.detail-footer {
     display: flex;
-    gap: 0.5rem;
-    justify-content: flex-end;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
 }
 
 @media (max-width: 768px) {
-    .summary-grid {
+    .stats-row {
         grid-template-columns: repeat(2, 1fr);
     }
 
-    .footer-actions {
+    .header-title-row {
         flex-direction: column;
+        align-items: flex-start;
+        gap: 0.375rem;
     }
 
-    .footer-actions button {
+    .detail-footer {
+        flex-direction: column-reverse;
+        gap: 0.5rem;
+        align-items: stretch;
+    }
+
+    .detail-footer button {
         width: 100%;
     }
 }

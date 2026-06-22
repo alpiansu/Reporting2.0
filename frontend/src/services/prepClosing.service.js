@@ -141,6 +141,16 @@ export const prepClosingApi = {
   },
 
   // ==================== WRC EXTRACTOR ENDPOINTS ====================
+  async getWrcSyncStatus(periode) {
+    const response = await api.get(`${BASE_URL}/wrc-sync-status`, {
+      params: { periode },
+    });
+    // response.data = { success: true, data: [...] }
+    const payload = response.data;
+    const list = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : [];
+    return list;
+  },
+
   async getWrcExtractRules() {
     const response = await api.get(`${BASE_URL}/wrc-extract-rules`);
     return response.data;

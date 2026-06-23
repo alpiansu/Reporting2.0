@@ -69,5 +69,6 @@ export default {
   /**
    * Progress task name
    */
+  syncAfterAllStores: true,
   taskProgressName: "combinedScreeningTask",
 };

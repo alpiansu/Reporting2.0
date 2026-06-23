@@ -41,6 +41,12 @@ class CombinedScreeningService {
     };
   }
 
+  // Helper to persist module screening result to RekapRemoteService
+  async persistModuleResult(moduleName, cab, storeCode, status, detail = "") {
+    const msg = `[${storeCode}] ${status}` + (detail ? ` – ${detail}` : "");
+    await RekapRemoteService.addToTemp(cab, storeCode, moduleName, msg);
+  }
+
   /**
    * Main entry point: run combined screening for all enabled modules.
    * @param {Object} options - { cabang, periode, username, fullName, force }
@@ -247,27 +253,27 @@ class CombinedScreeningService {
         logger.error(`[combined_screening] saveLogsToDatabase error: ${saveErr.message}`);
       }
 
-      // Sync rekap_remote JSON files (1x for all modules)
-      try {
-        await rekapRemoteStagingService.syncAllFromDatabase();
-        logger.info("[combined_screening] Rekap remote JSON synced for all modules");
-      } catch (syncErr) {
-        logger.error(`[combined_screening] syncAllFromDatabase error: ${syncErr.message}`);
-      }
-
-      // Sync individual module JSON files
-      try {
-        if (enabledModules.some(m => m.name === "rekon_virtual_mrg")) {
-          await rekonVirtualService.ensureDataLoaded(periode);
+      // Sync JSON files for each enabled module (once after all stores)
+      const syncedModules = [];
+      if (config.syncAfterAllStores) {
+        for (const mod of enabledModules) {
+          const service = this.moduleServiceMap[mod.name];
+          if (service && typeof service.syncToJsonFile === "function") {
+            try {
+              if (mod.name === "rekon_sales") {
+                await service.syncToJsonFile(strYear, strMonth);
+              } else if (mod.name === "rekon_virtual_mrg") {
+                await service.ensureDataLoaded(periode);
+              } else {
+                await service.syncToJsonFile(strPeriode);
+              }
+              syncedModules.push(mod.name);
+              logger.info(`[combined_screening] JSON sync ok for ${mod.name}`);
+            } catch (e) {
+              logger.warn(`[combined_screening] JSON sync failed for ${mod.name}: ${e.message}`);
+            }
+          }
         }
-        if (enabledModules.some(m => m.name === "penyesuaian")) {
-          await penyesuaianService.syncToJsonFile(strPeriode);
-        }
-        if (enabledModules.some(m => m.name === "rekon_persediaan")) {
-          await rekonPersediaanService.syncToJsonFile();
-        }
-      } catch (moduleSyncErr) {
-        logger.error(`[combined_screening] Module JSON sync error: ${moduleSyncErr.message}`);
       }
 
       const timeCompleted = moment().format("YYYY-MM-DD HH:mm:ss");
@@ -282,6 +288,7 @@ class CombinedScreeningService {
         message: "Combined screening completed",
         totalStores,
         processedCount,
+        syncedModules,
       };
     } catch (error) {
       if (progressService.isAborted(taskId)) {
@@ -326,7 +333,7 @@ class CombinedScreeningService {
     if (!storeInfo) {
       // Log failure for ALL modules
       for (const mod of enabledModules) {
-        await RekapRemoteService.addToTemp(cab, storeCode, mod.name, `[${storeCode}] store info not found`);
+        await this.persistModuleResult(mod.name, cab, storeCode, "error", "store info not found");
         moduleResults[mod.name] = "store_info_not_found";
       }
       return moduleResults;
@@ -342,7 +349,7 @@ class CombinedScreeningService {
 
     if (!storeConnection) {
       for (const mod of enabledModules) {
-        await RekapRemoteService.addToTemp(cab, storeCode, mod.name, `[${storeCode}] connection failed`);
+        await this.persistModuleResult(mod.name, cab, storeCode, "error", "connection failed");
         moduleResults[mod.name] = "connection_failed";
       }
       return moduleResults;
@@ -373,6 +380,8 @@ class CombinedScreeningService {
           const guard = await screeningGuard.isSuccessToday(moduleConfig.name, storeCode);
           if (guard.screened) {
             logger.info(`[combined_screening] ${moduleConfig.name}/${storeCode}: skip (guard: ${guard.reason})`);
+            // Persist skip result
+            await this.persistModuleResult(moduleConfig.name, cab, storeCode, "skip", guard.reason);
             moduleResults[moduleConfig.name] = "skip_guard";
             continue;
           }
@@ -386,17 +395,13 @@ class CombinedScreeningService {
             glDataByBranch,
           });
 
-          await RekapRemoteService.addToTemp(cab, storeCode, moduleConfig.name, `[${storeCode}] success (combined)`);
+          // Persist success result
+          await this.persistModuleResult(moduleConfig.name, cab, storeCode, "success");
           moduleResults[moduleConfig.name] = "success";
         } catch (moduleError) {
           // Error in 1 module does NOT stop other modules
           logger.error(`[combined_screening] ${moduleConfig.name}/${storeCode} ERROR: ${moduleError.message}`);
-          await RekapRemoteService.addToTemp(
-            cab,
-            storeCode,
-            moduleConfig.name,
-            `[${storeCode}] ERROR: ${moduleError.message}`,
-          );
+          await this.persistModuleResult(moduleConfig.name, cab, storeCode, "error", moduleError.message);
           moduleResults[moduleConfig.name] = `error: ${moduleError.message}`;
         }
       }

@@ -32,8 +32,9 @@ class ScreeningGuard {
       // Belum ada data untuk toko ini di module ini
       if (!entry) return { screened: false, reason: "no_data", updtime: null };
 
-      // Cek apakah status gagal (mengandung "error" case-insensitive)
-      const isFailed = /error/i.test(entry.status || "");
+      // Cek apakah status gagal (mengandung "error" atau "failed" case-insensitive)
+      const isFailed = /(error|failed)/i.test(entry.status || "");
+
       logger.info(`[screeningGuard] Cek status untuk ${moduleName}/${kdtk}: ${isFailed ? "gagal" : "berhasil"}`);
       if (isFailed) return { screened: false, reason: "previous_failed", updtime: entry.updtime };
 

@@ -18,7 +18,10 @@ class ResilientDatabase {
     this.maxRetries = 3;
     this.retryDelay = 5000; // 5 seconds
     this.lastConnectionAttempt = null;
-    this.connectionCooldown = 30000; // 30 seconds cooldown between attempts
+    this.lastConnectionFailure = null;
+    this.connectionCooldown = 30000; // 30 seconds cooldown after real failures
+    this.connectionPromise = null;
+    this.generation = 0;
 
     // JSON file paths for offline data
     this.dataPath = path.join(process.cwd(), "data");
@@ -55,18 +58,35 @@ class ResilientDatabase {
   }
 
   /**
-   * Attempt to connect to database
+   * Attempt to connect to database. Concurrent callers share one connection attempt.
    */
-  async connect() {
-    // Check cooldown period
-    if (this.lastConnectionAttempt && Date.now() - this.lastConnectionAttempt < this.connectionCooldown) {
+  async connect(options = {}) {
+    const { force = false } = options;
+
+    if (this.connectionPromise) {
+      logger.info("Database connection attempt already in progress, waiting for existing attempt...");
+      return this.connectionPromise;
+    }
+
+    if (!force && this.lastConnectionFailure && Date.now() - this.lastConnectionFailure < this.connectionCooldown) {
       throw new Error("Connection attempt in cooldown period");
     }
 
     this.lastConnectionAttempt = Date.now();
+    this.connectionPromise = this.createConnection();
 
     try {
-      this.sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASSWORD, {
+      return await this.connectionPromise;
+    } finally {
+      this.connectionPromise = null;
+    }
+  }
+
+  async createConnection() {
+    let nextSequelize = null;
+
+    try {
+      nextSequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASSWORD, {
         host: process.env.DB_HOST,
         port: process.env.DB_PORT,
         dialect: "mysql",
@@ -87,20 +107,37 @@ class ResilientDatabase {
         },
       });
 
-      // Test connection
-      await this.sequelize.authenticate();
+      await nextSequelize.authenticate();
+
+      const previousSequelize = this.sequelize;
+      if (previousSequelize && previousSequelize !== nextSequelize) {
+        await previousSequelize.close().catch(error => {
+          logger.warn(`Failed to close previous database connection: ${error.message}`);
+        });
+      }
+
+      this.sequelize = nextSequelize;
       this.isConnected = true;
       this.connectionAttempts = 0;
+      this.lastConnectionFailure = null;
+      this.generation++;
       logger.info("Database connection established successfully");
 
-      // Setup connection event handlers
       this.setupConnectionHandlers();
 
-      return this.sequelize;
+      return nextSequelize;
     } catch (error) {
       this.isConnected = false;
       this.connectionAttempts++;
+      this.lastConnectionFailure = Date.now();
       logger.error(`Database connection failed (attempt ${this.connectionAttempts}): ${error.message}`);
+
+      if (nextSequelize) {
+        await nextSequelize.close().catch(closeError => {
+          logger.warn(`Failed to close failed database connection: ${closeError.message}`);
+        });
+      }
+
       throw error;
     }
   }
@@ -131,19 +168,25 @@ class ResilientDatabase {
    * Get database instance with automatic reconnection and retry
    */
   async getDatabase() {
-    // Jika sudah connected, return instance
     if (this.isConnected && this.sequelize) {
       return this.sequelize;
     }
 
-    // Coba reconnect dengan retry mechanism
+    if (this.connectionPromise) {
+      try {
+        return await this.connectionPromise;
+      } catch (error) {
+        logger.warn(`Database connection in progress failed: ${error.message}`);
+      }
+    }
+
     const maxRetries = 3;
     const retryDelay = 2000; // 2 seconds
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         logger.info(`Attempting to reconnect to database (attempt ${attempt}/${maxRetries})...`);
-        await this.connect();
+        await this.connect({ force: attempt > 1 });
 
         if (this.isConnected && this.sequelize) {
           logger.info("Database reconnected successfully");
@@ -153,7 +196,6 @@ class ResilientDatabase {
         logger.warn(`Database reconnection attempt ${attempt} failed: ${error.message}`);
 
         if (attempt < maxRetries) {
-          // Wait before retry (exponential backoff)
           const delay = retryDelay * attempt;
           logger.info(`Waiting ${delay}ms before next retry...`);
           await new Promise(resolve => setTimeout(resolve, delay));
@@ -161,7 +203,6 @@ class ResilientDatabase {
       }
     }
 
-    // Semua retry gagal
     logger.warn("Database unavailable after all reconnection attempts, operating in offline mode");
     return null;
   }
@@ -247,8 +288,9 @@ class ResilientDatabase {
    */
   async forceReconnect() {
     this.lastConnectionAttempt = null;
+    this.lastConnectionFailure = null;
     this.connectionAttempts = 0;
-    return await this.connect();
+    return await this.connect({ force: true });
   }
 
   /**
@@ -260,6 +302,7 @@ class ResilientDatabase {
         await this.sequelize.close();
         this.isConnected = false;
         this.sequelize = null;
+        this.generation++;
         logger.info("Database connection closed");
       } catch (error) {
         logger.error(`Error closing database connection: ${error.message}`);
@@ -275,8 +318,15 @@ class ResilientDatabase {
       isConnected: this.isConnected,
       connectionAttempts: this.connectionAttempts,
       lastConnectionAttempt: this.lastConnectionAttempt,
+      lastConnectionFailure: this.lastConnectionFailure,
       hasSequelize: !!this.sequelize,
+      generation: this.generation,
+      reconnecting: !!this.connectionPromise,
     };
+  }
+
+  getGeneration() {
+    return this.generation;
   }
 }
 

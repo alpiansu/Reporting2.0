@@ -44,6 +44,7 @@ async function startServer() {
   try {
     // Try to connect to database (optional for resilient mode)
     try {
+      await resilientDb.initialize();
       const sequelize = await resilientDb.getDatabase();
       if (sequelize) {
         logger.info("Database connection established successfully");

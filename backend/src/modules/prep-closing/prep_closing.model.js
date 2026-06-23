@@ -5,10 +5,12 @@ import logger from "../../config/logger.js";
 const { resilientDb } = config;
 
 let ScreeningPraClosing = null;
+let ScreeningPraClosingGeneration = -1;
 
 const getScreeningPraClosingModel = async () => {
   try {
-    if (!ScreeningPraClosing) {
+    const dbGeneration = resilientDb.getGeneration();
+    if (!ScreeningPraClosing || ScreeningPraClosingGeneration !== dbGeneration) {
       const sequelize = await resilientDb.getDatabase();
       if (!sequelize) {
         throw new Error("Database connection not available");
@@ -128,6 +130,7 @@ const getScreeningPraClosingModel = async () => {
           ],
         }
       );
+      ScreeningPraClosingGeneration = dbGeneration;
     }
     return ScreeningPraClosing;
   } catch (error) {

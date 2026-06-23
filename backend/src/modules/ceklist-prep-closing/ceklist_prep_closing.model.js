@@ -7,10 +7,12 @@ const { resilientDb } = config;
 // ─── ceklist_space_hdd ───────────────────────────────────────────────────────
 
 let CeklistSpaceHdd = null;
+let CeklistSpaceHddGeneration = -1;
 
 const getCeklistSpaceHddModel = async () => {
   try {
-    if (!CeklistSpaceHdd) {
+    const dbGeneration = resilientDb.getGeneration();
+    if (!CeklistSpaceHdd || CeklistSpaceHddGeneration !== dbGeneration) {
       const sequelize = await resilientDb.getDatabase();
       if (!sequelize) throw new Error("Database connection not available");
 
@@ -82,6 +84,7 @@ const getCeklistSpaceHddModel = async () => {
           freezeTableName: true,
         }
       );
+      CeklistSpaceHddGeneration = dbGeneration;
     }
     return CeklistSpaceHdd;
   } catch (error) {
@@ -105,10 +108,12 @@ export const CeklistSpaceHddWrapper = {
 // ─── ceklist_space_tampung ────────────────────────────────────────────────────
 
 let CeklistSpaceTampung = null;
+let CeklistSpaceTampungGeneration = -1;
 
 const getCeklistSpaceTampungModel = async () => {
   try {
-    if (!CeklistSpaceTampung) {
+    const dbGeneration = resilientDb.getGeneration();
+    if (!CeklistSpaceTampung || CeklistSpaceTampungGeneration !== dbGeneration) {
       const sequelize = await resilientDb.getDatabase();
       if (!sequelize) throw new Error("Database connection not available");
 
@@ -165,6 +170,7 @@ const getCeklistSpaceTampungModel = async () => {
           freezeTableName: true,
         }
       );
+      CeklistSpaceTampungGeneration = dbGeneration;
     }
     return CeklistSpaceTampung;
   } catch (error) {
@@ -188,10 +194,12 @@ export const CeklistSpaceTampungWrapper = {
 // ─── ceklist_import_idt ───────────────────────────────────────────────────────
 
 let CeklistImportIdt = null;
+let CeklistImportIdtGeneration = -1;
 
 const getCeklistImportIdtModel = async () => {
   try {
-    if (!CeklistImportIdt) {
+    const dbGeneration = resilientDb.getGeneration();
+    if (!CeklistImportIdt || CeklistImportIdtGeneration !== dbGeneration) {
       const sequelize = await resilientDb.getDatabase();
       if (!sequelize) throw new Error("Database connection not available");
 
@@ -234,6 +242,7 @@ const getCeklistImportIdtModel = async () => {
           freezeTableName: true,
         }
       );
+      CeklistImportIdtGeneration = dbGeneration;
     }
     return CeklistImportIdt;
   } catch (error) {

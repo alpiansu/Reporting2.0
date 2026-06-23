@@ -7,7 +7,6 @@ import routes from "./routes/index.js";
 import modules from "./modules/index.js";
 import { requestLogger, errorHandler, notFound, databaseErrorHandler, addDatabaseStatus } from "./middlewares/index.js";
 import config from "./config/index.js";
-import resilientDb from "./config/resilient-database.js";
 
 // Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -41,9 +40,6 @@ app.use(requestLogger);
 
 // Database status middleware
 app.use(addDatabaseStatus);
-
-// Initialize resilient database
-resilientDb.initialize();
 
 // Initialize modules
 modules.initialize(app);

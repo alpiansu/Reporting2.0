@@ -3,7 +3,7 @@
  * Shared state + data-loading logic for all 4 tabs
  */
 import { ref, reactive, computed } from 'vue';
-import * as api from '../services/ceklistPrepClosing.service.js';
+import * as api from '@/services/ceklistPrepClosing.service.js';
 
 export function useCeklistPrepClosing() {
   // ─── Filter State ────────────────────────────────────────────────────────

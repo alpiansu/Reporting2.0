@@ -25,9 +25,9 @@
       </Column>
       <Column header="Capture" style="width:90px">
         <template #body="{ data }">
-          <img v-if="data.CAPTURE_PATH" :src="baseUrl + data.CAPTURE_PATH" alt="capture"
+          <img v-if="data.CAPTURE_PATH" :src="api.getAssetUrl(data.CAPTURE_PATH)" alt="capture"
             style="max-width:80px;max-height:56px;width:auto;height:auto;object-fit:contain;border-radius:3px;display:block;cursor:pointer"
-            @click="openPreview(baseUrl + data.CAPTURE_PATH)" />
+            @click="openPreview(api.getAssetUrl(data.CAPTURE_PATH))" />
           <i v-else class="pi pi-image" style="font-size:1.4rem;color:var(--text-color-secondary)" />
         </template>
       </Column>
@@ -73,7 +73,7 @@
           <label>Capture <span style="color:var(--text-color-secondary);font-weight:400;font-size:0.8rem">(opsional)</span></label>
           <div class="capture-upload-row">
             <div class="capture-preview-box">
-              <img v-if="capturePath" :src="baseUrl + capturePath" alt="capture"
+              <img v-if="capturePath" :src="api.getAssetUrl(capturePath)" alt="capture"
                 style="max-width:120px;max-height:80px;width:auto;height:auto;object-fit:contain;border-radius:4px" />
               <i v-else class="pi pi-image" style="font-size:2rem;color:var(--text-color-secondary)" />
             </div>
@@ -109,7 +109,7 @@ import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
 import Calendar from 'primevue/calendar';
 import Dialog from 'primevue/dialog';
-import * as api from '../services/ceklistPrepClosing.service.js';
+import * as api from '@/services/ceklistPrepClosing.service.js';
 
 const props = defineProps({
   rows:    { type: Array, default: () => [] },
@@ -130,7 +130,6 @@ const previewVisible = ref(false);
 const previewSrc = ref('');
 const form = reactive({ cab: '', path: '', capacity: '', freeSpace: '', tglCheck: null });
 
-const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:3000';
 
 function openPreview(url) { previewSrc.value = url; previewVisible.value = true; }
 

@@ -25,9 +25,9 @@
       <Column header="Capture" style="min-width:220px">
         <template #body="{ data }">
           <div v-if="data.CAPTURE">
-            <a v-if="isImageUrl(data.CAPTURE)" :href="backendUrl + data.CAPTURE"
+            <a v-if="isImageUrl(data.CAPTURE)" :href="api.getAssetUrl(data.CAPTURE)"
               target="_blank" class="capture-link">
-              <img :src="backendUrl + data.CAPTURE" class="capture-thumb" alt="capture" />
+              <img :src="api.getAssetUrl(data.CAPTURE)" class="capture-thumb" alt="capture" />
             </a>
             <span v-else class="capture-text">{{ data.CAPTURE }}</span>
           </div>
@@ -104,9 +104,8 @@ import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
 import Dialog from 'primevue/dialog';
 import Tag from 'primevue/tag';
-import * as api from '../services/ceklistPrepClosing.service.js';
+import * as api from '@/services/ceklistPrepClosing.service.js';
 
-const backendUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:3000';
 
 const props = defineProps({
   rows:    { type: Array, default: () => [] },

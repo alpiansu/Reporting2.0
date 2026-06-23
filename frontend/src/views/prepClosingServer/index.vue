@@ -149,7 +149,7 @@ import TabSpaceTampung from './components/TabSpaceTampung.vue';
 import TabImportIdt from './components/TabImportIdt.vue';
 import TabRekapScreening from './components/TabRekapScreening.vue';
 import { useCeklistPrepClosing } from './composables/useCeklistPrepClosing.js';
-import * as api from './services/ceklistPrepClosing.service.js';
+import * as api from '@/services/ceklistPrepClosing.service.js';
 
 // ─── Composable ───────────────────────────────────────────────────────────────
 const {

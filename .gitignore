@@ -16,3 +16,5 @@
 
 # Ignore reference folder
 /reference_template/
+/AGENTS.md
+/.github

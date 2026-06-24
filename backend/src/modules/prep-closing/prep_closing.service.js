@@ -406,7 +406,8 @@ class PrepClosingService {
   /**
    * Process single store screening
    */
-  async processSingleStore(store, strPeriode, strYear, strMonth, sharedConnection = null) {
+  async processSingleStore(store, strPeriode, strYear, strMonth, sharedConnection = null, options = {}) {
+    const { suppressIntermediateLogs = false } = options;
     const { storeCode, cab } = store;
     const results = { success: false, records: null, hasIssue: false };
     const isShared = !!sharedConnection;
@@ -458,17 +459,21 @@ class PrepClosingService {
           ...saldoData,
         };
 
-        await RekapRemoteService.addToTemp(cab, storeCode, "prep_closing", `[${storeCode}] executing rules...`);
+        if (!suppressIntermediateLogs) {
+          await RekapRemoteService.addToTemp(cab, storeCode, "prep_closing", `[${storeCode}] executing rules...`);
+        }
 
         // Execute all rules
         const ruleResults = await ruleEngine.executeRules(storeConnection, context);
 
-        await RekapRemoteService.addToTemp(
-          cab,
-          storeCode,
-          "prep_closing",
-          `[${storeCode}] rules completed: ${ruleResults.passedRules}/${ruleResults.totalRules} passed, ${ruleResults.criticalIssues} critical issues`,
-        );
+        if (!suppressIntermediateLogs) {
+          await RekapRemoteService.addToTemp(
+            cab,
+            storeCode,
+            "prep_closing",
+            `[${storeCode}] rules completed: ${ruleResults.passedRules}/${ruleResults.totalRules} passed, ${ruleResults.criticalIssues} critical issues`,
+          );
+        }
 
         // Prepare record for database
         const recordId = `${cab}${storeCode}${strPeriode}`;

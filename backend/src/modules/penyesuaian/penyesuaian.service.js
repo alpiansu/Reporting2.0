@@ -480,7 +480,8 @@ class PenyesuaianService {
    * @param {string} strMonth - Month in MM format
    * @returns {Promise<Object>} Result with success status, records, and hasIssue flag
    */
-  async processSingleStore(store, strPeriode, strYear, strMonth, sharedConnection = null, sessionId) {
+  async processSingleStore(store, strPeriode, strYear, strMonth, sharedConnection = null, sessionId, options = {}) {
+    const { suppressIntermediateLogs = false } = options;
     const { storeCode, cab } = store;
 
     const results = { success: false, records: [], hasIssue: false };
@@ -517,12 +518,14 @@ class PenyesuaianService {
         // STEP 1: Run filter query to check if store has data exceeding threshold
         const filterQuery = config.queries.filter(filetToko, strPeriode, strMonth, strYear);
         const [filterResult] = await storeConnection.query(filterQuery, [strMonth, strYear, strMonth, strYear]);
-        await RekapRemoteService.addToTemp(
-          cab,
-          storeCode,
-          "penyesuaian",
-          `[${storeCode}] filter query completed, threshold check: ${filterResult.length > 0 ? "EXCEEDED" : "OK"}`,
-        );
+        if (!suppressIntermediateLogs) {
+          await RekapRemoteService.addToTemp(
+            cab,
+            storeCode,
+            "penyesuaian",
+            `[${storeCode}] filter query completed, threshold check: ${filterResult.length > 0 ? "EXCEEDED" : "OK"}`,
+          );
+        }
 
         // STEP 2: If threshold exceeded, run detail query
         if (filterResult.length > 0) {

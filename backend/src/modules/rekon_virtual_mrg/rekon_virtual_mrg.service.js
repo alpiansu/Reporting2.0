@@ -565,7 +565,8 @@ class RekonVirtualService {
    * @param {Object|null} sharedConnection - Shared DB connection from combined screening
    * @returns {Promise<Object>} Result with success status and newRecords
    */
-  async processSingleStore(store, strYear, strMonth, sharedConnection = null) {
+  async processSingleStore(store, strYear, strMonth, sharedConnection = null, options = {}) {
+    const { suppressIntermediateLogs = false } = options;
     const { storeCode, cab } = store;
     const results = { success: false, newRecords: [] };
     const isShared = !!sharedConnection;
@@ -604,12 +605,14 @@ class RekonVirtualService {
           [params, params, params, params],
         );
 
-        await RekapRemoteService.addToTemp(
-          cab,
-          storeCode,
-          "rekon_virtual_mrg",
-          `[${storeCode}] query completed, got ${result.length} records`,
-        );
+        if (!suppressIntermediateLogs) {
+          await RekapRemoteService.addToTemp(
+            cab,
+            storeCode,
+            "rekon_virtual_mrg",
+            `[${storeCode}] query completed, got ${result.length} records`,
+          );
+        }
 
         if (result.length > 0) {
           const startDate = `${strYear}-${strMonth}-01`;

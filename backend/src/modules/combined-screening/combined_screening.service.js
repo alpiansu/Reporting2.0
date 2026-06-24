@@ -214,6 +214,8 @@ class CombinedScreeningService {
       });
     };
 
+    const storeTimeoutMs = config.parallelProcessing.storeTimeoutMs;
+
     try {
       await Promise.all(
         storesToProcess.map(store =>
@@ -227,15 +229,33 @@ class CombinedScreeningService {
               return;
             }
 
-            await this._processStoreAllModules(store, globalContext, force, enabledModules, {
-              dates,
-              wrcPools,
-              wrcDataCache,
-              fetchWrcBatch,
-              glDataByBranch,
-            });
+            logger.info(`[combined_screening] [STORE] Starting ${storeCode} (${cab})`);
+            const storeStart = Date.now();
 
-            await incrementProgress(storeCode, "Done ✅");
+            try {
+              await withTimeout(
+                this._processStoreAllModules(store, globalContext, force, enabledModules, {
+                  dates,
+                  wrcPools,
+                  wrcDataCache,
+                  fetchWrcBatch,
+                  glDataByBranch,
+                }),
+                storeTimeoutMs,
+                `store ${storeCode} exceeded ${storeTimeoutMs / 1000}s timeout`,
+              );
+
+              const elapsed = Date.now() - storeStart;
+              logger.info(`[combined_screening] [STORE] ${storeCode} done in ${elapsed}ms`);
+              await incrementProgress(storeCode, "Done ✅");
+            } catch (storeErr) {
+              const elapsed = Date.now() - storeStart;
+              logger.error(`[combined_screening] [STORE] ${storeCode} FAILED after ${elapsed}ms: ${storeErr.message}`);
+              for (const mod of enabledModules) {
+                await this.persistModuleResult(mod.name, cab, storeCode, "error", storeErr.message);
+              }
+              await incrementProgress(storeCode, "Error ❌");
+            }
           }),
         ),
       );
@@ -247,18 +267,23 @@ class CombinedScreeningService {
       }
 
       // Save rekap_remote logs to DB
+      logger.info(`[combined_screening] [FINALIZATION 1/3] Saving rekap_remote logs to database...`);
       try {
-        await RekapRemoteService.saveLogsToDatabase();
+        const saveResult = await RekapRemoteService.saveLogsToDatabase();
+        logger.info(`[combined_screening] [FINALIZATION 1/3] rekap_remote saved: ${saveResult?.savedCount ?? 0} records`);
       } catch (saveErr) {
-        logger.error(`[combined_screening] saveLogsToDatabase error: ${saveErr.message}`);
+        logger.error(`[combined_screening] [FINALIZATION 1/3] saveLogsToDatabase error: ${saveErr.message}`);
       }
 
       // Sync JSON files for each enabled module (once after all stores)
       const syncedModules = [];
       if (config.syncAfterAllStores) {
+        logger.info(`[combined_screening] [FINALIZATION 2/3] Syncing JSON files for ${enabledModules.length} modules...`);
         for (const mod of enabledModules) {
           const service = this.moduleServiceMap[mod.name];
           if (service && typeof service.syncToJsonFile === "function") {
+            logger.info(`[combined_screening] [FINALIZATION 2/3]   → syncing ${mod.name}...`);
+            const syncStart = Date.now();
             try {
               if (mod.name === "rekon_sales") {
                 await service.syncToJsonFile(strYear, strMonth);
@@ -268,20 +293,23 @@ class CombinedScreeningService {
                 await service.syncToJsonFile(strPeriode);
               }
               syncedModules.push(mod.name);
-              logger.info(`[combined_screening] JSON sync ok for ${mod.name}`);
+              logger.info(`[combined_screening] [FINALIZATION 2/3]   ✓ ${mod.name} synced in ${Date.now() - syncStart}ms`);
             } catch (e) {
-              logger.warn(`[combined_screening] JSON sync failed for ${mod.name}: ${e.message}`);
+              logger.warn(`[combined_screening] [FINALIZATION 2/3]   ✗ ${mod.name} sync failed in ${Date.now() - syncStart}ms: ${e.message}`);
             }
           }
         }
+        logger.info(`[combined_screening] [FINALIZATION 2/3] Sync complete: ${syncedModules.join(", ")}`);
       }
 
+      logger.info(`[combined_screening] [FINALIZATION 3/3] Marking task as completed...`);
       const timeCompleted = moment().format("YYYY-MM-DD HH:mm:ss");
       await progressService.completeProgress(taskId, {
         description: "All stores processed",
         status: "completed",
         completedAt: timeCompleted,
       });
+      logger.info(`[combined_screening] [FINALIZATION 3/3] Task ${taskId} completed at ${timeCompleted}`);
 
       return {
         success: true,
@@ -380,7 +408,6 @@ class CombinedScreeningService {
           const guard = await screeningGuard.isSuccessToday(moduleConfig.name, storeCode);
           if (guard.screened) {
             logger.info(`[combined_screening] ${moduleConfig.name}/${storeCode}: skip (guard: ${guard.reason})`);
-            // Persist skip result
             await this.persistModuleResult(moduleConfig.name, cab, storeCode, "skip", guard.reason);
             moduleResults[moduleConfig.name] = "skip_guard";
             continue;
@@ -388,6 +415,8 @@ class CombinedScreeningService {
         }
 
         // Execute module
+        logger.info(`[combined_screening] [MODULE] ${storeCode}/${moduleConfig.name}: starting...`);
+        const moduleStart = Date.now();
         try {
           await this._executeModuleScreening(moduleConfig, store, globalContext, storeConnection, {
             dates,
@@ -395,12 +424,13 @@ class CombinedScreeningService {
             glDataByBranch,
           });
 
-          // Persist success result
+          const moduleElapsed = Date.now() - moduleStart;
+          logger.info(`[combined_screening] [MODULE] ${storeCode}/${moduleConfig.name}: done in ${moduleElapsed}ms`);
           await this.persistModuleResult(moduleConfig.name, cab, storeCode, "success");
           moduleResults[moduleConfig.name] = "success";
         } catch (moduleError) {
-          // Error in 1 module does NOT stop other modules
-          logger.error(`[combined_screening] ${moduleConfig.name}/${storeCode} ERROR: ${moduleError.message}`);
+          const moduleElapsed = Date.now() - moduleStart;
+          logger.error(`[combined_screening] [MODULE] ${storeCode}/${moduleConfig.name}: ERROR in ${moduleElapsed}ms — ${moduleError.message}`);
           await this.persistModuleResult(moduleConfig.name, cab, storeCode, "error", moduleError.message);
           moduleResults[moduleConfig.name] = `error: ${moduleError.message}`;
         }
@@ -433,13 +463,13 @@ class CombinedScreeningService {
 
     switch (moduleConfig.name) {
       case "rekon_virtual_mrg":
-        return service.processSingleStore(store, params.strYear, params.strMonth, sharedConnection);
+        return service.processSingleStore(store, params.strYear, params.strMonth, sharedConnection, { suppressIntermediateLogs: true });
 
       case "penyesuaian":
-        return service.processSingleStore(store, params.strPeriode, params.strYear, params.strMonth, sharedConnection);
+        return service.processSingleStore(store, params.strPeriode, params.strYear, params.strMonth, sharedConnection, null, { suppressIntermediateLogs: true });
 
       case "prep_closing":
-        return service.processSingleStore(store, params.strPeriode, params.strYear, params.strMonth, sharedConnection);
+        return service.processSingleStore(store, params.strPeriode, params.strYear, params.strMonth, sharedConnection, { suppressIntermediateLogs: true });
 
       case "rekon_persediaan":
         return service.processSingleStore(

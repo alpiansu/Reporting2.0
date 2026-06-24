@@ -497,6 +497,13 @@ class PrepClosingService {
         results.records = recordData;
         results.hasIssue = !ruleResults.isReady; // Has issue if not ready
         results.success = true;
+
+        if (!suppressIntermediateLogs) {
+          await RekapRemoteService.addToTemp(
+            cab, storeCode, "prep_closing",
+            `[${storeCode}] ${results.hasIssue ? "issue_found" : "success"}`,
+          );
+        }
       } finally {
         if (!isShared && storeConnection) {
           await storeConnection.end();

@@ -668,6 +668,13 @@ class RekonVirtualService {
         }
 
         results.success = true;
+
+        if (!suppressIntermediateLogs) {
+          await RekapRemoteService.addToTemp(
+            cab, storeCode, "rekon_virtual_mrg",
+            `[${storeCode}] ${results.newRecords.length > 0 ? "issue_found" : "success"}`,
+          );
+        }
       } finally {
         // Only close connection if we opened it
         if (!isShared && storeConnection) {

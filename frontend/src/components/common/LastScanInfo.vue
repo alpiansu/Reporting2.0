@@ -196,8 +196,7 @@ const fetchLastScan = async () => {
   error.value = null;
   try {
     const data = await rekapRemoteService.getLastMassScanByModule(props.moduleName);
-    if (!data) throw new Error(`No scan data found for ${props.moduleName}`);
-    scanInfo.value = data;
+    scanInfo.value = data || null;
     emit('scan-loaded', data);
   } catch (err) {
     error.value = err.response?.data?.message || err.message;

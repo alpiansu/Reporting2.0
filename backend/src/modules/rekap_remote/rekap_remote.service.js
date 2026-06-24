@@ -309,19 +309,6 @@ class RekapRemoteService {
         }
       }
 
-      // Clean up temporary files after save attempt (without mutex since we're already in mutex)
-      try {
-        await fs.unlink(this.tempFilePath);
-        logger.info("Cleaned up rekap_remote temporary files [REKAP REMOTE]");
-      } catch (error) {
-        // File doesn't exist, ignore error
-        if (error.code === "ENOENT") {
-          logger.debug(`Temporary file not found, no cleanup needed: ${error.message}`);
-        } else {
-          logger.error(`Error cleaning up temp file: ${error.message} [REKAP REMOTE]`);
-        }
-      }
-
       const result = {
         success: errors.length === 0,
         savedCount: savedCount,

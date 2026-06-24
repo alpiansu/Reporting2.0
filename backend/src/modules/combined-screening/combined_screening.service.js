@@ -480,6 +480,7 @@ class CombinedScreeningService {
           dates,
           wrcContext,
           sharedConnection,
+          { suppressIntermediateLogs: true },
         );
 
       case "rekon_sales": {

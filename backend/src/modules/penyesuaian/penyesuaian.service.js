@@ -529,14 +529,19 @@ class PenyesuaianService {
 
         // STEP 2: If threshold exceeded, run detail query
         if (filterResult.length > 0) {
-          // console.log(filterResult[0]);
-          // console.log(`-----`);
-          // console.log(result);
-          //langsung insert summary ke sesuaiSummary
           await SesuaiTokoSummary.upsert(filterResult[0]);
+          results.success = true;
+          results.hasIssue = true;
         } else {
-          results.success = true; // Below threshold is still success
-          results.hasIssue = false; // No issues
+          results.success = true;
+          results.hasIssue = false;
+        }
+
+        if (!suppressIntermediateLogs) {
+          await RekapRemoteService.addToTemp(
+            cab, storeCode, "penyesuaian",
+            `[${storeCode}] ${results.hasIssue ? "issue_found" : "success"}`,
+          );
         }
       } finally {
         if (!isShared && storeConnection) {

@@ -22,13 +22,16 @@ class RekapRemoteStagingService {
     this.TTL = 60 * 60 * 1000; // 1 hour in milliseconds
   }
 
+  async _ensureDataDir() {
+    await fs.mkdir(REKAP_REMOTE_DATA_DIR, { recursive: true });
+  }
+
   /**
    * Initialize the service by creating necessary directories
    */
   async initialize() {
     try {
-      // Create directory if it doesn't exist
-      await fs.mkdir(REKAP_REMOTE_DATA_DIR, { recursive: true });
+      await this._ensureDataDir();
 
       // Handle legacy file if requested (delete it)
       try {
@@ -51,7 +54,7 @@ class RekapRemoteStagingService {
    */
   async _getAvailableModules() {
     try {
-      await fs.mkdir(REKAP_REMOTE_DATA_DIR, { recursive: true });
+      await this._ensureDataDir();
       const files = await fs.readdir(REKAP_REMOTE_DATA_DIR);
       return files
         .filter(f => f.endsWith(".json"))
@@ -94,6 +97,7 @@ class RekapRemoteStagingService {
     const data = this.rekapCache.get(moduleName) || [];
     
     try {
+      await this._ensureDataDir();
       await fileUtils.writeAtomicWithRetry(filePath, JSON.stringify(data, null, 2));
       logger.debug(`Saved ${data.length} records for module ${moduleName} to JSON file`);
     } catch (error) {
@@ -222,9 +226,10 @@ class RekapRemoteStagingService {
     } catch (error) {
       if (error.message.includes("Database sedang tidak tersedia")) {
         logger.warn(`JSON sync skipped for ${moduleName} - database not available`);
-        return;
+        return 0;
       }
       logger.error(`Failed to synchronize rekap_remote data for ${moduleName}: ${error.message}`);
+      throw error;
     }
   }
 
@@ -266,7 +271,7 @@ class RekapRemoteStagingService {
       this.lastLoadTimes.clear();
 
       // Ensure directory exists
-      await fs.mkdir(REKAP_REMOTE_DATA_DIR, { recursive: true });
+      await this._ensureDataDir();
 
       // Save each group to its file
       for (const [moduleName, data] of groupedData.entries()) {

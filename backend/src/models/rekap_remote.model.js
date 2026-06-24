@@ -159,15 +159,6 @@ class RekapRemoteWrapper extends BaseService {
       return await model.create(data);
     });
 
-    // Sync to JSON file after database operation
-    try {
-      if (data.module_name) {
-        await rekapRemoteStagingService.syncToJsonFile(data.module_name);
-      }
-    } catch (syncError) {
-      console.warn("Failed to sync to JSON after create:", syncError.message);
-    }
-
     return result;
   }
 
@@ -177,17 +168,6 @@ class RekapRemoteWrapper extends BaseService {
       return await model.update(data, options);
     });
 
-    // Sync to JSON file after database operation
-    try {
-      const filters = this.extractFilters(options);
-      const mod = filters.moduleName || data.module_name;
-      if (mod) {
-        await rekapRemoteStagingService.syncToJsonFile(mod);
-      }
-    } catch (syncError) {
-      console.warn("Failed to sync to JSON after update:", syncError.message);
-    }
-
     return result;
   }
 
@@ -196,16 +176,6 @@ class RekapRemoteWrapper extends BaseService {
       const model = await getRekapRemoteModel();
       return await model.destroy(options);
     });
-
-    // Sync to JSON file after database operation
-    try {
-      const filters = this.extractFilters(options);
-      if (filters.moduleName) {
-        await rekapRemoteStagingService.syncToJsonFile(filters.moduleName);
-      }
-    } catch (syncError) {
-      console.warn("Failed to sync to JSON after destroy:", syncError.message);
-    }
 
     return result;
   }
@@ -231,15 +201,6 @@ class RekapRemoteWrapper extends BaseService {
       return await model.upsert(data, options);
     });
 
-    // Sync to JSON file after database operation
-    try {
-      if (data.module_name) {
-        await rekapRemoteStagingService.syncToJsonFile(data.module_name);
-      }
-    } catch (syncError) {
-      console.warn("Failed to sync to JSON after upsert:", syncError.message);
-    }
-
     return result;
   }
 
@@ -249,14 +210,6 @@ class RekapRemoteWrapper extends BaseService {
       return await model.findOrCreate(options);
     });
 
-    // Sync to JSON file after database operation
-    try {
-      const [instance] = result;
-      await rekapRemoteStagingService.syncToJsonFile(instance.module_name);
-    } catch (syncError) {
-      console.warn("Failed to sync to JSON after findOrCreate:", syncError.message);
-    }
-
     return result;
   }
 
@@ -265,16 +218,6 @@ class RekapRemoteWrapper extends BaseService {
       const model = await getRekapRemoteModel();
       return await model.bulkCreate(data, options);
     });
-
-    // Sync to JSON file after database operation
-    try {
-      const affectedModules = [...new Set(data.map(item => item.module_name))].filter(Boolean);
-      for (const mod of affectedModules) {
-        await rekapRemoteStagingService.syncToJsonFile(mod);
-      }
-    } catch (syncError) {
-      console.warn("Failed to sync to JSON after bulkCreate:", syncError.message);
-    }
 
     return result;
   }

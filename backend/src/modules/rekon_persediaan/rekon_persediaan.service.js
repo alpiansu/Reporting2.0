@@ -98,11 +98,12 @@ class RekonPersediaanService {
    * @param {Object|null} sharedConnection - Shared DB connection from combined screening
    * @returns {Promise<Object>} Result with success status and newRecordsCount
    */
-  async processSingleStore(store, strPeriode, strYear, strMonth, dates, wrcContext, sharedConnection = null) {
+  async processSingleStore(store, strPeriode, strYear, strMonth, dates, wrcContext, sharedConnection = null, options = {}) {
     const { storeCode, cab } = store;
     const results = { success: false, newRecordsCount: 0 };
     const isShared = !!sharedConnection;
     const { branchWrcMap } = wrcContext || {};
+    const { suppressIntermediateLogs = false } = options;
 
     try {
       const storeInfo = await storeService.getStoreIPHost(storeCode);
@@ -214,6 +215,13 @@ class RekonPersediaanService {
         }
 
         results.success = true;
+
+        if (!suppressIntermediateLogs) {
+          await RekapRemoteService.addToTemp(
+            cab, storeCode, "rekon_persediaan",
+            `[${storeCode}] ${results.newRecordsCount > 0 ? "issue_found" : "success"}`,
+          );
+        }
       } finally {
         if (!isShared && storeConn) {
           await storeConn.end();

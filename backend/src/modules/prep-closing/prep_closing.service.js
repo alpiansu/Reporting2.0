@@ -255,8 +255,32 @@ class PrepClosingService {
         { replacements: { periode } },
       );
 
+      // ===== FILTER WRC OPSIONAL =====
+      let finalRows = rows;
+      // if (process.env.FILTER_WRC_SYNC === "true") {
+      logger.info(`[syncToJsonFile] Filtering ${rows.length} records with WRC validation...`);
+      const groupedByCab = rows.reduce((acc, r) => {
+        if (!acc[r.CAB]) acc[r.CAB] = [];
+        acc[r.CAB].push(r);
+        return acc;
+      }, {});
+
+      const filteredRows = [];
+      for (const [cab, cabRows] of Object.entries(groupedByCab)) {
+        // Siapkan array storeCode untuk validasi
+        const stores = cabRows.map(r => ({ storeCode: r.KDTK }));
+        const validated = await storeService.validateStoresFromWRC(stores, cab, periode, { throwOnError: false });
+        const validCodes = new Set(validated.map(s => s.storeCode));
+        const kept = cabRows.filter(r => validCodes.has(r.KDTK));
+        filteredRows.push(...kept);
+        logger.info(`[syncToJsonFile] Branch ${cab}: ${cabRows.length} → ${kept.length} kept after WRC validation`);
+      }
+      finalRows = filteredRows;
+      // }
+      // ===== AKHIR FILTER =====
+
       // 1. Summary file (tanpa ISSUES)
-      this.prepClosingData = rows.map(r => ({
+      this.prepClosingData = finalRows.map(r => ({
         RECID: r.RECID,
         CAB: r.CAB,
         KDTK: r.KDTK,
@@ -273,7 +297,7 @@ class PrepClosingService {
 
       // 2. Issues Map file (KDTK -> ISSUES)
       const issuesMap = {};
-      for (const r of rows) {
+      for (const r of finalRows) {
         if (Array.isArray(r.ISSUES) && r.ISSUES.length > 0) {
           issuesMap[r.KDTK] = r.ISSUES;
         }
@@ -282,7 +306,7 @@ class PrepClosingService {
 
       // 3. Detail Map file (KDTK -> full record termasuk ISSUES)
       const detailMap = {};
-      for (const r of rows) {
+      for (const r of finalRows) {
         detailMap[r.KDTK] = {
           RECID: r.RECID,
           CAB: r.CAB,
@@ -500,7 +524,9 @@ class PrepClosingService {
 
         if (!suppressIntermediateLogs) {
           await RekapRemoteService.addToTemp(
-            cab, storeCode, "prep_closing",
+            cab,
+            storeCode,
+            "prep_closing",
             `[${storeCode}] ${results.hasIssue ? "issue_found" : "success"}`,
           );
         }

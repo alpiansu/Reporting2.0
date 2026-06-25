@@ -884,12 +884,14 @@ class PrepClosingService {
       this.pendingRecords = [];
 
       // Track stores
-      const screenedStores = new Set();
-      const activeStores = new Set();
+      const screenedStores = new Set(); // Semua toko yang "disentuh" (progress tracker)
+      const processedStores = new Set(); // Hanya toko yang benar-benar diproses run ini
+      const activeStores = new Set(); // Toko dengan issues dari run ini
 
       let processedCount = 0;
       const totalStores = storesToProcess.length;
 
+      let msgOld = "";
       const incrementProgress = async (storeCode, statusText) => {
         processedCount++;
 
@@ -897,6 +899,8 @@ class PrepClosingService {
           description: `Store ${storeCode} → ${statusText} (${processedCount}/${totalStores})`,
           status: "Screening Stores",
         });
+
+        msgOld = `Store ${storeCode} → ${statusText} (${processedCount}/${totalStores})`;
       };
 
       // === STEP 5: Process each store ===
@@ -924,8 +928,13 @@ class PrepClosingService {
             }
 
             screenedStores.add(storeCode);
+            processedStores.add(storeCode);
 
             try {
+              await progressService.updateProgress(taskId, processedCount, {
+                description: `${msgOld} → Screening to Store ${storeCode} ...`,
+                status: "Screening Stores",
+              });
               const result = await withTimeout(
                 this.processSingleStore(store, strPeriode, strYear, strMonth),
                 config.parallelProcessing.storeTimeoutMs,
@@ -958,10 +967,14 @@ class PrepClosingService {
         ),
       );
 
+      msgOld = "";
+
       logger.info(`[prep_closing.service] Screening completed for periode ${periode}`);
       logger.info(
-        `[prep_closing.service] Screened: ${screenedStores.size}, Active (has issues): ${activeStores.size}, Ready: ${
-          screenedStores.size - activeStores.size
+        `[prep_closing.service] Touched: ${screenedStores.size} (guarded: ${
+          screenedStores.size - processedStores.size
+        }), Processed: ${processedStores.size}, Active (has issues): ${activeStores.size}, Ready: ${
+          processedStores.size - activeStores.size
         }`,
       );
 
@@ -985,13 +998,19 @@ class PrepClosingService {
         status: "finalizing",
       });
 
-      await this.updateResolvedRecords({
-        periode: strPeriode,
-        level: cabang === "All" || cabang === "ALL" ? 1 : 2,
-        cabang: cabang === "All" || cabang === "ALL" ? null : cabang,
-        screenedStores: Array.from(screenedStores),
-        activeStores: Array.from(activeStores),
-      });
+      if (processedStores.size === 0) {
+        logger.info(
+          "[prep_closing.service] STEP 6 skipped: tidak ada toko yang diproses di run ini (semua kena guard atau dibatalkan)",
+        );
+      } else {
+        await this.updateResolvedRecords({
+          periode: strPeriode,
+          level: cabang === "All" || cabang === "ALL" ? 1 : 2,
+          cabang: cabang === "All" || cabang === "ALL" ? null : cabang,
+          screenedStores: Array.from(processedStores),
+          activeStores: Array.from(activeStores),
+        });
+      }
 
       // === STEP 7: Save logs ===
       await progressService.updateProgress(taskId, processedCount, {
@@ -1021,9 +1040,11 @@ class PrepClosingService {
       return {
         success: true,
         message: "Screening process completed",
-        screenedStores: screenedStores.size,
+        touchedStores: screenedStores.size,
+        processedStores: processedStores.size,
+        guardedStores: screenedStores.size - processedStores.size,
         activeStores: activeStores.size,
-        resolvedStores: screenedStores.size - activeStores.size,
+        resolvedStores: processedStores.size - activeStores.size,
         skippedBranches: unsyncedBranches,
       };
     } catch (error) {

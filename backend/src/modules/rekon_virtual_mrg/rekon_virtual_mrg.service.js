@@ -165,6 +165,137 @@ class RekonVirtualService {
   }
 
   /**
+   * Sinkronkan semua data dari database ke file JSON per periode.
+   * Method ini akan mengelompokkan semua data berdasarkan periode dan menyimpan masing-masing.
+   * @returns {Promise<{totalFiles: number, totalRecords: number}>}
+   */
+  async syncAllPeriodsToJson() {
+    logger.info("Starting sync all periods to JSON...");
+    const dbData = await SaldoVirtual.findAll();
+
+    // Kelompokkan berdasarkan periode
+    const groups = {};
+    for (const item of dbData) {
+      const plain = item.get({ plain: true });
+      const periode = moment(plain.TANGGAL).format("YYMM");
+      if (!groups[periode]) groups[periode] = [];
+      groups[periode].push(plain);
+    }
+
+    let totalRecords = 0;
+    const periodes = Object.keys(groups);
+    for (const periode of periodes) {
+      // Simpan langsung ke file tanpa reload dari DB (karena kita sudah punya datanya)
+      // Tapi kita bisa gunakan syncPeriodFromDbToJson untuk konsistensi, namun itu akan query ulang.
+      // Untuk efisiensi, kita gunakan pendekatan manual seperti semula.
+      const jsonPath = this.getJsonPath(periode);
+      await fs.writeFile(jsonPath, JSON.stringify(groups[periode], null, 2));
+      totalRecords += groups[periode].length;
+      logger.info(`Saved ${groups[periode].length} records for periode ${periode}`);
+    }
+
+    // Update cache untuk periode terakhir? Atau biarkan saja.
+    // Jika ingin, bisa set cache ke periode terakhir yang disimpan.
+    if (periodes.length > 0) {
+      const lastPeriode = periodes[periodes.length - 1];
+      await this.syncPeriodFromDbToJson(lastPeriode); // optional, reload cache
+    }
+
+    return { totalFiles: periodes.length, totalRecords };
+  }
+
+  /**
+   * Sinkronkan data dari database ke file JSON untuk satu periode tertentu.
+   * Method ini akan mengambil semua data dari tabel SaldoVirtual yang sesuai dengan periode,
+   * lalu menyimpannya ke file JSON dan memperbarui cache memory.
+   * @param {string} periode - Format YYMM (contoh: "2503")
+   * @returns {Promise<number>} Jumlah record yang disinkronkan
+   */
+  async syncPeriodFromDbToJson(periode) {
+    if (!periode) throw new Error("Periode harus diisi (format YYMM)");
+
+    try {
+      const year = "20" + periode.substring(0, 2);
+      const month = periode.substring(2, 4);
+      const startDate = `${year}-${month}-01`;
+      const endDate = moment(`${year}-${month}`, "YYYY-MM").endOf("month").format("YYYY-MM-DD");
+
+      // Ambil data dari database untuk periode ini
+      const dbData = await SaldoVirtual.findAll({
+        where: {
+          TANGGAL: { [Op.between]: [startDate, endDate] },
+        },
+      });
+
+      // Konversi ke plain object & pastikan tipe numerik
+      this.virtualData = dbData.map(item => {
+        const plain = item.get({ plain: true });
+        return {
+          ...plain,
+          ACOST: Number(plain.ACOST) || 0,
+          PRICE: Number(plain.PRICE) || 0,
+          QTY_MSTRAN: Number(plain.QTY_MSTRAN) || 0,
+          QTY_MTRAN: Number(plain.QTY_MTRAN) || 0,
+          SEL: Number(plain.SEL) || 0,
+        };
+      });
+
+      this.loadedPeriod = periode;
+      this.initialized = true;
+      this.lastLoadTime = Date.now();
+
+      // Simpan ke file JSON
+      await this.saveToFile(periode);
+
+      logger.info(`Synchronized ${this.virtualData.length} records for periode ${periode} from DB to JSON`);
+      return this.virtualData.length;
+    } catch (error) {
+      logger.error(`syncPeriodFromDbToJson error: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Menggabungkan array records baru ke dalam cache memory dan menyimpan ke file JSON.
+   * Method ini digunakan setelah proses screening untuk memperbarui data tanpa harus reload dari DB.
+   * @param {string} periode - Format YYMM
+   * @param {Array} newRecords - Array record baru (dari query store)
+   * @returns {Promise<number>} Jumlah record yang berhasil digabung
+   */
+  async mergeAndSavePeriod(periode, newRecords) {
+    if (!periode) throw new Error("Periode harus diisi");
+    if (!newRecords || newRecords.length === 0) return 0;
+
+    // Pastikan data untuk periode ini sudah terload di memory
+    await this.ensureDataLoaded(periode);
+
+    // Merge newRecords ke virtualData
+    for (const record of newRecords) {
+      const idx = this.virtualData.findIndex(
+        v =>
+          v.CABANG === record.CABANG &&
+          v.SHOP === record.SHOP &&
+          v.TANGGAL === record.TANGGAL &&
+          v.PRDCD === record.PRDCD,
+      );
+      if (idx >= 0) {
+        // Pertahankan field lama (misal RECID), timpa dengan data baru
+        this.virtualData[idx] = { ...this.virtualData[idx], ...record };
+      } else {
+        // Record baru: tambahkan default RECID sesuai model
+        this.virtualData.push({ RECID: "*", ...record });
+      }
+    }
+
+    // Simpan ke file JSON
+    await this.saveToFile(periode);
+    this.lastLoadTime = Date.now();
+
+    logger.info(`Merged ${newRecords.length} records to periode ${periode} and saved to JSON`);
+    return newRecords.length;
+  }
+
+  /**
    * Synchronize data from database to JSON file for a specific period
    * Call this after any write operation to keep JSON in sync
    */
@@ -225,55 +356,73 @@ class RekonVirtualService {
     }
   }
 
+  async syncAllData() {
+    this.syncAllPeriodsToJson();
+  }
+
+  /**
+   * Invalidate cache memory untuk periode tertentu (kosongkan data di memory).
+   * Tidak menghapus file JSON.
+   */
+  invalidateCacheForPeriod(periode) {
+    if (this.loadedPeriod === periode) {
+      this.virtualData = [];
+      this.initialized = false;
+      this.loadedPeriod = null;
+      this.lastLoadTime = null;
+      logger.info(`Cache invalidated for periode ${periode}`);
+    }
+  }
+
   /**
    * Sync all data from database to period-based JSON files (Migration)
    */
-  async syncAllData() {
-    try {
-      logger.info("Starting sync all data (Migration) to period-based JSON files...");
-      const dbData = await SaldoVirtual.findAll();
+  // async syncAllData() {
+  //   try {
+  //     logger.info("Starting sync all data (Migration) to period-based JSON files...");
+  //     const dbData = await SaldoVirtual.findAll();
 
-      // Group by periode
-      const groupedData = {};
+  //     // Group by periode
+  //     const groupedData = {};
 
-      for (const item of dbData) {
-        const plainItem = item.get({ plain: true });
-        const record = {
-          ...plainItem,
-          ACOST: Number(plainItem.ACOST) || 0,
-          PRICE: Number(plainItem.PRICE) || 0,
-          QTY_MSTRAN: Number(plainItem.QTY_MSTRAN) || 0,
-          QTY_MTRAN: Number(plainItem.QTY_MTRAN) || 0,
-          SEL: Number(plainItem.SEL) || 0,
-        };
+  //     for (const item of dbData) {
+  //       const plainItem = item.get({ plain: true });
+  //       const record = {
+  //         ...plainItem,
+  //         ACOST: Number(plainItem.ACOST) || 0,
+  //         PRICE: Number(plainItem.PRICE) || 0,
+  //         QTY_MSTRAN: Number(plainItem.QTY_MSTRAN) || 0,
+  //         QTY_MTRAN: Number(plainItem.QTY_MTRAN) || 0,
+  //         SEL: Number(plainItem.SEL) || 0,
+  //       };
 
-        const periode = moment(record.TANGGAL).format("YYMM");
-        if (!groupedData[periode]) {
-          groupedData[periode] = [];
-        }
-        groupedData[periode].push(record);
-      }
+  //       const periode = moment(record.TANGGAL).format("YYMM");
+  //       if (!groupedData[periode]) {
+  //         groupedData[periode] = [];
+  //       }
+  //       groupedData[periode].push(record);
+  //     }
 
-      // Save each group to its file
-      let totalFiles = 0;
-      let totalRecords = 0;
+  //     // Save each group to its file
+  //     let totalFiles = 0;
+  //     let totalRecords = 0;
 
-      await fs.mkdir(VIRTUAL_MRG_DATA_DIR, { recursive: true });
-      for (const [periode, records] of Object.entries(groupedData)) {
-        const jsonPath = this.getJsonPath(periode);
-        await fs.writeFile(jsonPath, JSON.stringify(records, null, 2));
-        logger.info(`Saved ${records.length} records to ${jsonPath}`);
-        totalFiles++;
-        totalRecords += records.length;
-      }
+  //     await fs.mkdir(VIRTUAL_MRG_DATA_DIR, { recursive: true });
+  //     for (const [periode, records] of Object.entries(groupedData)) {
+  //       const jsonPath = this.getJsonPath(periode);
+  //       await fs.writeFile(jsonPath, JSON.stringify(records, null, 2));
+  //       logger.info(`Saved ${records.length} records to ${jsonPath}`);
+  //       totalFiles++;
+  //       totalRecords += records.length;
+  //     }
 
-      logger.info(`Migration complete: Saved ${totalRecords} records across ${totalFiles} period files`);
-      return { totalFiles, totalRecords };
-    } catch (error) {
-      logger.error(`Error in syncAllData: ${error.message}`);
-      throw error;
-    }
-  }
+  //     logger.info(`Migration complete: Saved ${totalRecords} records across ${totalFiles} period files`);
+  //     return { totalFiles, totalRecords };
+  //   } catch (error) {
+  //     logger.error(`Error in syncAllData: ${error.message}`);
+  //     throw error;
+  //   }
+  // }
   /**
    * Screening stores to rekon virtual margin based on store query
    */
@@ -387,6 +536,7 @@ class RekonVirtualService {
       let processedCount = 0;
       const totalStores = storesToProcess.length;
 
+      let msgOld = "";
       const incrementProgress = async (storeCode, statusText) => {
         processedCount++;
 
@@ -396,6 +546,8 @@ class RekonVirtualService {
             status: "Screening to Stores",
           });
         }
+
+        msgOld = `Store ${storeCode} → ${statusText} (${processedCount}/${totalStores})`;
       };
 
       // step 3, loop each stores asycronously
@@ -421,6 +573,10 @@ class RekonVirtualService {
             }
 
             try {
+              await progressService.updateProgress(taskId, processedCount, {
+                description: `${msgOld} → Screening to Store ${storeCode} ...`,
+                status: "Screening Stores",
+              });
               const result = await withTimeout(
                 this.processSingleStore(store, strYear, strMonth),
                 config.parallelProcessing.storeTimeoutMs,
@@ -489,34 +645,7 @@ class RekonVirtualService {
 
       // Sync database to JSON file - langsung merge ke memory
       if (newRecords.length > 0) {
-        try {
-          await this.ensureDataLoaded(options.periode);
-
-          // Merge newRecords ke virtualData di memory (partial merge)
-          // Field yang tidak ada di data store (seperti RECID) dipertahankan dari data lama di JSON
-          for (const record of newRecords) {
-            const idx = this.virtualData.findIndex(
-              v =>
-                v.CABANG === record.CABANG &&
-                v.SHOP === record.SHOP &&
-                v.TANGGAL === record.TANGGAL &&
-                v.PRDCD === record.PRDCD,
-            );
-            if (idx >= 0) {
-              // Pertahankan field lama (misal RECID), timpa dengan data baru
-              this.virtualData[idx] = { ...this.virtualData[idx], ...record };
-            } else {
-              // Record baru: tambahkan default RECID sesuai model (defaultValue: '*')
-              this.virtualData.push({ RECID: "*", ...record });
-            }
-          }
-
-          await this.saveToFile(options.periode);
-          this.lastLoadTime = Date.now();
-          logger.info(`[FINALIZE] JSON synced from memory, ${newRecords.length} records merged`);
-        } catch (syncErr) {
-          logger.error(`[rekon_virtual_mrg.service] syncToJsonFile error: ${syncErr.message}`);
-        }
+        await this.mergeAndSavePeriod(options.periode, newRecords);
       }
 
       const timeCompleted = moment().format("YYYY-MM-DD HH:mm:ss");
@@ -671,7 +800,9 @@ class RekonVirtualService {
 
         if (!suppressIntermediateLogs) {
           await RekapRemoteService.addToTemp(
-            cab, storeCode, "rekon_virtual_mrg",
+            cab,
+            storeCode,
+            "rekon_virtual_mrg",
             `[${storeCode}] ${results.newRecords.length > 0 ? "issue_found" : "success"}`,
           );
         }

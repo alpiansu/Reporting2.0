@@ -1,7 +1,7 @@
 <template>
   <div class="adjust-view">
     <PageHeader title="Upload Adjustment CSV" subtitle="Proses adjustment dengan menggunakan file csv"
-      description="Upload file CSV dengan format KDTK, PRDCD, QTY_ADJ, KETER dan opsional TGL_SELISIH untuk memproses penyesuaian item BJD di toko-toko yang ditentukan." />
+      description="Upload file CSV dengan format KDTK, PRDCD, QTY_ADJ, KETER, TGL_SELISIH untuk memproses penyesuaian item BJD di toko-toko yang ditentukan." />
 
     <div class="content-container">
       <!-- Template Download Card -->
@@ -24,7 +24,7 @@
           <div class="format-preview">
             <div class="format-badge">
               <i class="pi pi-table"></i>
-              <span>Format: KDTK, PRDCD, QTY_ADJ, KETER</span>
+              <span>Format: KDTK, PRDCD, QTY_ADJ, KETER, TGL_SELISIH</span>
             </div>
             <button class="format-details-toggle" @click="showFormatDetails = !showFormatDetails"
               :class="{ 'active': showFormatDetails }">
@@ -93,7 +93,7 @@
                   <i class="pi pi-cloud-upload drop-icon"></i>
                   <div class="drop-text">
                     <p class="drop-primary">Klik untuk pilih file atau drag & drop</p>
-                    <p class="drop-secondary">Format: CSV (KDTK, PRDCD, QTY_ADJ, KETER, [Optional Fields])</p>
+                     <p class="drop-secondary">Format: CSV (KDTK, PRDCD, QTY_ADJ, KETER, TGL_SELISIH)</p>
                   </div>
                 </div>
 
@@ -338,6 +338,7 @@
         :headers="csvHeaders"
         :rows="csvRows"
         :totalRows="csvTotalRows"
+        :requiredHeaders="requiredHeaders"
         @cancel="handlePreviewCancel"
         @confirm="handlePreviewConfirm"
       />
@@ -431,11 +432,13 @@ const csvFields = [
   },
   {
     name: 'TGL_SELISIH',
-    description: 'Tanggal selisih (Opsional - Format: YYYY-MM-DD)',
+    description: 'Tanggal selisih (Format: YYYY-MM-DD)',
     example: '2024-01-20',
-    required: false
+    required: true
   }
 ];
+
+const requiredHeaders = csvFields.filter(f => f.required).map(f => f.name);
 
 // Formatting methods for PrimeVue components
 const getQtySeverity = (qty) => {

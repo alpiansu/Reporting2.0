@@ -176,7 +176,7 @@ const props = defineProps({
   headers: { type: Array, default: () => [] },
   rows: { type: Array, default: () => [] },
   totalRows: { type: Number, default: 0 },
-  requiredHeaders: { type: Array, default: () => ['KDTK','PRDCD','QTY_ADJ','KETER'] }
+  requiredHeaders: { type: Array, default: () => ['KDTK','PRDCD','QTY_ADJ','KETER','TGL_SELISIH'] }
 });
 
 const emit = defineEmits(['cancel','confirm']);

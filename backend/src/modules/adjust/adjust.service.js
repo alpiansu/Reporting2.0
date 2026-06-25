@@ -531,7 +531,7 @@ class AdjustService {
   generateCsvTemplate() {
     try {
       // Define CSV headers
-      const headers = ["KDTK", "PRDCD", "QTY_ADJ", "KETER"];
+      const headers = ["KDTK", "PRDCD", "QTY_ADJ", "KETER", "TGL_SELISIH"];
 
       // Define example rows
       const exampleRows = [

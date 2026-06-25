@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "lastUpdated": "2026-05-05T06:23:50.226Z",
-  "updatedBy": "2013076089",
+  "lastUpdated": "2026-06-25T07:09:25.324Z",
+  "updatedBy": "admin2",
   "description": "Aturan pengecekan kesiapan closing bulanan",
   "rules": [
     {
@@ -487,7 +487,7 @@
       "description": "Pengecekan keberadaan database backup",
       "category": "database",
       "priority": 16,
-      "enabled": true,
+      "enabled": false,
       "query": {
         "type": "existence_check",
         "sql": "SELECT COUNT(*) as db_backup FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = 'backup'"

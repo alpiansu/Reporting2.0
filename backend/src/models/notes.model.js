@@ -4,16 +4,19 @@ import logger from "../config/logger.js";
 const { resilientDb } = config;
 
 let NotesEdp = null;
+let _notesSequelizeInstance = null;
 
 // Create a wrapper with async model getter
 const getNotesEdpModel = async () => {
   try {
-    if (!NotesEdp) {
-      const sequelize = await resilientDb.getDatabase();
-      if (!sequelize) {
-        throw new Error("Database connection not available");
-      }
+    const sequelize = await resilientDb.getDatabase(); // ← [PINDAH] selalu ambil instance terbaru dulu
 
+    if (!sequelize) {
+      throw new Error("Database connection not available");
+    }
+
+    if (!NotesEdp || _notesSequelizeInstance !== sequelize) {
+      _notesSequelizeInstance = sequelize;
       NotesEdp = sequelize.define(
         "NotesEdp",
         {
@@ -66,7 +69,7 @@ const getNotesEdpModel = async () => {
               fields: ["table_name"],
             },
           ],
-        }
+        },
       );
     }
     return NotesEdp;

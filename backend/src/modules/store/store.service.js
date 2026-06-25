@@ -103,7 +103,7 @@ class StoreService {
         const searchLower = search.toLowerCase();
         filteredStores = filteredStores.filter(
           store =>
-            store.storeCode.toLowerCase().includes(searchLower) || store.storeName.toLowerCase().includes(searchLower)
+            store.storeCode.toLowerCase().includes(searchLower) || store.storeName.toLowerCase().includes(searchLower),
         );
       }
 
@@ -246,7 +246,7 @@ class StoreService {
         period,
         "mstr_toko",
         query,
-        null // no shop filter needed
+        null, // no shop filter needed
       );
 
       if (!tempFile) {
@@ -282,7 +282,7 @@ class StoreService {
 
         if (!isInWRC) {
           logger.debug(
-            `Store ${store.storeCode} (${store.storeName}) not found or inactive in WRC mstr_toko_${period}`
+            `Store ${store.storeCode} (${store.storeName}) not found or inactive in WRC mstr_toko_${period}`,
           );
         }
 
@@ -300,7 +300,7 @@ class StoreService {
       logger.info(
         `Validated: ${validatedStores.length} active stores, ${
           stores.length - validatedStores.length
-        } stores filtered out`
+        } stores filtered out`,
       );
 
       return validatedStores;
@@ -347,8 +347,16 @@ class StoreService {
         filteredStores = await this.validateStoresFromWRC(filteredStores, branchCode, options.period);
       }
 
-      // Jika options.limit dikirim, batasi jumlah hasil
-      if (options.limit && Number.isInteger(options.limit) && options.limit > 0) {
+      // --- PEMBATASAN UNTUK DEVELOPMENT ---
+      // Jika environment development dan tidak ada limit yang diberikan,
+      // batasi hasil ke 20 toko (untuk simulasi/pengetesan)
+      if (process.env.NODE_ENV === "development" && !options.limit) {
+        const originalCount = filteredStores.length;
+        filteredStores = filteredStores.slice(0, 20);
+        logger.info(`[DEV MODE] getStoresByBranch limited to 20 stores (was ${originalCount})`);
+      }
+      // Jika options.limit diberikan, tetap pakai limit tersebut
+      else if (options.limit && Number.isInteger(options.limit) && options.limit > 0) {
         filteredStores = filteredStores.slice(0, options.limit);
       }
 
@@ -415,7 +423,7 @@ class StoreService {
         const searchLower = search.toLowerCase();
         filteredStores = filteredStores.filter(
           store =>
-            store.storeCode.toLowerCase().includes(searchLower) || store.storeName.toLowerCase().includes(searchLower)
+            store.storeCode.toLowerCase().includes(searchLower) || store.storeName.toLowerCase().includes(searchLower),
         );
       }
 
@@ -666,7 +674,7 @@ class StoreService {
         success: true,
         initialCount,
         currentCount: this.stores.length,
-        removedCount
+        removedCount,
       };
     } catch (error) {
       logger.error(`Failed to deduplicate stores: ${error.message}`);

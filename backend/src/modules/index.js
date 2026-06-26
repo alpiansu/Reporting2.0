@@ -30,6 +30,7 @@ import ceklistPrepClosingModule from "./ceklist-prep-closing/index.js";
 import monthlyReportsModule from "./monthly-reports/index.js";
 import rekapBackupModule from "./rekap_backup/index.js";
 import combinedScreeningModule from "./combined-screening/index.js";
+import exportLapDevModule from "./exportLapDev/index.js";
 
 export default {
   // Export all modules
@@ -60,6 +61,7 @@ export default {
   monthlyReportsModule,
   rekapBackupModule,
   combinedScreeningModule,
+  exportLapDevModule,
 
   // Initialize all modules
   initialize: app => {
@@ -90,6 +92,7 @@ export default {
     const monthlyReports = monthlyReportsModule.initialize(app);
     const rekapBackup = rekapBackupModule.initialize(app);
     const combinedScreening = combinedScreeningModule.initialize(app);
+    const exportLapDev = exportLapDevModule.initialize(app);
 
     // Initialize menu manager module
     app.use("/api/menu-manager", menuManagerModule.routes);
@@ -121,6 +124,7 @@ export default {
       monthlyReports,
       rekapBackup,
       combinedScreening,
+      exportLapDev,
       menuManager: true,
     };
   },

@@ -300,6 +300,8 @@ class CombinedScreeningService {
                 await service.syncToJsonFile(strYear, strMonth);
               } else if (mod.name === "rekon_virtual_mrg") {
                 await service.syncPeriodFromDbToJson(strPeriode);
+              } else if (mod.name === "prep_closing") {
+                await service.processTempToDb({ periode: strPeriode });
               } else {
                 await service.syncToJsonFile(strPeriode);
               }
@@ -498,6 +500,7 @@ class CombinedScreeningService {
       case "prep_closing":
         return service.processSingleStore(store, params.strPeriode, params.strYear, params.strMonth, sharedConnection, {
           suppressIntermediateLogs: true,
+          saveToTemp: true,
         });
 
       case "rekon_persediaan":

@@ -19,6 +19,7 @@ import screeningGuard from "../../utils/screeningGuard.js";
 
 // Path untuk file JSON
 const PREP_CLOSING_DATA_DIR = path.join(process.cwd(), "data/prep_closing");
+const PREP_CLOSING_TEMP_DIR = path.join(process.cwd(), "data/prep_closing/tmp");
 
 class PrepClosingService {
   constructor() {
@@ -66,6 +67,14 @@ class PrepClosingService {
 
   async ensureDataDir() {
     await fs.mkdir(PREP_CLOSING_DATA_DIR, { recursive: true });
+  }
+
+  getTempDirPath(periode) {
+    return path.join(PREP_CLOSING_TEMP_DIR, periode);
+  }
+
+  async ensureTempDir(periode) {
+    await fs.mkdir(this.getTempDirPath(periode), { recursive: true });
   }
 
   /**
@@ -375,6 +384,75 @@ class PrepClosingService {
   }
 
   /**
+   * Read temp screening files and insert to DB, then sync to JSON staging
+   */
+  async processTempToDb({ periode, cabang }) {
+    if (!periode) throw new Error("periode is required for processTempToDb");
+
+    const tempDir = this.getTempDirPath(periode);
+    let files;
+    try {
+      files = await fs.readdir(tempDir);
+    } catch (err) {
+      if (err.code === "ENOENT") {
+        logger.info(`[prep_closing.service] No temp files found for periode ${periode}`);
+        return { totalRead: 0, totalInserted: 0, synced: false };
+      }
+      throw err;
+    }
+
+    const jsonFiles = files.filter(f => f.endsWith(".json"));
+    let filteredFiles = jsonFiles;
+    if (cabang) {
+      filteredFiles = jsonFiles.filter(f => f.includes(`_${cabang}.json`));
+    }
+
+    if (filteredFiles.length === 0) {
+      logger.info(
+        `[prep_closing.service] No temp files to process for periode ${periode}${cabang ? `, cabang ${cabang}` : ""}`,
+      );
+      return { totalRead: 0, totalInserted: 0, synced: false };
+    }
+
+    const records = [];
+    for (const file of filteredFiles) {
+      try {
+        const content = await fs.readFile(path.join(tempDir, file), "utf8");
+        const record = JSON.parse(content);
+        if (record.LAST_SCREENED) record.LAST_SCREENED = new Date(record.LAST_SCREENED);
+        if (record.UPDTIME) record.UPDTIME = new Date(record.UPDTIME);
+        records.push(record);
+      } catch (err) {
+        logger.error(`[prep_closing.service] Error reading temp file ${file}: ${err.message}`);
+      }
+    }
+
+    if (records.length === 0) {
+      return { totalRead: 0, totalInserted: 0, synced: false };
+    }
+
+    const totalInserted = await this.bulkUpsertRecords(records);
+
+    let deletedCount = 0;
+    for (const file of filteredFiles) {
+      try {
+        await fs.unlink(path.join(tempDir, file));
+        deletedCount++;
+      } catch (err) {
+        logger.warn(`[prep_closing.service] Failed to delete temp file ${file}: ${err.message}`);
+      }
+    }
+
+    await this.syncToJsonFile(periode);
+
+    logger.info(
+      `[prep_closing.service] processTempToDb completed: ${records.length} read, ${totalInserted} inserted, ${deletedCount} temp files deleted`,
+    );
+
+    return { totalRead: records.length, totalInserted, synced: true };
+  }
+
+  /**
    * Calculate previous periode (1 month before)
    */
   getPreviousPeriode(periode) {
@@ -431,7 +509,7 @@ class PrepClosingService {
    * Process single store screening
    */
   async processSingleStore(store, strPeriode, strYear, strMonth, sharedConnection = null, options = {}) {
-    const { suppressIntermediateLogs = false } = options;
+    const { suppressIntermediateLogs = false, saveToTemp = false } = options;
     const { storeCode, cab } = store;
     const results = { success: false, records: null, hasIssue: false };
     const isShared = !!sharedConnection;
@@ -517,6 +595,13 @@ class PrepClosingService {
           UPDTIME: new Date(),
         };
 
+        // Save to temp file if requested (for combined-screening)
+        if (saveToTemp) {
+          await this.ensureTempDir(strPeriode);
+          const tempPath = path.join(this.getTempDirPath(strPeriode), `${storeCode}_${cab}.json`);
+          await fs.writeFile(tempPath, JSON.stringify(recordData));
+        }
+
         // Record will be bulk-upserted later (not per-store)
         results.records = recordData;
         results.hasIssue = !ruleResults.isReady; // Has issue if not ready
@@ -546,15 +631,16 @@ class PrepClosingService {
   /**
    * Bulk upsert all pending records to MySQL in a single query
    */
-  async bulkUpsertRecords() {
-    if (this.pendingRecords.length === 0) {
+  async bulkUpsertRecords(records = null) {
+    const dataToInsert = records || this.pendingRecords;
+    if (dataToInsert.length === 0) {
       logger.info("[prep_closing.service] No pending records to upsert");
       return 0;
     }
 
     try {
       const model = await ScreeningPraClosing.getModel();
-      await model.bulkCreate(this.pendingRecords, {
+      await model.bulkCreate(dataToInsert, {
         updateOnDuplicate: [
           "RECID",
           "ISSUES",
@@ -568,13 +654,13 @@ class PrepClosingService {
         ],
       });
 
-      const count = this.pendingRecords.length;
+      const count = dataToInsert.length;
       logger.info(`[prep_closing.service] Bulk upserted ${count} records to MySQL`);
-      this.pendingRecords = [];
+      if (!records) this.pendingRecords = [];
       return count;
     } catch (error) {
       logger.error(`[prep_closing.service] Bulk upsert failed: ${error.message}`);
-      this.pendingRecords = [];
+      if (!records) this.pendingRecords = [];
       throw error;
     }
   }

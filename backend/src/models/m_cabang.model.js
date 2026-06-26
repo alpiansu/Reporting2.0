@@ -1,90 +1,53 @@
-/**
- * MCabang model - JSON file based implementation
- *
- * This model provides an interface similar to Sequelize models
- * but uses a JSON file as the data source instead of a database.
- *
- * The actual data operations are handled by the MCabangService.
- */
-import MCabangService from '../modules/m_cabang/m_cabang.service.js';
+import MCabangService from "../modules/m_cabang/m_cabang.service.js";
 
-// Create a singleton instance of the service
 const mCabangService = new MCabangService();
 
-// Define the MCabang model schema for documentation and validation
-const MCabangSchema = {
-  kdcab: { type: "string", primaryKey: true },
-  namacab: { type: "string", required: true },
-};
-
-/**
- * MCabang model with methods similar to Sequelize models
- * but using the MCabangService for actual data operations
- */
-const MCabang = {
-  // Schema definition for documentation
-  schema: MCabangSchema,
-
-  /**
-   * Find all cabang with optional where clause
-   * @param {Object} options - Query options
-   * @returns {Promise<Array>} Array of cabang objects
-   */
-  findAll: async (options = {}) => {
-    // Get all cabang from service
+const MCabangWrapper = {
+  async findAll(options = {}) {
     return mCabangService.getAllCabang();
   },
 
-  /**
-   * Count all cabang
-   * @returns {Promise<number>} Count of cabang
-   */
-  count: async () => {
-    const cabangList = await mCabangService.getAllCabang();
-    return cabangList.length;
-  },
-
-  /**
-   * Find a cabang by primary key
-   * @param {string} kdcab - Cabang code
-   * @returns {Promise<Object>} Cabang object
-   */
-  findByPk: async (kdcab) => {
-    return mCabangService.getCabangByCode(kdcab);
-  },
-
-  /**
-   * Find one cabang with optional where clause
-   * @param {Object} options - Query options
-   * @returns {Promise<Object>} Cabang object
-   */
-  findOne: async (options = {}) => {
+  async findOne(options = {}) {
     const { where = {} } = options;
-
     if (where.kdcab) {
       return mCabangService.getCabangByCode(where.kdcab);
     }
-
-    // If no specific query, get the first cabang
     const cabangList = await mCabangService.getAllCabang();
     return cabangList[0] || null;
   },
 
-  /**
-   * Create a new cabang
-   * @param {Object} data - Cabang data
-   * @returns {Promise<Object>} Created cabang
-   */
-  create: async (data) => {
+  async findByPk(kdcab) {
+    return mCabangService.getCabangByCode(kdcab);
+  },
+
+  async create(data, options) {
     return mCabangService.createCabang(data);
   },
 
-  /**
-   * Bulk create multiple cabang
-   * @param {Array} dataArray - Array of cabang data
-   * @returns {Promise<Array>} Array of created cabang
-   */
-  bulkCreate: async (dataArray) => {
+  async update(data, options) {
+    const kdcab = options?.where?.kdcab || data?.kdcab;
+    if (kdcab) {
+      const cabang = await mCabangService.updateCabang(kdcab, data);
+      return cabang ? [1] : [0];
+    }
+    return [0];
+  },
+
+  async destroy(options) {
+    const kdcab = options?.where?.kdcab;
+    if (kdcab) {
+      const result = await mCabangService.deleteCabang(kdcab);
+      return result ? 1 : 0;
+    }
+    return 0;
+  },
+
+  async count(options = {}) {
+    const cabangList = await mCabangService.getAllCabang();
+    return cabangList.length;
+  },
+
+  async bulkCreate(dataArray, options) {
     const results = [];
     for (const data of dataArray) {
       const cabang = await mCabangService.createCabang(data);
@@ -92,6 +55,39 @@ const MCabang = {
     }
     return results;
   },
+
+  async upsert(data, options) {
+    const existingCabang = await mCabangService.getCabangByCode(data.kdcab);
+    if (existingCabang) {
+      const updated = await mCabangService.updateCabang(data.kdcab, data);
+      return updated || existingCabang;
+    }
+    return mCabangService.createCabang(data);
+  },
+
+  async findOrCreate(options) {
+    const { where, defaults } = options;
+    const existingCabang = await mCabangService.getCabangByCode(where.kdcab);
+    if (existingCabang) {
+      return [existingCabang, false];
+    }
+    const newCabang = await mCabangService.createCabang({ ...where, ...defaults });
+    return [newCabang, true];
+  },
+
+  async findAndCountAll(options = {}) {
+    const cabangList = await mCabangService.getAllCabang();
+    return { count: cabangList.length, rows: cabangList };
+  },
+
+  getModel() {
+    return {
+      sync: async () => {
+        await mCabangService.init();
+        return true;
+      },
+    };
+  },
 };
 
-export default MCabang;
+export default MCabangWrapper;

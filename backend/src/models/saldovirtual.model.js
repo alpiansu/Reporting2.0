@@ -4,16 +4,17 @@ import logger from "../config/logger.js";
 const { resilientDb } = config;
 
 let SaldoVirtual = null;
+let _saldoVirtualSequelizeInstance = null;
 
-// Create a wrapper with async model getter
 const getSaldoVirtualModel = async () => {
   try {
-    if (!SaldoVirtual) {
-      const sequelize = await resilientDb.getDatabase();
-      if (!sequelize) {
-        throw new Error("Database connection not available");
-      }
+    const sequelize = await resilientDb.getDatabase();
+    if (!sequelize) {
+      throw new Error("Database connection not available");
+    }
 
+    if (!SaldoVirtual || _saldoVirtualSequelizeInstance !== sequelize) {
+      _saldoVirtualSequelizeInstance = sequelize;
       SaldoVirtual = sequelize.define(
         "saldovirtual",
         {
@@ -87,7 +88,7 @@ const getSaldoVirtualModel = async () => {
               fields: ["SHOP", "PRDCD"],
             },
           ],
-        }
+        },
       );
     }
     return SaldoVirtual;
@@ -97,7 +98,6 @@ const getSaldoVirtualModel = async () => {
   }
 };
 
-// Create a wrapper object with async methods
 const SaldoVirtualWrapper = {
   async findAll(options) {
     const model = await getSaldoVirtualModel();
@@ -139,7 +139,6 @@ const SaldoVirtualWrapper = {
     const model = await getSaldoVirtualModel();
     return model.findOrCreate(options);
   },
-  // Add getModel method for registry compatibility
   getModel() {
     return getSaldoVirtualModel();
   },

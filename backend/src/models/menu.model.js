@@ -1,178 +1,97 @@
-/**
- * Menu model - JSON file based implementation
- *
- * This model provides an interface similar to Sequelize models
- * but uses a JSON file as the data source instead of a database.
- *
- * The actual data operations are handled by the MenuService.
- */
-import MenuService from '../modules/menu-manager/menu.service.js';
+import MenuService from "../modules/menu-manager/menu.service.js";
 
-// Create a singleton instance of the service
 const menuService = new MenuService();
 
-// Define the Menu model schema for documentation and validation
-const MenuSchema = {
-  id: { type: "string", primaryKey: true },
-  name: { type: "string", required: true },
-  items: {
-    type: "array",
-    items: {
-      type: "object",
-      properties: {
-        id: { type: "string", required: true },
-        text: { type: "string", required: true },
-        icon: { type: "string", required: true },
-        path: { type: "string", required: true },
-        roles: { type: "array", items: { type: "string" }, default: [] },
-        keywords: { type: "array", items: { type: "string" } },
-      },
-    },
-  },
-  order: { type: "number", default: 0 },
-  createdAt: { type: "date" },
-  updatedAt: { type: "date" },
-};
-
-/**
- * Menu model with methods similar to Sequelize models
- * but using the MenuService for actual data operations
- */
-const Menu = {
-  // Schema definition for documentation
-  schema: MenuSchema,
-
-  /**
-   * Find all menus
-   * @returns {Promise<Array>} Array of menu objects
-   */
-  findAll: async () => {
+const MenuWrapper = {
+  async findAll(options = {}) {
     return menuService.getAllMenus();
   },
 
-  /**
-   * Find a menu by primary key
-   * @param {string} id - Menu ID
-   * @returns {Promise<Object|null>} Menu object or null if not found
-   */
-  findByPk: async (id) => {
+  async findOne(options = {}) {
+    const { where = {} } = options;
+    if (where.id) {
+      await menuService.init();
+      return menuService.getMenuById(where.id);
+    }
+    const menus = await menuService.getAllMenus();
+    return menus[0] || null;
+  },
+
+  async findByPk(id) {
     await menuService.init();
     return menuService.getMenuById(id);
   },
 
-  /**
-   * Find menus by role
-   * @param {string} role - User role
-   * @returns {Promise<Array>} Array of menu objects filtered by role
-   */
-  findByRole: async (role) => {
+  async findByRole(role) {
     await menuService.init();
     return menuService.getMenusByRole(role);
   },
 
-  /**
-   * Create a new menu
-   * @param {Object} menuData - Menu data
-   * @returns {Promise<Object>} Created menu object
-   */
-  create: async (menuData) => {
+  async create(data, options) {
     await menuService.init();
-    return menuService.createMenu(menuData);
+    return menuService.createMenu(data);
   },
 
-  /**
-   * Update a menu
-   * @param {Object} menuData - Menu data with ID
-   * @returns {Promise<Object>} Updated menu object
-   */
-  update: async (menuData) => {
+  async update(data, options) {
     await menuService.init();
-    return menuService.updateMenu(menuData);
+    return menuService.updateMenu(data);
   },
 
-  /**
-   * Delete a menu
-   * @param {string} id - Menu ID
-   * @returns {Promise<boolean>} True if deleted, false if not found
-   */
-  delete: async (id) => {
-    await menuService.init();
-    return menuService.deleteMenu(id);
+  async destroy(options) {
+    const id = options?.where?.id;
+    if (id) {
+      await menuService.init();
+      return menuService.deleteMenu(id);
+    }
+    return 0;
   },
 
-  // ===== CATEGORY OPERATIONS =====
-
-  /**
-   * Create a new category
-   * @param {Object} categoryData - Category data
-   * @returns {Promise<Object>} Created category object
-   */
-  createCategory: async (categoryData) => {
-    return menuService.createCategory(categoryData);
+  async count(options = {}) {
+    const menus = await menuService.getAllMenus();
+    return menus.length;
   },
 
-  /**
-   * Update a category
-   * @param {string} id - Category ID
-   * @param {Object} categoryData - Category data
-   * @returns {Promise<Object>} Updated category object
-   */
-  updateCategory: async (id, categoryData) => {
-    return menuService.updateCategory(id, categoryData);
+  async bulkCreate(dataArray, options) {
+    const results = [];
+    for (const data of dataArray) {
+      const menu = await menuService.createMenu(data);
+      results.push(menu);
+    }
+    return results;
   },
 
-  /**
-   * Delete a category
-   * @param {string} id - Category ID
-   * @returns {Promise<boolean>} True if deleted, false if not found
-   */
-  deleteCategory: async (id) => {
-    return menuService.deleteCategory(id);
+  async upsert(data, options) {
+    const existingMenu = data.id ? await menuService.getMenuById(data.id) : null;
+    if (existingMenu) {
+      const updated = await menuService.updateMenu(data);
+      return updated || existingMenu;
+    }
+    return menuService.createMenu(data);
   },
 
-  // ===== MENU ITEM OPERATIONS =====
-
-  /**
-   * Add a menu item to a category
-   * @param {string} categoryId - Category ID
-   * @param {Object} itemData - Menu item data
-   * @returns {Promise<Object>} Created menu item object
-   */
-  addMenuItem: async (categoryId, itemData) => {
-    return menuService.addMenuItem(categoryId, itemData);
+  async findOrCreate(options) {
+    const { where, defaults } = options;
+    const existingMenu = where.id ? await menuService.getMenuById(where.id) : null;
+    if (existingMenu) {
+      return [existingMenu, false];
+    }
+    const newMenu = await menuService.createMenu({ ...where, ...defaults });
+    return [newMenu, true];
   },
 
-  /**
-   * Update a menu item
-   * @param {string} categoryId - Category ID
-   * @param {string} itemId - Menu item ID
-   * @param {Object} itemData - Menu item data
-   * @returns {Promise<Object>} Updated menu item object
-   */
-  updateMenuItem: async (categoryId, itemId, itemData) => {
-    return menuService.updateMenuItem(categoryId, itemId, itemData);
+  async findAndCountAll(options = {}) {
+    const menus = await menuService.getAllMenus();
+    return { count: menus.length, rows: menus };
   },
 
-  /**
-   * Delete a menu item
-   * @param {string} categoryId - Category ID
-   * @param {string} itemId - Menu item ID
-   * @returns {Promise<boolean>} True if deleted, false if not found
-   */
-  deleteMenuItem: async (categoryId, itemId) => {
-    return menuService.deleteMenuItem(categoryId, itemId);
-  },
-
-  /**
-   * Move a menu item to a different category
-   * @param {string} fromCategoryId - Source category ID
-   * @param {string} toCategoryId - Target category ID
-   * @param {string} itemId - Menu item ID
-   * @returns {Promise<Object>} Moved menu item object
-   */
-  moveMenuItem: async (fromCategoryId, toCategoryId, itemId) => {
-    return menuService.moveMenuItem(fromCategoryId, toCategoryId, itemId);
+  getModel() {
+    return {
+      sync: async () => {
+        await menuService.init();
+        return true;
+      },
+    };
   },
 };
 
-export default Menu;
+export default MenuWrapper;

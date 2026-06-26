@@ -10,23 +10,23 @@ export default {
    * resolveParams: maps the global context to the params each module's processSingleStore needs.
    */
   modules: [
-    {
-      name: "rekon_virtual_mrg",
-      enabled: true,
-      resolveParams: ctx => ({
-        strYear: ctx.strYear,
-        strMonth: ctx.strMonth,
-      }),
-    },
-    {
-      name: "penyesuaian",
-      enabled: true,
-      resolveParams: ctx => ({
-        strPeriode: ctx.strPeriode,
-        strYear: ctx.strYear,
-        strMonth: ctx.strMonth,
-      }),
-    },
+    // {
+    //   name: "rekon_virtual_mrg",
+    //   enabled: true,
+    //   resolveParams: ctx => ({
+    //     strYear: ctx.strYear,
+    //     strMonth: ctx.strMonth,
+    //   }),
+    // },
+    // {
+    //   name: "penyesuaian",
+    //   enabled: true,
+    //   resolveParams: ctx => ({
+    //     strPeriode: ctx.strPeriode,
+    //     strYear: ctx.strYear,
+    //     strMonth: ctx.strMonth,
+    //   }),
+    // },
     {
       name: "prep_closing",
       enabled: true,

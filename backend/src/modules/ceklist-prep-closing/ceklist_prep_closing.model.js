@@ -1,21 +1,20 @@
 import { DataTypes } from "sequelize";
 import config from "../../config/index.js";
 import logger from "../../config/logger.js";
-
 const { resilientDb } = config;
 
-// ─── ceklist_space_hdd ───────────────────────────────────────────────────────
-
 let CeklistSpaceHdd = null;
-let CeklistSpaceHddGeneration = -1;
+let _ceklistSpaceHddSequelizeInstance = null;
 
 const getCeklistSpaceHddModel = async () => {
   try {
-    const dbGeneration = resilientDb.getGeneration();
-    if (!CeklistSpaceHdd || CeklistSpaceHddGeneration !== dbGeneration) {
-      const sequelize = await resilientDb.getDatabase();
-      if (!sequelize) throw new Error("Database connection not available");
+    const sequelize = await resilientDb.getDatabase();
+    if (!sequelize) {
+      throw new Error("Database connection not available");
+    }
 
+    if (!CeklistSpaceHdd || _ceklistSpaceHddSequelizeInstance !== sequelize) {
+      _ceklistSpaceHddSequelizeInstance = sequelize;
       CeklistSpaceHdd = sequelize.define(
         "ceklist_space_hdd",
         {
@@ -82,9 +81,8 @@ const getCeklistSpaceHddModel = async () => {
           tableName: "ceklist_space_hdd",
           timestamps: false,
           freezeTableName: true,
-        }
+        },
       );
-      CeklistSpaceHddGeneration = dbGeneration;
     }
     return CeklistSpaceHdd;
   } catch (error) {
@@ -94,29 +92,63 @@ const getCeklistSpaceHddModel = async () => {
 };
 
 export const CeklistSpaceHddWrapper = {
-  async findAll(options) { const m = await getCeklistSpaceHddModel(); return m.findAll(options); },
-  async findOne(options) { const m = await getCeklistSpaceHddModel(); return m.findOne(options); },
-  async findByPk(pk, options) { const m = await getCeklistSpaceHddModel(); return m.findByPk(pk, options); },
-  async create(data, options) { const m = await getCeklistSpaceHddModel(); return m.create(data, options); },
-  async bulkCreate(data, options) { const m = await getCeklistSpaceHddModel(); return m.bulkCreate(data, options); },
-  async update(data, options) { const m = await getCeklistSpaceHddModel(); return m.update(data, options); },
-  async destroy(options) { const m = await getCeklistSpaceHddModel(); return m.destroy(options); },
-  async upsert(data, options) { const m = await getCeklistSpaceHddModel(); return m.upsert(data, options); },
-  getModel() { return getCeklistSpaceHddModel(); },
+  async findAll(options) {
+    const model = await getCeklistSpaceHddModel();
+    return model.findAll(options);
+  },
+  async findOne(options) {
+    const model = await getCeklistSpaceHddModel();
+    return model.findOne(options);
+  },
+  async findByPk(pk, options) {
+    const model = await getCeklistSpaceHddModel();
+    return model.findByPk(pk, options);
+  },
+  async create(data, options) {
+    const model = await getCeklistSpaceHddModel();
+    return model.create(data, options);
+  },
+  async bulkCreate(data, options) {
+    const model = await getCeklistSpaceHddModel();
+    return model.bulkCreate(data, options);
+  },
+  async update(data, options) {
+    const model = await getCeklistSpaceHddModel();
+    return model.update(data, options);
+  },
+  async destroy(options) {
+    const model = await getCeklistSpaceHddModel();
+    return model.destroy(options);
+  },
+  async count(options) {
+    const model = await getCeklistSpaceHddModel();
+    return model.count(options);
+  },
+  async upsert(data, options) {
+    const model = await getCeklistSpaceHddModel();
+    return model.upsert(data, options);
+  },
+  async findOrCreate(options) {
+    const model = await getCeklistSpaceHddModel();
+    return model.findOrCreate(options);
+  },
+  getModel() {
+    return getCeklistSpaceHddModel();
+  },
 };
 
-// ─── ceklist_space_tampung ────────────────────────────────────────────────────
-
 let CeklistSpaceTampung = null;
-let CeklistSpaceTampungGeneration = -1;
+let _ceklistSpaceTampungSequelizeInstance = null;
 
 const getCeklistSpaceTampungModel = async () => {
   try {
-    const dbGeneration = resilientDb.getGeneration();
-    if (!CeklistSpaceTampung || CeklistSpaceTampungGeneration !== dbGeneration) {
-      const sequelize = await resilientDb.getDatabase();
-      if (!sequelize) throw new Error("Database connection not available");
+    const sequelize = await resilientDb.getDatabase();
+    if (!sequelize) {
+      throw new Error("Database connection not available");
+    }
 
+    if (!CeklistSpaceTampung || _ceklistSpaceTampungSequelizeInstance !== sequelize) {
+      _ceklistSpaceTampungSequelizeInstance = sequelize;
       CeklistSpaceTampung = sequelize.define(
         "ceklist_space_tampung",
         {
@@ -168,9 +200,8 @@ const getCeklistSpaceTampungModel = async () => {
           tableName: "ceklist_space_tampung",
           timestamps: false,
           freezeTableName: true,
-        }
+        },
       );
-      CeklistSpaceTampungGeneration = dbGeneration;
     }
     return CeklistSpaceTampung;
   } catch (error) {
@@ -180,29 +211,63 @@ const getCeklistSpaceTampungModel = async () => {
 };
 
 export const CeklistSpaceTampungWrapper = {
-  async findAll(options) { const m = await getCeklistSpaceTampungModel(); return m.findAll(options); },
-  async findOne(options) { const m = await getCeklistSpaceTampungModel(); return m.findOne(options); },
-  async findByPk(pk, options) { const m = await getCeklistSpaceTampungModel(); return m.findByPk(pk, options); },
-  async create(data, options) { const m = await getCeklistSpaceTampungModel(); return m.create(data, options); },
-  async bulkCreate(data, options) { const m = await getCeklistSpaceTampungModel(); return m.bulkCreate(data, options); },
-  async update(data, options) { const m = await getCeklistSpaceTampungModel(); return m.update(data, options); },
-  async destroy(options) { const m = await getCeklistSpaceTampungModel(); return m.destroy(options); },
-  async upsert(data, options) { const m = await getCeklistSpaceTampungModel(); return m.upsert(data, options); },
-  getModel() { return getCeklistSpaceTampungModel(); },
+  async findAll(options) {
+    const model = await getCeklistSpaceTampungModel();
+    return model.findAll(options);
+  },
+  async findOne(options) {
+    const model = await getCeklistSpaceTampungModel();
+    return model.findOne(options);
+  },
+  async findByPk(pk, options) {
+    const model = await getCeklistSpaceTampungModel();
+    return model.findByPk(pk, options);
+  },
+  async create(data, options) {
+    const model = await getCeklistSpaceTampungModel();
+    return model.create(data, options);
+  },
+  async bulkCreate(data, options) {
+    const model = await getCeklistSpaceTampungModel();
+    return model.bulkCreate(data, options);
+  },
+  async update(data, options) {
+    const model = await getCeklistSpaceTampungModel();
+    return model.update(data, options);
+  },
+  async destroy(options) {
+    const model = await getCeklistSpaceTampungModel();
+    return model.destroy(options);
+  },
+  async count(options) {
+    const model = await getCeklistSpaceTampungModel();
+    return model.count(options);
+  },
+  async upsert(data, options) {
+    const model = await getCeklistSpaceTampungModel();
+    return model.upsert(data, options);
+  },
+  async findOrCreate(options) {
+    const model = await getCeklistSpaceTampungModel();
+    return model.findOrCreate(options);
+  },
+  getModel() {
+    return getCeklistSpaceTampungModel();
+  },
 };
 
-// ─── ceklist_import_idt ───────────────────────────────────────────────────────
-
 let CeklistImportIdt = null;
-let CeklistImportIdtGeneration = -1;
+let _ceklistImportIdtSequelizeInstance = null;
 
 const getCeklistImportIdtModel = async () => {
   try {
-    const dbGeneration = resilientDb.getGeneration();
-    if (!CeklistImportIdt || CeklistImportIdtGeneration !== dbGeneration) {
-      const sequelize = await resilientDb.getDatabase();
-      if (!sequelize) throw new Error("Database connection not available");
+    const sequelize = await resilientDb.getDatabase();
+    if (!sequelize) {
+      throw new Error("Database connection not available");
+    }
 
+    if (!CeklistImportIdt || _ceklistImportIdtSequelizeInstance !== sequelize) {
+      _ceklistImportIdtSequelizeInstance = sequelize;
       CeklistImportIdt = sequelize.define(
         "ceklist_import_idt",
         {
@@ -240,9 +305,8 @@ const getCeklistImportIdtModel = async () => {
           tableName: "ceklist_import_idt",
           timestamps: false,
           freezeTableName: true,
-        }
+        },
       );
-      CeklistImportIdtGeneration = dbGeneration;
     }
     return CeklistImportIdt;
   } catch (error) {
@@ -252,13 +316,47 @@ const getCeklistImportIdtModel = async () => {
 };
 
 export const CeklistImportIdtWrapper = {
-  async findAll(options) { const m = await getCeklistImportIdtModel(); return m.findAll(options); },
-  async findOne(options) { const m = await getCeklistImportIdtModel(); return m.findOne(options); },
-  async findByPk(pk, options) { const m = await getCeklistImportIdtModel(); return m.findByPk(pk, options); },
-  async create(data, options) { const m = await getCeklistImportIdtModel(); return m.create(data, options); },
-  async bulkCreate(data, options) { const m = await getCeklistImportIdtModel(); return m.bulkCreate(data, options); },
-  async update(data, options) { const m = await getCeklistImportIdtModel(); return m.update(data, options); },
-  async destroy(options) { const m = await getCeklistImportIdtModel(); return m.destroy(options); },
-  async upsert(data, options) { const m = await getCeklistImportIdtModel(); return m.upsert(data, options); },
-  getModel() { return getCeklistImportIdtModel(); },
+  async findAll(options) {
+    const model = await getCeklistImportIdtModel();
+    return model.findAll(options);
+  },
+  async findOne(options) {
+    const model = await getCeklistImportIdtModel();
+    return model.findOne(options);
+  },
+  async findByPk(pk, options) {
+    const model = await getCeklistImportIdtModel();
+    return model.findByPk(pk, options);
+  },
+  async create(data, options) {
+    const model = await getCeklistImportIdtModel();
+    return model.create(data, options);
+  },
+  async bulkCreate(data, options) {
+    const model = await getCeklistImportIdtModel();
+    return model.bulkCreate(data, options);
+  },
+  async update(data, options) {
+    const model = await getCeklistImportIdtModel();
+    return model.update(data, options);
+  },
+  async destroy(options) {
+    const model = await getCeklistImportIdtModel();
+    return model.destroy(options);
+  },
+  async count(options) {
+    const model = await getCeklistImportIdtModel();
+    return model.count(options);
+  },
+  async upsert(data, options) {
+    const model = await getCeklistImportIdtModel();
+    return model.upsert(data, options);
+  },
+  async findOrCreate(options) {
+    const model = await getCeklistImportIdtModel();
+    return model.findOrCreate(options);
+  },
+  getModel() {
+    return getCeklistImportIdtModel();
+  },
 };

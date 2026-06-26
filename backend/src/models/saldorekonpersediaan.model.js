@@ -4,15 +4,17 @@ import logger from "../config/logger.js";
 const { resilientDb } = config;
 
 let SaldoRekonPersediaan = null;
+let _saldoRekonPersediaanSequelizeInstance = null;
 
 const getSaldoRekonPersediaanModel = async () => {
   try {
-    if (!SaldoRekonPersediaan) {
-      const sequelize = await resilientDb.getDatabase();
-      if (!sequelize) {
-        throw new Error("Database connection not available");
-      }
+    const sequelize = await resilientDb.getDatabase();
+    if (!sequelize) {
+      throw new Error("Database connection not available");
+    }
 
+    if (!SaldoRekonPersediaan || _saldoRekonPersediaanSequelizeInstance !== sequelize) {
+      _saldoRekonPersediaanSequelizeInstance = sequelize;
       SaldoRekonPersediaan = sequelize.define(
         "saldorekonpersediaan",
         {
@@ -36,7 +38,6 @@ const getSaldoRekonPersediaanModel = async () => {
             primaryKey: true,
             allowNull: false,
           },
-          // Store Values
           HPP_DRY_STORE: {
             type: DataTypes.DECIMAL(18, 2),
             allowNull: true,
@@ -57,7 +58,6 @@ const getSaldoRekonPersediaanModel = async () => {
             type: DataTypes.DECIMAL(18, 2),
             allowNull: true,
           },
-          // WRC Values
           HPP_DRY_WRC: {
             type: DataTypes.DECIMAL(18, 2),
             allowNull: true,
@@ -78,7 +78,6 @@ const getSaldoRekonPersediaanModel = async () => {
             type: DataTypes.DECIMAL(18, 2),
             allowNull: true,
           },
-          // Differences
           SELISIH_DRY: {
             type: DataTypes.DECIMAL(18, 2),
             allowNull: true,
@@ -120,7 +119,7 @@ const getSaldoRekonPersediaanModel = async () => {
               fields: ["SHOP"],
             },
           ],
-        }
+        },
       );
     }
     return SaldoRekonPersediaan;
@@ -139,6 +138,22 @@ const SaldoRekonPersediaanWrapper = {
     const model = await getSaldoRekonPersediaanModel();
     return model.findOne(options);
   },
+  async findByPk(pk, options) {
+    const model = await getSaldoRekonPersediaanModel();
+    return model.findByPk(pk, options);
+  },
+  async create(data, options) {
+    const model = await getSaldoRekonPersediaanModel();
+    return model.create(data, options);
+  },
+  async update(data, options) {
+    const model = await getSaldoRekonPersediaanModel();
+    return model.update(data, options);
+  },
+  async destroy(options) {
+    const model = await getSaldoRekonPersediaanModel();
+    return model.destroy(options);
+  },
   async count(options) {
     const model = await getSaldoRekonPersediaanModel();
     return model.count(options);
@@ -147,9 +162,13 @@ const SaldoRekonPersediaanWrapper = {
     const model = await getSaldoRekonPersediaanModel();
     return model.bulkCreate(data, options);
   },
-  async destroy(options) {
+  async upsert(data, options) {
     const model = await getSaldoRekonPersediaanModel();
-    return model.destroy(options);
+    return model.upsert(data, options);
+  },
+  async findOrCreate(options) {
+    const model = await getSaldoRekonPersediaanModel();
+    return model.findOrCreate(options);
   },
   getModel() {
     return getSaldoRekonPersediaanModel();

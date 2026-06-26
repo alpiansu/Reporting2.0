@@ -1,19 +1,20 @@
 import { DataTypes } from "sequelize";
 import config from "../../../config/index.js";
 import logger from "../../../config/logger.js";
-
 const { resilientDb } = config;
 
 let MtranVsCd = null;
+let _mtranVsCdSequelizeInstance = null;
 
 const getMtranVsCdModel = async () => {
   try {
-    if (!MtranVsCd) {
-      const sequelize = await resilientDb.getDatabase();
-      if (!sequelize) {
-        throw new Error("Database connection not available");
-      }
+    const sequelize = await resilientDb.getDatabase();
+    if (!sequelize) {
+      throw new Error("Database connection not available");
+    }
 
+    if (!MtranVsCd || _mtranVsCdSequelizeInstance !== sequelize) {
+      _mtranVsCdSequelizeInstance = sequelize;
       MtranVsCd = sequelize.define(
         "mtran_vs_cd",
         {
@@ -116,7 +117,7 @@ const getMtranVsCdModel = async () => {
               fields: ["MONTH", "YEAR"],
             },
           ],
-        }
+        },
       );
     }
     return MtranVsCd;
@@ -126,7 +127,6 @@ const getMtranVsCdModel = async () => {
   }
 };
 
-// Wrapper with async methods
 const MtranVsCdWrapper = {
   async findAll(options) {
     const model = await getMtranVsCdModel();
@@ -136,6 +136,10 @@ const MtranVsCdWrapper = {
     const model = await getMtranVsCdModel();
     return model.findOne(options);
   },
+  async findByPk(pk, options) {
+    const model = await getMtranVsCdModel();
+    return model.findByPk(pk, options);
+  },
   async findAndCountAll(options) {
     const model = await getMtranVsCdModel();
     return model.findAndCountAll(options);
@@ -144,6 +148,10 @@ const MtranVsCdWrapper = {
     const model = await getMtranVsCdModel();
     return model.create(data, options);
   },
+  async update(data, options) {
+    const model = await getMtranVsCdModel();
+    return model.update(data, options);
+  },
   async bulkCreate(data, options) {
     const model = await getMtranVsCdModel();
     return model.bulkCreate(data, options);
@@ -151,6 +159,18 @@ const MtranVsCdWrapper = {
   async destroy(options) {
     const model = await getMtranVsCdModel();
     return model.destroy(options);
+  },
+  async count(options) {
+    const model = await getMtranVsCdModel();
+    return model.count(options);
+  },
+  async upsert(data, options) {
+    const model = await getMtranVsCdModel();
+    return model.upsert(data, options);
+  },
+  async findOrCreate(options) {
+    const model = await getMtranVsCdModel();
+    return model.findOrCreate(options);
   },
   getModel() {
     return getMtranVsCdModel();

@@ -4,16 +4,17 @@ import logger from "../../config/logger.js";
 const { resilientDb } = config;
 
 let NoteCategories = null;
+let _noteCategoriesSequelizeInstance = null;
 
-// Create a wrapper with async model getter
 const getNotesCategoriesModel = async () => {
   try {
-    if (!NoteCategories) {
-      const sequelize = await resilientDb.getDatabase();
-      if (!sequelize) {
-        throw new Error("Database connection not available");
-      }
+    const sequelize = await resilientDb.getDatabase();
+    if (!sequelize) {
+      throw new Error("Database connection not available");
+    }
 
+    if (!NoteCategories || _noteCategoriesSequelizeInstance !== sequelize) {
+      _noteCategoriesSequelizeInstance = sequelize;
       NoteCategories = sequelize.define(
         "NoteCategories",
         {
@@ -52,7 +53,7 @@ const getNotesCategoriesModel = async () => {
               unique: true,
             },
           ],
-        }
+        },
       );
     }
     return NoteCategories;
@@ -62,7 +63,6 @@ const getNotesCategoriesModel = async () => {
   }
 };
 
-// Create a wrapper object with async methods
 const NoteCategoriesWrapper = {
   async findAll(options) {
     const model = await getNotesCategoriesModel();
@@ -104,7 +104,6 @@ const NoteCategoriesWrapper = {
     const model = await getNotesCategoriesModel();
     return model.findOrCreate(options);
   },
-  // Add getModel method for registry compatibility
   getModel() {
     return getNotesCategoriesModel();
   },

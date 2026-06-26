@@ -1,19 +1,20 @@
 import { DataTypes } from "sequelize";
 import config from "../../../config/index.js";
 import logger from "../../../config/logger.js";
-
 const { resilientDb } = config;
 
 let RekonSales = null;
+let _rekonSalesSequelizeInstance = null;
 
 const getRekonSalesModel = async () => {
   try {
-    if (!RekonSales) {
-      const sequelize = await resilientDb.getDatabase();
-      if (!sequelize) {
-        throw new Error("Database connection not available");
-      }
+    const sequelize = await resilientDb.getDatabase();
+    if (!sequelize) {
+      throw new Error("Database connection not available");
+    }
 
+    if (!RekonSales || _rekonSalesSequelizeInstance !== sequelize) {
+      _rekonSalesSequelizeInstance = sequelize;
       RekonSales = sequelize.define(
         "rekon_sales",
         {
@@ -144,7 +145,7 @@ const getRekonSalesModel = async () => {
               fields: ["KDTK"],
             },
           ],
-        }
+        },
       );
     }
     return RekonSales;
@@ -154,7 +155,6 @@ const getRekonSalesModel = async () => {
   }
 };
 
-// Wrapper with async methods
 const RekonSalesWrapper = {
   async findAll(options) {
     const model = await getRekonSalesModel();
@@ -184,9 +184,17 @@ const RekonSalesWrapper = {
     const model = await getRekonSalesModel();
     return model.destroy(options);
   },
+  async count(options) {
+    const model = await getRekonSalesModel();
+    return model.count(options);
+  },
   async upsert(data, options) {
     const model = await getRekonSalesModel();
     return model.upsert(data, options);
+  },
+  async findOrCreate(options) {
+    const model = await getRekonSalesModel();
+    return model.findOrCreate(options);
   },
   getModel() {
     return getRekonSalesModel();

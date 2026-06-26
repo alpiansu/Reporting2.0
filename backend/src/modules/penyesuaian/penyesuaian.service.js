@@ -114,6 +114,7 @@ class PenyesuaianService {
    * Jika kdtk ada → abaikan cabang, else filter by cabang
    */
   async loadRecordsDetailFromDb({ periode, cabang, kdtk }, hasRefreshed = false) {
+    logger.info(`[penyesuaian.service] menjalankan loadRecordsDetailFromDb dengan status hasRefreshed:${hasRefreshed}`);
     const model = await SesuaiToko.getModel();
     const sequelize = model.sequelize;
     const { Sequelize } = await import("sequelize");
@@ -163,16 +164,25 @@ class PenyesuaianService {
     ORDER BY a.SESUAI DESC
   `;
 
+    logger.info(`[penyesuaian.service] menjalankan query ambil data detail penyesuaian toko ${kdtk}`);
     const records = await sequelize.query(query, {
       replacements,
       type: Sequelize.QueryTypes.SELECT,
     });
 
+    logger.info(
+      `[penyesuaian.service] hasil query ambil data detail penyesuaian toko ${kdtk} mendapatkan ${records.length} baris data`,
+    );
+
     if (records.length == 0 || records[0]?.STATUS_UPDTIME != "OK") {
       // ✅ Bug 2 fix: Guard rekursi dipindah ke DALAM if block
       if (hasRefreshed) {
-        logger.warn(`[penyesuaian.service] Data tetap kosong/tidak valid setelah refresh toko ${kdtk}`);
-        return [];
+        logger.warn(
+          `[penyesuaian.service] Loop ke 2 atas toko ${kdtk} dengan status saat ini ${records[0]?.STATUS_UPDTIME}`,
+        );
+        if (records.length == 0) {
+          return [];
+        }
       }
 
       // ✅ Bug 1 fix: Gunakan optional chaining + fallback value
@@ -185,7 +195,11 @@ class PenyesuaianService {
 
       // ✅ Bug 3 fix: length dicek duluan, gunakan ===
       if (records.length > 0 && statusUpdtime === "UPD-SUMMARY") {
-        await this.processSingleStore({ storeCode: kdtk, cabang }, periode, strYear, strMonth);
+        logger.info(`[penyesuaian.service] jalankan processSingleStore toko ${kdtk}`);
+        const result = await this.processSingleStore({ storeCode: kdtk, cabang }, periode, strYear, strMonth);
+        if (result.hasIssue === false) {
+          return [];
+        }
       }
 
       return await this.loadRecordsDetailFromDb({ periode, cabang, kdtk }, true);
@@ -435,7 +449,7 @@ class PenyesuaianService {
    * Aturan: RECID = '1', SESUAI dan UPDTIME tetap dipertahankan sebagai informasi historis.
    */
   async markSummaryAsResolved(params) {
-    const { periode, kdtk, cabang } = params;
+    const { periode, kdtk } = params;
     try {
       // Kita hanya update RECID menjadi '1'. SESUAI dan UPDTIME dibiarkan (Historical).
       await SesuaiTokoSummary.update(
@@ -527,19 +541,23 @@ class PenyesuaianService {
           );
         }
 
+        logger.info(`[penyesuaian.service] filterResult.length : ${filterResult.length}`);
         // STEP 2: If threshold exceeded, run detail query
         if (filterResult.length > 0) {
           await SesuaiTokoSummary.upsert(filterResult[0]);
           results.success = true;
           results.hasIssue = true;
         } else {
+          await this.markSummaryAsResolved({ periode: strPeriode, kdtk: storeCode });
           results.success = true;
           results.hasIssue = false;
         }
 
         if (!suppressIntermediateLogs) {
           await RekapRemoteService.addToTemp(
-            cab, storeCode, "penyesuaian",
+            cab,
+            storeCode,
+            "penyesuaian",
             `[${storeCode}] ${results.hasIssue ? "issue_found" : "success"}`,
           );
         }
@@ -549,6 +567,7 @@ class PenyesuaianService {
         }
       }
     } catch (err) {
+      logger.error(`[penyesuaian.service] processSingleStore : error : ${err}`);
       await RekapRemoteService.addToTemp(cab, storeCode, "penyesuaian", `[${storeCode}] ERROR: ${err.message}`);
     }
 
@@ -784,9 +803,6 @@ class PenyesuaianService {
         status: "finalizing",
       });
 
-      // ✅ Hitung resolved stores (yang di-screen tapi tidak punya issue)
-      const resolvedStores = Array.from(screenedStores).filter(store => !activeStores.has(store));
-
       // ── Sisa finalizing ──
       await progressService.updateProgress(taskId, processedCount, {
         description: "Saving logs to database…",
@@ -814,7 +830,6 @@ class PenyesuaianService {
         processedRecords: newRecords.length,
         screenedStores: screenedStores.size,
         activeStores: activeStores.size,
-        resolvedStores: resolvedStores.length,
       };
     } catch (error) {
       // If task was cancelled by user, don't call failProgress (already handled by cancelTask)
@@ -835,102 +850,6 @@ class PenyesuaianService {
       // Cleanup: Invalidate cache to force reload from JSON file on next request
       await SesuaiToko.cleanupScreeningSession(sessionId);
       this.invalidateCache();
-    }
-  }
-
-  /**
-   * Update RECID to '1' for records that no longer meet the threshold
-   * IMPORTANT: Only update records with RECID='*' to preserve UPDTIME
-   *
-   * @param {Object} params - Update parameters
-   * @param {string} params.periode - Period in YYMM format
-   * @param {number} params.level - Screening level (1=All cabang, 2=1 cabang, 3=1 toko)
-   * @param {string} [params.cabang] - Branch code (for level 2)
-   * @param {string} [params.kdtk] - Store code (for level 3)
-   * @param {boolean} [params.hasIssue] - Does the store have issues? (for level 3)
-   * @param {Array<string>} [params.screenedStores] - Stores that were screened (for level 1 & 2)
-   * @param {Array<string>} [params.activeStores] - Stores that still have issues (for level 1 & 2)
-   */
-  async updateResolvedRecords(params) {
-    const { periode, level, cabang, kdtk, hasIssue, screenedStores, activeStores } = params;
-
-    try {
-      // Get the database instance
-      const model = await SesuaiToko.getModel();
-      const sequelize = model.sequelize;
-      const { Sequelize } = await import("sequelize");
-
-      // 🛑 ALUR BARU: Hapus Detail & Update Status Summary
-      // LEVEL 3: Single Store
-      if (level === 3) {
-        if (hasIssue) {
-          logger.info(`[penyesuaian.service] Level 3: Store ${kdtk} has issues, skip resolve update`);
-          return 0;
-        } else {
-          // Hapus data detail
-          await SesuaiToko.destroy({ where: { PERIODE: periode, KDTK: kdtk } });
-          // Mark summary as resolved
-          await this.markSummaryAsResolved({ periode, kdtk });
-          logger.info(`[penyesuaian.service] Level 3: Resolved store ${kdtk} (details deleted, summary status '1')`);
-          return 1;
-        }
-      }
-
-      // LEVEL 1 & 2: Multi Stores (Screened but no longer has issues)
-      const storesToResolve = [];
-      if (screenedStores && screenedStores.length > 0) {
-        for (const sCode of screenedStores) {
-          if (!activeStores || !activeStores.includes(sCode)) {
-            storesToResolve.push(sCode);
-          }
-        }
-      }
-
-      if (storesToResolve.length === 0) {
-        logger.info(`[penyesuaian.service] No resolved stores to update`);
-        return 0;
-      }
-
-      // BATCHING: Split storesToResolve into chunks to avoid database locks
-      const BATCH_SIZE = 500;
-      let totalUpdated = 0;
-
-      for (let i = 0; i < storesToResolve.length; i += BATCH_SIZE) {
-        const chunk = storesToResolve.slice(i, i + BATCH_SIZE);
-
-        // 1. Hapus dari tabel detail
-        await SesuaiToko.destroy({
-          where: {
-            PERIODE: periode,
-            KDTK: { [Sequelize.Op.in]: chunk },
-          },
-        });
-
-        // 2. Update status Summary menjadi '1' (Resolved)
-        // Kita gunakan update langsung ke model SesuaiTokoSummary
-        const [summaryUpdateCount] = await SesuaiTokoSummary.update(
-          { RECID: "1" },
-          {
-            where: {
-              PERIODE: periode,
-              KDTK: { [Sequelize.Op.in]: chunk },
-            },
-          },
-        );
-
-        totalUpdated += summaryUpdateCount;
-        logger.debug(
-          `[penyesuaian.service] Resolved batch ${Math.floor(i / BATCH_SIZE) + 1}: ${summaryUpdateCount} summary rows updated`,
-        );
-      }
-
-      logger.info(
-        `[penyesuaian.service] Total stores resolved: ${storesToResolve.length}, summary status updated: ${totalUpdated}`,
-      );
-      return totalUpdated;
-    } catch (error) {
-      logger.error(`[penyesuaian.service] Error updating resolved records: ${error.message}`);
-      throw error;
     }
   }
 

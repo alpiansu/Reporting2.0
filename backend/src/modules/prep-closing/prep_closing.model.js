@@ -1,21 +1,20 @@
 import { DataTypes } from "sequelize";
 import config from "../../config/index.js";
 import logger from "../../config/logger.js";
-
 const { resilientDb } = config;
 
 let ScreeningPraClosing = null;
-let ScreeningPraClosingGeneration = -1;
+let _screeningPraClosingSequelizeInstance = null;
 
 const getScreeningPraClosingModel = async () => {
   try {
-    const dbGeneration = resilientDb.getGeneration();
-    if (!ScreeningPraClosing || ScreeningPraClosingGeneration !== dbGeneration) {
-      const sequelize = await resilientDb.getDatabase();
-      if (!sequelize) {
-        throw new Error("Database connection not available");
-      }
+    const sequelize = await resilientDb.getDatabase();
+    if (!sequelize) {
+      throw new Error("Database connection not available");
+    }
 
+    if (!ScreeningPraClosing || _screeningPraClosingSequelizeInstance !== sequelize) {
+      _screeningPraClosingSequelizeInstance = sequelize;
       ScreeningPraClosing = sequelize.define(
         "screening_praclosing",
         {
@@ -49,16 +48,12 @@ const getScreeningPraClosingModel = async () => {
             allowNull: false,
             comment: "Format: YYMM",
           },
-
-          // 🔴 Issues Data (JSON format)
           ISSUES: {
             field: "ISSUES",
             type: DataTypes.JSON,
             allowNull: true,
             comment: "Array of failed rule keys with details",
           },
-
-          // 📊 Summary Statistics
           TOTAL_RULES: {
             field: "TOTAL_RULES",
             type: DataTypes.INTEGER,
@@ -83,8 +78,6 @@ const getScreeningPraClosingModel = async () => {
             allowNull: true,
             defaultValue: 0,
           },
-
-          // 🎯 Status Fields
           IS_READY: {
             field: "IS_READY",
             type: DataTypes.BOOLEAN,
@@ -92,13 +85,11 @@ const getScreeningPraClosingModel = async () => {
             defaultValue: false,
             comment: "true if all critical rules passed",
           },
-
           LAST_SCREENED: {
             field: "LAST_SCREENED",
             type: DataTypes.DATE,
             allowNull: true,
           },
-
           UPDTIME: {
             field: "UPDTIME",
             type: DataTypes.DATE,
@@ -128,9 +119,8 @@ const getScreeningPraClosingModel = async () => {
               fields: ["IS_READY"],
             },
           ],
-        }
+        },
       );
-      ScreeningPraClosingGeneration = dbGeneration;
     }
     return ScreeningPraClosing;
   } catch (error) {
@@ -139,7 +129,6 @@ const getScreeningPraClosingModel = async () => {
   }
 };
 
-// Wrapper with async methods
 const ScreeningPraClosingWrapper = {
   async findAll(options) {
     const model = await getScreeningPraClosingModel();
@@ -169,9 +158,17 @@ const ScreeningPraClosingWrapper = {
     const model = await getScreeningPraClosingModel();
     return model.destroy(options);
   },
+  async count(options) {
+    const model = await getScreeningPraClosingModel();
+    return model.count(options);
+  },
   async upsert(data, options) {
     const model = await getScreeningPraClosingModel();
     return model.upsert(data, options);
+  },
+  async findOrCreate(options) {
+    const model = await getScreeningPraClosingModel();
+    return model.findOrCreate(options);
   },
   getModel() {
     return getScreeningPraClosingModel();

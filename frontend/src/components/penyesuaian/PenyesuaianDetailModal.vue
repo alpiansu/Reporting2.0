@@ -40,7 +40,22 @@
         <BaseServerDataTableModal :title="'Detail Data'" :icon="'pi pi-table'" :fetcher="fetchDetail"
           :query="{ kdtk: kdtk, periode: periode }" :columns="columns" :autoColumns="true" :initialItemsPerPage="10"
           :minTableWidth="'1200px'" :maxHeight="'500px'" :searchable="true" :sortable="true"
-          class="detail-table-wrapper" />
+          class="detail-table-wrapper">
+          <template #cell-PRDCD="{ row, value }">
+            <a href="#" class="prdcd-link" @click.prevent="openInspector(value, row.BEGBAL)">{{ value }}</a>
+          </template>
+        </BaseServerDataTableModal>
+
+        <StoreItemInspectorDialog
+          v-if="showInspector"
+          :show="showInspector"
+          :kdtk="kdtk"
+          :prdcd="selectedPrdcd"
+          :cab="cab"
+          :periode="periode"
+          :begbal="selectedBegbal"
+          @close="showInspector = false"
+        />
       </div>
     </template>
     <template #footer>
@@ -59,6 +74,7 @@ import { ref } from 'vue'
 import BaseModalDetail from '@/components/common/BaseModalDetail.vue'
 import BaseServerDataTableModal from '@/components/common/BaseServerDataTableModal.vue'
 import penyesuaianService from '@/services/penyesuaian.service.js'
+import StoreItemInspectorDialog from './StoreItemInspectorDialog.vue'
 
 const props = defineProps({
   show: { type: Boolean, default: false },
@@ -70,7 +86,16 @@ const props = defineProps({
 
 const emit = defineEmits(['close'])
 
-const columns = ref([]); 
+const columns = ref([]);
+const showInspector = ref(false);
+const selectedPrdcd = ref('');
+const selectedBegbal = ref('');
+
+function openInspector(prdcd, begbal) {
+  selectedPrdcd.value = prdcd;
+  selectedBegbal.value = begbal;
+  showInspector.value = true;
+}
 
 async function fetchDetail(params) {
   const res = await penyesuaianService.getStoreRecords(props.kdtk, props.periode, params);
@@ -187,6 +212,18 @@ async function fetchDetail(params) {
   transform: translateY(-2px);
   box-shadow: 0 8px 25px rgba(107, 114, 128, 0.4);
   background: linear-gradient(135deg, #4b5563 0%, #374151 100%);
+}
+
+.prdcd-link {
+  color: #2563eb;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+  font-family: monospace;
+}
+
+.prdcd-link:hover {
+  color: #1d4ed8;
 }
 
 .btn-cancel:active {

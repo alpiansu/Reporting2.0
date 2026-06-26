@@ -173,6 +173,16 @@ class PenyesuaianService {
     });
     return response.data;
   }
+
+  /**
+   * Get store item details (prodmast, mstran, mtran, protect) from store DB
+   */
+  async getStoreItem(kdtk, prdcd, periode = "") {
+    const response = await api.get(`/${this.fixedPattern}/store-item/${kdtk}/${prdcd}`, {
+      params: { periode },
+    });
+    return response.data;
+  }
 }
 
 export default new PenyesuaianService();

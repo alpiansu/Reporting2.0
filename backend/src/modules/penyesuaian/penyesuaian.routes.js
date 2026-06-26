@@ -34,4 +34,7 @@ router.get("/:cabang/:kdtk/:periode/:prdcd", penyesuaianController.getRecord);
 // Update or create note for a specific store and periode
 router.put("/note/", penyesuaianController.updateNote);
 
+// Get store item details (prodmast, mstran, mtran, protect) from store DB
+router.get("/store-item/:kdtk/:prdcd", penyesuaianController.getStoreItem);
+
 export default router;

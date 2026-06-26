@@ -6,6 +6,7 @@ import { apiResponse } from "../../utils/index.js";
 import penyesuaianService from "./penyesuaian.service.js";
 import notesService from "../notes/notes.service.js";
 import UserService from "../user/user.service.js";
+import storeInspectorService from "../../services/storeInspector.service.js";
 
 /**
  * Start screening/reconciliation process
@@ -305,6 +306,21 @@ export const updateNote = async (req, res) => {
     return apiResponse.success(res, result);
   } catch (error) {
     logger.error(`[penyesuaian] Error updating note: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+export const getStoreItem = async (req, res) => {
+  try {
+    const { kdtk, prdcd } = req.params;
+    const { periode } = req.query;
+    if (!kdtk || !prdcd) {
+      return apiResponse.badRequest(res, "kdtk and prdcd are required");
+    }
+    const result = await storeInspectorService.inspect({ kdtk, prdcd, periode });
+    return apiResponse.success(res, result);
+  } catch (error) {
+    logger.error(`[penyesuaian.controller] Error getStoreItem: ${error.message}`);
     return apiResponse.error(res, error.message);
   }
 };

@@ -197,6 +197,10 @@ class PenyesuaianService {
       if (records.length > 0 && statusUpdtime === "UPD-SUMMARY") {
         logger.info(`[penyesuaian.service] jalankan processSingleStore toko ${kdtk}`);
         const result = await this.processSingleStore({ storeCode: kdtk, cabang }, periode, strYear, strMonth);
+        // Invalidate cache to force reload from JSON file on next request
+        this.invalidateCache();
+        // Sync to JSON file
+        await this.syncToJsonFile(periode);
         if (result.hasIssue === false) {
           return [];
         }

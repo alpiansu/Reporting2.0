@@ -31,7 +31,7 @@ function analyzeMstranRow(qty, gross, acost) {
   const warnings = [];
   const q = Number(qty) || 0;
   const r = Number(gross) || 0;
-  const unitPrice = q > 0 ? r / q : 0;
+  const unitPrice = q !== 0 ? r / q : 0;
 
   if (q !== 0 && r === 0) {
     warnings.push({
@@ -41,14 +41,7 @@ function analyzeMstranRow(qty, gross, acost) {
     });
   }
 
-  if (q > 0 && r < 0) {
-    warnings.push({
-      type: "critical",
-      text: `QTY positif (${formatNumber(q)}) dengan GROSS negatif (${formatNumber(r)})`,
-    });
-  }
-
-  if (q > 0 && r > 0 && acost > 0) {
+  if (q !== 0 && r !== 0 && acost > 0) {
     const deviation = Math.abs(unitPrice - acost) / acost;
     if (deviation > 0.5) {
       warnings.push({
@@ -69,10 +62,6 @@ function analyzeMstranRow(qty, gross, acost) {
     warnings.push({ type: "warning", text: `QTY nol tapi GROSS Rp ${formatNumber(r)}` });
   }
 
-  if (q < 0 && r !== 0) {
-    warnings.push({ type: "warning", text: `QTY negatif (${q}) dengan GROSS ${formatNumber(r)}` });
-  }
-
   return { unitPrice, qty: q, rupiah: r, warnings };
 }
 
@@ -90,7 +79,7 @@ function analyzeMtranRow(qty, hpp, acost) {
     });
   }
 
-  if (q > 0 && h > 0 && acost > 0) {
+  if (q !== 0 && h !== 0 && acost > 0) {
     const deviation = Math.abs(unitPrice - acost) / acost;
     if (deviation > 0.5) {
       warnings.push({
@@ -109,10 +98,6 @@ function analyzeMtranRow(qty, hpp, acost) {
 
   if (q === 0 && h !== 0) {
     warnings.push({ type: "warning", text: `QTY nol tapi HPP Rp ${formatNumber(h)}` });
-  }
-
-  if (q < 0 && h !== 0) {
-    warnings.push({ type: "warning", text: `QTY negatif (${q}) dengan HPP ${formatNumber(h)}` });
   }
 
   const totalValue = q * h;

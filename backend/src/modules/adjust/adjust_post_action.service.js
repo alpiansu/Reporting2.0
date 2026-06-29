@@ -22,7 +22,7 @@ class AdjustPostActionService {
       // 1. TGL_SELISIH Action
       if (normalizedRecord.TGL_SELISIH) {
         // We pass the normalized value but still use the original record/store info if needed
-        await this.handleTglSelisih(normalizedRecord.TGL_SELISIH, record.PRDCD, store, username);
+        await this.handleTglSelisih(normalizedRecord.TGL_SELISIH, normalizedRecord.PRDCD, store, username);
       }
 
       // Add future post-actions here...

@@ -458,7 +458,7 @@ class AdjustService {
               });
 
               // Execute scalable post-adjustment actions
-              adjustPostActionService.executePostActions(record, store, username);
+              await adjustPostActionService.executePostActions(record, store, username);
             } else {
               // Insert gagal - tidak ada rows yang terpengaruh
               historyRecords.push({

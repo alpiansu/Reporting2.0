@@ -49,9 +49,9 @@ const onCancel = () => { visible.value = false; };
 
 <style scoped>
 .note-form { display: flex; flex-direction: column; gap: .75rem; }
-.meta { display: flex; justify-content: space-between; align-items: center; }
+.meta { display: flex; justify-content: space-between; align-items: center; color: var(--text-color); }
 .badge { color: #fff; padding: .25rem .5rem; border-radius: 6px; font-size: .75rem; }
 .controls { display: flex; justify-content: space-between; align-items: center; }
-.last-update { color: #6b7280; font-size: .75rem; }
+.last-update { color: var(--text-color-secondary); font-size: .75rem; }
 .footer { display: flex; justify-content: flex-end; gap: .5rem; }
 </style>

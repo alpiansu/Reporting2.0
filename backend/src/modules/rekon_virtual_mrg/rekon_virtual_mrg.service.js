@@ -262,28 +262,47 @@ class RekonVirtualService {
    * @param {Array} newRecords - Array record baru (dari query store)
    * @returns {Promise<number>} Jumlah record yang berhasil digabung
    */
-  async mergeAndSavePeriod(periode, newRecords) {
+  async mergeAndSavePeriod(periode, newRecords, deletedKeys = new Set()) {
     if (!periode) throw new Error("Periode harus diisi");
-    if (!newRecords || newRecords.length === 0) return 0;
+
+    const hasNewRecords = Array.isArray(newRecords) && newRecords.length > 0;
+    const hasDeletedKeys = deletedKeys instanceof Set && deletedKeys.size > 0;
+
+    // Tidak ada yang perlu dilakukan
+    if (!hasNewRecords && !hasDeletedKeys) return 0;
 
     // Pastikan data untuk periode ini sudah terload di memory
     await this.ensureDataLoaded(periode);
 
-    // Merge newRecords ke virtualData
-    for (const record of newRecords) {
-      const idx = this.virtualData.findIndex(
-        v =>
-          v.CABANG === record.CABANG &&
-          v.SHOP === record.SHOP &&
-          v.TANGGAL === record.TANGGAL &&
-          v.PRDCD === record.PRDCD,
-      );
-      if (idx >= 0) {
-        // Pertahankan field lama (misal RECID), timpa dengan data baru
-        this.virtualData[idx] = { ...this.virtualData[idx], ...record };
-      } else {
-        // Record baru: tambahkan default RECID sesuai model
-        this.virtualData.push({ RECID: "*", ...record });
+    // 1. Prune obsolete records dari memory terlebih dahulu
+    if (hasDeletedKeys) {
+      const beforeCount = this.virtualData.length;
+      this.virtualData = this.virtualData.filter(v => {
+        const dateStr = moment(v.TANGGAL).format("YYYY-MM-DD");
+        const key = `${v.CABANG}_${v.SHOP}_${dateStr}_${v.PRDCD}`;
+        return !deletedKeys.has(key);
+      });
+      const pruned = beforeCount - this.virtualData.length;
+      logger.info(`[mergeAndSavePeriod] Pruned ${pruned} obsolete records from memory for periode ${periode}`);
+    }
+
+    // 2. Merge/upsert newRecords ke virtualData
+    if (hasNewRecords) {
+      for (const record of newRecords) {
+        const idx = this.virtualData.findIndex(
+          v =>
+            v.CABANG === record.CABANG &&
+            v.SHOP === record.SHOP &&
+            v.TANGGAL === record.TANGGAL &&
+            v.PRDCD === record.PRDCD,
+        );
+        if (idx >= 0) {
+          // Pertahankan field lama (misal RECID), timpa dengan data baru
+          this.virtualData[idx] = { ...this.virtualData[idx], ...record };
+        } else {
+          // Record baru: tambahkan default RECID sesuai model
+          this.virtualData.push({ RECID: "*", ...record });
+        }
       }
     }
 
@@ -291,8 +310,11 @@ class RekonVirtualService {
     await this.saveToFile(periode);
     this.lastLoadTime = Date.now();
 
-    logger.info(`Merged ${newRecords.length} records to periode ${periode} and saved to JSON`);
-    return newRecords.length;
+    logger.info(
+      `[mergeAndSavePeriod] Merged ${hasNewRecords ? newRecords.length : 0} records, ` +
+      `pruned ${deletedKeys.size} keys for periode ${periode}`,
+    );
+    return hasNewRecords ? newRecords.length : 0;
   }
 
   /**
@@ -532,6 +554,8 @@ class RekonVirtualService {
 
       // Temporary array to collect new records
       const newRecords = [];
+      // Kumpulkan composite key dari obsolete records yang dihapus dari DB
+      const allDeletedKeys = new Set();
 
       let processedCount = 0;
       const totalStores = storesToProcess.length;
@@ -586,6 +610,9 @@ class RekonVirtualService {
               if (result.success) {
                 if (result.newRecords.length > 0) {
                   newRecords.push(...result.newRecords);
+                }
+                if (result.deletedKeys && result.deletedKeys.size > 0) {
+                  result.deletedKeys.forEach(k => allDeletedKeys.add(k));
                 }
                 await incrementProgress(storeCode, `Success ✅ (${result.newRecords.length} rows)`);
               } else {
@@ -643,9 +670,9 @@ class RekonVirtualService {
         });
       }
 
-      // Sync database to JSON file - langsung merge ke memory
-      if (newRecords.length > 0) {
-        await this.mergeAndSavePeriod(options.periode, newRecords);
+      // Sync database to JSON file - merge upsert + prune obsolete dari memory/JSON
+      if (newRecords.length > 0 || allDeletedKeys.size > 0) {
+        await this.mergeAndSavePeriod(options.periode, newRecords, allDeletedKeys);
       }
 
       const timeCompleted = moment().format("YYYY-MM-DD HH:mm:ss");
@@ -697,7 +724,7 @@ class RekonVirtualService {
   async processSingleStore(store, strYear, strMonth, sharedConnection = null, options = {}) {
     const { suppressIntermediateLogs = false } = options;
     const { storeCode, cab } = store;
-    const results = { success: false, newRecords: [] };
+    const results = { success: false, newRecords: [], deletedKeys: new Set() };
     const isShared = !!sharedConnection;
 
     try {
@@ -785,6 +812,12 @@ class RekonVirtualService {
                 },
               });
             }
+
+            // Kumpulkan composite key yang dihapus agar bisa diprune dari JSON cache
+            obsoleteRecords.forEach(obs => {
+              const dateStr = moment(obs.TANGGAL).format("YYYY-MM-DD");
+              results.deletedKeys.add(`${cab}_${storeCode}_${dateStr}_${obs.PRDCD}`);
+            });
           }
 
           await SaldoVirtual.bulkCreate(result, {
@@ -822,48 +855,39 @@ class RekonVirtualService {
   async deleteStorePeriod(cabang, shop, year, month) {
     try {
       const periode = year.substring(2) + month;
-      // pastikan cache memory terload
-      await this.ensureDataLoaded(periode);
-
       const ym = `${year}-${month}`;
+      const startDate = `${year}-${month}-01`;
+      const endDate = moment(`${year}-${month}`, "YYYY-MM").endOf("month").format("YYYY-MM-DD");
 
-      // cari record lama dari memory
-      const oldRecords = this.virtualData.filter(
-        item => item.CABANG === cabang && item.SHOP === shop && moment(item.TANGGAL).format("YYYY-MM") === ym,
-      );
-
-      if (oldRecords.length === 0) {
-        logger.info(`[rekon_virtual_mrg.service - deleteStorePeriod] No old records for ${shop} (${ym})`);
-        return 0;
-      }
-
-      // hapus dari database
-      await SaldoVirtual.destroy({
+      // DB adalah source-of-truth. Hapus dulu, gunakan return value sebagai indikator.
+      // Tidak cek dari memory dulu karena memory bisa stale dan menyebabkan silent skip.
+      const deletedCount = await SaldoVirtual.destroy({
         where: {
           CABANG: cabang,
           SHOP: shop,
-          TANGGAL: {
-            [Op.between]: [
-              `${year}-${month}-01`,
-              moment(`${year}-${month}`, "YYYY-MM").endOf("month").format("YYYY-MM-DD"),
-            ],
-          },
+          TANGGAL: { [Op.between]: [startDate, endDate] },
         },
       });
 
-      // hapus dari memory
-      this.virtualData = this.virtualData.filter(
-        item => !(item.CABANG === cabang && item.SHOP === shop && moment(item.TANGGAL).format("YYYY-MM") === ym),
-      );
+      if (deletedCount === 0) {
+        logger.info(`[rekon_virtual_mrg.service - deleteStorePeriod] No records in DB for ${shop} (${ym})`);
+        return 0;
+      }
 
-      // simpan ulang file JSON
-      await this.saveToFile(periode);
+      // Prune dari memory hanya jika periode ini memang sedang loaded.
+      // Tidak paksa ensureDataLoaded() — hindari race condition saat dipanggil dari parallel loop.
+      if (this.initialized && this.loadedPeriod === periode) {
+        this.virtualData = this.virtualData.filter(
+          item => !(item.CABANG === cabang && item.SHOP === shop && moment(item.TANGGAL).format("YYYY-MM") === ym),
+        );
+        await this.saveToFile(periode);
+      }
 
       logger.info(
-        `[rekon_virtual_mrg.service - deleteStorePeriod] Deleted ${oldRecords.length} records for SHOP=${shop} periode=${ym}`,
+        `[rekon_virtual_mrg.service - deleteStorePeriod] Deleted ${deletedCount} records for SHOP=${shop} periode=${ym}`,
       );
 
-      return oldRecords.length;
+      return deletedCount;
     } catch (error) {
       logger.error(`[rekon_virtual_mrg.service - deleteStorePeriod] Error: ${error.message}`);
       throw error;

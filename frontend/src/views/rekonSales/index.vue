@@ -335,6 +335,12 @@ const handleReScreen = async (row) => {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  animation: contentFadeIn 0.3s ease-out;
+}
+
+@keyframes contentFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @media (max-width: 768px) {
@@ -355,7 +361,7 @@ const handleReScreen = async (row) => {
 
 .filter-card {
   top: 0;
-  background: #fff;
+  background: var(--surface-color);
   border-radius: 10px;
   padding: 1rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, .08);

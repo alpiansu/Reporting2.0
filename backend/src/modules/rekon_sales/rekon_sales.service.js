@@ -595,7 +595,6 @@ class RekonSalesService {
       );
 
       const storesToProcess = storeGroups.flat();
-
       logger.info(`[rekon_sales.service] Total stores to process: ${storesToProcess.length}`);
 
       // === STEP 3: Register progress task ===
@@ -1686,6 +1685,126 @@ class RekonSalesService {
       throw error;
     }
   }
+
+  /**
+   * Get comprehensive rekon sales data for display (matching reference's openRekonSales)
+   * Includes notes, detail_rekon_sales, sel_ppn_cd2, and HAVING filter
+   */
+  async getFullRekonSalesData(options = {}) {
+    const { cabang = "All", month, year } = options;
+    if (!month || !year) throw new Error("Month and year are required");
+
+    try {
+      const model = await RekonSales.getModel();
+      const sequelize = model.sequelize;
+
+      const cabCondition = cabang !== "All" && cabang !== "ALL" ? " AND r.CAB = :cabang" : "";
+
+      const [rows] = await sequelize.query(
+        `
+        SELECT
+          r.RECID, r.CAB, r.KDTK, r.TANGGAL,
+          r.NET_TOKO, r.NET_GL, r.SEL_NET_GL,
+          r.NET_CLOSINGDETAIL AS NET_CD, r.SEL_NET_CD,
+          r.PPN_MTRAN AS PPN_TOKO, r.PPN_GL, r.SEL_PPN_GL,
+          r.PPN_CD, r.SEL_PPN_CD,
+          r.RETUR_PPNJP_ISTORE,
+          (COALESCE(r.SEL_PPN_CD, 0) - COALESCE(r.RETUR_PPNJP_ISTORE, 0)) AS SEL_PPN_CD2,
+          COALESCE(r.NET_RETUR_ECOM, 0) AS NET_RETUR_ECOM,
+          COALESCE(r.PPN_RETUR_ECOM, 0) AS PPN_RETUR_ECOM,
+          n.noteText AS KETFU,
+          n.updatedAt AS UPDTIME_NOTE,
+          n.pic AS FULLNAME,
+          GROUP_CONCAT(DISTINCT CASE WHEN dtl.SUBKEY = 'SEL_KODEPESANAN' AND dtl.RECID = '*' AND CHAR_LENGTH(dtl.VALSUBKEY) = 9 THEN dtl.VALSUBKEY ELSE NULL END) AS SEL_KODE_PESAN
+        FROM rekon_sales r
+        LEFT JOIN notesEdp n ON n.table_name = 'rekon_sales' AND n.unix_key = CONCAT(r.KDTK, r.TANGGAL)
+        LEFT JOIN detail_rekon_sales dtl ON r.KDTK = dtl.KDTK AND r.TANGGAL = dtl.TGL AND r.CAB = dtl.CAB
+        WHERE MONTH(r.TANGGAL) = :month AND YEAR(r.TANGGAL) = :year AND r.RECID = '*' ${cabCondition}
+        GROUP BY r.CAB, r.KDTK, r.TANGGAL
+        HAVING
+          r.SEL_NET_GL < -50 OR r.SEL_NET_GL > 50 OR
+          r.SEL_NET_CD < -50 OR r.SEL_NET_CD > 50 OR
+          r.SEL_PPN_GL < -50 OR r.SEL_PPN_GL > 50 OR
+          r.SEL_PPN_CD < -50 OR r.SEL_PPN_CD > 50 OR
+          GROUP_CONCAT(DISTINCT CASE WHEN dtl.SUBKEY = 'SEL_KODEPESANAN' AND dtl.RECID = '*' AND CHAR_LENGTH(dtl.VALSUBKEY) = 9 THEN dtl.VALSUBKEY ELSE NULL END) IS NOT NULL
+        ORDER BY r.CAB, r.KDTK, r.TANGGAL
+        LIMIT 1000
+      `,
+        {
+          replacements: { month, year, cabang },
+        },
+      );
+
+      return rows.map(r => ({
+        recid: r.RECID,
+        cab: r.CAB,
+        kdtk: r.KDTK,
+        tgl: r.TANGGAL,
+        net_toko: parseFloat(r.NET_TOKO) || 0,
+        net_gl: parseFloat(r.NET_GL) || 0,
+        sel_net_gl: parseFloat(r.SEL_NET_GL) || 0,
+        net_cd: parseFloat(r.NET_CD) || 0,
+        sel_net_cd: parseFloat(r.SEL_NET_CD) || 0,
+        ppn_toko: parseFloat(r.PPN_TOKO) || 0,
+        ppn_gl: parseFloat(r.PPN_GL) || 0,
+        sel_ppn_gl: parseFloat(r.SEL_PPN_GL) || 0,
+        ppn_cd: parseFloat(r.PPN_CD) || 0,
+        sel_ppn_cd: parseFloat(r.SEL_PPN_CD) || 0,
+        retur_ppnjp_istore: parseFloat(r.RETUR_PPNJP_ISTORE) || 0,
+        sel_ppn_cd2: parseFloat(r.SEL_PPN_CD2) || 0,
+        net_retur_ecom: parseFloat(r.NET_RETUR_ECOM) || 0,
+        ppn_retur_ecom: parseFloat(r.PPN_RETUR_ECOM) || 0,
+        ketfu: r.KETFU || null,
+        updtime_note: r.UPDTIME_NOTE || null,
+        fullname: r.FULLNAME || null,
+        sel_kode_pesan: r.SEL_KODE_PESAN || null,
+      }));
+    } catch (error) {
+      logger.error(`[rekon_sales.service] Error getFullRekonSalesData: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get detail mtran vs cd data for a specific store and date (per-item level)
+   * (Equivalent to reference's detilRekonSales)
+   */
+  async getDetailRekonSales(options = {}) {
+    const { kdtk, tanggal } = options;
+    if (!kdtk || !tanggal) throw new Error("kdtk and tanggal are required");
+
+    try {
+      const model = await MtranVsCd.getModel();
+      const data = await model.findAll({
+        where: {
+          SHOP: kdtk,
+          TANGGAL: tanggal,
+        },
+        raw: true,
+      });
+
+      return data.map(r => ({
+        cab: r.CAB,
+        shop: r.SHOP,
+        tanggal: r.TANGGAL,
+        docno: r.DOCNO,
+        seqno: r.SEQNO,
+        plu: r.PLU,
+        singkatan: r.SINGKATAN,
+        qty: parseFloat(r.QTY) || 0,
+        price: parseFloat(r.PRICE) || 0,
+        gross: parseFloat(r.GROSS) || 0,
+        hpp: parseFloat(r.HPP) || 0,
+        selisih: parseFloat(r.SELISIH) || 0,
+        rtype: r.RTYPE,
+        isppn: r.ISPPN,
+      }));
+    } catch (error) {
+      logger.error(`[rekon_sales.service] Error getDetailRekonSales: ${error.message}`);
+      throw error;
+    }
+  }
+
   /**
    * Ensure rekon sales data is loaded for a given period
    */

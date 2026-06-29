@@ -1625,6 +1625,11 @@ class PrepClosingService {
 
         const filteredIssues = ruleKeySet ? issues.filter(iss => ruleKeySet.has(iss.ruleKey)) : issues;
         issuesMapByStore.set(kdtk, filteredIssues);
+
+        // Get note for this store (same as in storeRow)
+        const unixKey = `${kdtk}${periode}`;
+        const storeNote = notesByKey.get(unixKey) || null;
+
         for (const iss of filteredIssues) {
           issuesBreakdown.push({
             CAB: cab,
@@ -1634,6 +1639,15 @@ class PrepClosingService {
             category: iss.category,
             severity: iss.severity || null,
             message: iss.message || "",
+            note: storeNote
+              ? {
+                  unixKey: storeNote.unixKey,
+                  noteText: storeNote.noteText,
+                  pic: storeNote.pic,
+                  fullName: storeNote.fullName || null,
+                  updated_at: storeNote.updated_at || null,
+                }
+              : null,
           });
         }
       }

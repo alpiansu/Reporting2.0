@@ -21,6 +21,22 @@
         @page="onPage" @sort="onSort"
         currentPageReportTemplate="Halaman {currentPage} dari {totalPages} · {first}–{last} dari {totalRecords} toko" scrollable
         :scrollHeight="'600px'" :rowClass="getRowClass" stripedRows>
+        <template #loading>
+          <div class="skeleton-loading">
+            <div v-for="i in 5" :key="i" class="skeleton-row">
+              <div v-for="j in 7" :key="j" class="skeleton-cell">
+                <Skeleton width="80%" :height="'1rem'" />
+              </div>
+            </div>
+          </div>
+        </template>
+        <template #empty>
+          <div class="empty-state">
+            <i class="pi pi-inbox empty-icon"></i>
+            <p class="empty-text" v-if="!loading">Belum ada data untuk periode ini. Jalankan screening terlebih dahulu.</p>
+            <p class="empty-text" v-else>Memuat data...</p>
+          </div>
+        </template>
         <Column header="No" frozen :style="{ width: '80px', textAlign: 'center' }">
           <template #body="slotProps">
             <span class="row-number">{{ (pagination.page - 1) * pagination.limit + (slotProps.index + 1) }}</span>
@@ -115,6 +131,7 @@ import Column from 'primevue/column';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import Tag from 'primevue/tag';
+import Skeleton from 'primevue/skeleton';
 import { formatNumber, formatDateTime, formatRelativeTime } from '../utils/formatters';
 
 const props = defineProps({
@@ -177,7 +194,7 @@ const getRowClass = (row) => {
 
 <style scoped>
 .table-wrapper {
-  background: #ffffff;
+  background: var(--surface-color);
   border-radius: 12px;
   padding: 1.5rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -200,7 +217,7 @@ const getRowClass = (row) => {
 .table-title {
   font-size: 1.25rem;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-color);
   margin: 0;
 }
 
@@ -262,7 +279,7 @@ const getRowClass = (row) => {
 
 .table-container {
   border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   overflow: hidden;
 }
 
@@ -272,21 +289,21 @@ const getRowClass = (row) => {
 }
 
 :deep(.p-datatable-thead > tr > th) {
-  background: #f9fafb;
-  color: #374151;
+  background: var(--background-color);
+  color: var(--text-color);
   font-weight: 600;
   padding: 1rem 0.75rem;
-  border-bottom: 2px solid #e5e7eb;
+  border-bottom: 2px solid var(--border-color);
   white-space: nowrap;
 }
 
 :deep(.p-datatable-tbody > tr > td) {
   padding: 0.875rem 0.75rem;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--border-color);
 }
 
 :deep(.p-datatable-tbody > tr:hover) {
-  background: #f0f9ff !important;
+  background: color-mix(in srgb, var(--primary-color) 8%, var(--surface-color)) !important;
   transition: background-color 0.2s ease;
 }
 
@@ -307,24 +324,24 @@ const getRowClass = (row) => {
 
 /* Cell Content */
 .row-number {
-  color: #6b7280;
+  color: var(--text-color-secondary);
   font-weight: 500;
 }
 
 .link-kdtk {
-  color: #3b82f6;
+  color: var(--primary-color);
   text-decoration: none;
   font-weight: 500;
   transition: color 0.2s ease;
 }
 
 .link-kdtk:hover {
-  color: #2563eb;
+  color: var(--primary-color-darken);
   text-decoration: underline;
 }
 
 .store-name {
-  color: #1f2937;
+  color: var(--text-color);
   font-weight: 500;
 }
 
@@ -342,27 +359,61 @@ const getRowClass = (row) => {
 }
 
 .last-screened {
-  color: #6b7280;
+  color: var(--text-color-secondary);
   font-size: 0.813rem;
 }
 
-
 .notes-cell:hover {
-  background: #f3f4f6;
+  background: color-mix(in srgb, var(--text-color) 6%, var(--surface-color));
   cursor: pointer;
+  border-radius: 4px;
 }
 
 .note-icon {
-  color: #9ca3af;
+  color: var(--text-color-secondary);
   font-size: 0.875rem;
 }
 
 .note-text {
-  color: #6b7280;
+  color: var(--text-color-secondary);
   font-size: 0.875rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  color: var(--text-color-secondary);
+}
+.empty-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+.empty-text {
+  font-size: 1rem;
+  text-align: center;
+  margin: 0;
+}
+
+.skeleton-loading {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.skeleton-row {
+  display: flex;
+  gap: 1rem;
+  padding: 0.5rem 0;
+}
+.skeleton-cell {
+  flex: 1;
 }
 
 .action-buttons {

@@ -305,7 +305,8 @@ const exportToExcel = async () => {
             ruleName: i.ruleName,
             category: i.category,
             severity: i.severity || '',
-            message: i.message || ''
+            message: i.message || '',
+            NOTE: i.note?.noteText || ''
         })));
         XLSX.utils.book_append_sheet(wb, issuesSheet, 'Issues Breakdown');
 

@@ -76,7 +76,7 @@ onMounted(() => {
 
 <style scoped>
 .filter-bar { display: grid; grid-template-columns: 1fr 1fr auto; gap: 1rem; align-items: end; }
-.field label { display: block; font-weight: 600; font-size: .85rem; color: #374151; margin-bottom: .25rem; }
+.field label { display: block; font-weight: 600; font-size: .85rem; color: var(--text-color); margin-bottom: .25rem; }
 .actions { display: flex; gap: .5rem; align-items: end; justify-content: flex-end; }
 .force-toggle { grid-column: 1 / -1; display: flex; align-items: center; margin-top: -0.25rem; }
 </style>

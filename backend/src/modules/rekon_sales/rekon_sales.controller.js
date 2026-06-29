@@ -16,15 +16,6 @@ export const screeningByCabang = async (req, res) => {
   try {
     const { cabang, periode, kdtk, force } = req.query;
 
-    if (!periode) {
-      return apiResponse.badRequest(res, "Periode is required");
-    }
-
-    // Validate periode format (YYYY-MM)
-    if (!/^\d{4}-\d{2}$/.test(periode)) {
-      return apiResponse.badRequest(res, "Format periode tidak valid. Gunakan format YYYY-MM (contoh: 2025-11)");
-    }
-
     const username = req.user?.username || "system";
     const fullName = req.user?.fullName || username;
     const isForce = force === "true";
@@ -231,6 +222,59 @@ export const getExportData = async (req, res) => {
     return apiResponse.success(res, result);
   } catch (error) {
     logger.error(`[rekon_sales.controller] Error getExportData: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+/**
+ * Get comprehensive rekon sales data for display (with notes, tolerance filter, sel_ppn_cd2)
+ * GET /api/rekon-sales/data/:cab/:month/:year
+ * GET /api/rekon-sales/data?cab=xxx&month=xx&year=xxxx
+ */
+export const getRekonSalesData = async (req, res) => {
+  try {
+    const cabParam = req.params.cab || req.query.cab || "All";
+    const month = req.params.month || req.query.month;
+    const year = req.params.year || req.query.year;
+
+    if (!month || !year) {
+      return apiResponse.badRequest(res, "Month and year are required");
+    }
+
+    const cab = !cabParam || cabParam === "All" || cabParam === "ALL" ? "All" : cabParam;
+
+    logger.info(`[rekon_sales.controller] Getting rekon sales data: cab=${cab}, month=${month}, year=${year}`);
+
+    const result = await rekonSalesService.getFullRekonSalesData({ cabang: cab, month, year });
+
+    return apiResponse.success(res, result);
+  } catch (error) {
+    logger.error(`[rekon_sales.controller] Error getRekonSalesData: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+/**
+ * Get detail mtran vs cd data for a specific store and date (per-item level)
+ * GET /api/rekon-sales/detil/:tgl/:kdtk
+ * GET /api/rekon-sales/detil?tgl=xxx&kdtk=xxx
+ */
+export const getDetailRekonSales = async (req, res) => {
+  try {
+    const kdtk = req.params.kdtk || req.query.kdtk;
+    const tanggal = req.params.tgl || req.query.tgl;
+
+    if (!kdtk || !tanggal) {
+      return apiResponse.badRequest(res, "kdtk and tanggal are required");
+    }
+
+    logger.info(`[rekon_sales.controller] Getting detail rekon sales: kdtk=${kdtk}, tanggal=${tanggal}`);
+
+    const result = await rekonSalesService.getDetailRekonSales({ kdtk, tanggal });
+
+    return apiResponse.success(res, result || []);
+  } catch (error) {
+    logger.error(`[rekon_sales.controller] Error getDetailRekonSales: ${error.message}`);
     return apiResponse.error(res, error.message);
   }
 };

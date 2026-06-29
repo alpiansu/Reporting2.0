@@ -14,6 +14,9 @@
           </div>
           <h4>Rincian per Tanggal</h4>
           <DataTable :value="dailyMetrics" dataKey="tanggal" size="small" stripedRows class="p-datatable-sm">
+            <template #empty>
+              <div class="empty-tab"><i class="pi pi-calendar mr-2"></i>Tidak ada rincian harian</div>
+            </template>
             <Column field="tanggal" header="Tanggal" style="min-width: 100px" />
             <Column field="net_mtran" header="NET MTRAN" class="text-right">
               <template #body="{ data }">{{ formatDecimal(data.net_mtran) }}</template>
@@ -50,6 +53,9 @@
           <div v-for="d in dailyDifferences" :key="d.tanggal" class="daily-block">
             <h4>{{ d.tanggal }}</h4>
             <DataTable :value="d.rows" :loading="diffLoading" dataKey="DOCNO" size="small" stripedRows>
+              <template #empty>
+                <div class="empty-tab"><i class="pi pi-minus-circle mr-2"></i>Tidak ada perbedaan transaksi</div>
+              </template>
               <Column field="DOCNO" header="DOCNO" />
               <Column field="SEQNO" header="SEQNO" />
               <Column field="NET_MTRAN" header="NET MTRAN" class="text-right">
@@ -70,6 +76,9 @@
           <div v-for="d in dailyIssues" :key="d.tanggal" class="daily-block">
             <h4>{{ d.tanggal }}</h4>
             <DataTable :value="d.issues" :loading="kodeLoading" size="small" stripedRows>
+              <template #empty>
+                <div class="empty-tab"><i class="pi pi-check-circle mr-2"></i>Tidak ada masalah kode pesanan</div>
+              </template>
               <Column field="SUBKEY" header="Subkey" />
               <Column field="KODEPESANANTOKO" header="Kode Toko" />
               <Column field="KODEPSANANGL" header="Kode GL" />
@@ -79,7 +88,7 @@
         </TabPanel>
       </TabView>
       <div class="dialog-actions">
-        <Button label="Catatan" icon="pi pi-pencil" class="p-button-text" @click="$emit('open-note', { KDTK: summary.KDTK, NAMA: summary.NAMA, CAB: summary.CAB || '-' , TANGGAL: dailyMetrics[0]?.tanggal || '' , note: null })" />
+        <Button label="Catatan" icon="pi pi-pencil" class="p-button-text" @click="emitOpenNote" />
         <Button label="Tutup" icon="pi pi-times" class="p-button-text" @click="localVisible=false" />
       </div>
     </div>
@@ -115,6 +124,12 @@ const amountClass = (n) => Number(n || 0) >= 0 ? 'amount-positive' : 'amount-neg
 
 const summary = computed(() => (props.detail?.data?.summary || props.detail?.summary || props.detail || {}));
 const dailyMetrics = computed(() => (props.detail?.data?.daily || props.detail?.daily || (props.detail?.data ? [props.detail.data] : props.detail ? [props.detail] : [])));
+const notesList = computed(() => (props.detail?.data?.notes || props.detail?.notes || []));
+const dailyNote = computed(() => {
+  const firstDate = dailyMetrics.value[0]?.tanggal;
+  if (!firstDate || !notesList.value.length) return null;
+  return notesList.value.find(n => n.tanggal === firstDate) || notesList.value[0] || null;
+});
 const dailyDifferences = computed(() => {
   const diffs = props.differences?.data || props.differences;
   return Array.isArray(diffs) ? [{ tanggal: summary.value?.TANGGAL || '', rows: diffs }] : (diffs?.daily || []);
@@ -123,13 +138,24 @@ const dailyIssues = computed(() => {
   const issues = props.kodePesananIssues?.data || props.kodePesananIssues;
   return Array.isArray(issues) ? [{ tanggal: summary.value?.TANGGAL || '', issues: issues }] : (issues?.daily || []);
 });
+
+const emitOpenNote = () => {
+  emit('open-note', {
+    KDTK: summary.value.KDTK,
+    NAMA: summary.value.NAMA || '-',
+    CAB: summary.value.CAB || props.detail?.CAB || '-',
+    TANGGAL: dailyMetrics.value[0]?.tanggal || '',
+    note: dailyNote.value
+  });
+};
 </script>
 
 <style scoped>
-.detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin-bottom: 1rem; }
+.detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin-bottom: 1rem; color: var(--text-color); }
 .dialog-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .75rem; }
-.amount-positive { color: #10b981; font-weight: 600; }
-.amount-negative { color: #ef4444; font-weight: 600; }
+.empty-tab { display: flex; align-items: center; justify-content: center; padding: 2rem; color: var(--text-color-secondary); font-size: 0.9rem; }
+.amount-positive { color: var(--success-color); font-weight: 600; }
+.amount-negative { color: var(--error-color); font-weight: 600; }
 :deep(.text-right) { text-align: right !important; }
 :deep(.p-datatable-thead > tr > th.text-right) { text-align: right !important; justify-content: flex-end; }
 </style>

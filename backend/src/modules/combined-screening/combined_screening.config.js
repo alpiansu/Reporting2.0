@@ -47,15 +47,15 @@ export default {
     //     strMonth: ctx.strMonth,
     //   }),
     // },
-    // {
-    //   name: "rekon_sales",
-    //   enabled: true,
-    //   requiresGlData: true, // flag: needs per-branch GL data
-    //   resolveParams: ctx => ({
-    //     strMonth: ctx.strMonth,
-    //     strYear: ctx.strYear,
-    //   }),
-    // },
+    {
+      name: "rekon_sales",
+      enabled: true,
+      requiresGlData: true,
+      resolveParams: ctx => ({
+        strMonth: ctx.strMonth,
+        strYear: ctx.strYear,
+      }),
+    },
   ],
 
   /**

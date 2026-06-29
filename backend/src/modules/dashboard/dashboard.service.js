@@ -21,10 +21,34 @@ class DashboardService {
     }
   }
 
+  async _readPenyesuaianData() {
+    try {
+      const dirPath = path.join(this.dataDir, "penyesuaian");
+      const files = await fs.readdir(dirPath);
+      const penyesuaianFiles = files.filter(f => f.startsWith("penyesuaian_") && f.endsWith(".json"));
+
+      let allRecords = [];
+      for (const file of penyesuaianFiles) {
+        try {
+          const data = await fs.readFile(path.join(dirPath, file), "utf8");
+          const parsed = JSON.parse(data);
+          if (Array.isArray(parsed)) allRecords = allRecords.concat(parsed);
+        } catch (e) {
+          logger.warn(`Error reading ${file}: ${e.message}`);
+        }
+      }
+      return allRecords;
+    } catch (error) {
+      if (error.code === "ENOENT") return [];
+      logger.error(`Error reading penyesuaian data: ${error.message}`);
+      return [];
+    }
+  }
+
   async getStats() {
     try {
       const stores = await this.readJsonFile("stores.json");
-      const penyesuaian = await this.readJsonFile("penyesuaian.json");
+      const penyesuaian = await this._readPenyesuaianData();
       const rekonSales = await this.readJsonFile("rekon_sales.json");
 
       const now = new Date();

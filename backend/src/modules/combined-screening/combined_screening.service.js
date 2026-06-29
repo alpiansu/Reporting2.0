@@ -288,27 +288,16 @@ class CombinedScreeningService {
         throw new Error("Proses dibatalkan oleh pengguna");
       }
 
-      // Save rekap_remote logs to DB
-      logger.info(`[combined_screening] [FINALIZATION 1/3] Saving rekap_remote logs to database...`);
-      try {
-        const saveResult = await RekapRemoteService.saveLogsToDatabase();
-        logger.info(
-          `[combined_screening] [FINALIZATION 1/3] rekap_remote saved: ${saveResult?.savedCount ?? 0} records`,
-        );
-      } catch (saveErr) {
-        logger.error(`[combined_screening] [FINALIZATION 1/3] saveLogsToDatabase error: ${saveErr.message}`);
-      }
-
       // Sync JSON files for each enabled module (once after all stores)
       const syncedModules = [];
       if (config.syncAfterAllStores) {
         logger.info(
-          `[combined_screening] [FINALIZATION 2/3] Syncing JSON files for ${enabledModules.length} modules...`,
+          `[combined_screening] [FINALIZATION 1/3] Syncing JSON files for ${enabledModules.length} modules...`,
         );
         for (const mod of enabledModules) {
           const service = this.moduleServiceMap[mod.name];
           if (service && typeof service.syncToJsonFile === "function") {
-            logger.info(`[combined_screening] [FINALIZATION 2/3]   → syncing ${mod.name}...`);
+            logger.info(`[combined_screening] [FINALIZATION 1/3]   → syncing ${mod.name}...`);
             const syncStart = Date.now();
             try {
               if (mod.name === "rekon_sales") {
@@ -330,17 +319,28 @@ class CombinedScreeningService {
 
               syncedModules.push(mod.name);
               logger.info(
-                `[combined_screening] [FINALIZATION 2/3]   ✓ ${mod.name} synced in ${Date.now() - syncStart}ms`,
+                `[combined_screening] [FINALIZATION 1/3]   ✓ ${mod.name} synced in ${Date.now() - syncStart}ms`,
               );
             } catch (e) {
               logger.warn(
-                `[combined_screening] [FINALIZATION 2/3]   ✗ ${mod.name} sync failed in ${Date.now() - syncStart}ms: ${e.message}`,
+                `[combined_screening] [FINALIZATION 1/3]   ✗ ${mod.name} sync failed in ${Date.now() - syncStart}ms: ${e.message}`,
               );
               // Success markers NOT written on failure — guard will re-process next time
             }
           }
         }
-        logger.info(`[combined_screening] [FINALIZATION 2/3] Sync complete: ${syncedModules.join(", ")}`);
+        logger.info(`[combined_screening] [FINALIZATION 1/3] Sync complete: ${syncedModules.join(", ")}`);
+      }
+
+      // Save ALL rekap_remote logs (errors + success markers) to DB after sync
+      logger.info(`[combined_screening] [FINALIZATION 2/3] Saving rekap_remote logs to database...`);
+      try {
+        const saveResult = await RekapRemoteService.saveLogsToDatabase();
+        logger.info(
+          `[combined_screening] [FINALIZATION 2/3] rekap_remote saved: ${saveResult?.savedCount ?? 0} records`,
+        );
+      } catch (saveErr) {
+        logger.error(`[combined_screening] [FINALIZATION 2/3] saveLogsToDatabase error: ${saveErr.message}`);
       }
 
       logger.info(`[combined_screening] [FINALIZATION 3/3] Marking task as completed...`);
@@ -459,16 +459,23 @@ class CombinedScreeningService {
         logger.info(`[combined_screening] [MODULE] ${storeCode}/${moduleConfig.name}: starting...`);
         const moduleStart = Date.now();
         try {
-          await this._executeModuleScreening(moduleConfig, store, globalContext, storeConnection, {
+          const modResult = await this._executeModuleScreening(moduleConfig, store, globalContext, storeConnection, {
             dates,
             wrcContext,
             glDataByBranch,
           });
 
           const moduleElapsed = Date.now() - moduleStart;
-          logger.info(`[combined_screening] [MODULE] ${storeCode}/${moduleConfig.name}: done in ${moduleElapsed}ms`);
-          // Success marker deferred to finalization — written only after module sync succeeds
-          moduleResults[moduleConfig.name] = "success";
+
+          if (modResult && modResult.success) {
+            logger.info(`[combined_screening] [MODULE] ${storeCode}/${moduleConfig.name}: done in ${moduleElapsed}ms`);
+            // Success marker deferred to finalization — written only after module sync succeeds
+            moduleResults[moduleConfig.name] = "success";
+          } else {
+            logger.warn(`[combined_screening] [MODULE] ${storeCode}/${moduleConfig.name}: completed with failure in ${moduleElapsed}ms`);
+            await this.persistModuleResult(moduleConfig.name, cab, storeCode, "error", "module returned success: false");
+            moduleResults[moduleConfig.name] = "error";
+          }
         } catch (moduleError) {
           const moduleElapsed = Date.now() - moduleStart;
           logger.error(

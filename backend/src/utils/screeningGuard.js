@@ -24,7 +24,7 @@ class ScreeningGuard {
    */
   async isSuccessToday(moduleName, kdtk) {
     try {
-      const data = await rekapRemoteStagingService._getData(moduleName);
+      const data = await rekapRemoteStagingService.getModuleData(moduleName);
       const entry = data.find(item => item.kdtk === kdtk);
 
       logger.info(`[screeningGuard] Cek status untuk ${moduleName}/${kdtk}: ${entry ? "ada data" : "tidak ada data"}`);

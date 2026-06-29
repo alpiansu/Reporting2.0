@@ -181,6 +181,13 @@ class RekapRemoteStagingService {
   /**
    * Get data for a specific module or combined
    */
+  async getModuleData(moduleName = null) {
+    return this._getData(moduleName);
+  }
+
+  /**
+   * Get data for a specific module or combined
+   */
   async _getData(moduleName = null) {
     await this.ensureDataLoaded(moduleName);
     if (moduleName) {

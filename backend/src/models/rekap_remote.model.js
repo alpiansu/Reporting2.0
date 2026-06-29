@@ -41,6 +41,11 @@ const getRekapRemoteModel = async () => {
             allowNull: true,
             comment: "Status koneksi (success, timeout, error, dll)",
           },
+          message: {
+            type: DataTypes.TEXT,
+            allowNull: true,
+            comment: "Pesan detail / error message",
+          },
           updtime: {
             type: "TIMESTAMP",
             allowNull: false,

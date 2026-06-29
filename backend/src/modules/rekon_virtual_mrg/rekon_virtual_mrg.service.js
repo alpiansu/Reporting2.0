@@ -357,7 +357,7 @@ class RekonVirtualService {
   }
 
   async syncAllData() {
-    this.syncAllPeriodsToJson();
+    await this.syncAllPeriodsToJson();
   }
 
   /**
@@ -788,7 +788,7 @@ class RekonVirtualService {
           }
 
           await SaldoVirtual.bulkCreate(result, {
-            updateOnDuplicate: ["QTY_MSTRAN", "QTY_MTRAN", "SEL", "LASTCATCH"],
+            updateOnDuplicate: ["QTY_MSTRAN", "QTY_MTRAN", "SEL", "LASTCATCH", "SINGKATAN", "ACOST", "PRICE"],
           });
 
           results.newRecords = result;
@@ -857,7 +857,7 @@ class RekonVirtualService {
       );
 
       // simpan ulang file JSON
-      await this.saveToFile();
+      await this.saveToFile(periode);
 
       logger.info(
         `[rekon_virtual_mrg.service - deleteStorePeriod] Deleted ${oldRecords.length} records for SHOP=${shop} periode=${ym}`,
@@ -1199,7 +1199,7 @@ class RekonVirtualService {
       // Bulk create records to database
       if (results.length > 0) {
         await SaldoVirtual.bulkCreate(results, {
-          updateOnDuplicate: ["QTY_MSTRAN", "QTY_MTRAN", "SEL", "LASTCATCH"],
+          updateOnDuplicate: ["QTY_MSTRAN", "QTY_MTRAN", "SEL", "LASTCATCH", "SINGKATAN", "ACOST", "PRICE"],
         });
 
         // Sync to JSON file after write operation

@@ -63,6 +63,9 @@ class CombinedScreeningService {
     const strMonth = moment(periode, "YYMM").format("MM");
     const globalContext = { strPeriode, strYear, strMonth };
 
+    // Track successful stores per module for deferred success marker writing
+    const moduleSuccessTracker = new Map(); // moduleName → Array<{cab, storeCode}>
+
     logger.info(
       `[combined_screening] Starting combined screening: cabang=${cabang}, periode=${periode}, force=${force}, by=${username}`,
     );
@@ -240,7 +243,7 @@ class CombinedScreeningService {
                 description: `${msgOld} → Screening to Store ${storeCode} ...`,
                 status: "Screening Stores",
               });
-              await withTimeout(
+              const storeModuleResults = await withTimeout(
                 this._processStoreAllModules(store, globalContext, force, enabledModules, {
                   dates,
                   wrcPools,
@@ -251,6 +254,18 @@ class CombinedScreeningService {
                 storeTimeoutMs,
                 `store ${storeCode} exceeded ${storeTimeoutMs / 1000}s timeout`,
               );
+
+              // Track successful stores per module (for deferred success marker in finalization)
+              if (storeModuleResults) {
+                for (const [modName, modResult] of Object.entries(storeModuleResults)) {
+                  if (modResult === "success") {
+                    if (!moduleSuccessTracker.has(modName)) {
+                      moduleSuccessTracker.set(modName, []);
+                    }
+                    moduleSuccessTracker.get(modName).push({ cab, storeCode: store.storeCode });
+                  }
+                }
+              }
 
               const elapsed = Date.now() - storeStart;
               logger.info(`[combined_screening] [STORE] ${storeCode} done in ${elapsed}ms`);
@@ -305,6 +320,14 @@ class CombinedScreeningService {
               } else {
                 await service.syncToJsonFile(strPeriode);
               }
+
+              // Write success markers AFTER module sync succeeds
+              if (moduleSuccessTracker.has(mod.name)) {
+                for (const { cab, storeCode } of moduleSuccessTracker.get(mod.name)) {
+                  await this.persistModuleResult(mod.name, cab, storeCode, "success");
+                }
+              }
+
               syncedModules.push(mod.name);
               logger.info(
                 `[combined_screening] [FINALIZATION 2/3]   ✓ ${mod.name} synced in ${Date.now() - syncStart}ms`,
@@ -313,6 +336,7 @@ class CombinedScreeningService {
               logger.warn(
                 `[combined_screening] [FINALIZATION 2/3]   ✗ ${mod.name} sync failed in ${Date.now() - syncStart}ms: ${e.message}`,
               );
+              // Success markers NOT written on failure — guard will re-process next time
             }
           }
         }
@@ -443,7 +467,7 @@ class CombinedScreeningService {
 
           const moduleElapsed = Date.now() - moduleStart;
           logger.info(`[combined_screening] [MODULE] ${storeCode}/${moduleConfig.name}: done in ${moduleElapsed}ms`);
-          await this.persistModuleResult(moduleConfig.name, cab, storeCode, "success");
+          // Success marker deferred to finalization — written only after module sync succeeds
           moduleResults[moduleConfig.name] = "success";
         } catch (moduleError) {
           const moduleElapsed = Date.now() - moduleStart;

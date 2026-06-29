@@ -396,6 +396,7 @@ class PrepClosingService {
     } catch (err) {
       if (err.code === "ENOENT") {
         logger.info(`[prep_closing.service] No temp files found for periode ${periode}`);
+        await this.syncToJsonFile(periode);
         return { totalRead: 0, totalInserted: 0, synced: false };
       }
       throw err;
@@ -411,6 +412,7 @@ class PrepClosingService {
       logger.info(
         `[prep_closing.service] No temp files to process for periode ${periode}${cabang ? `, cabang ${cabang}` : ""}`,
       );
+      await this.syncToJsonFile(periode);
       return { totalRead: 0, totalInserted: 0, synced: false };
     }
 
@@ -428,10 +430,14 @@ class PrepClosingService {
     }
 
     if (records.length === 0) {
+      await this.syncToJsonFile(periode);
       return { totalRead: 0, totalInserted: 0, synced: false };
     }
 
     const totalInserted = await this.bulkUpsertRecords(records);
+
+    // Sync JSON FIRST — if this fails, temp files are preserved for retry
+    await this.syncToJsonFile(periode);
 
     let deletedCount = 0;
     for (const file of filteredFiles) {
@@ -442,8 +448,6 @@ class PrepClosingService {
         logger.warn(`[prep_closing.service] Failed to delete temp file ${file}: ${err.message}`);
       }
     }
-
-    await this.syncToJsonFile(periode);
 
     logger.info(
       `[prep_closing.service] processTempToDb completed: ${records.length} read, ${totalInserted} inserted, ${deletedCount} temp files deleted`,

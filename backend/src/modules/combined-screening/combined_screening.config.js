@@ -62,7 +62,7 @@ export default {
    * Parallel processing settings
    */
   parallelProcessing: {
-    concurrencyLimit: 5, // max stores processed concurrently
+    concurrencyLimit: 8, // max stores processed concurrently
     storeTimeoutMs: 180000, // 3 minutes per store (longer because multi-module)
   },
 

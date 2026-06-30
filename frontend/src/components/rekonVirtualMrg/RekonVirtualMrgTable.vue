@@ -132,7 +132,7 @@
             @keydown.enter.prevent="saveNote(item)"></textarea>
           <div class="note-actions">
             <Button severity="secondary" raised size="small" label="Cancel" @click="cancelEditing(item)" />
-            <Button severity="success" raised size="small" label="Save" @click="saveNote(item)" />
+            <Button severity="success" raised size="small" label="Save" :loading="isSavingNote(item)" :disabled="isSavingNote(item)" @click="saveNote(item)" />
           </div>
         </div>
       </td>
@@ -206,6 +206,7 @@ const emit = defineEmits(['refresh', 'page-change', 'items-per-page-change', 'so
 const toast = useToastService();
 const autoUpdatingItems = reactive(new Set());
 const highlightedItems = reactive(new Set());
+const savingNotes = ref(new Set());
 const showDialogConfirm = ref(false);
 const confirmDialogData = ref({
   title: 'Confirmation Dialog',
@@ -501,7 +502,13 @@ const startEditingNote = (item) => {
   };
 };
 
+const isSavingNote = (item) => {
+  return savingNotes.value.has(`${item.CABANG}_${item.SHOP}_${item.TANGGAL}_${item.PRDCD}`);
+};
+
 const saveNote = async (item) => {
+  const itemKey = `${item.CABANG}_${item.SHOP}_${item.TANGGAL}_${item.PRDCD}`;
+  savingNotes.value.add(itemKey);
   try {
     // Update note through the service
     const response = await rekonVirtualMrgService.updateNote(
@@ -523,6 +530,8 @@ const saveNote = async (item) => {
   } catch (error) {
     console.error('Error saving note:', error);
     toast.showError('Error', `Failed to save note: ${error}`);
+  } finally {
+    savingNotes.value.delete(itemKey);
   }
 };
 

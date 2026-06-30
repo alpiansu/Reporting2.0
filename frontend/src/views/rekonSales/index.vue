@@ -41,7 +41,7 @@
       <NoteDialog v-model:visible="noteVisible" :store="noteStore"
         :defaultText="noteStore?.note?.noteText || noteStore?.note || ''"
         :lastUpdate="noteStore?.note?.updated_at ? formatDateTime(noteStore.note.updated_at) : ''"
-        @save="saveNote" @delete="deleteNote" />
+        :saving="savingNote" @save="saveNote" @delete="deleteNote" />
     </div>
   </div>
 </template>
@@ -107,6 +107,7 @@ const kodePesananIssues = ref([]);
 const kodeLoading = ref(false);
 const noteVisible = ref(false);
 const noteStore = ref(null);
+const savingNote = ref(false);
 const loadingStores = ref(new Set());
 const highlightedItems = ref(new Set());
 
@@ -253,6 +254,7 @@ const openNote = (rowOrDetail) => {
 };
 
 const saveNote = async ({ text }) => {
+  savingNote.value = true;
   try {
     const tanggal = noteStore.value.TANGGAL;
     await updateNote({ cabang: filters.cabang, kdtk: noteStore.value.KDTK, tanggal, noteText: text });
@@ -263,10 +265,13 @@ const saveNote = async ({ text }) => {
     await refreshAll();
   } catch (err) {
     toast.showError('Error', err.message || 'Gagal menyimpan catatan');
+  } finally {
+    savingNote.value = false;
   }
 };
 
 const deleteNote = async () => {
+  savingNote.value = true;
   try {
     const tanggal = noteStore.value.TANGGAL;
     await updateNote({ cabang: filters.cabang, kdtk: noteStore.value.KDTK, tanggal, noteText: '' });
@@ -277,6 +282,8 @@ const deleteNote = async () => {
     await refreshAll();
   } catch (err) {
     toast.showError('Error', err.message || 'Gagal menghapus catatan');
+  } finally {
+    savingNote.value = false;
   }
 };
 

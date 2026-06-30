@@ -12,8 +12,8 @@
     </div>
     <template #footer>
       <div class="footer">
-        <Button icon="pi pi-trash" label="Hapus" severity="danger" outlined @click="onDelete" />
-        <Button icon="pi pi-save" label="Simpan" class="p-button-primary" @click="onSave" />
+        <Button icon="pi pi-trash" label="Hapus" severity="danger" outlined :disabled="saving" @click="onDelete" />
+        <Button icon="pi pi-save" label="Simpan" class="p-button-primary" :disabled="saving" :loading="saving" @click="onSave" />
         <Button icon="pi pi-times" label="Batal" class="p-button-text" @click="onCancel" />
       </div>
     </template>
@@ -30,7 +30,8 @@ const props = defineProps({
   visible: { type: Boolean, default: false },
   store: { type: Object, default: () => ({}) },
   defaultText: { type: String, default: '' },
-  lastUpdate: { type: String, default: '' }
+  lastUpdate: { type: String, default: '' },
+  saving: { type: Boolean, default: false }
 });
 
 const emit = defineEmits(['update:visible', 'save', 'delete']);

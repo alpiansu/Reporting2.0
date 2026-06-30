@@ -110,7 +110,7 @@
             @keydown.enter.prevent="saveNote(item)"></textarea>
           <div class="note-actions">
             <Button severity="secondary" raised size="small" label="Cancel" @click="cancelEditing(item)" />
-            <Button severity="success" raised size="small" label="Save" @click="saveNote(item)" />
+            <Button severity="success" raised size="small" label="Save" :loading="isSavingNote(item)" :disabled="isSavingNote(item)" @click="saveNote(item)" />
           </div>
         </div>
       </td>
@@ -183,13 +183,7 @@ const emit = defineEmits(['refresh', 'page-change', 'items-per-page-change', 'so
 const toast = useToastService();
 const autoUpdatingItems = ref(new Set());
 const highlightedItems = ref(new Set());
-const showDialogConfirm = ref(false);
-const confirmDialogData = ref({
-  title: 'Confirmation Dialog',
-  message: 'Are you sure?',
-  confirmText: 'Yes',
-});
-// Confirmation dialog state
+const savingNotes = ref(new Set());
 const selectedItem = ref(null);
 
 // Search functionality
@@ -204,62 +198,7 @@ const filteredData = computed(() => {
   return [];
 });
 
-// trigger when button auto note clicked
-const hitButtonAutoNote = async (item) => {
-  console.log('Auto Note clicked for item:', item.note);
-  // kalau note kosong, langsung update
-  if (!item.note?.length == 0 || item.note == null || (item.note.noteText.trim() === '' && (item.note.categoryId == null || item.note.categoryId === ''))) {
-    autoUpdateNote(item);
-    return;
-  }
 
-  // kalau sudah ada note, tampilkan dialog konfirmasi
-  selectedItem.value = item;
-  confirmDialogData.value.message = 'Catatan sudah ada sebelumnya. Apakah Anda ingin menimpa catatan lama dengan auto note baru?';
-  confirmDialogData.value.title = 'Konfirmasi Auto Note';
-  confirmDialogData.value.confirmText = 'Ya!';
-  showDialogConfirm.value = true;
-};
-
-//function handling confirmation dialog
-const handlingConfirmation = () => {
-  if (selectedItem.value) {
-    autoUpdateNote(selectedItem.value)
-  }
-  showDialogConfirm.value = false
-  selectedItem.value = null
-}
-
-//method for auto note
-const autoUpdateNote = async (item) => {
-  const itemKey = `${item.CABANG}_${item.KDTK}`;
-  try {
-    // Add item to loading set
-    autoUpdatingItems.value.add(itemKey);
-
-    toast.showInfo('Proses', 'Sedang memperbarui notes secara otomatis...');
-    const response = await penyesuaianService.autoUpdateNote(
-      item.CABANG,
-      item.KDTK,
-      item.PERIODE
-    );
-    
-    if (response?.data) {
-      item.note = response.data;
-    }
-
-    highlightedItems.value.add(itemKey);
-    // Remove highlight after animation (3 detik agar lebih terlihat)
-    setTimeout(() => {
-      highlightedItems.value.delete(itemKey);
-    }, 3000);
-  } catch (error) {
-    console.error('Error auto updating notes:', error);
-    toast.showError('Error', `Gagal memperbarui notes kdtk ${item.KDTK} secara otomatis`);
-  } finally {
-    autoUpdatingItems.value.delete(itemKey);
-  }
-};
 
 // Helper function untuk cek apakah item sedang loading
 const isItemAutoUpdating = (item) => {
@@ -422,7 +361,13 @@ const startEditingNote = (item) => {
   };
 };
 
+const isSavingNote = (item) => {
+  return savingNotes.value.has(`${item.CABANG}_${item.KDTK}`);
+};
+
 const saveNote = async (item) => {
+  const itemKey = `${item.CABANG}_${item.KDTK}`;
+  savingNotes.value.add(itemKey);
   try {
     // Update note through the service
     const response = await penyesuaianService.updateNote({
@@ -440,6 +385,8 @@ const saveNote = async (item) => {
   } catch (error) {
     console.error('Error saving note:', error);
     toast.showError('Error', `Failed to save note: ${error}`);
+  } finally {
+    savingNotes.value.delete(itemKey);
   }
 };
 

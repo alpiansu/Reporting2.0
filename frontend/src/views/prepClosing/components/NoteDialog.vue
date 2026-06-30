@@ -71,11 +71,11 @@
         <template #footer>
             <div class="footer-actions">
                 <Button v-if="store?.note" label="Hapus" icon="pi pi-trash"
-                    class="p-button-danger p-button-outlined p-button-sm" @click="handleClear" />
+                    class="p-button-danger p-button-outlined p-button-sm" :disabled="saving" @click="handleClear" />
                 <div class="footer-right">
                     <Button label="Batal" icon="pi pi-times" class="p-button-text p-button-secondary" @click="handleCancel" />
-                    <Button label="Simpan" icon="pi pi-save" class="p-button-primary" :disabled="!canSave"
-                        @click="handleSave" />
+                    <Button label="Simpan" icon="pi pi-save" class="p-button-primary"
+                        :disabled="!canSave || saving" :loading="saving" @click="handleSave" />
                 </div>
             </div>
         </template>
@@ -97,7 +97,8 @@ import { formatDateTime, formatPeriode } from '../utils/formatters';
 const props = defineProps({
     visible: Boolean,
     store: Object,
-    periode: String
+    periode: String,
+    saving: { type: Boolean, default: false }
 });
 
 const emit = defineEmits(['update:visible', 'save']);

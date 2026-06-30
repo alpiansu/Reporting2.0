@@ -83,7 +83,7 @@
 
     <!-- Note Dialog -->
     <NoteDialog v-model:visible="noteDialogVisible" :store="noteStore" :periode="filters.periode"
-      @save="handleSaveNote" />
+      :saving="savingNote" @save="handleSaveNote" />
 
     <!-- Configuration Rules Dialog -->
     <RuleConfigDialog v-model:visible="showRuleConfig" @rules-updated="handleRefresh" />
@@ -195,6 +195,7 @@ const cabangOptions = ref([]);
 const detailModalVisible = ref(false);
 const noteDialogVisible = ref(false);
 const noteStore = ref(null);
+const savingNote = ref(false);
 const isMassScreening = ref(false);
 const showRuleConfig = ref(false);
 const showWrcConfig = ref(false);
@@ -509,6 +510,7 @@ const handleEditNote = (store) => {
 const handleSaveNote = async (noteText) => {
   if (!noteStore.value) return;
 
+  savingNote.value = true;
   try {
     await updateNote(
       noteStore.value.CAB,
@@ -525,6 +527,8 @@ const handleSaveNote = async (noteText) => {
     }
   } catch (err) {
     toast.showError('Error', err.message || 'Gagal menyimpan note');
+  } finally {
+    savingNote.value = false;
   }
 };
 

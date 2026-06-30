@@ -132,11 +132,14 @@
         </div>
 
         <BaseServerDataTableModal :title="'Detail Data'" :icon="'pi pi-table'" :fetcher="fetchDetail"
-          :query="{ kdtk: kdtk, periode: periode }" :columns="columns" :autoColumns="true" :initialItemsPerPage="10"
+          :query="{ kdtk: kdtk, periode: periode }" :columns="columns" :autoColumns="false" :initialItemsPerPage="10"
           :minTableWidth="'1200px'" :maxHeight="'500px'" :searchable="true" :sortable="true"
-          class="detail-table-wrapper">
+          class="detail-table-wrapper" @loaded="onTableLoaded">
           <template #cell-PRDCD="{ row, value }">
             <a href="#" class="prdcd-link" @click.prevent="openInspector(value, row.BEGBAL)">{{ value }}</a>
+          </template>
+          <template #cell-SESUAI="{ row }">
+            <span class="value-sesuai">{{ row.SESUAI }}</span>
           </template>
         </BaseServerDataTableModal>
 
@@ -196,7 +199,27 @@ const props = defineProps({
 
 const emit = defineEmits(['close'])
 
-const columns = ref([]);
+const columnDefs = [
+  // { field: 'RECID', label: 'Rec ID', align: 'center' },
+  { field: 'PRDCD', label: 'PRDCD', align: 'center' },
+  { field: 'SINGKATAN', label: 'SINGKATAN' },
+  { field: 'PTAG', label: 'PTag', align: 'center' },
+  { field: 'SESUAI', label: 'Nilai Sesuai', align: 'right', headerClass: 'col-sesuai', cellClass: 'cell-sesuai' },
+  { field: 'BEGBAL', label: 'Saldo Awal', align: 'right' },
+  { field: 'TRFIN', label: 'TRF In', align: 'right' },
+  { field: 'TRFOUT', label: 'TRF Out', align: 'right' },
+  { field: 'RP_SALES', label: 'RP Sales', align: 'right' },
+  { field: 'RP_RETUR_SALES', label: 'RP Retur Sales', align: 'right' },
+  { field: 'ADJ', label: 'Adj', align: 'right' },
+  { field: 'BA', label: 'BA', align: 'right' },
+  { field: 'BS', label: 'BS', align: 'right' },
+  { field: 'ACOST', label: 'ACost', align: 'right' },
+  { field: 'LCOST', label: 'LCost', align: 'right' },
+  { field: 'STOCK', label: 'Stock', align: 'right' },
+  { field: 'RP_STOCK', label: 'RP Stock', align: 'right' },
+  // { field: 'STATUS_UPDTIME', label: 'Status Update', align: 'center', headerClass: 'col-status' },
+];
+const columns = ref(columnDefs);
 const showInspector = ref(false);
 const selectedPrdcd = ref('');
 const selectedBegbal = ref('');
@@ -259,6 +282,13 @@ function openInspector(prdcd, begbal) {
   selectedPrdcd.value = prdcd;
   selectedBegbal.value = begbal;
   showInspector.value = true;
+}
+
+const tableDataFields = ref([]);
+function onTableLoaded({ data }) {
+  if (data && data.length > 0) {
+    tableDataFields.value = Object.keys(data[0]);
+  }
 }
 
 const insightFetchedForKdtk = ref('');
@@ -745,5 +775,24 @@ async function fetchDetail(params) {
     padding: 0.5rem 1rem;
     font-size: 0.8125rem;
   }
+}
+
+.penyesuaian-detail-modal :deep(.col-sesuai) {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%) !important;
+  border-bottom: 2px solid #f59e0b !important;
+}
+
+.penyesuaian-detail-modal :deep(.col-sesuai .th-content span) {
+  color: #92400e;
+}
+
+.penyesuaian-detail-modal :deep(.cell-sesuai) {
+  font-weight: 700 !important;
+  color: #1e293b !important;
+}
+
+.value-sesuai {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-weight: 600;
 }
 </style>

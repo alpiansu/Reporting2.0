@@ -202,7 +202,9 @@ class PenyesuaianService {
         // Sync to JSON file
         await this.syncToJsonFile(periode);
         if (result.hasIssue === false) {
-          return [];
+          const err = new Error("Nilai penyesuaian toko ini sudah di bawah ambang batas Rp 500.000, data detail tidak dapat ditampilkan.");
+          err.code = "STORE_BELOW_THRESHOLD";
+          throw err;
         }
       }
 
@@ -1200,13 +1202,25 @@ class PenyesuaianService {
 
       let cacheEntry = this.cacheDetailData.get(key);
 
+      let warning = null;
+
       // 🔄 Cek apakah cache masih valid
       if (!cacheEntry || !this.isCacheValid(cacheEntry)) {
-        const freshData = await this.loadRecordsDetailFromDb({
-          periode,
-          cabang,
-          kdtk,
-        });
+        let freshData;
+        try {
+          freshData = await this.loadRecordsDetailFromDb({
+            periode,
+            cabang,
+            kdtk,
+          });
+        } catch (loadError) {
+          if (loadError.code === "STORE_BELOW_THRESHOLD") {
+            freshData = [];
+            warning = loadError.message;
+          } else {
+            throw loadError;
+          }
+        }
         cacheEntry = {
           data: freshData,
           lastFetchTime: now,
@@ -1296,7 +1310,7 @@ class PenyesuaianService {
       });
 
       // 🚀 Return hasil akhir
-      return {
+      const result = {
         data: formattedData,
         total: totalRecords,
         page: Number(page),
@@ -1304,6 +1318,8 @@ class PenyesuaianService {
         totalPages: Math.ceil(totalRecords / limit),
         fromCache: true,
       };
+      if (warning) result.warning = warning;
+      return result;
     } catch (error) {
       logger.error(`[penyesuaian.service] Error in getAllRecords: ${error.message}`);
       throw error;
@@ -1408,6 +1424,65 @@ class PenyesuaianService {
       logger.error(`[penyesuaian.service] Error enriching data with notes: ${err.message}`);
       return data;
     }
+  }
+  /**
+   * Get store-level insights from detail records.
+   * Identifies top items contributing to the store's total SESUAI,
+   * filtered by sign direction (plus/minus) matching the store total.
+   */
+  async getStoreInsights(kdtk, periode, cabang = null) {
+    const records = await this.loadRecordsDetailFromDb({ periode, kdtk, cabang });
+
+    if (!records || records.length === 0) {
+      return {
+        totalSesuai: 0,
+        totalItems: 0,
+        signDirection: "neutral",
+        contributingItems: 0,
+        filteredTotal: 0,
+        topItems: [],
+        paretoInfo: { itemsFor80Percent: 0, totalItems: 0 },
+      };
+    }
+
+    const totalSesuai = records.reduce((sum, r) => sum + (Number(r.SESUAI) || 0), 0);
+
+    const signDirection = totalSesuai >= 0 ? "positive" : "negative";
+    const signFiltered =
+      totalSesuai >= 0
+        ? records.filter((r) => Number(r.SESUAI) > 0)
+        : records.filter((r) => Number(r.SESUAI) < 0);
+
+    const sorted = [...signFiltered].sort((a, b) => Math.abs(b.SESUAI) - Math.abs(a.SESUAI));
+
+    const filteredTotal = sorted.reduce((sum, r) => sum + Math.abs(Number(r.SESUAI)), 0);
+
+    const topItems = sorted.slice(0, 5).map((r) => ({
+      prdcd: r.PRDCD,
+      name: r.SINGKATAN,
+      sesui: Number(r.SESUAI),
+      absSesuai: Math.abs(Number(r.SESUAI)),
+      contributionPercent: filteredTotal > 0 ? Math.round((Math.abs(Number(r.SESUAI)) / filteredTotal) * 100) : 0,
+    }));
+
+    let cumulative = 0;
+    const paretoCount = sorted.filter((r) => {
+      cumulative += Math.abs(Number(r.SESUAI));
+      return cumulative / filteredTotal <= 0.8;
+    }).length;
+
+    return {
+      totalSesuai: Math.round(totalSesuai),
+      totalItems: records.length,
+      signDirection,
+      contributingItems: signFiltered.length,
+      filteredTotal: Math.round(filteredTotal),
+      topItems,
+      paretoInfo: {
+        itemsFor80Percent: paretoCount,
+        totalItems: signFiltered.length,
+      },
+    };
   }
 }
 

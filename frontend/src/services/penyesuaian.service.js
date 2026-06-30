@@ -175,6 +175,14 @@ class PenyesuaianService {
   }
 
   /**
+   * Get store-level insight: top items contributing to store's total SESUAI
+   */
+  async getStoreInsight(kdtk, periode) {
+    const response = await api.get(`/${this.fixedPattern}/insight/${kdtk}/${periode}`);
+    return response.data;
+  }
+
+  /**
    * Get store item details (prodmast, mstran, mtran, protect) from store DB
    */
   async getStoreItem(kdtk, prdcd, periode = "") {

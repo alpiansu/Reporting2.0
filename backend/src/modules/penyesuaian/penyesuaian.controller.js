@@ -310,6 +310,30 @@ export const updateNote = async (req, res) => {
   }
 };
 
+/**
+ * Get store-level insight for a specific store and period
+ * Returns top items contributing to the store's total SESUAI
+ * GET /api/penyesuaian/insight/:kdtk/:periode
+ */
+export const getStoreInsight = async (req, res) => {
+  try {
+    const { kdtk, periode } = req.params;
+
+    if (!kdtk || !periode) {
+      return apiResponse.badRequest(res, "kdtk and periode are required");
+    }
+
+    logger.info(`[penyesuaian.controller] Getting insight for store: ${kdtk}, periode: ${periode}`);
+
+    const result = await penyesuaianService.getStoreInsights(kdtk, periode);
+
+    return apiResponse.success(res, result);
+  } catch (error) {
+    logger.error(`[penyesuaian.controller] Error getting store insight: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
 export const getStoreItem = async (req, res) => {
   try {
     const { kdtk, prdcd } = req.params;

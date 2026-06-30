@@ -81,6 +81,8 @@ class BuatRmbService {
             status: "Screening to Stores",
           });
 
+          progressService.addProcessingStore(taskId, store.storeCode);
+
           try {
             logger.info(`Processing store: ${store.storeCode}`);
             const storeRecords = records.filter(record => record.KDTK === store.storeCode);
@@ -114,6 +116,8 @@ class BuatRmbService {
               error: error.message,
               historyRecords: failedHistoryRecords,
             };
+          } finally {
+            progressService.removeProcessingStore(taskId, store.storeCode);
           }
         }),
       );
@@ -224,6 +228,8 @@ class BuatRmbService {
       });
 
       throw error;
+    } finally {
+      progressService.clearProcessingStores(taskId);
     }
   }
 

@@ -115,6 +115,8 @@ class AdjustService {
             status: "Screening to Stores",
           });
 
+          progressService.addProcessingStore(taskId, store.storeCode);
+
           try {
             logger.info(`Processing store: ${store.storeCode}`);
             // Filter records khusus untuk toko ini
@@ -151,6 +153,8 @@ class AdjustService {
               error: error.message,
               historyRecords: failedHistoryRecords,
             };
+          } finally {
+            progressService.removeProcessingStore(taskId, store.storeCode);
           }
         }),
       );
@@ -273,6 +277,8 @@ class AdjustService {
       });
 
       throw error;
+    } finally {
+      progressService.clearProcessingStores(taskId);
     }
   }
   async parseCsvBuffer(buffer) {

@@ -69,6 +69,25 @@
           <i class="pi pi-user"></i>
           <span>{{ mainTask.startedBy }}</span>
         </div>
+
+        <!-- Processing stores (real-time) -->
+        <div class="processing-stores" v-if="currentProcessingStores.length > 0">
+          <div class="stores-header">
+            <i class="pi pi-database"></i>
+            <span>Memproses {{ currentProcessingStores.length }} store</span>
+          </div>
+          <div class="stores-list">
+            <span
+              class="store-chip"
+              v-for="(store, idx) in visibleStores"
+              :key="idx"
+              :title="store"
+            >{{ store }}</span>
+            <span class="store-more" v-if="currentProcessingStores.length > maxVisibleStores">
+              +{{ currentProcessingStores.length - maxVisibleStores }} more
+            </span>
+          </div>
+        </div>
       </div>
 
       <!-- Minimal progress indicator -->
@@ -117,11 +136,25 @@ const isMinimal = ref(true);
 const isCancelling = ref(false);
 const showConfirmDialog = ref(false);
 
+// Processing stores display
+const maxVisibleStores = 8;
+
 // ── Computed ──────────────────────────────────────────────────────────────────
 
 const mainTask = computed(() => progressStore.mainTask);
 const isVisible = computed(() => progressStore.hasActiveTasks);
 const hasError = computed(() => mainTask.value?.status?.toLowerCase() === 'failed');
+
+// Stores currently being processed for the main task
+const currentProcessingStores = computed(() => {
+  const taskId = mainTask.value?.taskId;
+  if (!taskId) return [];
+  return progressStore.processingStores[taskId] || [];
+});
+
+const visibleStores = computed(() => {
+  return currentProcessingStores.value.slice(0, maxVisibleStores);
+});
 
 // Use login username for cancel permission check (fallback via taskId always works)
 // startedBy now contains the user's display name (fullName) for UI display
@@ -439,6 +472,59 @@ watch(isVisible, (newVal) => {
 
 .initiator-row .pi {
   font-size: 0.65rem;
+}
+
+/* ── Processing stores ─────────────────────────────────────────────────────── */
+.processing-stores {
+  margin-top: 8px;
+  padding: 6px 8px;
+  background: #f8f9ff;
+  border-radius: 6px;
+  border: 1px solid #eef0ff;
+}
+
+.stores-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.68rem;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.stores-header .pi {
+  font-size: 0.6rem;
+  color: #818cf8;
+}
+
+.stores-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.store-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #4f46e5;
+  background: #eef2ff;
+  border-radius: 4px;
+  line-height: 1.4;
+  white-space: nowrap;
+  max-width: 70px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.store-more {
+  font-size: 0.62rem;
+  color: #9ca3af;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 4px;
 }
 
 /* ── Minimal ───────────────────────────────────────────────────────────────── */

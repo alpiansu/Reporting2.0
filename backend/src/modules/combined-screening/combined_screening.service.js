@@ -238,6 +238,8 @@ class CombinedScreeningService {
             logger.info(`[combined_screening] [STORE] Starting ${storeCode} (${cab})`);
             const storeStart = Date.now();
 
+            progressService.addProcessingStore(taskId, storeCode);
+
             try {
               await progressService.updateProgress(taskId, processedCount, {
                 description: `${msgOld} → Screening to Store ${storeCode} ...`,
@@ -277,6 +279,8 @@ class CombinedScreeningService {
                 await this.persistModuleResult(mod.name, cab, storeCode, "error", storeErr.message);
               }
               await incrementProgress(storeCode, "Error ❌");
+            } finally {
+              progressService.removeProcessingStore(taskId, storeCode);
             }
           }),
         ),
@@ -372,6 +376,8 @@ class CombinedScreeningService {
       });
       throw error;
     } finally {
+      progressService.clearProcessingStores(taskId);
+
       // Close all WRC pools
       for (const pool of wrcPools.values()) {
         try {

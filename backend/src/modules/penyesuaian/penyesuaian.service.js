@@ -759,6 +759,9 @@ class PenyesuaianService {
             // Always mark as screened (even if error/timeout)
             screenedStores.add(storeCode);
 
+            // Track this store as actively being processed (for real-time SSE display)
+            progressService.addProcessingStore(taskId, storeCode);
+
             try {
               const result = await withTimeout(
                 this.processSingleStore(store, strPeriode, strYear, strMonth, null, sessionId),
@@ -783,6 +786,8 @@ class PenyesuaianService {
             } catch (err) {
               await RekapRemoteService.addToTemp(cab, storeCode, "penyesuaian", `[${storeCode}] ERROR: ${err.message}`);
               await incrementProgress(storeCode, "Error ❌");
+            } finally {
+              progressService.removeProcessingStore(taskId, storeCode);
             }
           }),
         ),
@@ -853,6 +858,9 @@ class PenyesuaianService {
 
       throw error;
     } finally {
+      // Cleanup processing stores tracking for this task
+      progressService.clearProcessingStores(taskId);
+
       // Cleanup: Invalidate cache to force reload from JSON file on next request
       await SesuaiToko.cleanupScreeningSession(sessionId);
       this.invalidateCache();

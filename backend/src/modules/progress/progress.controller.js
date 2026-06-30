@@ -23,12 +23,14 @@ export const streamAllProgress = async (req, res) => {
   const onComplete = task => sendEvent("complete", task);
   const onFail = task => sendEvent("fail", task);
   const onRemove = taskId => sendEvent("remove", { taskId });
+  const onProcessingUpdate = data => sendEvent("processingUpdate", data);
 
   progressService.on("progressStart", onStart);
   progressService.on("progressUpdate", onUpdate);
   progressService.on("progressComplete", onComplete);
   progressService.on("progressFailed", onFail);
   progressService.on("progressRemoved", onRemove);
+  progressService.on("processingUpdate", onProcessingUpdate);
 
   setupSSECleanup(req, res, {
     progressStart: onStart,
@@ -36,6 +38,7 @@ export const streamAllProgress = async (req, res) => {
     progressComplete: onComplete,
     progressFailed: onFail,
     progressRemoved: onRemove,
+    processingUpdate: onProcessingUpdate,
   });
 };
 
@@ -92,12 +95,18 @@ export const streamTaskProgress = async (req, res) => {
     }
   };
   const onRemove = taskId => sendEvent("remove", { taskId });
+  const onProcessingUpdate = data => {
+    if (data.taskId === taskId) {
+      sendEvent("processingUpdate", data);
+    }
+  };
 
   progressService.on("progressStart", onStart);
   progressService.on("progressUpdate", onUpdate);
   progressService.on("progressComplete", onComplete);
   progressService.on("progressFailed", onFail);
   progressService.on("progressRemoved", onRemove);
+  progressService.on("processingUpdate", onProcessingUpdate);
 
   setupSSECleanup(req, res, {
     progressStart: onStart,
@@ -105,6 +114,7 @@ export const streamTaskProgress = async (req, res) => {
     progressComplete: onComplete,
     progressFailed: onFail,
     progressRemoved: onRemove,
+    processingUpdate: onProcessingUpdate,
   });
 };
 
@@ -132,12 +142,14 @@ export const streamModuleProgress = async (req, res) => {
   const onComplete = task => sendEvent("complete", task);
   const onFail = task => sendEvent("fail", task);
   const onRemove = taskId => sendEvent("remove", { taskId });
+  const onProcessingUpdate = data => sendEvent("processingUpdate", data);
 
   progressService.on("progressStart", onStart);
   progressService.on("progressUpdate", onUpdate);
   progressService.on("progressComplete", onComplete);
   progressService.on("progressFailed", onFail);
   progressService.on("progressRemoved", onRemove);
+  progressService.on("processingUpdate", onProcessingUpdate);
 
   setupSSECleanup(req, res, {
     progressStart: onStart,
@@ -145,6 +157,7 @@ export const streamModuleProgress = async (req, res) => {
     progressComplete: onComplete,
     progressFailed: onFail,
     progressRemoved: onRemove,
+    processingUpdate: onProcessingUpdate,
   });
 };
 
@@ -177,6 +190,9 @@ function setupSSECleanup(req, res, listeners) {
     progressService.off("progressComplete", listeners.progressComplete);
     progressService.off("progressFailed", listeners.progressFailed);
     progressService.off("progressRemoved", listeners.progressRemoved);
+    if (listeners.processingUpdate) {
+      progressService.off("processingUpdate", listeners.processingUpdate);
+    }
     if (!res.writableEnded) {
       res.end();
     }

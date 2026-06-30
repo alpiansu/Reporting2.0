@@ -262,9 +262,10 @@ class ProgressService {
    * @param {Function} onComplete - Callback when any task completes
    * @param {Function} onError - Callback when any task fails
    * @param {Function} [onCancel] - Optional callback when any task is cancelled
+   * @param {Function} [onProcessing] - Optional callback when processing stores update (real-time store tracking)
    * @returns {EventSourcePolyfill} - SSE connection instance
    */
-  monitorAllProgress(onInit, onStart, onUpdate, onComplete, onError, onCancel) {
+  monitorAllProgress(onInit, onStart, onUpdate, onComplete, onError, onCancel, onProcessing) {
     const apiUrl =
       import.meta.env.VITE_API_URL ||
       api.defaults.baseURL ||
@@ -351,6 +352,16 @@ class ProgressService {
         // Task removed — no action needed for global monitor
       } catch (error) {
         // ignore
+      }
+    });
+
+    // Handle real-time processing store updates (which stores are currently being processed)
+    eventSource.addEventListener("processingUpdate", (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (onProcessing) onProcessing(data);
+      } catch (error) {
+        console.error("❌ Error parsing processingUpdate event:", error);
       }
     });
 

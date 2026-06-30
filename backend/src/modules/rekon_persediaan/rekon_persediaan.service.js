@@ -374,6 +374,8 @@ class RekonPersediaanService {
               }
             }
 
+            progressService.addProcessingStore(taskId, storeCode);
+
             try {
               // Initialize Pool & Cache Batch WRC
               if (!wrcPools.has(cab)) {
@@ -407,6 +409,8 @@ class RekonPersediaanService {
                   description: `Store ${storeCode} → Error`,
                   status: "Processing",
                 });
+            } finally {
+              progressService.removeProcessingStore(taskId, storeCode);
             }
           }),
         ),
@@ -451,6 +455,7 @@ class RekonPersediaanService {
         });
       throw error;
     } finally {
+      progressService.clearProcessingStores(taskId);
       for (const pool of wrcPools.values()) await pool.end();
     }
   }

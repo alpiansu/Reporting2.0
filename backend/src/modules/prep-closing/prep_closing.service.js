@@ -1020,6 +1020,8 @@ class PrepClosingService {
             screenedStores.add(storeCode);
             processedStores.add(storeCode);
 
+            progressService.addProcessingStore(taskId, storeCode);
+
             try {
               await progressService.updateProgress(taskId, processedCount, {
                 description: `${msgOld} → Screening to Store ${storeCode} ...`,
@@ -1052,6 +1054,8 @@ class PrepClosingService {
                 `[${storeCode}] ERROR: ${err.message}`,
               );
               await incrementProgress(storeCode, "Error ❌");
+            } finally {
+              progressService.removeProcessingStore(taskId, storeCode);
             }
           }),
         ),
@@ -1156,6 +1160,8 @@ class PrepClosingService {
       });
 
       throw error;
+    } finally {
+      progressService.clearProcessingStores(taskId);
     }
   }
 

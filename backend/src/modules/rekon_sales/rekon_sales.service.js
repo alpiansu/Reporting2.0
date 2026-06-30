@@ -689,6 +689,8 @@ class RekonSalesService {
 
             screenedStores.add(storeCode);
 
+            progressService.addProcessingStore(taskId, storeCode);
+
             try {
               const result = await withTimeout(
                 this.processSingleStore(store, strMonth, strYear, glDataByBranch[cab], { deferSave: true }),
@@ -739,6 +741,8 @@ class RekonSalesService {
             } catch (err) {
               await RekapRemoteService.addToTemp(cab, storeCode, "rekon_sales", `[${storeCode}] ERROR: ${err.message}`);
               await incrementProgress(storeCode, "Error ❌");
+            } finally {
+              progressService.removeProcessingStore(taskId, storeCode);
             }
           }),
         ),
@@ -858,6 +862,8 @@ class RekonSalesService {
       });
 
       throw error;
+    } finally {
+      progressService.clearProcessingStores(taskId);
     }
   }
 

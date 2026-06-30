@@ -596,6 +596,8 @@ class RekonVirtualService {
               }
             }
 
+            progressService.addProcessingStore(taskId, storeCode);
+
             try {
               await progressService.updateProgress(taskId, processedCount, {
                 description: `${msgOld} → Screening to Store ${storeCode} ...`,
@@ -627,6 +629,8 @@ class RekonVirtualService {
               );
 
               await incrementProgress(storeCode, "Error ❌");
+            } finally {
+              progressService.removeProcessingStore(taskId, storeCode);
             }
           }),
         ),
@@ -710,8 +714,9 @@ class RekonVirtualService {
       }
 
       throw error;
+    } finally {
+      progressService.clearProcessingStores(taskId);
     }
-  }
 
   /**
    * Process single store for rekon virtual margin screening

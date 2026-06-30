@@ -9,6 +9,10 @@ export const useProgressStore = defineStore("progress", {
 
     isInitialized: false,
     autoExpandOnNewTask: true,
+
+    // Real-time tracking of which stores are currently being processed per task
+    // shape: { [taskId]: string[] }
+    processingStores: {},
   }),
 
   getters: {
@@ -77,6 +81,10 @@ export const useProgressStore = defineStore("progress", {
         // onCancel - handle user-initiated cancellation gracefully
         (task) => {
           this.handleTaskConclusion(task.id || task.taskId, "cancelled");
+        },
+        // onProcessing - real-time store processing tracking
+        (data) => {
+          this.handleProcessingUpdate(data);
         },
       );
 
@@ -193,6 +201,19 @@ export const useProgressStore = defineStore("progress", {
       // Keep isInitialized as true if we just want to restart,
       // but typically we'd set to false if fully stopping.
       this.isInitialized = false;
+    },
+
+    /**
+     * Handle real-time processing store updates from SSE.
+     * Updates the processingStores map so the widget can display which stores are active.
+     */
+    handleProcessingUpdate(data) {
+      if (!data || !data.taskId) return;
+      if (data.stores && data.stores.length > 0) {
+        this.processingStores[data.taskId] = data.stores;
+      } else {
+        delete this.processingStores[data.taskId];
+      }
     },
 
     async cancelTask(taskId) {

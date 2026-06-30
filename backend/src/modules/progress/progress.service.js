@@ -20,6 +20,10 @@ class ProgressService extends EventEmitter {
     // In-memory set of taskIds that have been requested to abort.
     // Checked by processing loops before starting each new store.
     this.abortSet = new Set();
+
+    // In-memory map of taskId → string[] of store codes currently being processed.
+    // No disk I/O, no mutex — purely for real-time SSE display.
+    this.processingStoresMap = new Map();
   }
 
   /**
@@ -47,6 +51,47 @@ class ProgressService extends EventEmitter {
     if (this.abortSet.has(taskId)) {
       this.abortSet.delete(taskId);
       logger.info(`[ProgressService] Abort flag cleared for task: ${taskId}`);
+    }
+  }
+
+  /**
+   * Register that a store is being processed for a task.
+   * Emits a 'processingUpdate' SSE event with the full current set of stores.
+   * Pure in-memory — no disk I/O, no mutex.
+   * Safe under Node.js single-threaded model: push + emit are synchronous.
+   */
+  addProcessingStore(taskId, storeCode) {
+    let stores = this.processingStoresMap.get(taskId);
+    if (!stores) {
+      stores = [];
+      this.processingStoresMap.set(taskId, stores);
+    }
+    stores.push(storeCode);
+    this.emit('processingUpdate', { taskId, stores: [...stores] });
+  }
+
+  /**
+   * Remove a store from the processing set for a task.
+   * Emits a 'processingUpdate' event with the remaining stores.
+   */
+  removeProcessingStore(taskId, storeCode) {
+    const stores = this.processingStoresMap.get(taskId);
+    if (!stores) return;
+    const idx = stores.indexOf(storeCode);
+    if (idx !== -1) stores.splice(idx, 1);
+    if (stores.length === 0) {
+      this.processingStoresMap.delete(taskId);
+    }
+    this.emit('processingUpdate', { taskId, stores: [...stores] });
+  }
+
+  /**
+   * Clear all processing stores for a task (used on task completion/failure/cancel).
+   */
+  clearProcessingStores(taskId) {
+    if (this.processingStoresMap.has(taskId)) {
+      this.processingStoresMap.delete(taskId);
+      this.emit('processingUpdate', { taskId, stores: [] });
     }
   }
 

@@ -31,6 +31,7 @@ import monthlyReportsModule from "./monthly-reports/index.js";
 import rekapBackupModule from "./rekap_backup/index.js";
 import combinedScreeningModule from "./combined-screening/index.js";
 import exportLapDevModule from "./exportLapDev/index.js";
+import ntbVsGlslpModule from "./ntb_vs_glslp/index.js";
 
 export default {
   // Export all modules
@@ -62,6 +63,7 @@ export default {
   rekapBackupModule,
   combinedScreeningModule,
   exportLapDevModule,
+  ntbVsGlslpModule,
 
   // Initialize all modules
   initialize: app => {
@@ -93,6 +95,7 @@ export default {
     const rekapBackup = rekapBackupModule.initialize(app);
     const combinedScreening = combinedScreeningModule.initialize(app);
     const exportLapDev = exportLapDevModule.initialize(app);
+    const ntbVsGlslp = ntbVsGlslpModule.initialize(app);
 
     // Initialize menu manager module
     app.use("/api/menu-manager", menuManagerModule.routes);
@@ -125,6 +128,7 @@ export default {
       rekapBackup,
       combinedScreening,
       exportLapDev,
+      ntbVsGlslp,
       menuManager: true,
     };
   },

@@ -12,6 +12,7 @@ import notesService from "./notes.service";
 import penyesuaianService from "./penyesuaian.service";
 import userService from "./user.service";
 import rekapBackupService from "./rekapBackup.service";
+import ntbVsGlslpService from "./ntbVsGlslp.service";
 
 export {
   authService,
@@ -28,4 +29,5 @@ export {
   penyesuaianService,
   userService,
   rekapBackupService,
+  ntbVsGlslpService,
 };

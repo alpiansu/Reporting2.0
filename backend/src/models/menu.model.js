@@ -46,6 +46,11 @@ const MenuWrapper = {
     return 0;
   },
 
+  async delete(id) {
+    await menuService.init();
+    return menuService.deleteMenu(id);
+  },
+
   async count(options = {}) {
     const menus = await menuService.getAllMenus();
     return menus.length;
@@ -84,7 +89,7 @@ const MenuWrapper = {
     return { count: menus.length, rows: menus };
   },
 
-  getModel() {
+  async getModel() {
     return {
       sync: async () => {
         await menuService.init();
@@ -92,6 +97,46 @@ const MenuWrapper = {
       },
     };
   },
+
+  // ===== CATEGORY OPERATIONS =====
+
+  async createCategory(categoryData) {
+    await menuService.init();
+    return menuService.createCategory(categoryData);
+  },
+
+  async updateCategory(id, categoryData) {
+    await menuService.init();
+    return menuService.updateCategory(id, categoryData);
+  },
+
+  async deleteCategory(id) {
+    await menuService.init();
+    return menuService.deleteCategory(id);
+  },
+
+  // ===== MENU ITEM OPERATIONS =====
+
+  async addMenuItem(categoryId, itemData) {
+    await menuService.init();
+    return menuService.addMenuItem(categoryId, itemData);
+  },
+
+  async updateMenuItem(categoryId, itemId, itemData) {
+    await menuService.init();
+    return menuService.updateMenuItem(categoryId, itemId, itemData);
+  },
+
+  async deleteMenuItem(categoryId, itemId) {
+    await menuService.init();
+    return menuService.deleteMenuItem(categoryId, itemId);
+  },
+
+  async moveMenuItem(fromCategoryId, toCategoryId, itemId) {
+    await menuService.init();
+    return menuService.moveMenuItem(fromCategoryId, toCategoryId, itemId);
+  },
+
 };
 
 export default MenuWrapper;

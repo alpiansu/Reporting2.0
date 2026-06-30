@@ -717,6 +717,7 @@ class RekonVirtualService {
     } finally {
       progressService.clearProcessingStores(taskId);
     }
+  }
 
   /**
    * Process single store for rekon virtual margin screening

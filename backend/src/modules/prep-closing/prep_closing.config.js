@@ -10,7 +10,7 @@ export default {
 
   // Parallel processing configuration
   parallelProcessing: {
-    concurrencyLimit: 5, // Max stores at once
+    concurrencyLimit: 8, // Max stores at once
     branchConcurrencyLimit: 2, // Max branches at once
     storeTimeoutMs: 120000, // 2 minutes per store
     queryTimeoutMs: 10000, // 10 seconds per query

@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastUpdated": "2026-06-25T07:09:25.324Z",
+  "lastUpdated": "2026-06-30T09:10:50.002Z",
   "updatedBy": "admin2",
   "description": "Aturan pengecekan kesiapan closing bulanan",
   "rules": [
@@ -369,7 +369,7 @@
         "failMessage": "Belum ada data produk khusus di SO (Jumlah: {actual})",
         "passMessage": "Data produk khusus sudah tersedia ({actual} items)"
       },
-      "severity": "medium",
+      "severity": "high",
       "ui": {
         "icon": "pi pi-box",
         "color": "#3b82f6",

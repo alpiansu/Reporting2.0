@@ -304,18 +304,19 @@ class PrepClosingService {
       }));
       await this.saveToFile(periode);
 
-      // 2. Issues Map file (KDTK -> ISSUES)
+      // 2. Issues Map file (KDTK -> ISSUES) — hanya untuk RECID='*' (unresolved)
       const issuesMap = {};
       for (const r of finalRows) {
-        if (Array.isArray(r.ISSUES) && r.ISSUES.length > 0) {
+        if (r.RECID === '*' && Array.isArray(r.ISSUES) && r.ISSUES.length > 0) {
           issuesMap[r.KDTK] = r.ISSUES;
         }
       }
       await fs.writeFile(this.getIssuesJsonPath(periode), JSON.stringify(issuesMap));
 
-      // 3. Detail Map file (KDTK -> full record termasuk ISSUES)
+      // 3. Detail Map file (KDTK -> full record termasuk ISSUES) — hanya untuk RECID='*'
       const detailMap = {};
       for (const r of finalRows) {
+        if (r.RECID !== '*') continue;
         detailMap[r.KDTK] = {
           RECID: r.RECID,
           CAB: r.CAB,

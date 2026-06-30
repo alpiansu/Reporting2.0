@@ -58,6 +58,10 @@ class ProgressService extends EventEmitter {
       await this._ensureJsonFile();
       await this._loadProgressData();
 
+      // Reset all progress on startup to prevent stale tasks
+      // from blocking new tasks after server crash/restart
+      await this._resetProgressOnStartup();
+
       // Auto cleanup old tasks periodically
       if (config.cleanup.enabled && !this.cleanupTimer) {
         this.cleanupTimer = setInterval(
@@ -120,6 +124,14 @@ class ProgressService extends EventEmitter {
       lastError.message,
     );
     this.progressMap = new Map();
+  }
+
+  async _resetProgressOnStartup() {
+    if (this.progressMap.size === 0) return;
+
+    logger.info("[ProgressService] Server restart detected — clearing all progress data");
+    this.progressMap.clear();
+    await this._saveProgressData();
   }
 
   async _saveProgressData(maxRetries = 5) {

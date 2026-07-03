@@ -127,7 +127,20 @@ class ProgressService {
       try {
         const progressData = JSON.parse(event.data);
         // console.log("🎯 Progress INIT event:", progressData);
-        if (onUpdate) onUpdate(progressData);
+        if (progressData.status === "completed" && onComplete) {
+          onComplete(progressData);
+          eventSource.close();
+        } else if (progressData.status === "failed" && onError) {
+          onError(progressData);
+          eventSource.close();
+        } else if (progressData.status === "cancelled") {
+          taskCancelled = true;
+          if (onCancel) onCancel(progressData);
+          else if (onError) onError(progressData);
+          eventSource.close();
+        } else if (onUpdate) {
+          onUpdate(progressData);
+        }
       } catch (error) {
         console.error("❌ Error parsing INIT event:", error);
       }

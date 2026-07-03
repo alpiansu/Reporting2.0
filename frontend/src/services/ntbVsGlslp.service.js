@@ -42,6 +42,27 @@ const service = {
     });
     return response.data;
   },
+
+  checkSentStatus: async (items) => {
+    const response = await api.post(`/dthr-ftp/batch-status`, { items });
+    return response.data;
+  },
+
+  dispatchToFtp: async (items, force = false) => {
+    const response = await api.post(`/dthr-ftp/dispatch`, { items, force });
+    return response.data;
+  },
+
+  getDispatchSummary: async (cabang, periode) => {
+    const params = { cabang: cabang || 'All', periode };
+    const response = await api.get(`/dthr-ftp/dispatch-summary`, { params });
+    return response.data;
+  },
+
+  dispatchUnsent: async (cabang, periode, force = false) => {
+    const response = await api.post(`/dthr-ftp/dispatch-unsent`, { cabang, periode, force });
+    return response.data;
+  },
 };
 
 export default service;

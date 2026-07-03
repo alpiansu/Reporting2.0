@@ -19,6 +19,7 @@ import MtranVsCd from "../modules/rekon_sales/models/mtran_vs_cd.model.js";
 import RekonSales from "../modules/rekon_sales/models/rekon_sales.model.js";
 import SaldoRekonPersediaan from "./saldorekonpersediaan.model.js";
 import { CeklistSpaceHddWrapper, CeklistSpaceTampungWrapper, CeklistImportIdtWrapper } from "../modules/ceklist-prep-closing/ceklist_prep_closing.model.js";
+import DthrFtpLogWrapper from "../modules/dthr_ftp/dthr_ftp.model.js";
 import modelRegistry from "./registry.js";
 
 // Register all Sequelize models with the registry
@@ -42,6 +43,7 @@ modelRegistry.register("SaldoRekonPersediaan", () => SaldoRekonPersediaan.getMod
 modelRegistry.register("CeklistSpaceHdd", () => CeklistSpaceHddWrapper.getModel(), { priority: 1.5 });
 modelRegistry.register("CeklistSpaceTampung", () => CeklistSpaceTampungWrapper.getModel(), { priority: 1.4 });
 modelRegistry.register("CeklistImportIdt", () => CeklistImportIdtWrapper.getModel(), { priority: 1.3 });
+modelRegistry.register("DthrFtpLog", () => DthrFtpLogWrapper.getModel(), { priority: 1.2 });
 
 // Note: User and Store are JSON-based models, not Sequelize models
 // They don't need to be registered for database sync
@@ -79,6 +81,7 @@ export default {
   DetailRekonSales,
   MtranVsCd,
   RekonSales,
+  DthrFtpLog: DthrFtpLogWrapper,
 };
 
 // Named exports for backward compatibility
@@ -101,6 +104,7 @@ export {
   DetailRekonSales,
   MtranVsCd,
   RekonSales,
+  DthrFtpLogWrapper as DthrFtpLog,
 };
 
 // Database connection functions

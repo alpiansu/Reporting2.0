@@ -32,6 +32,7 @@ import rekapBackupModule from "./rekap_backup/index.js";
 import combinedScreeningModule from "./combined-screening/index.js";
 import exportLapDevModule from "./exportLapDev/index.js";
 import ntbVsGlslpModule from "./ntb_vs_glslp/index.js";
+import dthrFtpModule from "./dthr_ftp/index.js";
 
 export default {
   // Export all modules
@@ -64,6 +65,7 @@ export default {
   combinedScreeningModule,
   exportLapDevModule,
   ntbVsGlslpModule,
+  dthrFtpModule,
 
   // Initialize all modules
   initialize: app => {
@@ -96,6 +98,7 @@ export default {
     const combinedScreening = combinedScreeningModule.initialize(app);
     const exportLapDev = exportLapDevModule.initialize(app);
     const ntbVsGlslp = ntbVsGlslpModule.initialize(app);
+    const dthrFtp = dthrFtpModule.initialize(app);
 
     // Initialize menu manager module
     app.use("/api/menu-manager", menuManagerModule.routes);
@@ -129,6 +132,7 @@ export default {
       combinedScreening,
       exportLapDev,
       ntbVsGlslp,
+      dthrFtp,
       menuManager: true,
     };
   },

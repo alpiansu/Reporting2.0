@@ -19,7 +19,7 @@ export default {
         // `delete from pos.mstran where date(bukti_tgl) = curdate() and rtype = 'X' and istype = 'so' and addid like '%133.10%';`,
       ],
       insertPlu: `
-        INSERT INTO mstadj(lokasi,rtype,bukti_no,bukti_tgl,supco,inv_date,prdcd,plu_nas,istype,bkp,sub_bkp,price,gross,qty,jam,keter,price_jual,gross_jual)
+        INSERT INTO mstadj(lokasi,rtype,bukti_no,bukti_tgl,supco,inv_date,prdcd,plu_nas,istype,bkp,sub_bkp,price,gross,qty,jam,keter,price_jual,gross_jual,invno)
         SELECT 
           '01', 'X', 
           (SELECT docno FROM const WHERE rkey = 'NKL')+1,
@@ -37,7 +37,8 @@ export default {
           CURTIME(),
           ?,              -- Keterangan from file
           pm.price,
-          pm.price*(?)   -- qty from file
+          pm.price*(?),   -- qty from file
+          (SELECT docno FROM const WHERE rkey = 'NKL')+1
         FROM prodmast pm
         WHERE pm.prdcd = ?  -- prdcd from file
       `,

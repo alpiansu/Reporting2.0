@@ -191,7 +191,6 @@ class StoreQueryHelper {
             AND (catcode NOT RLIKE '^55|^055' AND catcode NOT IN('54901','54902','54005','054901','054902','054005')) 
             AND plu NOT IN(00000000,0,'',' ') 
             AND TANGGAL < CURDATE()
-            AND STATION != '99'
           GROUP BY TANGGAL, STATION, SHIFT
         ) AS X 
         HAVING (SEL_NET > ${tolerance} OR SEL_NET < -${tolerance} OR SEL_PPN > ${tolerance} OR SEL_PPN < -${tolerance})
@@ -210,6 +209,60 @@ class StoreQueryHelper {
       return rows;
     } catch (error) {
       logger.error(`[StoreQueryHelper] Error in cekSelisihMtranVsCD: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch item-level mtran data for problematic shifts
+   * Accepts problematic shifts from cekSelisihMtranVsCD() and returns per-item transaction rows
+   *
+   * @param {Object} connection - Store database connection
+   * @param {string} strMonth - Month in MM format
+   * @param {string} strYear - Year in YYYY format
+   * @param {Array} problematicShifts - Result from cekSelisihMtranVsCD (must have TANGGAL, STATION, SHIFT)
+   * @returns {Promise<Array>} Array of item-level records with DOCNO, SEQNO
+   */
+  async getItemLevelDifferences(connection, strMonth, strYear, problematicShifts) {
+    try {
+      if (!problematicShifts || problematicShifts.length === 0) {
+        return [];
+      }
+
+      const subBkpBebasPPN = config.subBkpBebasPPN;
+
+      const shiftKeys = problematicShifts.map(s => `${s.TANGGAL}|${s.STATION}|${s.SHIFT}`);
+      const placeholders = shiftKeys.map(() => "?").join(", ");
+
+      const query = `
+        SELECT
+          (SELECT KIRIM FROM toko) AS CAB,
+          (SELECT KDTK FROM toko) AS SHOP,
+          m.TANGGAL,
+          m.DOCNO, m.SEQNO, m.PLU,
+          p.SINGKATAN,
+          m.QTY, m.PRICE, m.GROSS, m.HPP,
+          0 AS SELISIH,
+          m.RTYPE,
+          IF(m.sub_bkp NOT IN ${subBkpBebasPPN}, 'Y', 'N') AS ISPPN,
+          ? AS MONTH,
+          ? AS YEAR
+        FROM mtran m
+        LEFT JOIN prodmast p ON m.PLU = p.prdcd
+        WHERE MONTH(m.TANGGAL) = ? AND YEAR(m.TANGGAL) = ?
+          AND (m.catcode NOT RLIKE '^55|^055' AND m.catcode NOT IN('54901','54902','54005','054901','054902','054005'))
+          AND m.plu NOT IN(00000000,0,'',' ')
+          AND m.TANGGAL < CURDATE()
+          AND CONCAT(m.TANGGAL, '|', m.STATION, '|', m.SHIFT) IN (${placeholders})
+        ORDER BY m.TANGGAL, m.DOCNO, m.SEQNO
+      `;
+
+      const [rows] = await connection.query(query, [strMonth, strYear, strMonth, strYear, ...shiftKeys]);
+
+      logger.info(`[StoreQueryHelper] getItemLevelDifferences: ${rows.length} item-level records fetched`);
+      return rows;
+    } catch (error) {
+      logger.error(`[StoreQueryHelper] Error in getItemLevelDifferences: ${error.message}`);
       throw error;
     }
   }

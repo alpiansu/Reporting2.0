@@ -167,6 +167,7 @@ jest.mock("../modules/rekon_sales/helpers/store.query.helper.js", () => ({
   default: {
     fetchMtranVsCD: jest.fn(() => Promise.resolve([])),
     cekSelisihMtranVsCD: jest.fn(() => Promise.resolve([])),
+    getItemLevelDifferences: jest.fn(() => Promise.resolve([])),
   },
 }));
 

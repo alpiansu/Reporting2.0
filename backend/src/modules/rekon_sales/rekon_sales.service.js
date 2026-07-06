@@ -274,7 +274,13 @@ class RekonSalesService {
           );
 
           if (hasDifferences) {
-            diffData = await StoreQueryHelper.cekSelisihMtranVsCD(storeConnection, strMonth, strYear);
+            const problematicShifts = await StoreQueryHelper.cekSelisihMtranVsCD(storeConnection, strMonth, strYear);
+            diffData = await StoreQueryHelper.getItemLevelDifferences(
+              storeConnection,
+              strMonth,
+              strYear,
+              problematicShifts,
+            );
           }
 
           // Save immediately if not deferred (single store mode)
@@ -534,14 +540,16 @@ class RekonSalesService {
         // Save logs to database
         await RekapRemoteService.saveLogsToDatabase();
 
-        // Update resolved records
-        await this.updateResolvedRecords({
-          month: strMonth,
-          year: strYear,
-          level: 3,
-          kdtk: kdtk,
-          hasIssue: result.hasIssue,
-        });
+        // Update resolved records (only if process succeeded)
+        if (result.success) {
+          await this.updateResolvedRecords({
+            month: strMonth,
+            year: strYear,
+            level: 3,
+            kdtk: kdtk,
+            hasIssue: result.hasIssue,
+          });
+        }
 
         // Sync to JSON file
         this.invalidateCache();
@@ -647,6 +655,7 @@ class RekonSalesService {
       // Track stores
       const screenedStores = new Set();
       const activeStores = new Set();
+      const erroredStores = new Set();
 
       let processedCount = 0;
       const totalStores = storesToProcess.length;
@@ -736,9 +745,11 @@ class RekonSalesService {
                   await incrementProgress(storeCode, "No Issues ✅");
                 }
               } else {
+                erroredStores.add(storeCode);
                 await incrementProgress(storeCode, "Error ❌");
               }
             } catch (err) {
+              erroredStores.add(storeCode);
               await RekapRemoteService.addToTemp(cab, storeCode, "rekon_sales", `[${storeCode}] ERROR: ${err.message}`);
               await incrementProgress(storeCode, "Error ❌");
             } finally {
@@ -812,6 +823,7 @@ class RekonSalesService {
         cabang: cabang === "All" || cabang === "ALL" ? null : cabang,
         screenedStores: Array.from(screenedStores),
         activeStores: Array.from(activeStores),
+        erroredStores: Array.from(erroredStores),
       });
 
       // === STEP 8: Save logs ===
@@ -871,7 +883,7 @@ class RekonSalesService {
    * Update resolved records
    */
   async updateResolvedRecords(params) {
-    const { month, year, level, cabang, kdtk, hasIssue, screenedStores, activeStores } = params;
+    const { month, year, level, cabang, kdtk, hasIssue, screenedStores, activeStores, erroredStores } = params;
 
     try {
       const model = await RekonSales.getModel();
@@ -924,10 +936,15 @@ class RekonSalesService {
           replacements.activeStores = activeStores;
         }
 
+        if (erroredStores && erroredStores.length > 0) {
+          query += ` AND KDTK NOT IN (:erroredStores)`;
+          replacements.erroredStores = erroredStores;
+        }
+
         logger.info(
           `[rekon_sales.service] Level 2: Updating for cabang ${cabang}, screened: ${screenedStores.length}, active: ${
             activeStores?.length || 0
-          }`,
+          }, errored: ${erroredStores?.length || 0}`,
         );
       }
       // LEVEL 1: All Branches
@@ -952,10 +969,15 @@ class RekonSalesService {
           replacements.activeStores = activeStores;
         }
 
+        if (erroredStores && erroredStores.length > 0) {
+          query += ` AND KDTK NOT IN (:erroredStores)`;
+          replacements.erroredStores = erroredStores;
+        }
+
         logger.info(
           `[rekon_sales.service] Level 1: Updating all cabang, screened: ${screenedStores.length}, active: ${
             activeStores?.length || 0
-          }`,
+          }, errored: ${erroredStores?.length || 0}`,
         );
       }
 
@@ -1586,9 +1608,6 @@ class RekonSalesService {
         // Map fields for frontend
         const mapped = {
           ...r.toJSON(),
-          NET_MTRAN: parseFloat(r.GROSS) || 0,
-          NET_CD: (parseFloat(r.GROSS) || 0) + (parseFloat(r.SELISIH) || 0),
-          SEL_NET_CD: parseFloat(r.SELISIH) || 0,
         };
 
         grouped.get(tgl).push(mapped);

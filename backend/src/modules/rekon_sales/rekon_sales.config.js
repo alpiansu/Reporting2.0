@@ -36,6 +36,4 @@ export default {
   // Tolerance for differences (in Rupiah)
   tolerance: 50,
 
-  // Sub BKP Bebas PPN
-  subBkpBebasPPN: "('K','D','M','U','A','Q','E','L','P','F','B','J','H','T','R','I','O','S')",
 };

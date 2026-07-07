@@ -49,29 +49,34 @@
             </Column>
           </DataTable>
         </TabPanel>
-        <TabPanel header="Differences">
-          <div v-for="d in dailyDifferences" :key="d.tanggal" class="daily-block">
-            <h4>{{ d.tanggal }}</h4>
-            <DataTable :value="d.rows" :loading="diffLoading" dataKey="DOCNO" size="small" stripedRows>
-              <template #empty>
-                <div class="empty-tab"><i class="pi pi-minus-circle mr-2"></i>Tidak ada perbedaan transaksi</div>
-              </template>
-              <Column field="DOCNO" header="DOCNO" />
-              <Column field="SEQNO" header="SEQNO" />
-              <Column field="NET_MTRAN" header="NET MTRAN" class="text-right">
-                <template #body="{ data }">{{ formatDecimal(data.NET_MTRAN) }}</template>
-              </Column>
-              <Column field="NET_CD" header="NET CD" class="text-right">
-                <template #body="{ data }">{{ formatDecimal(data.NET_CD) }}</template>
-              </Column>
-              <Column field="SEL_NET_CD" header="SEL NET CD" class="text-right">
-                <template #body="{ data }">
-                  <span :class="amountClass(data.SEL_NET_CD)">{{ formatDecimal(data.SEL_NET_CD) }}</span>
-                </template>
-              </Column>
-            </DataTable>
+
+        <TabPanel v-if="hasDifferences" header="Selisih Mtran & Closing Detail">
+          <div class="shift-hint">
+            <i class="pi pi-info-circle"></i>
+            <span>Klik baris untuk melihat detail item transaksi secara live dari toko.</span>
           </div>
+          <DataTable :value="differencesData" :dataKey="shiftId" size="small" stripedRows
+            @row-click="onRowClick" :selection="selectedShift" selectionMode="single">
+            <template #empty>
+              <div class="empty-tab"><i class="pi pi-minus-circle mr-2"></i>Tidak ada data selisih</div>
+            </template>
+            <Column field="TANGGAL" header="Tanggal" />
+            <Column field="STATION" header="Station" />
+            <Column field="SHIFT" header="Shift" />
+            <Column field="NET_MTRAN" header="NET MTRAN" class="text-right">
+              <template #body="{ data }">{{ formatDecimal(data.NET_MTRAN) }}</template>
+            </Column>
+            <Column field="NET_ClosingDetail" header="NET Closing Detail" class="text-right">
+              <template #body="{ data }">{{ formatDecimal(data.NET_ClosingDetail) }}</template>
+            </Column>
+            <Column field="SEL" header="Selisih" class="text-right">
+              <template #body="{ data }">
+                <span :class="amountClass(data.SEL)">{{ formatDecimal(data.SEL) }}</span>
+              </template>
+            </Column>
+          </DataTable>
         </TabPanel>
+
         <TabPanel header="Kode Pesanan">
           <div v-for="d in dailyIssues" :key="d.tanggal" class="daily-block">
             <h4>{{ d.tanggal }}</h4>
@@ -93,7 +98,7 @@
       </div>
     </div>
   </Dialog>
-  </template>
+</template>
 
 <script setup>
 import { ref, watch, computed } from 'vue';
@@ -111,14 +116,16 @@ const props = defineProps({
   differences: { type: [Array, Object], default: () => [] },
   diffLoading: { type: Boolean, default: false },
   kodePesananIssues: { type: [Array, Object], default: () => [] },
-  kodeLoading: { type: Boolean, default: false }
+  kodeLoading: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['open-note', 'update:visible']);
+const emit = defineEmits(['open-note', 'update:visible', 'view-live-check']);
 
 const localVisible = ref(props.visible);
 watch(() => props.visible, (v) => { localVisible.value = v; });
 watch(localVisible, (v) => emit('update:visible', v));
+
+const selectedShift = ref(null);
 
 const amountClass = (n) => Number(n || 0) >= 0 ? 'amount-positive' : 'amount-negative';
 
@@ -130,10 +137,30 @@ const dailyNote = computed(() => {
   if (!firstDate || !notesList.value.length) return null;
   return notesList.value.find(n => n.tanggal === firstDate) || notesList.value[0] || null;
 });
-const dailyDifferences = computed(() => {
+
+const differencesData = computed(() => {
   const diffs = props.differences?.data || props.differences;
-  return Array.isArray(diffs) ? [{ tanggal: summary.value?.TANGGAL || '', rows: diffs }] : (diffs?.daily || []);
+  if (Array.isArray(diffs)) return diffs;
+  if (diffs?.daily) return diffs.daily;
+  return [];
 });
+
+const hasDifferences = computed(() => differencesData.value.length > 0);
+
+const shiftId = (row) => `${row.TANGGAL}|${row.STATION}|${row.SHIFT}`;
+
+const onRowClick = (event) => {
+  const row = event.data;
+  emit('view-live-check', {
+    kdtk: summary.value.KDTK,
+    month: summary.value.month,
+    year: summary.value.year,
+    tanggal: row.TANGGAL,
+    station: row.STATION,
+    shift: row.SHIFT,
+  });
+};
+
 const dailyIssues = computed(() => {
   const issues = props.kodePesananIssues?.data || props.kodePesananIssues;
   return Array.isArray(issues) ? [{ tanggal: summary.value?.TANGGAL || '', issues: issues }] : (issues?.daily || []);
@@ -145,7 +172,7 @@ const emitOpenNote = () => {
     NAMA: summary.value.NAMA || '-',
     CAB: summary.value.CAB || props.detail?.CAB || '-',
     TANGGAL: dailyMetrics.value[0]?.tanggal || '',
-    note: dailyNote.value
+    note: dailyNote.value,
   });
 };
 </script>
@@ -158,4 +185,24 @@ const emitOpenNote = () => {
 .amount-negative { color: var(--error-color); font-weight: 600; }
 :deep(.text-right) { text-align: right !important; }
 :deep(.p-datatable-thead > tr > th.text-right) { text-align: right !important; justify-content: flex-end; }
+
+.shift-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  background: var(--surface-section);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--text-color-secondary);
+}
+.shift-hint i { font-size: 1rem; color: var(--primary-color); }
+
+:deep(.p-datatable .p-datatable-tbody > tr) {
+  cursor: pointer;
+}
+:deep(.p-datatable .p-datatable-tbody > tr:hover) {
+  background: var(--surface-hover) !important;
+}
 </style>

@@ -10,6 +10,7 @@ import {
   getKodePesananIssues,
   getExportData,
   updateNote,
+  getLiveCheck,
 } from "./rekon_sales.controller.js";
 import rekonSalesRoutes from "./rekon_sales.routes.js";
 import RekonSalesService from "./rekon_sales.service.js";
@@ -23,6 +24,7 @@ const RekonSalesController = {
   getKodePesananIssues,
   getExportData,
   updateNote,
+  getLiveCheck,
 };
 
 export default {

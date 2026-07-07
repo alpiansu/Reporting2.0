@@ -122,15 +122,15 @@ const mockFullRekonSalesRows = [
 const mockMtranVsCdRows = [
   {
     CAB: "G033", SHOP: "TW75", TANGGAL: "2025-05-15",
-    DOCNO: "DOC001", SEQNO: 1, PLU: "899999001", SINGKATAN: "Test Item A",
-    QTY: "2", PRICE: "50000", GROSS: "100000", HPP: "80000",
-    SELISIH: "1000", RTYPE: "J", ISPPN: "Y",
+    STATION: "1", SHIFT: "1",
+    NET_MTRAN: 100000, NET_ClosingDetail: 95000, SEL: 5000,
+    MONTH: "05", YEAR: "2025",
   },
   {
-    CAB: "G033", SHOP: "TW75", TANGGAL: "2025-05-15",
-    DOCNO: "DOC001", SEQNO: 2, PLU: "899999002", SINGKATAN: "Test Item B",
-    QTY: "1", PRICE: "25000", GROSS: "25000", HPP: "20000",
-    SELISIH: "500", RTYPE: "J", ISPPN: "N",
+    CAB: "G033", SHOP: "TW75", TANGGAL: "2025-05-16",
+    STATION: "2", SHIFT: "1",
+    NET_MTRAN: 25000, NET_ClosingDetail: 20000, SEL: 5000,
+    MONTH: "05", YEAR: "2025",
   },
 ];
 
@@ -166,8 +166,8 @@ jest.mock("../modules/rekon_sales/helpers/store.query.helper.js", () => ({
   __esModule: true,
   default: {
     fetchMtranVsCD: jest.fn(() => Promise.resolve([])),
-    cekSelisihMtranVsCD: jest.fn(() => Promise.resolve([])),
-    getItemLevelDifferences: jest.fn(() => Promise.resolve([])),
+    getShiftDifferences: jest.fn(() => Promise.resolve([])),
+    getLiveCheckItems: jest.fn(() => Promise.resolve([])),
   },
 }));
 
@@ -511,42 +511,35 @@ describe("getFullRekonSalesData", () => {
 });
 
 // ══════════════════════════════════════════════════════════════
-// 4. GET DETAIL REKON SALES (per-item)
+// 4. GET LIVE CHECK (fetch item-level mtran from store)
 // ══════════════════════════════════════════════════════════════
 
-describe("getDetailRekonSales", () => {
-  test("returns per-item detail untuk 1 toko + tanggal", async () => {
-    mockMtranVsCdFindAll(jest.fn(() => Promise.resolve(mockMtranVsCdRows)));
+describe("getLiveCheck", () => {
+  test("returns shifts and items for problematic store", async () => {
+    mtranModelMock = { findAll: jest.fn(() => Promise.resolve(mockMtranVsCdRows.map(r => ({ ...r, toJSON: () => r })))) };
+    jest.spyOn(MtranVsCd, "getModel").mockResolvedValue(mtranModelMock);
 
-    const result = await rekonSalesService.getDetailRekonSales({ kdtk: "TW75", tanggal: "2025-05-15" });
+    const result = await rekonSalesService.getLiveCheck({ kdtk: "TW75", month: "05", year: "2025" });
 
-    expect(result).toBeInstanceOf(Array);
-    expect(result).toHaveLength(2);
-
-    const first = result[0];
-    expect(first.shop).toBe("TW75");
-    expect(first.plu).toBe("899999001");
-    expect(first.singkatan).toBe("Test Item A");
-    expect(first.qty).toBe(2);
-    expect(first.price).toBe(50000);
-    expect(first.gross).toBe(100000);
-    expect(first.hpp).toBe(80000);
-    expect(first.selisih).toBe(1000);
-    expect(first.rtype).toBe("J");
-    expect(first.isppn).toBe("Y");
+    expect(result).toBeDefined();
+    expect(result.shifts).toBeDefined();
+    expect(result.shifts).toHaveLength(2);
   });
 
-  test("return empty array jika tidak ada data", async () => {
-    mockMtranVsCdFindAll(jest.fn(() => Promise.resolve([])));
+  test("return empty shifts jika tidak ada data mtran_vs_cd", async () => {
+    mtranModelMock = { findAll: jest.fn(() => Promise.resolve([])) };
+    jest.spyOn(MtranVsCd, "getModel").mockResolvedValue(mtranModelMock);
 
-    const result = await rekonSalesService.getDetailRekonSales({ kdtk: "XXXX", tanggal: "2025-05-15" });
-    expect(result).toEqual([]);
+    const result = await rekonSalesService.getLiveCheck({ kdtk: "XXXX", month: "05", year: "2025" });
+
+    expect(result.shifts).toEqual([]);
+    expect(result.items).toEqual([]);
   });
 
-  test("throw error jika kdtk atau tanggal kosong", async () => {
+  test("throw error jika kdtk/month/year kosong", async () => {
     await expect(
-      rekonSalesService.getDetailRekonSales({ kdtk: "TW75" }),
-    ).rejects.toThrow("kdtk and tanggal are required");
+      rekonSalesService.getLiveCheck({ kdtk: "TW75" }),
+    ).rejects.toThrow("kdtk, month, and year are required");
   });
 });
 
@@ -631,8 +624,11 @@ describe("getDifferencesByMonth", () => {
     const result = await rekonSalesService.getDifferencesByMonth({ kdtk: "TW75", month: "05", year: "2025" });
 
     expect(result).toBeDefined();
-    expect(result.daily).toBeDefined();
-    expect(Array.isArray(result.daily)).toBe(true);
+    expect(result.data).toBeDefined();
+    expect(Array.isArray(result.data)).toBe(true);
+    expect(result.data[0].STATION).toBeDefined();
+    expect(result.data[0].SHIFT).toBeDefined();
+    expect(result.data[0].SEL).toBeDefined();
   });
 });
 

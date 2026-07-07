@@ -36,7 +36,10 @@
 
       <StoreDetailModal v-model:visible="detailVisible" :detail="selectedDetail" :differences="differences"
         :diffLoading="diffLoading" :kodePesananIssues="kodePesananIssues" :kodeLoading="kodeLoading"
-        @open-note="openNote" />
+        @open-note="openNote" @view-live-check="handleViewLiveCheck" />
+
+      <MtranVsCdLiveCheckDialog v-model:visible="liveCheckVisible" :items="liveCheckItems"
+        :loading="liveCheckLoading" :error="liveCheckError" :shiftInfo="liveCheckShiftInfo" />
 
       <NoteDialog v-model:visible="noteVisible" :store="noteStore"
         :defaultText="noteStore?.note?.noteText || noteStore?.note || ''"
@@ -61,6 +64,7 @@ import FilterBar from './components/FilterBar.vue';
 import StoreListTable from './components/StoreListTable.vue';
 import StoreDetailModal from './components/StoreDetailModal.vue';
 import NoteDialog from './components/NoteDialog.vue';
+import MtranVsCdLiveCheckDialog from './components/MtranVsCdLiveCheckDialog.vue';
 import ProgressBar from '@/components/common/ProgressBar.vue';
 import LastScanInfo from '@/components/common/LastScanInfo.vue';
 import rekonSalesApi from '@/services/rekonSales.service.js';
@@ -108,6 +112,11 @@ const kodeLoading = ref(false);
 const noteVisible = ref(false);
 const noteStore = ref(null);
 const savingNote = ref(false);
+const liveCheckLoading = ref(false);
+const liveCheckItems = ref([]);
+const liveCheckError = ref('');
+const liveCheckVisible = ref(false);
+const liveCheckShiftInfo = ref(null);
 const loadingStores = ref(new Set());
 const highlightedItems = ref(new Set());
 
@@ -304,6 +313,26 @@ const exportExcel = async () => {
     toast.showSuccess('Sukses', 'Export Excel selesai');
   } catch (err) {
     toast.showError('Error', err.message || 'Gagal export data');
+  }
+};
+
+const handleViewLiveCheck = async ({ kdtk, month, year, tanggal, station, shift }) => {
+  liveCheckShiftInfo.value = { TANGGAL: tanggal, STATION: station, SHIFT: shift };
+  liveCheckLoading.value = true;
+  liveCheckError.value = '';
+  liveCheckItems.value = [];
+  liveCheckVisible.value = true;
+  try {
+    const res = await rekonSalesApi.getLiveCheck({ kdtk, month, year, tanggal, station, shift });
+    const data = res?.data || res || {};
+    liveCheckItems.value = data.items || [];
+    if (data.error) {
+      liveCheckError.value = data.error;
+    }
+  } catch (err) {
+    liveCheckError.value = err.message || 'Gagal mengambil data live';
+  } finally {
+    liveCheckLoading.value = false;
   }
 };
 

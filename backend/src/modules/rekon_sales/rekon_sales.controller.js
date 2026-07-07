@@ -167,7 +167,7 @@ export const getDifferences = async (req, res) => {
 
     const result = await rekonSalesService.getDifferencesByMonth({ kdtk, month, year });
 
-    return apiResponse.success(res, result || { daily: [] });
+    return apiResponse.success(res, result || { data: [] });
   } catch (error) {
     logger.error(`[rekon_sales.controller] Error getting differences: ${error.message}`);
     return apiResponse.error(res, error.message);
@@ -255,26 +255,24 @@ export const getRekonSalesData = async (req, res) => {
 };
 
 /**
- * Get detail mtran vs cd data for a specific store and date (per-item level)
- * GET /api/rekon-sales/detil/:tgl/:kdtk
- * GET /api/rekon-sales/detil?tgl=xxx&kdtk=xxx
+ * Live check: fetch item-level mtran data from store for problematic shifts
+ * GET /api/rekon-sales/live-check?kdtk=xxx&month=07&year=2026
  */
-export const getDetailRekonSales = async (req, res) => {
+export const getLiveCheck = async (req, res) => {
   try {
-    const kdtk = req.params.kdtk || req.query.kdtk;
-    const tanggal = req.params.tgl || req.query.tgl;
+    const { kdtk, month, year, tanggal, station, shift } = req.query;
 
-    if (!kdtk || !tanggal) {
-      return apiResponse.badRequest(res, "kdtk and tanggal are required");
+    if (!kdtk || !month || !year) {
+      return apiResponse.badRequest(res, "kdtk, month, and year are required");
     }
 
-    logger.info(`[rekon_sales.controller] Getting detail rekon sales: kdtk=${kdtk}, tanggal=${tanggal}`);
+    logger.info(`[rekon_sales.controller] Live check: kdtk=${kdtk}, month=${month}, year=${year}, tanggal=${tanggal}, station=${station}, shift=${shift}`);
 
-    const result = await rekonSalesService.getDetailRekonSales({ kdtk, tanggal });
+    const result = await rekonSalesService.getLiveCheck({ kdtk, month, year, tanggal, station, shift });
 
-    return apiResponse.success(res, result || []);
+    return apiResponse.success(res, result);
   } catch (error) {
-    logger.error(`[rekon_sales.controller] Error getDetailRekonSales: ${error.message}`);
+    logger.error(`[rekon_sales.controller] Error getLiveCheck: ${error.message}`);
     return apiResponse.error(res, error.message);
   }
 };

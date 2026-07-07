@@ -6,6 +6,17 @@ const { resilientDb } = config;
 let MtranVsCd = null;
 let _mtranVsCdSequelizeInstance = null;
 
+/**
+ * IMPORTANT: STRUCTURE CHANGE (July 2026)
+ * This model was restructured from item-level (PK: SHOP+TANGGAL+DOCNO+SEQNO)
+ * to per-shift summary (PK: SHOP+TANGGAL+STATION+SHIFT).
+ *
+ * If upgrading from the old structure, drop the old mtran_vs_cd table first:
+ *   DROP TABLE IF EXISTS mtran_vs_cd;
+ *
+ * The table will be recreated automatically on next app start via sequelize.sync()
+ */
+
 const getMtranVsCdModel = async () => {
   try {
     const sequelize = await resilientDb.getDatabase();
@@ -35,61 +46,31 @@ const getMtranVsCdModel = async () => {
             primaryKey: true,
             allowNull: false,
           },
-          DOCNO: {
-            field: "DOCNO",
-            type: DataTypes.STRING(20),
+          STATION: {
+            field: "STATION",
+            type: DataTypes.CHAR(4),
             primaryKey: true,
             allowNull: false,
           },
-          SEQNO: {
-            field: "SEQNO",
-            type: DataTypes.INTEGER,
+          SHIFT: {
+            field: "SHIFT",
+            type: DataTypes.CHAR(1),
             primaryKey: true,
             allowNull: false,
           },
-          PLU: {
-            field: "PLU",
-            type: DataTypes.STRING(20),
-            allowNull: true,
-          },
-          SINGKATAN: {
-            field: "SINGKATAN",
-            type: DataTypes.STRING(100),
-            allowNull: true,
-          },
-          QTY: {
-            field: "QTY",
+          NET_MTRAN: {
+            field: "NET_MTRAN",
             type: DataTypes.DECIMAL(20, 2),
             allowNull: true,
           },
-          PRICE: {
-            field: "PRICE",
+          NET_ClosingDetail: {
+            field: "NET_ClosingDetail",
             type: DataTypes.DECIMAL(20, 2),
             allowNull: true,
           },
-          GROSS: {
-            field: "GROSS",
+          SEL: {
+            field: "SEL",
             type: DataTypes.DECIMAL(20, 2),
-            allowNull: true,
-          },
-          HPP: {
-            field: "HPP",
-            type: DataTypes.DECIMAL(20, 2),
-            allowNull: true,
-          },
-          SELISIH: {
-            field: "SELISIH",
-            type: DataTypes.DECIMAL(20, 2),
-            allowNull: true,
-          },
-          RTYPE: {
-            field: "RTYPE",
-            type: DataTypes.CHAR(1),
-            allowNull: true,
-          },
-          ISPPN: {
-            field: "ISPPN",
-            type: DataTypes.CHAR(1),
             allowNull: true,
           },
           MONTH: {
@@ -115,6 +96,10 @@ const getMtranVsCdModel = async () => {
             {
               name: "idx_mtran_vs_cd_month_year",
               fields: ["MONTH", "YEAR"],
+            },
+            {
+              name: "idx_mtran_vs_cd_shift",
+              fields: ["SHOP", "TANGGAL", "STATION", "SHIFT"],
             },
           ],
         },

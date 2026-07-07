@@ -41,6 +41,10 @@ export default {
     return (await api.get(`${BASE_URL}/export-data`, { params })).data;
   },
 
+  async getLiveCheck(params) {
+    return (await api.get(`${BASE_URL}/live-check`, { params })).data;
+  },
+
   async updateNote(body) {
     return (await api.put(`${BASE_URL}/note`, body)).data;
   },

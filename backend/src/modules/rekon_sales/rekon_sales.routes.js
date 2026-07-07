@@ -51,11 +51,8 @@ router.get("/data/:cab/:month/:year", rekonSalesController.getRekonSalesData);
 // Get comprehensive rekon sales data (query params — gaya project saat ini)
 router.get("/data", rekonSalesController.getRekonSalesData);
 
-// Get detail mtran vs cd for a specific store and date (path params)
-router.get("/detil/:tgl/:kdtk", rekonSalesController.getDetailRekonSales);
-
-// Get detail mtran vs cd for a specific store and date (query params)
-router.get("/detil", rekonSalesController.getDetailRekonSales);
+// Live check mtran item-level data for problematic shifts
+router.get("/live-check", rekonSalesController.getLiveCheck);
 
 // Update or create note for a specific store and date
 router.put("/note", validatePeriod, validateCabangKdtk, rekonSalesController.updateNote);

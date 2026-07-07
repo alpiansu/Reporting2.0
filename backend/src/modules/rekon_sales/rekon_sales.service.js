@@ -233,7 +233,7 @@ class RekonSalesService {
         await RekapRemoteService.addToTemp(cab, storeCode, "rekon_sales", `[${storeCode}] fetching mtran data...`);
 
         // STEP 1: Fetch mtran vs closing detail using helper
-        const mtranData = await StoreQueryHelper.fetchMtranVsCD(storeConnection, strMonth, strYear);
+        const mtranData = await StoreQueryHelper.fetchMtranVsCD(storeConnection, strMonth, strYear, storeCode, cab);
 
         if (mtranData.length === 0) {
           await RekapRemoteService.addToTemp(cab, storeCode, "rekon_sales", `[${storeCode}] no data found`);
@@ -274,13 +274,7 @@ class RekonSalesService {
           );
 
           if (hasDifferences) {
-            const problematicShifts = await StoreQueryHelper.cekSelisihMtranVsCD(storeConnection, strMonth, strYear);
-            diffData = await StoreQueryHelper.getItemLevelDifferences(
-              storeConnection,
-              strMonth,
-              strYear,
-              problematicShifts,
-            );
+            diffData = await StoreQueryHelper.getShiftDifferences(storeConnection, strMonth, strYear, storeCode, cab);
           }
 
           // Save immediately if not deferred (single store mode)
@@ -1410,41 +1404,6 @@ class RekonSalesService {
   }
 
   /**
-   * Get differences (mtran vs closing detail)
-   */
-  async getDifferences(options = {}) {
-    const { kdtk, tanggal, page = 1, limit = 50 } = options;
-
-    try {
-      const model = await MtranVsCd.getModel();
-
-      const { count, rows } = await model.findAndCountAll({
-        where: {
-          SHOP: kdtk,
-          TANGGAL: tanggal,
-        },
-        limit: parseInt(limit),
-        offset: (parseInt(page) - 1) * parseInt(limit),
-        order: [
-          ["DOCNO", "ASC"],
-          ["SEQNO", "ASC"],
-        ],
-      });
-
-      return {
-        data: rows,
-        total: count,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        totalPages: Math.ceil(count / parseInt(limit)),
-      };
-    } catch (error) {
-      logger.error(`[rekon_sales.service] Error getDifferences: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
    * Get kode pesanan issues
    */
   async getKodePesananIssues(options = {}) {
@@ -1570,7 +1529,7 @@ class RekonSalesService {
   }
 
   /**
-   * Get differences for a specific store and month (grouped per date)
+   * Get differences for a specific store and month (per-shift summary)
    */
   async getDifferencesByMonth(options = {}) {
     const { kdtk, month, year } = options;
@@ -1581,43 +1540,23 @@ class RekonSalesService {
 
     try {
       const model = await MtranVsCd.getModel();
-      const start = moment
-        .tz({ year: parseInt(year), month: parseInt(month) - 1, day: 1 }, "Asia/Jakarta")
-        .startOf("day");
-      const end = start.clone().endOf("month").endOf("day");
 
       const rows = await model.findAll({
         where: {
           SHOP: kdtk.trim().toUpperCase(),
-          TANGGAL: {
-            [Op.between]: [start.format("YYYY-MM-DD"), end.format("YYYY-MM-DD")],
-          },
+          MONTH: month,
+          YEAR: year,
         },
         order: [
           ["TANGGAL", "ASC"],
-          ["DOCNO", "ASC"],
-          ["SEQNO", "ASC"],
+          ["STATION", "ASC"],
+          ["SHIFT", "ASC"],
         ],
       });
 
-      const grouped = new Map();
-      rows.forEach(r => {
-        const tgl = r.TANGGAL;
-        if (!grouped.has(tgl)) grouped.set(tgl, []);
-
-        // Map fields for frontend
-        const mapped = {
-          ...r.toJSON(),
-        };
-
-        grouped.get(tgl).push(mapped);
-      });
-
-      const daily = Array.from(grouped.entries()).map(([tanggal, rows]) => ({
-        tanggal,
-        rows,
-      }));
-      return { daily };
+      return {
+        data: rows.map(r => r.toJSON()),
+      };
     } catch (error) {
       logger.error(`[rekon_sales.service] Error getDifferencesByMonth: ${error.message}`);
       throw error;
@@ -1791,41 +1730,63 @@ class RekonSalesService {
   }
 
   /**
-   * Get detail mtran vs cd data for a specific store and date (per-item level)
-   * (Equivalent to reference's detilRekonSales)
+   * Live check: fetch item-level mtran data from store for problematic shifts
+   * Reads shifts from mtran_vs_cd summary, then queries the store live
    */
-  async getDetailRekonSales(options = {}) {
-    const { kdtk, tanggal } = options;
-    if (!kdtk || !tanggal) throw new Error("kdtk and tanggal are required");
+  async getLiveCheck(options = {}) {
+    const { kdtk, month, year, tanggal, station, shift } = options;
+    if (!kdtk || !month || !year) throw new Error("kdtk, month, and year are required");
 
     try {
+      // Step 1: Get problematic shifts from mtran_vs_cd summary
+      const whereClause = {
+        SHOP: kdtk.trim().toUpperCase(),
+        MONTH: month,
+        YEAR: year,
+      };
+      if (tanggal && station && shift) {
+        whereClause.TANGGAL = tanggal;
+        whereClause.STATION = station;
+        whereClause.SHIFT = shift;
+      }
+
       const model = await MtranVsCd.getModel();
-      const data = await model.findAll({
-        where: {
-          SHOP: kdtk,
-          TANGGAL: tanggal,
-        },
+      const shiftRows = await model.findAll({
+        where: whereClause,
         raw: true,
       });
 
-      return data.map(r => ({
-        cab: r.CAB,
-        shop: r.SHOP,
-        tanggal: r.TANGGAL,
-        docno: r.DOCNO,
-        seqno: r.SEQNO,
-        plu: r.PLU,
-        singkatan: r.SINGKATAN,
-        qty: parseFloat(r.QTY) || 0,
-        price: parseFloat(r.PRICE) || 0,
-        gross: parseFloat(r.GROSS) || 0,
-        hpp: parseFloat(r.HPP) || 0,
-        selisih: parseFloat(r.SELISIH) || 0,
-        rtype: r.RTYPE,
-        isppn: r.ISPPN,
+      if (!shiftRows || shiftRows.length === 0) {
+        return { shifts: [], items: [] };
+      }
+
+      const shifts = shiftRows.map(r => ({
+        TANGGAL: r.TANGGAL,
+        STATION: r.STATION,
+        SHIFT: r.SHIFT,
       }));
+
+      // Step 2: Connect to store and query live item-level data
+      const storeInfo = await storeService.getStoreIPHost(kdtk);
+      if (!storeInfo) {
+        logger.warn(`[rekon_sales.service] Store info not found for ${kdtk}`);
+        return { shifts, items: [], error: "Store info not found" };
+      }
+
+      const storeConnection = await dbStore.createDbStore(storeInfo.dbHost, config.connectionRetry.maxRetries);
+
+      if (!storeConnection) {
+        return { shifts, items: [], error: "Failed to connect to store" };
+      }
+
+      try {
+        const items = await StoreQueryHelper.getLiveCheckItems(storeConnection, shifts);
+        return { shifts, items };
+      } finally {
+        await storeConnection.end();
+      }
     } catch (error) {
-      logger.error(`[rekon_sales.service] Error getDetailRekonSales: ${error.message}`);
+      logger.error(`[rekon_sales.service] Error getLiveCheck: ${error.message}`);
       throw error;
     }
   }

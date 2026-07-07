@@ -23,6 +23,43 @@ import RekonCalculator from "./helpers/rekon.calculator.js";
 import WrcDataHelper from "./helpers/wrc.data.helper.js";
 import { json, Op } from "sequelize";
 
+/**
+ * Check if the only differences are from Station 99 / Shift 9 (retur) 
+ * while GL values are within tolerance.
+ *
+ * Validates:
+ * 1. All flagged shifts in diffData are Station 99 / Shift 9
+ * 2. Non-retur shifts have NET MTRAN vs CD within tolerance
+ * 3. Non-retur shifts have PPN MTRAN vs CD within tolerance
+ * 4. All GL vs NET_MTRAN values are within tolerance
+ * 5. All GL vs PPN_MTRAN values are within tolerance
+ */
+function isOnlyReturIssue(diffData, mtranData, rekonResults, tolerance) {
+  if (!diffData?.length) return false;
+
+  // 1. Semua shift flagged di diffData harus Station 99 / Shift 9
+  if (!diffData.every(d => Number(d.STATION) === 99 && Number(d.SHIFT) === 9)) return false;
+
+  const diffDates = new Set(diffData.map(d => d.TANGGAL));
+
+  // 2 & 3. Per-shift: non-retur shifts harus aman NET & PPN terhadap CD
+  for (const date of diffDates) {
+    for (const s of mtranData) {
+      if (s.TANGGAL !== date) continue;
+      if (Number(s.STATION) === 99 && Number(s.SHIFT) === 9) continue;
+
+      if (Math.abs(Number(s.NET_MTRAN) - Number(s.NET_ClosingDetail)) > tolerance) return false;
+      if (Math.abs(Number(s.PPN_MTRAN) - Number(s.PPN_CD)) > tolerance) return false;
+    }
+  }
+
+  // 4 & 5. GL harus aman (NET dan PPN)
+  return rekonResults.every(r =>
+    Math.abs(Number(r.SEL_NET_GL) || 0) <= tolerance &&
+    Math.abs(Number(r.SEL_PPN_GL) || 0) <= tolerance
+  );
+}
+
 class RekonSalesService {
   constructor() {
     // Initialize cache manager
@@ -277,6 +314,14 @@ class RekonSalesService {
             diffData = await StoreQueryHelper.getShiftDifferences(storeConnection, strMonth, strYear, storeCode, cab);
           }
 
+          // Check if the only differences are Station 99/Shift 9 retur with GL safe
+          if (diffData.length > 0 && isOnlyReturIssue(diffData, mtranData, rekonResults, config.tolerance)) {
+            logger.info(`[${storeCode}] Only Station 99/Shift 9 retur issue — GL safe, RECID=1`);
+            for (const r of rekonResults) {
+              r.RECID = '1';
+            }
+          }
+
           // Save immediately if not deferred (single store mode)
           if (!deferSave) {
             await this.saveRekonResults(cab, storeCode, strMonth, strYear, rekonResults, diffData);
@@ -449,7 +494,7 @@ class RekonSalesService {
       // KDTK (bukan SHOP), TGL (bukan TANGGAL), NET_TOKO (bukan NET_MTRAN),
       // NET_CLOSINGDETAIL (bukan NET_ClosingDetail), PPN_TOKO (bukan PPN_MTRAN)
       const rekonSalesData = rekonResults.map(item => ({
-        RECID: "*",
+        RECID: item.RECID || "*",
         CAB: item.CAB,
         KDTK: item.KDTK,
         TGL: item.TGL,
@@ -707,7 +752,7 @@ class RekonSalesService {
                   if (Array.isArray(result.records) && result.records.length > 0) {
                     allRekonResults.push(
                       ...result.records.map(item => ({
-                        RECID: "*",
+                        RECID: item.RECID || "*",
                         CAB: item.CAB,
                         KDTK: item.KDTK,
                         TGL: item.TGL,

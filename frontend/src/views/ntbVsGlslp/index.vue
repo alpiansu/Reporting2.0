@@ -793,9 +793,16 @@ function exportSendResult() {
 }
 
 async function handleSendToFtp() {
+  const seen = new Set();
   const items = selectedRows.value
     .filter(r => canSendRow(r))
-    .map(r => ({ kodeToko: r.KODE_TOKO, tglTransaksi: r.TGL_TRANSAKSI }));
+    .map(r => ({ kodeToko: r.KODE_TOKO, tglTransaksi: r.TGL_TRANSAKSI }))
+    .filter(i => {
+      const key = `${i.kodeToko}_${i.tglTransaksi}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 
   if (items.length === 0) {
     toast.add({ severity: 'warn', summary: 'Tidak ada data yang bisa dikirim', life: 3000 });

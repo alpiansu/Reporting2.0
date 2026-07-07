@@ -21,12 +21,20 @@ export const dispatch = async (req, res) => {
       return apiResponse.error(res, "User tidak terautentikasi", 401);
     }
 
-    const normalized = items.map((i) => ({
-      kdtk: i.kodeToko,
-      tglTransaksi: i.tglTransaksi,
-    }));
+    const seen = new Set();
+    const normalized = items
+      .map((i) => ({
+        kdtk: i.kodeToko,
+        tglTransaksi: i.tglTransaksi,
+      }))
+      .filter((i) => {
+        const key = `${i.kdtk}_${i.tglTransaksi}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
 
-    logger.info(`[dthr_ftp.controller] Dispatch ${normalized.length} items by ${username}, force=${force}`);
+    logger.info(`[dthr_ftp.controller] Dispatch ${normalized.length} unique items (from ${items.length}) by ${username}, force=${force}`);
 
     const result = await dthrFtpService.dispatchBatch(normalized, username, fullName, force);
 

@@ -108,28 +108,36 @@ class DthrFtpService {
     return `(n.HASIL_CEK IS NULL OR n.HASIL_CEK = '' OR NOT (LOWER(n.HASIL_CEK) LIKE '%file hr%' AND LOWER(n.HASIL_CEK) LIKE '%tidak ada%'))`;
   }
 
+  _canSendCondition() {
+    return `(HASIL_CEK IS NULL OR HASIL_CEK = '' OR NOT (LOWER(HASIL_CEK) LIKE '%file hr%' AND LOWER(HASIL_CEK) LIKE '%tidak ada%'))`;
+  }
+
   async getDispatchSummary({ cabang, periode }) {
     const sequelize = await resilientDb.getDatabase();
     if (!sequelize) throw new Error("Database tidak tersedia");
     if (!periode) throw new Error("Periode wajib diisi");
 
     const table = this._getNtbTableName(periode);
+    const canSend = this._canSendCondition();
 
     const sql = `
-      SELECT
-        n.KODE_GUDANG AS cabang,
+      SELECT sub.cabang,
         COUNT(*) AS total,
         COUNT(DISTINCT l.kdtk, l.tgl_transaksi) AS sent,
         COUNT(*) - COUNT(DISTINCT l.kdtk, l.tgl_transaksi) AS unsent
-      FROM ${table} n
+      FROM (
+        SELECT n.KODE_GUDANG AS cabang, n.KODE_TOKO, n.TGL_TRANSAKSI
+        FROM ${table} n
+        GROUP BY n.KODE_GUDANG, n.KODE_TOKO, n.TGL_TRANSAKSI
+        HAVING SUM(CASE WHEN ${canSend} THEN 1 ELSE 0 END) > 0
+      ) sub
       LEFT JOIN dthr_ftp_log l
-        ON l.kdtk = n.KODE_TOKO
-        AND l.tgl_transaksi = n.TGL_TRANSAKSI
+        ON l.kdtk = sub.KODE_TOKO
+        AND l.tgl_transaksi = sub.TGL_TRANSAKSI
         AND l.status = 'success'
-      WHERE ${this._canSendSql()}
-        AND (:cabang = 'All' OR n.KODE_GUDANG = :cabang)
-      GROUP BY n.KODE_GUDANG
-      ORDER BY n.KODE_GUDANG
+      WHERE (:cabang = 'All' OR sub.cabang = :cabang)
+      GROUP BY sub.cabang
+      ORDER BY sub.cabang
     `;
 
     const [rows] = await sequelize.query(sql, { replacements: { cabang: cabang || "All" } });
@@ -150,13 +158,15 @@ class DthrFtpService {
     if (!periode) throw new Error("Periode wajib diisi");
 
     const table = this._getNtbTableName(periode);
+    const canSend = this._canSendCondition();
 
     if (force) {
       const sql = `
         SELECT n.KODE_TOKO AS kdtk, n.TGL_TRANSAKSI AS tglTransaksi
         FROM ${table} n
         WHERE n.KODE_GUDANG = :cabang
-          AND ${this._canSendSql()}
+        GROUP BY n.KODE_TOKO, n.TGL_TRANSAKSI
+        HAVING SUM(CASE WHEN ${canSend} THEN 1 ELSE 0 END) > 0
         ORDER BY n.TGL_TRANSAKSI
       `;
       const [rows] = await sequelize.query(sql, { replacements: { cabang } });
@@ -171,8 +181,9 @@ class DthrFtpService {
         AND l.tgl_transaksi = n.TGL_TRANSAKSI
         AND l.status = 'success'
       WHERE n.KODE_GUDANG = :cabang
-        AND ${this._canSendSql()}
         AND l.id IS NULL
+      GROUP BY n.KODE_TOKO, n.TGL_TRANSAKSI
+      HAVING SUM(CASE WHEN ${canSend} THEN 1 ELSE 0 END) > 0
       ORDER BY n.TGL_TRANSAKSI
     `;
     const [rows] = await sequelize.query(sql, { replacements: { cabang } });
@@ -182,8 +193,21 @@ class DthrFtpService {
   async dispatchBatch(items, username, fullName, force = false) {
     await this.validateWorkingDir();
 
+    // Dedup: only one dispatch per (kdtk, tglTransaksi) / per filename
+    const seen = new Set();
+    const uniqueItems = items.filter(i => {
+      const key = `${i.kdtk}_${i.tglTransaksi}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    if (uniqueItems.length !== items.length) {
+      logger.info(`[dthr_ftp] Dedup: ${items.length} items → ${uniqueItems.length} unique files`);
+    }
+
     const taskId = `dthrFtpTask_${username}`;
-    const totalItems = items.length;
+    const totalItems = uniqueItems.length;
 
     const timeStart = moment().format("YYYY-MM-DD HH:mm:ss");
     await progressService.startProgress(taskId, totalItems, {
@@ -195,7 +219,7 @@ class DthrFtpService {
       createdAt: timeStart,
     });
 
-    this._processBatch(items, username, force, taskId).catch(async (err) => {
+    this._processBatch(uniqueItems, username, force, taskId).catch(async (err) => {
       logger.error(`[dthr_ftp] Background batch failed: ${err.message}`);
       try {
         await progressService.failProgress(taskId, {

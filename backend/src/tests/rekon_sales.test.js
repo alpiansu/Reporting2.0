@@ -147,6 +147,7 @@ const mockStoreService = {
   }),
   getStoreIPHost: jest.fn(() => Promise.resolve({ dbHost: "localhost", dbName: "test_db" })),
   getStoresByBranch: jest.fn(() => [{ storeCode: "TW75", cab: "G033" }, { storeCode: "T001", cab: "G033" }]),
+  validateStoresFromWRC: jest.fn((stores) => Promise.resolve(stores)),
 };
 
 jest.mock("../modules/store/storeService.js", () => ({

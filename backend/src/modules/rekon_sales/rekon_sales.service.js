@@ -570,6 +570,17 @@ class RekonSalesService {
         const storeInfo = await storeService.getStoreByCode(kdtk);
         const storeCab = storeInfo ? storeInfo.branch || storeInfo.cab : "UNKNOWN";
 
+        // Validate store against WRC mstr_toko
+        const wrcPeriod = strYear.slice(2) + strMonth;
+        const validated = await storeService.validateStoresFromWRC(
+          [{ storeCode: kdtk, storeName: "" }],
+          storeCab,
+          wrcPeriod,
+        );
+        if (validated.length === 0) {
+          throw new Error(`Store ${kdtk} tidak aktif atau tidak ditemukan di WRC periode ${wrcPeriod}`);
+        }
+
         // Get GL data from WRC
         const { data: dataGL } = await WrcDataHelper.openDataGLWrc(storeCab, kdtk, strMonth, strYear);
 
@@ -631,10 +642,14 @@ class RekonSalesService {
       logger.info(`[rekon_sales.service] Branches to process: ${branches.join(", ")}`);
 
       // === STEP 2: Collect all stores ===
+      const wrcPeriod = strYear.slice(2) + strMonth;
       const storeGroups = await Promise.all(
         branches.map(cab =>
           limitBranches(async () => {
-            const stores = await storeService.getStoresByBranch(cab, true);
+            const stores = await storeService.getStoresByBranch(cab, true, {
+              validateWRC: true,
+              period: wrcPeriod,
+            });
             logger.info(`[rekon_sales.service] Found ${stores.length} stores for branch ${cab}`);
             return stores.map(s => ({ ...s, cab }));
           }),

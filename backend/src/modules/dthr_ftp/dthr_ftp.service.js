@@ -1,4 +1,3 @@
-import path from "path";
 import fs from "fs/promises";
 import pLimit from "p-limit";
 import moment from "moment-timezone";
@@ -7,7 +6,6 @@ import logger from "../../config/logger.js";
 import storeService from "../store/storeService.js";
 import progressService from "../progress/progress.service.js";
 import resilientDb from "../../config/resilient-database.js";
-import FtpService from "../../services/ftp.service.js";
 import { buildDthrFilename, runXcmd } from "../../utils/xcmd.utils.js";
 import DthrFtpLog from "./dthr_ftp.model.js";
 
@@ -27,7 +25,7 @@ async function resolveStoreInfo(kdtk) {
   };
 }
 
-async function dispatchOne({ kdtk, tglTransaksi, username, progressTaskId, ftpService, force }) {
+async function dispatchOne({ kdtk, tglTransaksi, username, force }) {
   const info = await resolveStoreInfo(kdtk);
   const fileName = buildDthrFilename({ kdtk, tglTransaksi });
 
@@ -50,21 +48,15 @@ async function dispatchOne({ kdtk, tglTransaksi, username, progressTaskId, ftpSe
     sent_by: username,
   });
 
-  const localPath = path.join(XCMD_WORKING_DIR, fileName);
-
   try {
-    await runXcmd(["getdthr", info.cabang, fileName], {
+    await runXcmd(["PUSHDTHR", info.cabang, "eisho", fileName], {
       cwd: XCMD_WORKING_DIR,
       timeoutMs: XCMD_TIMEOUT_MS,
     });
 
-    await ftpService.uploadFile(localPath, `/${info.cabang}/`, fileName);
-
-    await fs.unlink(localPath);
-
     await logEntry.update({ status: "success", sent_at: new Date() });
 
-    logger.info(`[dthr_ftp] Success: ${fileName} → /${info.cabang}/`);
+    logger.info(`[dthr_ftp] Success: ${fileName} pushed via xcmd`);
     return { fileName, status: "success", kdtk, tglTransaksi, namaToko: info.namaToko };
   } catch (err) {
     await logEntry.update({ status: "failed", error_message: err.message });
@@ -234,14 +226,13 @@ class DthrFtpService {
 
   async _processBatch(items, username, force, taskId) {
     const totalItems = items.length;
-    const ftpService = new FtpService("nielsen");
     const limit = pLimit(3);
     let completedCount = 0;
 
     const results = await Promise.allSettled(
       items.map((item) =>
         limit(async () => {
-          const result = await dispatchOne({ ...item, username, ftpService, force });
+          const result = await dispatchOne({ ...item, username, force });
           completedCount++;
           const statusIcon = result.status === "success" ? "✓" : result.status === "skipped" ? "⏭" : "✗";
           await progressService.updateProgress(taskId, completedCount, {

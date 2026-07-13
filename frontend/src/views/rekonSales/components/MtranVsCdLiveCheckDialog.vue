@@ -33,33 +33,50 @@
           <span class="label">PPN Rate Selisih</span>
           <span class="value">{{ validationSummary.totalPpnRateSelisih }}</span>
         </div>
+        <div class="summary-item" v-if="validationSummary.totalGrossDppSelisih > 0">
+          <span class="label">GROSS DPP Selisih</span>
+          <span class="value">{{ validationSummary.totalGrossDppSelisih }}</span>
+        </div>
       </div>
 
-      <DataTable :value="items" dataKey="id" size="small" stripedRows scrollable scrollHeight="500px"
-        :rowClass="rowValidationClass">
+      <div class="table-toolbar">
+        <div class="search-box">
+          <i class="pi pi-search search-icon"></i>
+          <InputText v-model="globalSearch" placeholder="Cari PLU, DOCNO, Nama Item..." class="search-input" />
+        </div>
+        <div class="toggle-filter">
+          <span class="toggle-label">Hanya Selisih</span>
+          <InputSwitch v-model="showOnlySelisih" />
+        </div>
+      </div>
+
+      <DataTable :value="filteredItems" dataKey="id" size="small" stripedRows scrollable scrollHeight="500px"
+        :rowClass="rowValidationClass" :paginator="true" :rows="25"
+        paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown"
+        :rowsPerPageOptions="[25, 50, 100]">
         <template #empty>
           <div class="empty-state"><i class="pi pi-check-circle"></i>Tidak ada data</div>
         </template>
 
-        <Column field="TANGGAL" header="Tanggal" style="min-width:100px" frozen />
-        <Column field="STATION" header="Station" style="width:70px" />
-        <Column field="SHIFT" header="Shift" style="width:60px" />
-        <Column field="RTYPE" header="Rtype" style="width:60px" />
-        <Column field="DOCNO" header="DOCNO" style="min-width:110px" />
-        <Column field="PLU" header="PLU" style="min-width:90px" />
-        <Column field="SINGKATAN" header="Nama Item" style="min-width:160px" />
+        <Column field="TANGGAL" header="Tanggal" style="min-width:100px" frozen sortable />
+        <Column field="STATION" header="Station" style="width:70px" sortable />
+        <Column field="SHIFT" header="Shift" style="width:60px" sortable />
+        <Column field="RTYPE" header="Rtype" style="width:60px" sortable />
+        <Column field="DOCNO" header="DOCNO" style="min-width:110px" sortable />
+        <Column field="PLU" header="PLU" style="min-width:90px" sortable />
+        <Column field="SINGKATAN" header="Nama Item" style="min-width:160px" sortable />
 
-        <Column field="QTY" header="Qty" class="text-right" style="width:70px">
+        <Column field="QTY" header="Qty" class="text-right" style="width:70px" sortable>
           <template #body="{ data }">{{ formatDecimal(data.QTY) }}</template>
         </Column>
-        <Column field="PRICE" header="Harga" class="text-right" style="width:90px">
+        <Column field="PRICE" header="Harga" class="text-right" style="width:90px" sortable>
           <template #body="{ data }">{{ formatNumber(data.PRICE) }}</template>
         </Column>
-        <Column field="GROSS" header="Gross" class="text-right" style="width:100px">
+        <Column field="GROSS" header="Gross" class="text-right" style="width:100px" sortable>
           <template #body="{ data }">{{ formatNumber(data.GROSS) }}</template>
         </Column>
 
-        <Column header="BKP" style="width:100px">
+        <Column header="BKP" style="width:100px" sortable field="BKP">
           <template #body="{ data }">
             <div class="validation-cell">
               <span :class="bkpStatusClass(data)">{{ data.BKP || '-' }}</span>
@@ -69,28 +86,35 @@
             </div>
           </template>
         </Column>
-        <Column header="SUB_BKP" style="width:80px">
+        <Column header="SUB_BKP" style="width:80px" sortable field="SUB_BKP">
           <template #body="{ data }">
             <span :class="bkpStatusClass(data)">{{ data.SUB_BKP || '-' }}</span>
           </template>
         </Column>
 
-        <Column field="PPN" header="PPN" class="text-right" style="width:100px">
+        <Column field="PPN" header="PPN" class="text-right" style="width:100px" sortable>
           <template #body="{ data }">{{ formatNumber(data.PPN) }}</template>
         </Column>
 
-        <Column field="GROSS_DPP" header="Gross DPP" class="text-right" style="width:110px">
+        <Column field="GROSS_DPP" header="Gross DPP" class="text-right" style="width:110px" sortable>
           <template #body="{ data }">{{ formatNumber(data.GROSS_DPP) }}</template>
         </Column>
-        <Column field="HIT_GROSS_DPP" header="Hit Gross DPP" class="text-right" style="width:120px">
+        <Column field="HIT_GROSS_DPP" header="Hit Gross DPP" class="text-right" style="width:120px" sortable>
           <template #body="{ data }">
-            <span :class="data.GROSS_DPP != data.HIT_GROSS_DPP ? 'value-mismatch' : ''">
+            <span :class="hasGrossDppMismatch(data) ? 'value-mismatch' : ''">
               {{ formatNumber(data.HIT_GROSS_DPP) }}
             </span>
           </template>
         </Column>
+        <Column field="SEL_GROSS_DPP" header="Sel GROSS DPP" class="text-right" style="width:120px" sortable>
+          <template #body="{ data }">
+            <span :class="selisihClass(data.SEL_GROSS_DPP)">
+              {{ formatNumber(data.SEL_GROSS_DPP) }}
+            </span>
+          </template>
+        </Column>
 
-        <Column header="PPN Rate" style="width:120px">
+        <Column header="PPN Rate" style="width:120px" sortable field="PPN_RATE">
           <template #body="{ data }">
             <div class="validation-cell">
               <span :class="ppnRateStatusClass(data)">{{ data.PPN_RATE ?? '-' }}</span>
@@ -116,7 +140,9 @@ import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
-import { formatNumber, formatDecimal } from '../utils/formatters';
+import InputText from 'primevue/inputtext';
+import InputSwitch from 'primevue/inputswitch';
+import { formatNumber, formatDecimal, getSelisihClass } from '../utils/formatters';
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -132,25 +158,54 @@ const localVisible = ref(props.visible);
 watch(() => props.visible, (v) => { localVisible.value = v; });
 watch(localVisible, (v) => emit('update:visible', v));
 
+const globalSearch = ref('');
+const showOnlySelisih = ref(true);
+
 const dialogHeader = computed(() => {
   const info = props.shiftInfo;
   if (!info) return 'Live Check Mtran vs Closing Detail';
   return `Live Check: ${info.TANGGAL} / Station ${info.STATION} / Shift ${info.SHIFT}`;
 });
 
-const uniqueShifts = computed(() => {
-  const set = new Set(props.items.map(i => `${i.TANGGAL}|${i.STATION}|${i.SHIFT}`));
-  return set.size;
+const hasGrossDppMismatch = (data) => {
+  return Math.abs(Number(data.GROSS_DPP || 0) - Number(data.HIT_GROSS_DPP || 0)) > 0.01;
+};
+
+const selisihClass = getSelisihClass;
+
+const processedItems = computed(() => {
+  return props.items.map(item => ({
+    ...item,
+    SEL_GROSS_DPP: Number(item.HIT_GROSS_DPP || 0) - Number(item.GROSS_DPP || 0),
+  }));
 });
 
 const validationSummary = computed(() => {
   let totalBkpSelisih = 0;
   let totalPpnRateSelisih = 0;
-  for (const item of props.items) {
+  let totalGrossDppSelisih = 0;
+  for (const item of processedItems.value) {
     if (item.BKP_VALIDATION === 'SELISIH') totalBkpSelisih++;
     if (item.PPN_RATE_VALIDATION !== 'OK') totalPpnRateSelisih++;
+    if (hasGrossDppMismatch(item)) totalGrossDppSelisih++;
   }
-  return { totalBkpSelisih, totalPpnRateSelisih };
+  return { totalBkpSelisih, totalPpnRateSelisih, totalGrossDppSelisih };
+});
+
+const displayItems = computed(() => {
+  const items = processedItems.value;
+  if (!showOnlySelisih.value) return items;
+  return items.filter(item => hasGrossDppMismatch(item));
+});
+
+const filteredItems = computed(() => {
+  const q = globalSearch.value.toLowerCase().trim();
+  if (!q) return displayItems.value;
+  return displayItems.value.filter(item =>
+    Object.values(item).some(val =>
+      String(val).toLowerCase().includes(q)
+    )
+  );
 });
 
 const bkpStatusClass = (data) => {
@@ -178,7 +233,7 @@ const ppnRateTooltip = (data) => {
 
 const rowValidationClass = (data) => {
   if (data.BKP_VALIDATION === 'SELISIH' || data.PPN_RATE_VALIDATION !== 'OK') return 'row-has-issue';
-  if (data.GROSS_DPP != data.HIT_GROSS_DPP) return 'row-has-issue';
+  if (hasGrossDppMismatch(data)) return 'row-has-issue';
   return '';
 };
 </script>
@@ -227,6 +282,47 @@ const rowValidationClass = (data) => {
 
 .summary-item.warning .value {
   color: var(--error-color, #e53935);
+}
+
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.search-box {
+  position: relative;
+  flex: 1;
+  max-width: 350px;
+}
+
+.search-input {
+  width: 100%;
+  padding-left: 2.25rem !important;
+}
+
+.search-icon {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6b7280;
+  pointer-events: none;
+  font-size: 0.875rem;
+}
+
+.toggle-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.toggle-label {
+  font-size: 0.85rem;
+  color: var(--text-color-secondary);
+  white-space: nowrap;
 }
 
 .validation-cell {

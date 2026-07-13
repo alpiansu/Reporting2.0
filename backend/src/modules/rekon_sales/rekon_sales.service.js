@@ -711,6 +711,15 @@ class RekonSalesService {
           if (retryResult) {
             result = retryResult;
           }
+
+          // After retry: if GL still missing, treat as has issue
+          if (result.needsXcmdRetry) {
+            result.hasIssue = true;
+            result.records = result.records || [];
+            logger.warn(
+              `[rekon_sales.service] [${kdtk}] GL data still missing after xcmd retry — treating as unresolved`,
+            );
+          }
         }
 
         // Save logs to database
@@ -902,6 +911,18 @@ class RekonSalesService {
                 });
                 if (retryResult) {
                   result = retryResult;
+                }
+
+                // After retry: if GL still missing, treat as has issue
+                if (result.needsXcmdRetry) {
+                  result.hasIssue = true;
+                  result.records = result.records || [];
+                  await RekapRemoteService.addToTemp(
+                    cab,
+                    storeCode,
+                    "rekon_sales",
+                    `[${storeCode}] GL data still missing after xcmd retry — treating as unresolved`,
+                  );
                 }
               }
 

@@ -29,6 +29,15 @@ export const formatRelativeTime = (date) => {
   return `${Math.floor(diff / 86400)} hari lalu`;
 };
 
+import { TOLERANCE } from './constants';
+
+export const getSelisihClass = (n) => {
+  const abs = Math.abs(Number(n || 0));
+  if (abs <= TOLERANCE) return 'selisih-ok';
+  if (abs <= 5000) return 'selisih-warning';
+  return 'selisih-danger';
+};
+
 export const formatPeriode = (periode) => {
   if (!periode) return '-';
   const [year, month] = String(periode).split('-');

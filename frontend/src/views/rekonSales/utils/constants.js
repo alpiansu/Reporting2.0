@@ -1,4 +1,6 @@
 // Constants for ReKon Sales module
+export const TOLERANCE = 50;
+
 export const SCREENING_LEVELS = {
   SINGLE_STORE: "single_store",
   MASS_CABANG: "mass_cabang",

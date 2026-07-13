@@ -108,7 +108,7 @@ import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import TabView from 'primevue/tabview';
 import TabPanel from 'primevue/tabpanel';
-import { formatNumber, formatDecimal } from '../utils/formatters';
+import { formatNumber, formatDecimal, getSelisihClass } from '../utils/formatters';
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -127,7 +127,7 @@ watch(localVisible, (v) => emit('update:visible', v));
 
 const selectedShift = ref(null);
 
-const amountClass = (n) => Number(n || 0) >= 0 ? 'amount-positive' : 'amount-negative';
+const amountClass = getSelisihClass;
 
 const summary = computed(() => (props.detail?.data?.summary || props.detail?.summary || props.detail || {}));
 const dailyMetrics = computed(() => (props.detail?.data?.daily || props.detail?.daily || (props.detail?.data ? [props.detail.data] : props.detail ? [props.detail] : [])));
@@ -181,8 +181,9 @@ const emitOpenNote = () => {
 .detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin-bottom: 1rem; color: var(--text-color); }
 .dialog-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .75rem; }
 .empty-tab { display: flex; align-items: center; justify-content: center; padding: 2rem; color: var(--text-color-secondary); font-size: 0.9rem; }
-.amount-positive { color: var(--success-color); font-weight: 600; }
-.amount-negative { color: var(--error-color); font-weight: 600; }
+.selisih-ok { color: #6B7280; }
+.selisih-warning { color: #D97706; font-weight: 600; }
+.selisih-danger { color: #DC2626; font-weight: 600; }
 :deep(.text-right) { text-align: right !important; }
 :deep(.p-datatable-thead > tr > th.text-right) { text-align: right !important; justify-content: flex-end; }
 

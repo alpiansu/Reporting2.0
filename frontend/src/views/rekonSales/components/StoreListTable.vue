@@ -90,32 +90,21 @@
           </template>
         </Column>
 
-        <Column header="Notes" :style="{ minWidth: '260px' }">
-          <template #body="slotProps">
-            <div class="notes-cell" @click="$emit('edit-note', slotProps.data)">
-              <div class="note-left">
-                <i class="pi pi-pencil note-icon" />
-                <span class="note-text">
-                  {{ slotProps.data.note?.noteText ?? slotProps.data.note ?? 'Tambah catatan...' }}
-                </span>
-              </div>
-              <div class="note-meta-icons" v-if="slotProps.data.note">
-                <i class="pi pi-user"
-                  v-tooltip.top="slotProps.data.note?.fullName || slotProps.data.note?.pic || '-'" />
-                <i class="pi pi-clock" v-tooltip.top="formatDateTime(slotProps.data.note?.updated_at || '')" />
-              </div>
-            </div>
-          </template>
-        </Column>
-
-        <Column header="Actions" frozen alignFrozen="right" :style="{ minWidth: '220px' }">
+        <Column header="Actions" frozen alignFrozen="right" :style="{ width: '130px' }">
           <template #body="slotProps">
             <div class="action-buttons">
-              <Button label="Detail" icon="pi pi-eye" size="small" outlined
+              <Button icon="pi pi-pencil" size="small" text
+                v-tooltip.top="noteTooltip(slotProps.data)"
+                :class="['action-btn', slotProps.data.note ? 'note-active' : 'note-empty']"
+                @click="$emit('edit-note', slotProps.data)" />
+              <Button icon="pi pi-eye" size="small" outlined
+                v-tooltip.top="'Detail'"
                 @click="$emit('view-details', slotProps.data)" />
-              <Button :label="isLoading(slotProps.data) ? 'Processing...' : 'Re-screen'" icon="pi pi-refresh"
-                size="small" severity="secondary" outlined :loading="isLoading(slotProps.data)"
-                :disabled="isLoading(slotProps.data)" @click="$emit('re-screen', slotProps.data)" />
+              <Button icon="pi pi-refresh" size="small" severity="secondary" outlined
+                v-tooltip.top="isLoading(slotProps.data) ? 'Processing...' : 'Re-screen'"
+                :loading="isLoading(slotProps.data)"
+                :disabled="isLoading(slotProps.data)"
+                @click="$emit('re-screen', slotProps.data)" />
             </div>
           </template>
         </Column>
@@ -132,7 +121,7 @@ import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import Tag from 'primevue/tag';
 import Skeleton from 'primevue/skeleton';
-import { formatNumber, formatDateTime, formatRelativeTime } from '../utils/formatters';
+import { formatNumber, formatDateTime, formatRelativeTime, getSelisihClass } from '../utils/formatters';
 
 const props = defineProps({
   data: { type: Array, required: true },
@@ -184,7 +173,15 @@ const onSort = (ev) => emit('sort-change', {
 
 const isLoading = (row) => props.loadingStores.has(`${row.CABANG || row.CAB}_${row.KDTK}`);
 
-const amountClass = (n) => Number(n || 0) >= 0 ? 'positive' : 'negative';
+const amountClass = getSelisihClass;
+
+const noteTooltip = (row) => {
+  if (!row.note) return 'Tambah catatan';
+  const text = row.note?.noteText ?? row.note ?? '';
+  const pic = row.note?.fullName || row.note?.pic || '';
+  const preview = String(text).length > 80 ? String(text).substring(0, 80) + '...' : String(text);
+  return pic ? `${pic}: ${preview}` : preview;
+};
 
 const getRowClass = (row) => {
   const key = `${row.CABANG || row.CAB || 'Unknown'}_${row.KDTK || 'Unknown'}`;
@@ -263,15 +260,6 @@ const getRowClass = (row) => {
   z-index: 1;
 }
 
-.notes-cell {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: .5rem;
-}
-.note-left { display: inline-flex; align-items: center; gap: .5rem; }
-.note-meta-icons { display: inline-flex; align-items: center; gap: .5rem; color: #6b7280; }
-.note-meta-icons i { cursor: pointer; }
 .clear-btn {
   position: absolute;
   right: 0.25rem;
@@ -350,12 +338,18 @@ const getRowClass = (row) => {
   font-variant-numeric: tabular-nums;
 }
 
-.amount-value.positive {
-  color: #059669;
+.amount-value.selisih-ok {
+  color: #6B7280;
 }
 
-.amount-value.negative {
-  color: #dc2626;
+.amount-value.selisih-warning {
+  color: #D97706;
+  font-weight: 600;
+}
+
+.amount-value.selisih-danger {
+  color: #DC2626;
+  font-weight: 600;
 }
 
 .last-screened {
@@ -363,23 +357,24 @@ const getRowClass = (row) => {
   font-size: 0.813rem;
 }
 
-.notes-cell:hover {
-  background: color-mix(in srgb, var(--text-color) 6%, var(--surface-color));
-  cursor: pointer;
-  border-radius: 4px;
+.action-buttons {
+  display: flex;
+  gap: 0.25rem;
+  justify-content: flex-end;
+  align-items: center;
 }
 
-.note-icon {
-  color: var(--text-color-secondary);
-  font-size: 0.875rem;
+.action-btn {
+  width: 2rem;
+  height: 2rem;
 }
 
-.note-text {
-  color: var(--text-color-secondary);
-  font-size: 0.875rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.note-active {
+  color: var(--primary-color) !important;
+}
+
+.note-empty {
+  color: #9CA3AF !important;
 }
 
 .empty-state {
@@ -414,12 +409,6 @@ const getRowClass = (row) => {
 }
 .skeleton-cell {
   flex: 1;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 0.5rem;
-  justify-content: flex-end;
 }
 
 /* Responsive */

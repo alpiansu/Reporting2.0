@@ -94,8 +94,9 @@
           <template #body="slotProps">
             <div class="action-buttons">
               <Button icon="pi pi-pencil" size="small" text
-                v-tooltip.top="noteTooltip(slotProps.data)"
                 :class="['action-btn', slotProps.data.note ? 'note-active' : 'note-empty']"
+                @mouseenter="showNotePopover($event, slotProps.data)"
+                @mouseleave="startHideTimer"
                 @click="$emit('edit-note', slotProps.data)" />
               <Button icon="pi pi-eye" size="small" outlined
                 v-tooltip.top="'Detail'"
@@ -110,6 +111,28 @@
         </Column>
       </DataTable>
     </div>
+
+    <Popover ref="notePopover" @mouseenter="cancelHideTimer" @mouseleave="hidePopover">
+      <div class="note-popover-content">
+        <template v-if="popoverNoteData?.note">
+          <div v-if="popoverNoteData.note?.category" class="note-popover-category">
+            {{ popoverNoteData.note.category.name || popoverNoteData.note.category }}
+          </div>
+          <div class="note-popover-text">{{ popoverNoteData.note?.noteText ?? popoverNoteData.note }}</div>
+          <div class="note-popover-meta">
+            <span class="note-popover-meta-item">
+              <i class="pi pi-user" /> {{ popoverNoteData.note?.fullName || popoverNoteData.note?.pic || '-' }}
+            </span>
+            <span class="note-popover-meta-item">
+              <i class="pi pi-clock" /> {{ formatDateTime(popoverNoteData.note?.updated_at || '') }}
+            </span>
+          </div>
+        </template>
+        <div v-else class="note-popover-empty">
+          <i class="pi pi-pencil" /> Belum ada catatan
+        </div>
+      </div>
+    </Popover>
   </div>
 </template>
 
@@ -121,6 +144,7 @@ import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import Tag from 'primevue/tag';
 import Skeleton from 'primevue/skeleton';
+import Popover from 'primevue/popover';
 import { formatNumber, formatDateTime, formatRelativeTime, getSelisihClass } from '../utils/formatters';
 
 const props = defineProps({
@@ -175,12 +199,26 @@ const isLoading = (row) => props.loadingStores.has(`${row.CABANG || row.CAB}_${r
 
 const amountClass = getSelisihClass;
 
-const noteTooltip = (row) => {
-  if (!row.note) return 'Tambah catatan';
-  const text = row.note?.noteText ?? row.note ?? '';
-  const pic = row.note?.fullName || row.note?.pic || '';
-  const preview = String(text).length > 80 ? String(text).substring(0, 80) + '...' : String(text);
-  return pic ? `${pic}: ${preview}` : preview;
+const notePopover = ref(null);
+const popoverNoteData = ref(null);
+let hideTimer = null;
+
+const showNotePopover = (event, row) => {
+  if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+  popoverNoteData.value = row;
+  notePopover.value?.show(event);
+};
+
+const startHideTimer = () => {
+  hideTimer = setTimeout(() => { notePopover.value?.hide(); }, 200);
+};
+
+const cancelHideTimer = () => {
+  if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+};
+
+const hidePopover = () => {
+  hideTimer = setTimeout(() => { notePopover.value?.hide(); }, 150);
 };
 
 const getRowClass = (row) => {
@@ -429,5 +467,57 @@ const getRowClass = (row) => {
   .search-box {
     max-width: 100%;
   }
+}
+</style>
+
+<style>
+/* Note Popover (unscoped - rendered in body portal by PrimeVue) */
+.note-popover-content {
+  width: 300px;
+  padding: 0.75rem;
+}
+
+.note-popover-category {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fff;
+  background: #3b82f6;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+}
+
+.note-popover-text {
+  font-size: 0.875rem;
+  color: #374151;
+  line-height: 1.5;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.note-popover-meta {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.625rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.note-popover-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.note-popover-empty {
+  font-size: 0.85rem;
+  color: #9ca3af;
+  font-style: italic;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 </style>

@@ -157,7 +157,28 @@ class RekonSalesService {
         },
       );
 
-      const formattedData = rows.map(r => ({
+      // ===== FILTER WRC: validasi toko aktif ke mstr_toko =====
+      const wrcPeriod = String(year).slice(2) + String(month).padStart(2, "0");
+      const groupedByCab = rows.reduce((acc, r) => {
+        if (!acc[r.CAB]) acc[r.CAB] = [];
+        acc[r.CAB].push(r);
+        return acc;
+      }, {});
+
+      const filteredRows = [];
+      for (const [cab, cabRows] of Object.entries(groupedByCab)) {
+        const stores = cabRows.map(r => ({ storeCode: r.KDTK }));
+        const validated = await storeService.validateStoresFromWRC(stores, cab, wrcPeriod);
+        const validCodes = new Set(validated.map(s => s.storeCode));
+        const kept = cabRows.filter(r => validCodes.has(r.KDTK));
+        filteredRows.push(...kept);
+        if (cabRows.length !== kept.length) {
+          logger.info(`[syncToJsonFile] Branch ${cab}: ${cabRows.length} → ${kept.length} kept after WRC validation`);
+        }
+      }
+      // ===== AKHIR FILTER =====
+
+      const formattedData = filteredRows.map(r => ({
         RECID: r.RECID,
         CAB: r.CAB,
         KDTK: r.KDTK,
@@ -185,7 +206,7 @@ class RekonSalesService {
       const cacheKey = this.getCacheKey(year, month);
       this.cacheManager.set(cacheKey, formattedData, config.cache.summaryTTL);
 
-      logger.info(`[rekon_sales.service] Synced ${formattedData.length} records to JSON for ${year}-${month}`);
+      logger.info(`[rekon_sales.service] Synced ${formattedData.length} records to JSON for ${year}-${month} (filtered from ${rows.length} raw records)`);
 
       return formattedData;
     } catch (error) {

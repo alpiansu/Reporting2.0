@@ -21,7 +21,12 @@ import screeningGuard from "../../utils/screeningGuard.js";
 import StoreQueryHelper from "./helpers/store.query.helper.js";
 import RekonCalculator from "./helpers/rekon.calculator.js";
 import WrcDataHelper from "./helpers/wrc.data.helper.js";
+import { runXcmd, buildDthrFilename } from "../../utils/xcmd.utils.js";
 import { json, Op } from "sequelize";
+
+const XCMD_WORKING_DIR = process.env.XCMD_WORKING_DIR;
+const XCMD_TIMEOUT_MS = parseInt(process.env.XCMD_TIMEOUT_MS, 10) || 60_000;
+const XCMD_RETRY_WAIT_MS = 15_000;
 
 /**
  * Check if the only differences are from Station 99 / Shift 9 (retur) 
@@ -260,7 +265,7 @@ class RekonSalesService {
   async processSingleStore(store, strMonth, strYear, dataGL, options = {}, sharedConnection = null) {
     const { deferSave = false } = options;
     const { storeCode, cab } = store;
-    const results = { success: false, records: null, hasIssue: false };
+    const results = { success: false, records: null, hasIssue: false, needsXcmdRetry: false, missingGlDates: null };
     const isShared = !!sharedConnection;
 
     try {
@@ -306,6 +311,30 @@ class RekonSalesService {
           "rekon_sales",
           `[${storeCode}] processing ${mtranData.length} transactions...`,
         );
+
+        // Detect dates where store has mtran data but GL data is missing
+        const checkedDates = new Set();
+        const missingGlDates = [];
+        for (const item of mtranData) {
+          const dateKey = `${item.SHOP}|${item.TANGGAL}`;
+          if (checkedDates.has(dateKey)) continue;
+          checkedDates.add(dateKey);
+          const glData = WrcDataHelper.findGLData(dataGL, item.SHOP, item.TANGGAL);
+          if (glData.length === 0) {
+            missingGlDates.push({ shop: item.SHOP, tanggal: item.TANGGAL });
+          }
+        }
+
+        if (missingGlDates.length > 0) {
+          logger.info(
+            `[rekon_sales.service] [${storeCode}] GL missing for ${missingGlDates.length} dates, requesting xcmd retry`,
+          );
+          results.success = true;
+          results.hasIssue = false;
+          results.needsXcmdRetry = true;
+          results.missingGlDates = missingGlDates;
+          return results;
+        }
 
         // STEP 2: Rekon vs GL using calculator
         // logger.info(`[rekon_sales.service] check value of dataGL : ${JSON.stringify(dataGL)}`);
@@ -381,6 +410,66 @@ class RekonSalesService {
     }
 
     return results;
+  }
+
+  /**
+   * Retry screening for a store after running xcmd pushdthr
+   * Handles: run xcmd per missing date → wait 15s → re-fetch GL → re-process
+   */
+  async retryXcmdPushDthr(store, strMonth, strYear, missingGlDates, options = {}) {
+    const { deferSave = false, branchGlData = null, branchKey = null } = options;
+    const { storeCode, cab } = store;
+
+    if (!XCMD_WORKING_DIR) {
+      logger.warn(`[rekon_sales.service] [${storeCode}] XCMD_WORKING_DIR not configured, skipping xcmd retry`);
+      return null;
+    }
+
+    // Step 1: Run xcmd pushdthr for each missing date
+    for (const { tanggal } of missingGlDates) {
+      try {
+        const fileName = buildDthrFilename({ kdtk: storeCode, tglTransaksi: tanggal });
+        await runXcmd(["PUSHDTHR", cab, "WRC", fileName], {
+          cwd: XCMD_WORKING_DIR,
+          timeoutMs: XCMD_TIMEOUT_MS,
+        });
+        logger.info(`[rekon_sales.service] [${storeCode}] xcmd pushdthr success: ${fileName}`);
+      } catch (err) {
+        logger.error(`[rekon_sales.service] [${storeCode}] xcmd pushdthr failed for ${tanggal}: ${err.message}`);
+      }
+    }
+
+    // Step 2: Wait 15 seconds for data propagation (only this thread)
+    logger.info(`[rekon_sales.service] [${storeCode}] Waiting ${XCMD_RETRY_WAIT_MS / 1000}s for GL data propagation...`);
+    await new Promise(resolve => setTimeout(resolve, XCMD_RETRY_WAIT_MS));
+
+    // Step 3: Re-fetch GL data for this specific store
+    try {
+      const { data: refreshedGlData } = await WrcDataHelper.openDataGLWrc(cab, storeCode, strMonth, strYear);
+
+      // Merge refreshed GL into branch GL array if available
+      if (branchGlData && branchKey && refreshedGlData && refreshedGlData.length > 0) {
+        branchGlData[branchKey] = [
+          ...branchGlData[branchKey].filter(g => g.KODE_TOKO !== storeCode),
+          ...refreshedGlData,
+        ];
+        logger.info(
+          `[rekon_sales.service] [${storeCode}] Merged ${refreshedGlData.length} refreshed GL records into branch data`,
+        );
+      }
+
+      // Step 4: Re-process the store
+      const updatedGlData = branchGlData && branchKey ? branchGlData[branchKey] : refreshedGlData;
+      const retryResult = await this.processSingleStore(store, strMonth, strYear, updatedGlData, { deferSave });
+
+      logger.info(
+        `[rekon_sales.service] [${storeCode}] Retry completed — success: ${retryResult.success}, hasIssue: ${retryResult.hasIssue}`,
+      );
+      return retryResult;
+    } catch (err) {
+      logger.error(`[rekon_sales.service] [${storeCode}] Retry re-process failed: ${err.message}`);
+      return null;
+    }
   }
 
   /**
@@ -606,7 +695,23 @@ class RekonSalesService {
         const { data: dataGL } = await WrcDataHelper.openDataGLWrc(storeCab, kdtk, strMonth, strYear);
 
         // Process single store
-        const result = await this.processSingleStore({ storeCode: kdtk, cab: storeCab }, strMonth, strYear, dataGL);
+        let result = await this.processSingleStore({ storeCode: kdtk, cab: storeCab }, strMonth, strYear, dataGL);
+
+        // xcmd retry: GL missing for some dates → push data harian → wait → re-process
+        if (result.needsXcmdRetry && result.missingGlDates?.length > 0) {
+          logger.info(
+            `[rekon_sales.service] [${kdtk}] GL missing for ${result.missingGlDates.length} dates, running xcmd pushdthr...`,
+          );
+          const retryResult = await this.retryXcmdPushDthr(
+            { storeCode: kdtk, cab: storeCab },
+            strMonth,
+            strYear,
+            result.missingGlDates,
+          );
+          if (retryResult) {
+            result = retryResult;
+          }
+        }
 
         // Save logs to database
         await RekapRemoteService.saveLogsToDatabase();
@@ -776,11 +881,29 @@ class RekonSalesService {
             progressService.addProcessingStore(taskId, storeCode);
 
             try {
-              const result = await withTimeout(
+              let result = await withTimeout(
                 this.processSingleStore(store, strMonth, strYear, glDataByBranch[cab], { deferSave: true }),
                 config.parallelProcessing.storeTimeoutMs,
                 `process store ${storeCode}`,
               );
+
+              // xcmd retry: GL missing for some dates → push data harian → wait → re-process
+              if (result.needsXcmdRetry && result.missingGlDates?.length > 0) {
+                await RekapRemoteService.addToTemp(
+                  cab,
+                  storeCode,
+                  "rekon_sales",
+                  `[${storeCode}] GL missing for ${result.missingGlDates.length} dates, running xcmd pushdthr...`,
+                );
+                const retryResult = await this.retryXcmdPushDthr(store, strMonth, strYear, result.missingGlDates, {
+                  deferSave: true,
+                  branchGlData: glDataByBranch,
+                  branchKey: cab,
+                });
+                if (retryResult) {
+                  result = retryResult;
+                }
+              }
 
               if (result.success) {
                 if (result.hasIssue) {

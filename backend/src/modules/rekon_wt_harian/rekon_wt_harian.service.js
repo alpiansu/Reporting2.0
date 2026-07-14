@@ -368,7 +368,8 @@ class RekonWtHarianService {
         }
         const percentage = totalStores > 0 ? Math.round((processedStores / totalStores) * 100) : 0;
         progressService.updateProgress(progressId, processedStores, {
-          message: `Memproses toko: ${processedStores}/${totalStores} (${percentage}%) - Cabang: ${cab}`,
+          description: `🔍 ${result?.storeCode || ''} → Selesai (${processedStores}/${totalStores}) — Cabang: ${cab}`,
+          status: "screening_stores",
           currentStore: result?.storeCode,
           currentBranch: cab,
           storesWithDifferences,
@@ -457,10 +458,15 @@ class RekonWtHarianService {
       logger.error(`Error reconciling all branches: ${error.message}`);
 
       if (progressId) {
-        await progressService.failProgress(progressId, error.message);
+        await progressService.failProgress(progressId, {
+          description: `Gagal memproses semua cabang: ${error.message}`,
+          status: "failed",
+        });
       }
 
       throw error;
+    } finally {
+      progressService.clearProcessingStores(progressId);
     }
   }
 
@@ -502,7 +508,10 @@ class RekonWtHarianService {
       logger.info(`Started non-blocking reconciliation for all branches with progress ID: ${progressId}`);
     } catch (error) {
       logger.error(`Error starting non-blocking reconciliation: ${error.message}`);
-      await progressService.failProgress(progressId, error.message);
+      await progressService.failProgress(progressId, {
+        description: `Gagal memulai rekonsiliasi: ${error.message}`,
+        status: "failed",
+      });
     }
   }
 
@@ -533,7 +542,8 @@ class RekonWtHarianService {
             }
             const percentage = totalStores > 0 ? Math.round((processedStores / totalStores) * 100) : 0;
             progressService.updateProgress(progressId, processedStores, {
-              message: `Memproses toko: ${processedStores}/${totalStores} (${percentage}%)`,
+              description: `🔍 ${result?.storeCode || ''} → Selesai (${processedStores}/${totalStores})`,
+              status: "screening_stores",
               currentStore: result?.storeCode,
               storesWithDifferences,
               totalDifferences,
@@ -542,7 +552,16 @@ class RekonWtHarianService {
 
           const result = await this.reconcileData(cab, period, progressId, onStoreProcessed, force);
 
+          progressService.updateProgress(progressId, processedStores, {
+            description: "📊 Proses simpan database...",
+            status: "finalizing",
+          });
           await this.saveDifferencesToDatabase(cab, period);
+
+          progressService.updateProgress(progressId, processedStores, {
+            description: "💾 Menyimpan hasil ke file...",
+            status: "finalizing",
+          });
           await this.syncToJsonFile();
 
           await progressService.completeProgress(progressId);
@@ -553,14 +572,20 @@ class RekonWtHarianService {
           );
         } catch (error) {
           logger.error(`Error in background reconciliation: ${error.message}`);
-          await progressService.failProgress(progressId, error.message);
+          await progressService.failProgress(progressId, {
+            description: `Gagal rekonsiliasi: ${error.message}`,
+            status: "failed",
+          });
         }
       }, 0);
 
       logger.info(`Started non-blocking reconciliation for branch ${cab} with progress ID: ${progressId}`);
     } catch (error) {
       logger.error(`Error starting non-blocking reconciliation: ${error.message}`);
-      await progressService.failProgress(progressId, error.message);
+      await progressService.failProgress(progressId, {
+        description: `Gagal memulai rekonsiliasi: ${error.message}`,
+        status: "failed",
+      });
     }
   }
 
@@ -704,6 +729,14 @@ class RekonWtHarianService {
    */
   async reconcileData(cab, period, progressId, onStoreProcessed, force = false) {
     try {
+      // Phase: Fetching WRC data
+      if (progressId) {
+        progressService.updateProgress(progressId, 0, {
+          description: "📡 Mengambil data WRC...",
+          status: "fetching_data",
+        });
+      }
+
       // Get WRC data
       const wrcDataFile = await this.getWrcData(cab, period);
 
@@ -766,7 +799,8 @@ class RekonWtHarianService {
         // Update progress with wave information
         if (progressId) {
           progressService.updateProgress(progressId, branchStores.length - currentStores.length, {
-            message: `Wave ${wave}: Memproses ${currentStores.length} toko`,
+            description: `🌊 Wave ${wave}: Memproses ${currentStores.length} toko...`,
+            status: "screening_stores",
             currentWave: wave,
             cab: cab,
             period: period,
@@ -774,7 +808,7 @@ class RekonWtHarianService {
         }
 
         // Process current wave of stores
-        const waveResults = await this.processStoreWave(currentStores, cab, period, wrcData, CONCURRENCY_LIMIT, wave, force);
+        const waveResults = await this.processStoreWave(currentStores, cab, period, wrcData, CONCURRENCY_LIMIT, wave, force, progressId);
 
         const waveEndTime = Date.now();
         const waveDuration = (waveEndTime - waveStartTime) / 1000;
@@ -897,7 +931,8 @@ class RekonWtHarianService {
         }
 
         progressService.updateProgress(progressId, results.processedStores, {
-          message: `Wave ${wave} selesai: ${completedStores.length} berhasil, ${timeoutStores.length} timeout`,
+          description: `✅ Wave ${wave} selesai: ${completedStores.length} berhasil, ${timeoutStores.length} timeout`,
+          status: "screening_stores",
           currentWave: wave,
           totalDifferences: results.totalDifferences,
           storesWithDifferences: results.storesWithDifferences,
@@ -958,6 +993,14 @@ class RekonWtHarianService {
       results.period = period;
       results.totalDuration = totalDuration;
 
+      // Phase: Saving to database
+      if (progressId) {
+        progressService.updateProgress(progressId, results.processedStores, {
+          description: "📊 Proses simpan database...",
+          status: "finalizing",
+        });
+      }
+
       // Save differences to database
       try {
         logger.info(`Saving differences to database for branch ${cab} and period ${period}`);
@@ -969,6 +1012,14 @@ class RekonWtHarianService {
       } catch (error) {
         logger.error(`Error saving differences to database: ${error.message}`);
         results.saveError = error.message;
+      }
+
+      // Phase: Syncing logs
+      if (progressId) {
+        progressService.updateProgress(progressId, results.processedStores, {
+          description: "💾 Menyimpan log rekap_remote...",
+          status: "finalizing",
+        });
       }
 
       // Save rekap_remote logs to database at the end of reconciliation process
@@ -1000,16 +1051,23 @@ class RekonWtHarianService {
    * @param {number} waveNumber - Current wave number for logging
    * @returns {Promise<Array>} Promise.allSettled results
    */
-  async processStoreWave(stores, cab, period, wrcData, concurrencyLimit, waveNumber, force = false) {
+  async processStoreWave(stores, cab, period, wrcData, concurrencyLimit, waveNumber, force = false, progressId = null) {
     // Use a semaphore-like approach to control concurrency
     const processConcurrentStores = async (stores, limit) => {
       const results = [];
       const executing = [];
 
       for (const store of stores) {
-        const promise = this.processStoreWithTimeout(store, cab, period, wrcData, waveNumber, force).then(result => {
+        if (progressId) {
+          progressService.addProcessingStore(progressId, store.storeCode);
+        }
+        const promise = this.processStoreWithTimeout(store, cab, period, wrcData, waveNumber, force, progressId).then(result => {
           executing.splice(executing.indexOf(promise), 1);
           return result;
+        }).finally(() => {
+          if (progressId) {
+            progressService.removeProcessingStore(progressId, store.storeCode);
+          }
         });
 
         results.push(promise);
@@ -1037,9 +1095,22 @@ class RekonWtHarianService {
    * @param {number} waveNumber - Current wave number (optional, for logging)
    * @returns {Promise<Object>} Store processing result
    */
-  async processStoreWithTimeout(store, cab, period, wrcData, waveNumber = 1, force = false) {
+  async processStoreWithTimeout(store, cab, period, wrcData, waveNumber = 1, force = false, progressId = null) {
     const storeCode = store.storeCode;
     const STORE_TIMEOUT = config.parallelProcessing?.storeTimeoutMs || 10000;
+
+    // Check if task was aborted
+    if (progressId && progressService.isAborted(progressId)) {
+      logger.info(`[Wave ${waveNumber}] [${storeCode}] Aborted — task dibatalkan`);
+      return {
+        storeCode,
+        storeName: store.storeName || storeCode,
+        differences: [],
+        errors: [],
+        skipped: true,
+        skipReason: "Task dibatalkan",
+      };
+    }
 
     // Daily screening guard: skip store if already successfully screened today
     if (!force) {

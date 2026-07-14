@@ -40,10 +40,18 @@
         style="margin-top: 15px;" />
 
       <!-- Progress Bar Component -->
-      <ProgressBar :visible="showProgressBar" :title="progressTitle" :status="progressStatus"
-        :processed="processedItems" :total="totalItems" :differences="totalDifferences" :timeElapsed="timeElapsed"
-        :message="progressMessage" :percentage="progressPercentage"
-        :currentBranch="currentBranch" @close="hideProgressBar" />
+      <ProgressBar v-if="isReconciling" :visible="isReconciling" :percentage="progressPercentage" :info="currentInfo">
+        <template #title>
+          Proses Rekonsiliasi WT Harian
+        </template>
+        <template #subtitle>
+          Menghubungkan ke toko/WRC dan membandingkan data transaksi.<br />
+          Proses ini mungkin memakan waktu tergantung jumlah toko dan hari.
+        </template>
+        <template #details>
+          <small><strong>{{ currentInfo }}</strong></small>
+        </template>
+      </ProgressBar>
 
       <!-- Confirmation Dialog -->
       <ConfirmDialog v-model="showConfirmDialog" :title="confirmDialogTitle" :message="confirmDialogMessage"
@@ -54,7 +62,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue';
+import { ref, reactive, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useToastService } from '../../utils/toast';
 import { useCabangStore } from '../../stores';
 import { useProgress } from '../../composables/useProgress';
@@ -62,7 +70,7 @@ import Dropdown from 'primevue/dropdown';
 import Calendar from 'primevue/calendar';
 import Checkbox from 'primevue/checkbox';
 import Button from 'primevue/button';
-import ProgressBar from './ProgressBar.vue';
+import ProgressBar from '../common/ProgressBar.vue';
 import ConfirmDialog from '../common/ConfirmDialog.vue';
 import rekonWtHarianService from '../../services/rekonWtHarian.service';
 import LastScanInfo from "@/components/common/LastScanInfo.vue";
@@ -78,25 +86,15 @@ const today = ref(new Date());
 const {
   progress,
   percentage: progressPercentage,
-  isMonitoring,
   isCompleted,
   isFailed,
-  isVisible: isProgressVisible,
+  isVisible,
+  currentInfo,
   startMonitoring,
   stopMonitoring,
 } = useProgress();
 
 const isReconciling = ref(false);
-const showProgressBar = ref(false);
-const processedItems = ref(0);
-const totalItems = ref(0);
-const totalDifferences = ref(0);
-const timeElapsed = ref(0);
-const progressMessage = ref('');
-const progressTimer = ref(null);
-const currentBranch = ref('');
-const progressTitle = ref('Proses Rekonsiliasi WT Harian');
-const progressStatus = computed(() => progress.value?.status || 'pending');
 
 // Confirm dialog variables
 const showConfirmDialog = ref(false);
@@ -209,41 +207,6 @@ const handleCabChange = () => {
 
 const emit = defineEmits(['view-results']);
 
-// Map progress data to local state for ProgressBar component
-const syncProgressFromData = (progressData) => {
-  if (!progressData) return;
-
-  const info = progressData.info || {};
-
-  processedItems.value = progressData.current || 0;
-  totalItems.value = progressData.total || 0;
-  totalDifferences.value = info.totalDifferences || info.storesWithDifferences || 0;
-  currentBranch.value = info.cab || info.currentBranch || '';
-  progressMessage.value = progressData.description || progressData.message || '';
-
-  if (currentBranch.value && currentBranch.value !== 'All') {
-    const cabangText = `Cabang ${currentBranch.value}`;
-    const periodeText = formData.periode ? `Periode ${formData.periode}` : '';
-    progressTitle.value = `Rekonsiliasi WT Harian - ${cabangText} ${periodeText}`.trim();
-  }
-};
-
-// Watch for progress changes from useProgress composable
-watch(progress, (newProgress) => {
-  if (!newProgress || !isReconciling.value) return;
-
-  syncProgressFromData(newProgress);
-
-  if (isCompleted.value) {
-    stopProgressTracking();
-    toast.showSuccess('Sukses', 'Rekonsiliasi selesai');
-    emitViewResults();
-  } else if (isFailed.value) {
-    stopProgressTracking();
-    toast.showError('Error', newProgress.description || 'Terjadi kesalahan saat rekonsiliasi');
-  }
-}, { deep: true });
-
 const startReconciliation = async () => {
   if (!validateForm()) return;
   
@@ -256,18 +219,6 @@ const startReconciliation = async () => {
   
   try {
     isReconciling.value = true;
-    showProgressBar.value = true;
-    processedItems.value = 0;
-    totalItems.value = 0;
-    totalDifferences.value = 0;
-    timeElapsed.value = 0;
-    progressMessage.value = 'Memulai proses rekonsiliasi...';
-    
-    const cabangText = formData.cab === 'All' ? 'Semua Cabang' : `Cabang ${formData.cab}`;
-    const periodeText = formData.periode ? `Periode ${formData.periode}` : '';
-    progressTitle.value = `Rekonsiliasi WT Harian - ${cabangText} ${periodeText}`.trim();
-    
-    startProgressTimer();
     
     const response = await rekonWtHarianService.startReconciliation({
       cab: formData.cab,
@@ -277,10 +228,8 @@ const startReconciliation = async () => {
     
     if (response.data && response.data.taskId) {
       const taskId = response.data.taskId;
-      totalItems.value = response.data.totalStores || response.data.totalBranches || 0;
       
       await startMonitoring(taskId, {
-        onUpdate: (data) => syncProgressFromData(data),
         onComplete: () => {
           stopProgressTracking();
           toast.showSuccess('Sukses', 'Rekonsiliasi selesai');
@@ -303,19 +252,14 @@ const startReconciliation = async () => {
       const activeCab = activeProcess.info?.cab || activeProcess.cab || 'Unknown';
       const activePeriode = activeProcess.info?.period || activeProcess.periode || 'Unknown';
       
-      progressMessage.value = `Proses rekonsiliasi untuk ${activeCab === 'All' ? 'semua cabang' : `cabang ${activeCab}`} periode ${activePeriode} sedang berjalan.`;
-      
       if (activeProcess && activeProcess.id) {
         confirmDialogTitle.value = 'Proses Rekonsiliasi Sedang Berjalan';
-        confirmDialogMessage.value = `${progressMessage.value}\n\nApakah Anda ingin melihat progress proses yang sedang berjalan?`;
+        confirmDialogMessage.value = `Proses rekonsiliasi untuk ${activeCab === 'All' ? 'semua cabang' : `cabang ${activeCab}`} periode ${activePeriode} sedang berjalan.\n\nApakah Anda ingin melihat progress proses yang sedang berjalan?`;
         confirmDialogConfirmText.value = 'Ya, Lihat Progress';
         confirmDialogCancelText.value = 'Tidak';
         
         confirmDialogCallback.value = async () => {
-          totalItems.value = activeProcess.total || activeProcess.totalItems || 0;
-          
           await startMonitoring(activeProcess.id, {
-            onUpdate: (data) => syncProgressFromData(data),
             onComplete: () => {
               stopProgressTracking();
               toast.showSuccess('Sukses', 'Rekonsiliasi selesai');
@@ -336,7 +280,6 @@ const startReconciliation = async () => {
       
       toast.showWarning('Perhatian', error.response.data.message || 'Proses rekonsiliasi sedang berjalan');
     } else {
-      progressMessage.value = `Error: ${error.message || 'Terjadi kesalahan saat memulai rekonsiliasi'}`;
       toast.showError('Error', error.message || 'Terjadi kesalahan saat memulai rekonsiliasi');
     }
     
@@ -344,31 +287,9 @@ const startReconciliation = async () => {
   }
 };
 
-const startProgressTimer = () => {
-  if (progressTimer.value) {
-    clearInterval(progressTimer.value);
-  }
-  
-  timeElapsed.value = 0;
-  
-  progressTimer.value = setInterval(() => {
-    timeElapsed.value++;
-  }, 1000);
-};
-
 const stopProgressTracking = () => {
   isReconciling.value = false;
-  
-  if (progressTimer.value) {
-    clearInterval(progressTimer.value);
-    progressTimer.value = null;
-  }
-  
   stopMonitoring();
-};
-
-const hideProgressBar = () => {
-  showProgressBar.value = false;
 };
 
 const handleConfirmDialogConfirm = () => {
@@ -394,24 +315,10 @@ const checkExistingReconciliation = async () => {
       const status = taskData.status;
       
       if (status === 'running' || status === 'pending') {
-        totalItems.value = taskData.total || 0;
-        
-        const info = taskData.info || {};
-        const cabangText = info.cab === 'All' ? 'Semua Cabang' : `Cabang ${info.cab || formData.cab}`;
-        const periodeText = formData.periode ? `Periode ${formData.periode}` : '';
-        progressTitle.value = `Rekonsiliasi WT Harian - ${cabangText} ${periodeText}`.trim();
-        
-        currentBranch.value = info.cab || formData.cab;
-        totalDifferences.value = info.totalDifferences || 0;
-        progressMessage.value = taskData.description || 'Rekonsiliasi sedang berjalan...';
-        
         isReconciling.value = true;
-        showProgressBar.value = true;
-        startProgressTimer();
         
         if (taskData.id) {
           await startMonitoring(taskData.id, {
-            onUpdate: (data) => syncProgressFromData(data),
             onComplete: () => {
               stopProgressTracking();
               toast.showSuccess('Sukses', 'Rekonsiliasi selesai');
@@ -435,6 +342,33 @@ const checkExistingReconciliation = async () => {
     return false;
   }
 };
+
+// Backup watches (rekon_sales pattern) — handles completion if callback timing changes
+watch(isCompleted, async (newVal) => {
+  if (!isReconciling.value) return;
+  if (newVal) {
+    setTimeout(async () => {
+      if (isReconciling.value) {
+        stopProgressTracking();
+        toast.showSuccess('Sukses', 'Rekonsiliasi selesai');
+        emitViewResults();
+      }
+    }, 1000);
+  }
+});
+
+watch(isFailed, async (newVal) => {
+  if (!isReconciling.value) return;
+  if (newVal) {
+    setTimeout(async () => {
+      if (isReconciling.value) {
+        const errorMsg = progress.value?.error?.description || progress.value?.description || 'Terjadi kesalahan saat rekonsiliasi';
+        stopProgressTracking();
+        toast.showError('Error', errorMsg);
+      }
+    }, 1000);
+  }
+});
 
 onBeforeUnmount(() => {
   stopProgressTracking();
@@ -518,43 +452,6 @@ label {
   color: #e74c3c;
   font-size: 0.875rem;
   margin-top: 0.25rem;
-}
-
-.help-text {
-  color: #666;
-  font-size: 0.875rem;
-  margin-top: 0.25rem;
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.75rem 1.5rem;
-  border-radius: 4px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s, transform 0.1s;
-  border: none;
-  gap: 0.5rem;
-}
-
-.btn:active {
-  transform: translateY(1px);
-}
-
-.btn-primary {
-  background-color: var(--primary-color);
-  color: white;
-}
-
-.btn-primary:hover {
-  background-color: var(--primary-color-darken);
-}
-
-.btn-primary:disabled {
-  background-color: #b0bec5;
-  cursor: not-allowed;
 }
 
 @media (min-width: 768px) {

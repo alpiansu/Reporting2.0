@@ -83,6 +83,10 @@ export const startReconciliation = async (req, res, next) => {
       await progressService.startProgress(taskId, totalStores, {
         module: "rekon_wt_harian",
         title: "Rekon WT Harian - Semua Cabang",
+        description: "Mendaftarkan tugas rekonsiliasi...",
+        startedBy: req.user?.fullName || req.user?.username || "system",
+        status: "registering",
+        createdAt: new Date().toISOString(),
         cab: "All",
         period: periode,
         totalStores,
@@ -108,6 +112,10 @@ export const startReconciliation = async (req, res, next) => {
     await progressService.startProgress(taskId, totalStores, {
       module: "rekon_wt_harian",
       title: `Rekon WT Harian - Cabang ${cabParam}`,
+      description: "Mendaftarkan tugas rekonsiliasi...",
+      startedBy: req.user?.fullName || req.user?.username || "system",
+      status: "registering",
+      createdAt: new Date().toISOString(),
       cab: cabParam,
       period: periode,
       totalStores,

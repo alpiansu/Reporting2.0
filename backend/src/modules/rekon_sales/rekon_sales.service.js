@@ -371,8 +371,9 @@ class RekonSalesService {
           }
 
           // Check if the only differences are Station 99/Shift 9 retur with GL safe
-          if (diffData.length > 0 && isOnlyReturIssue(diffData, mtranData, rekonResults, config.tolerance)) {
-            logger.info(`[${storeCode}] Only Station 99/Shift 9 retur issue — GL safe, RECID=1`);
+          const isOnlyRetur = diffData.length > 0 && isOnlyReturIssue(diffData, mtranData, rekonResults, config.tolerance);
+          if (isOnlyRetur) {
+            logger.info(`[${storeCode}] Only Station 99/Shift 9 retur issue — GL safe, treating as no issue`);
             for (const r of rekonResults) {
               r.RECID = '1';
             }
@@ -398,7 +399,7 @@ class RekonSalesService {
           results.records = rekonResults;
           results.diffData = diffData;
           results.detailData = detailIssues;
-          results.hasIssue = true;
+          results.hasIssue = !(isOnlyRetur && detailIssues.length === 0);
           results.success = true;
         } else {
           // No issues found

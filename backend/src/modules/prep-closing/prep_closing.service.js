@@ -880,11 +880,10 @@ class PrepClosingService {
 
       logger.info(`[prep_closing.service] Branches to process: ${branches.join(", ")}`);
 
-      // === WRC GUARD: Skip cabang yang belum sync WRC JSON ===
+      // === WRC GUARD: Screening hanya boleh dijalankan jika semua cabang sudah sync WRC ===
       await wrcExtractorService.loadCache();
       const wrcCache = wrcExtractorService.cacheData;
       const unsyncedBranches = [];
-      const validBranches = [];
 
       for (const cab of branches) {
         const branchCache = wrcCache.data_by_cabang?.[cab];
@@ -893,24 +892,16 @@ class PrepClosingService {
           (Object.keys(branchCache.branch_level_data || {}).length > 0 ||
             Object.keys(branchCache.stores || {}).length > 0)
         );
-        if (hasData) {
-          validBranches.push(cab);
-        } else {
+        if (!hasData) {
           unsyncedBranches.push(cab);
         }
       }
 
       if (unsyncedBranches.length > 0) {
-        logger.warn(`[prep_closing.service] WRC Guard: Skipping unsynced branches: ${unsyncedBranches.join(", ")}`);
-      }
-
-      if (validBranches.length === 0) {
         throw new Error(
           `Data WRC belum di-sync untuk cabang: ${unsyncedBranches.join(", ")}. Silakan lakukan Sync WRC terlebih dahulu.`,
         );
       }
-
-      branches = validBranches;
 
       // === STEP 2: Collect all stores ===
       const storeGroups = await Promise.all(
@@ -1738,6 +1729,7 @@ class PrepClosingService {
     await storeService.ensureInitialized();
     const cacheData = wrcExtractorService.cacheData;
     const allBranches = [...new Set(storeService.stores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))];
+    const lastExtractedAt = cacheData.last_extracted_at || null;
 
     const result = allBranches.map(cab => {
       const branchCache = cacheData.data_by_cabang?.[cab];
@@ -1746,7 +1738,7 @@ class PrepClosingService {
         (Object.keys(branchCache.branch_level_data || {}).length > 0 ||
           Object.keys(branchCache.stores || {}).length > 0)
       );
-      return { cab, synced: hasData };
+      return { cab, synced: hasData, last_synced_at: hasData ? lastExtractedAt : null };
     });
 
     return result;

@@ -263,7 +263,7 @@ class RekonSalesService {
    * FIXED: Properly handle detailIssues from rekonKodePesanan
    */
   async processSingleStore(store, strMonth, strYear, dataGL, options = {}, sharedConnection = null) {
-    const { deferSave = false } = options;
+    const { deferSave = false, skipMissingGlCheck = false } = options;
     const { storeCode, cab } = store;
     const results = { success: false, records: null, hasIssue: false, needsXcmdRetry: false, missingGlDates: null };
     const isShared = !!sharedConnection;
@@ -325,7 +325,7 @@ class RekonSalesService {
           }
         }
 
-        if (missingGlDates.length > 0) {
+        if (missingGlDates.length > 0 && !skipMissingGlCheck) {
           logger.info(
             `[rekon_sales.service] [${storeCode}] GL missing for ${missingGlDates.length} dates, requesting xcmd retry`,
           );
@@ -334,6 +334,12 @@ class RekonSalesService {
           results.needsXcmdRetry = true;
           results.missingGlDates = missingGlDates;
           return results;
+        }
+
+        if (missingGlDates.length > 0 && skipMissingGlCheck) {
+          logger.warn(
+            `[rekon_sales.service] [${storeCode}] GL still missing for ${missingGlDates.length} dates after xcmd retry, proceeding with empty GL`,
+          );
         }
 
         // STEP 2: Rekon vs GL using calculator
@@ -458,9 +464,9 @@ class RekonSalesService {
         );
       }
 
-      // Step 4: Re-process the store
+      // Step 4: Re-process the store (with skipMissingGlCheck so it falls back to empty GL instead of requesting another retry)
       const updatedGlData = branchGlData && branchKey ? branchGlData[branchKey] : refreshedGlData;
-      const retryResult = await this.processSingleStore(store, strMonth, strYear, updatedGlData, { deferSave });
+      const retryResult = await this.processSingleStore(store, strMonth, strYear, updatedGlData, { deferSave, skipMissingGlCheck: true });
 
       logger.info(
         `[rekon_sales.service] [${storeCode}] Retry completed — success: ${retryResult.success}, hasIssue: ${retryResult.hasIssue}`,
@@ -660,7 +666,7 @@ class RekonSalesService {
 
   /**
    * Main screening method
-   * Supports 3 levels: All cabang, 1 cabang, or 1 specific store
+   * Supports 4 levels: All cabang, 1 cabang, 1 specific store, or custom shops list
    */
   async screening(options) {
     // Ensure services are initialized
@@ -767,7 +773,21 @@ class RekonSalesService {
     try {
       // === STEP 1: Determine branches ===
       let branches = [];
-      if (cabang === "All" || cabang === "ALL") {
+      if (options.shops && options.shops.length > 0) {
+        if (cabang !== "All" && cabang !== "ALL") {
+          branches = [cabang];
+        } else {
+          const shopBranches = new Set();
+          for (const shopCode of options.shops) {
+            const storeInfo = await storeService.getStoreByCode(shopCode);
+            if (storeInfo) {
+              const branch = storeInfo.branch || storeInfo.cab;
+              shopBranches.add(branch);
+            }
+          }
+          branches = [...shopBranches];
+        }
+      } else if (cabang === "All" || cabang === "ALL") {
         const allStores = storeService.stores;
         branches = [...new Set(allStores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))];
       } else {
@@ -778,6 +798,10 @@ class RekonSalesService {
 
       // === STEP 2: Collect all stores ===
       const wrcPeriod = strYear.slice(2) + strMonth;
+      const shopSet = options.shops && options.shops.length > 0
+        ? new Set(options.shops.map(s => s.trim().toUpperCase()))
+        : null;
+
       const storeGroups = await Promise.all(
         branches.map(cab =>
           limitBranches(async () => {
@@ -786,7 +810,11 @@ class RekonSalesService {
               period: wrcPeriod,
             });
             logger.info(`[rekon_sales.service] Found ${stores.length} stores for branch ${cab}`);
-            return stores.map(s => ({ ...s, cab }));
+            let filtered = stores.map(s => ({ ...s, cab }));
+            if (shopSet) {
+              filtered = filtered.filter(s => shopSet.has(s.storeCode.toUpperCase()));
+            }
+            return filtered;
           }),
         ),
       );
@@ -1115,9 +1143,18 @@ class RekonSalesService {
 
       // LEVEL 3: Single Store
       if (level === 3) {
+        replacements.kdtk = kdtk;
+
         if (hasIssue) {
-          logger.info(`[rekon_sales.service] Level 3: Store ${kdtk} has issues, no RECID update`);
-          return 0;
+          query = `
+            UPDATE rekon_sales
+            SET RECID = '*'
+            WHERE MONTH(TANGGAL) = :month
+              AND YEAR(TANGGAL) = :year
+              AND KDTK = :kdtk
+              AND RECID = '1'
+          `;
+          logger.info(`[rekon_sales.service] Level 3: Store ${kdtk} has issues, resetting RECID='1' back to '*'`);
         } else {
           query = `
             UPDATE rekon_sales
@@ -1127,8 +1164,6 @@ class RekonSalesService {
               AND KDTK = :kdtk
               AND RECID = '*'
           `;
-          replacements.kdtk = kdtk;
-
           logger.info(`[rekon_sales.service] Level 3: Updating RECID='1' for store ${kdtk}`);
         }
       }
@@ -1208,6 +1243,42 @@ class RekonSalesService {
       });
 
       logger.info(`[rekon_sales.service] Updated ${metadata} records to RECID='1'`);
+
+      // For Level 1 & 2: also reset RECID='1' back to '*' for active stores (stores with issues)
+      if ((level === 1 || level === 2) && activeStores && activeStores.length > 0) {
+        const resetQuery = level === 2 ? `
+          UPDATE rekon_sales
+          SET RECID = '*'
+          WHERE MONTH(TANGGAL) = :month
+            AND YEAR(TANGGAL) = :year
+            AND CAB = :cabang
+            AND RECID = '1'
+            AND KDTK IN (:activeStores)
+        ` : `
+          UPDATE rekon_sales
+          SET RECID = '*'
+          WHERE MONTH(TANGGAL) = :month
+            AND YEAR(TANGGAL) = :year
+            AND RECID = '1'
+            AND KDTK IN (:activeStores)
+        `;
+
+        const resetReplacements = {
+          month,
+          year,
+          activeStores,
+          ...(level === 2 ? { cabang } : {}),
+        };
+
+        const [resetResults, resetMetadata] = await sequelize.query(resetQuery, {
+          replacements: resetReplacements,
+          type: Sequelize.QueryTypes.UPDATE,
+        });
+
+        logger.info(
+          `[rekon_sales.service] Level ${level}: Reset ${resetMetadata} records back to RECID='*' for active stores`,
+        );
+      }
 
       return metadata;
     } catch (error) {

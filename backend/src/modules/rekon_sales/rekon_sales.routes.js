@@ -17,14 +17,9 @@ const validatePeriod = [
 const validateCabangKdtk = [
   body(["cabang"]).not().isEmpty().trim().escape().withMessage("tidak boleh kosong"),
   body(["cabang"]).isString().withMessage("cabang harus berupa string"),
-  body(["kdtk"])
-    .if(body(["cabang"]).not().equals("ALL"))
-    .not()
-    .isEmpty()
-    .withMessage("kdtk harus diisi jika cabang tidak ALL"),
 ];
 
-// Screening routes (supports 3 levels: All cabang, 1 cabang, 1 store)
+// Screening routes (supports All cabang, 1 cabang, 1 store, or custom shops list)
 router.get("/screening", validatePeriod, validateCabangKdtk, rekonSalesController.screeningByCabang);
 
 // Get summary statistics

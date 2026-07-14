@@ -9,16 +9,28 @@ import UserService from "../user/user.service.js";
 
 /**
  * Start screening process
- * Supports 3 levels: All cabang, 1 cabang, or 1 specific store
+ * Supports 4 levels: All cabang, 1 cabang, 1 specific store, or custom shops list
  * GET /api/rekon-sales/screening
  */
 export const screeningByCabang = async (req, res) => {
   try {
-    const { cabang, periode, kdtk, force } = req.query;
+    const { cabang, periode, kdtk, shops, force } = req.query;
 
     const username = req.user?.username || "system";
     const fullName = req.user?.fullName || username;
     const isForce = force === "true";
+
+    let shopList = [];
+    if (shops) {
+      if (Array.isArray(shops)) {
+        shopList = shops;
+      } else if (typeof shops === "string") {
+        shopList = shops
+          .split(",")
+          .map(s => s.trim())
+          .filter(Boolean);
+      }
+    }
 
     // LEVEL 3: Single store screening (no guard)
     if (kdtk) {
@@ -34,10 +46,10 @@ export const screeningByCabang = async (req, res) => {
       return apiResponse.success(res, result);
     }
 
-    // LEVEL 1 & 2: Multi-store screening (with daily guard)
+    // LEVEL 1 & 2 + Custom Shops: Multi-store screening (with daily guard)
     const cabParam = !cabang || cabang === "All" ? "All" : cabang;
     logger.info(
-      `[rekon_sales.controller] Starting screening for cabang: ${cabParam}, periode: ${periode}${isForce ? " [FORCE]" : ""}`,
+      `[rekon_sales.controller] Starting screening for cabang: ${cabParam}, periode: ${periode}${shopList.length > 0 ? `, shops: ${shopList.join(",")}` : ""}${isForce ? " [FORCE]" : ""}`,
     );
 
     const { default: config } = await import("./rekon_sales.config.js");
@@ -49,6 +61,7 @@ export const screeningByCabang = async (req, res) => {
       username,
       fullName,
       force: isForce,
+      shops: shopList,
     });
 
     return apiResponse.success(res, { ...result, taskId });

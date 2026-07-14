@@ -6,6 +6,11 @@ export default {
   async screening(params) {
     try {
       if (params.force) params.force = "true";
+      if (params.shops && params.shops.length > 0) {
+        params.shops = params.shops.join(",");
+      } else {
+        delete params.shops;
+      }
       return (await api.get(`${BASE_URL}/screening`, { params })).data;
     } catch (err) {
       console.log(`error when trying to do screening on rekon_sales: ${err.message}`);

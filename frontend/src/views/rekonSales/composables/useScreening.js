@@ -26,12 +26,13 @@ export function useScreening() {
     return username ? `rekonSalesTask_${username}` : null;
   };
 
-  const screenCabang = async ({ cabang, periode, force = false }) => {
+  const screenCabang = async ({ cabang, periode, force = false, shops = [] }) => {
     try {
       isMassScreening.value = true;
       isReconciling.value = true;
       const params = { cabang, periode };
       if (force) params.force = true;
+      if (shops && shops.length > 0) params.shops = shops;
       // Non-blocking trigger
       rekonSalesApi.screening(params).catch(err => {
         console.error("Screening trigger error (non-blocking):", err);

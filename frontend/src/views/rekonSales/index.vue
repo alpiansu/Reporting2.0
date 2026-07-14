@@ -6,7 +6,7 @@
     <div class="content-container">
       <div class="filter-card">
         <FilterBar v-model:cabang="filters.cabang" v-model:month="filters.month" v-model:year="filters.year"
-          :cabangOptions="cabangOptions" :loading="isReconciling" @refresh="refreshAll"
+          v-model:shops="selectedShops" :cabangOptions="cabangOptions" :loading="isReconciling" @refresh="refreshAll"
           @start-screening="handleStartScreening" />
 
       </div>
@@ -104,6 +104,7 @@ const {
 } = useProgress({ maxRetry: 60, retryInterval: 1000 });
 
 const cabangOptions = ref([]);
+const selectedShops = ref([]);
 const detailVisible = ref(false);
 const selectedDetail = ref(null);
 const detailLoading = ref(false);
@@ -142,9 +143,9 @@ watch([() => filters.month, () => filters.year, () => filters.cabang], async () 
 });
 
 const handleStartScreening = async (options = {}) => {
-  console.log('🎬 Trigger mass screening:', { cabang: filters.cabang, periode: `${filters.year}-${filters.month}`, force: options.force });
+  console.log('🎬 Trigger mass screening:', { cabang: filters.cabang, periode: `${filters.year}-${filters.month}`, force: options.force, shops: options.shops });
 
-  await screenCabang({ cabang: filters.cabang, periode: `${filters.year}-${filters.month}`, force: options.force });
+  await screenCabang({ cabang: filters.cabang, periode: `${filters.year}-${filters.month}`, force: options.force, shops: options.shops });
 };
 
 // Cleanup saat component unmount

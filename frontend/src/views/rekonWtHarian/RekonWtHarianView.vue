@@ -42,44 +42,16 @@ const showResults = computed(() => {
 
 // Methods
 const handleViewResults = (data) => {
-  console.log('handleViewResults called with data:', data);
   activeCab.value = data.cab;
   activePeriode.value = data.periode;
   
-  // Force refresh of results component if it exists
-  // Gunakan nextTick untuk memastikan komponen sudah dirender
   if (resultsComponent.value) {
-    console.log('Calling loadResults on resultsComponent');
-    // Pastikan komponen sudah dirender dan fungsi loadResults tersedia
     setTimeout(() => {
       if (resultsComponent.value && typeof resultsComponent.value.loadResults === 'function') {
         resultsComponent.value.loadResults();
-      } else {
-        console.warn('loadResults function not available on resultsComponent');
       }
     }, 200);
   }
-};
-
-const getCabangDisplay = (cab) => {
-  if (cab === '' || cab === 'SEMUA') {
-    return 'SEMUA CABANG';
-  }
-  return cab;
-};
-
-const formatPeriode = (periode) => {
-  if (!periode || periode.length !== 4) return periode;
-  
-  const year = '20' + periode.substring(0, 2);
-  const month = parseInt(periode.substring(2, 4));
-  
-  const monthNames = [
-    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-  ];
-  
-  return `${monthNames[month - 1]} ${year}`;
 };
 </script>
 

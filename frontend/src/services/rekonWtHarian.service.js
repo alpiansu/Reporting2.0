@@ -1,5 +1,4 @@
 import api from "./api";
-import { EventSourcePolyfill } from "event-source-polyfill";
 
 /**
  * Service for WT Harian reconciliation
@@ -12,83 +11,10 @@ export default {
    * @returns {Promise}
    */
   getLatestProgress(cab, periode) {
-    // If cab is empty, use 'All' as default value
     const cabParam = cab || "All";
     return api.get(`/rekon-wt-harian/latest-progress/${cabParam}/${periode}`);
   },
 
-  /**
-   * Create Server-Sent Events connection for real-time progress updates
-   * @param {String} progressId - Progress ID to subscribe to
-   * @param {Function} onMessage - Callback function for progress updates
-   * @returns {EventSource} - SSE connection
-   */
-  createProgressWebSocket(progressId, onMessage) {
-    // Get the API URL
-    const apiUrl = import.meta.env.VITE_API_URL;
-    console.log('Creating SSE connection for progress ID:', progressId);
-
-    // Get auth token
-    const token = localStorage.getItem("token");
-
-    // Create SSE connection with authorization header using global progress routes
-    const sseUrl = `${apiUrl}/progress/sse/${progressId}`;
-    const eventSource = new EventSourcePolyfill(sseUrl, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      heartbeatTimeout: 60000, // 60 seconds
-    });
-
-    eventSource.onopen = () => {
-      console.log("SSE connection opened for progress ID:", progressId);
-    };
-
-    // No need to send subscription message as the endpoint is already specific to the progressId
-
-    eventSource.onmessage = event => {
-      try {
-        const data = JSON.parse(event.data);
-        if (onMessage && typeof onMessage === "function") {
-          onMessage(data);
-        }
-      } catch (error) {
-        console.error("Error parsing SSE message:", error);
-      }
-    };
-
-    // Handle heartbeat messages (empty comments)
-    eventSource.addEventListener('heartbeat', event => {
-      // Heartbeat received - no logging needed
-    });
-
-    // Listen for specific message types
-    eventSource.addEventListener('progress', event => {
-      // Progress event received - handled by onmessage
-    });
-
-    eventSource.addEventListener('connected', event => {
-      console.log('Connected to SSE');
-    });
-
-    eventSource.addEventListener('error', event => {
-      console.log('SSE error event received');
-    });
-
-    eventSource.onerror = error => {
-      console.error("SSE connection error:", error.type || 'Unknown error');
-      // Auto-reconnect is handled by EventSourcePolyfill
-    };
-
-    // Return the EventSource with a custom close method for consistency
-    return {
-      ...eventSource,
-      close: () => {
-        console.log("Closing SSE connection");
-        eventSource.close();
-      },
-    };
-  },
   /**
    * Start reconciliation process
    * @param {Object} data - Contains cab and periode
@@ -169,5 +95,14 @@ export default {
    */
   refreshShopReconciliation(periode, cab, toko) {
     return api.post(`/rekon-wt-harian/refresh-shop/${periode}/${cab}/${toko}`);
+  },
+
+  /**
+   * Update or create note for a specific store
+   * @param {Object} data - Contains cabang, toko, periode, noteText
+   * @returns {Promise}
+   */
+  updateNote(data) {
+    return api.put("/rekon-wt-harian/note", data);
   },
 };

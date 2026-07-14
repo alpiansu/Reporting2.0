@@ -65,6 +65,7 @@
         Status
         <i v-if="sortColumn === 'status'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
       </th>
+      <th>Catatan</th>
       <th class="text-center">Aksi</th>
     </template>
 
@@ -97,10 +98,19 @@
           {{ getStatusText(item.status) }}
         </span>
       </td>
+      <td>
+        <button
+          class="btn-note"
+          :class="{ 'btn-note-active': item.note }"
+          @click="openNoteDialog(item)"
+          :title="item.note ? item.note.noteText : 'Tambah catatan'"
+        >
+          <i class="pi" :class="item.note ? 'pi-comment' : 'pi-comment'"></i>
+          <span v-if="item.note" class="note-text">{{ item.note.noteText }}</span>
+          <span v-else class="note-text note-empty">-</span>
+        </button>
+      </td>
       <td class="text-center">
-        <div class="action-buttons">
-          <button 
-            @click="showDetailModal(item)" 
             class="btn btn-detail"
             title="Lihat Detail Data"
             :disabled="!item.record_count || item.record_count === 0"
@@ -131,6 +141,17 @@
     :toko="selectedItem?.shop || ''"
     @close="closeDetailModal"
   />
+
+  <!-- Note Dialog -->
+  <NoteDialog
+    v-model:visible="noteDialogVisible"
+    :store="selectedNoteStore"
+    :defaultText="noteText"
+    :lastUpdate="noteLastUpdate"
+    :saving="noteSaving"
+    @save="handleSaveNote"
+    @delete="handleDeleteNote"
+  />
 </template>
 
 <script setup>
@@ -139,6 +160,7 @@ import { useToastService } from '../../utils/toast';
 import { rekonWtHarianService } from '../../services';
 import DataTable from '../common/DataTable.vue';
 import RekonWtHarianDetailModal from './RekonWtHarianDetailModal.vue';
+import NoteDialog from './NoteDialog.vue';
 import * as XLSX from 'xlsx';
 
 const props = defineProps({
@@ -190,6 +212,13 @@ const isRefreshing = ref(false);
 
 // Highlight functionality for updated rows
 const highlightedShops = ref(new Set());
+
+// Note functionality
+const noteDialogVisible = ref(false);
+const selectedNoteStore = ref(null);
+const noteText = ref('');
+const noteLastUpdate = ref('');
+const noteSaving = ref(false);
 
 
 
@@ -446,22 +475,6 @@ const formatCurrencyDecimal = (value) => {
   }).format(value);
 };
 
-// Format date
-const formatDate = (dateString) => {
-  if (!dateString) return '-';
-  
-  try {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('id-ID', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    }).format(date);
-  } catch (error) {
-    return dateString;
-  }
-};
-
 // Format date time for display
 const formatDateTime = (dateTimeString) => {
   if (!dateTimeString) return '-';
@@ -487,21 +500,6 @@ const formatDateTime = (dateTimeString) => {
 const getAmountClass = (value) => {
   if (!value || value === 0) return 'same-amount';
   return 'different-amount';
-};
-
-// Format periode for display
-const formatPeriode = (periode) => {
-  if (!periode || periode.length !== 4) return periode;
-  
-  const year = '20' + periode.substring(0, 2);
-  const month = parseInt(periode.substring(2, 4));
-  
-  const monthNames = [
-    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-  ];
-  
-  return `${monthNames[month - 1]} ${year}`;
 };
 
 // Get status badge class
@@ -596,6 +594,54 @@ const showDetailModal = (item) => {
 const closeDetailModal = () => {
   detailModalVisible.value = false;
   selectedItem.value = null;
+};
+
+// Note methods
+const openNoteDialog = (item) => {
+  selectedNoteStore.value = item;
+  noteText.value = item.note?.noteText || '';
+  noteLastUpdate.value = item.note?.updatedAt
+    ? new Date(item.note.updatedAt).toLocaleString('id-ID')
+    : '';
+  noteDialogVisible.value = true;
+};
+
+const handleSaveNote = async ({ text }) => {
+  noteSaving.value = true;
+  try {
+    await rekonWtHarianService.updateNote({
+      cabang: selectedNoteStore.value.cab,
+      toko: selectedNoteStore.value.shop,
+      periode: props.periode,
+      noteText: text
+    });
+    toast.showSuccess('Berhasil', 'Catatan berhasil disimpan');
+    noteDialogVisible.value = false;
+    emit('refresh');
+  } catch (err) {
+    toast.showError('Gagal', err.response?.data?.message || 'Gagal menyimpan catatan');
+  } finally {
+    noteSaving.value = false;
+  }
+};
+
+const handleDeleteNote = async () => {
+  noteSaving.value = true;
+  try {
+    await rekonWtHarianService.updateNote({
+      cabang: selectedNoteStore.value.cab,
+      toko: selectedNoteStore.value.shop,
+      periode: props.periode,
+      noteText: ''
+    });
+    toast.showSuccess('Berhasil', 'Catatan berhasil dihapus');
+    noteDialogVisible.value = false;
+    emit('refresh');
+  } catch (err) {
+    toast.showError('Gagal', err.response?.data?.message || 'Gagal menghapus catatan');
+  } finally {
+    noteSaving.value = false;
+  }
 };
 </script>
 

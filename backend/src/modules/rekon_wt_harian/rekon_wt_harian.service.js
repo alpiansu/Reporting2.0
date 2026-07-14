@@ -9,9 +9,10 @@ import logger from "../../config/logger.js";
 import dbStore from "../../config/db_store.js";
 import RekonWtHarian from "../../models/rekon_wt_harian.model.js";
 import config from "../../config/rekon_wt_harian.config.js";
-import { ProgressHelper } from "../../services/progress/index.js";
+import progressService from "../progress/progress.service.js";
 import storeService from "../../modules/store/storeService.js";
 import wrcUtils from "../../utils/wrc.utils.js";
+import screeningGuard from "../../utils/screeningGuard.js";
 import RekapRemoteService from "../rekap_remote/rekap_remote.service.js";
 import RekapRemoteStagingService from "../rekap_remote/rekap_remote_staging.service.js";
 
@@ -150,84 +151,7 @@ class RekonWtHarianService {
     }
   }
 
-  /**
-   * Update progress bar dengan parameter yang fleksibel
-   * @param {string} progressId - ID progress yang sedang berjalan
-   * @param {Object} options - Opsi untuk update progress
-   * @param {number} options.processedStores - Jumlah toko yang sudah diproses (default: 0)
-   * @param {number} options.totalStores - Total toko yang akan diproses (required)
-   * @param {string} options.currentStore - Kode toko yang sedang diproses (optional)
-   * @param {number} options.storesWithDifferences - Jumlah toko dengan perbedaan (default: 0)
-   * @param {number} options.totalDifferences - Total perbedaan yang ditemukan (default: 0)
-   * @param {string} options.cab - Kode cabang (optional)
-   * @param {string} options.period - Periode (optional)
-   * @param {string} options.customMessage - Pesan custom (optional)
-   */
-  updateProgressBar(progressId, options = {}) {
-    const {
-      processedStores = 0,
-      totalStores,
-      currentStore = "",
-      storesWithDifferences = 0,
-      totalDifferences = 0,
-      cab = "",
-      period = "",
-      customMessage = "",
-    } = options;
 
-    // Validasi parameter wajib
-    if (!progressId) {
-      throw new Error("progressId is required");
-    }
-    if (totalStores === undefined || totalStores === null) {
-      throw new Error("totalStores is required");
-    }
-
-    // Calculate percentage
-    const percentage = totalStores > 0 ? Math.round((processedStores / totalStores) * 100) : 0;
-
-    // Generate message
-    let message;
-    if (customMessage) {
-      message = customMessage;
-    } else if (processedStores === 0) {
-      message = `Memulai proses rekonsiliasi: 0/${totalStores} toko (0%)`;
-    } else {
-      message = `Memproses toko: ${processedStores}/${totalStores} (${percentage}%)`;
-    }
-
-    // Prepare details object
-    const details = {
-      currentProgress: `${processedStores}/${totalStores} toko`,
-      percentage: percentage,
-      storesWithDifferences: storesWithDifferences,
-      totalDifferences: totalDifferences,
-    };
-
-    // Add optional details if provided
-    if (currentStore) details.currentStore = currentStore;
-    if (cab) details.cab = cab;
-    if (period) details.period = period;
-
-    // Update progress
-    ProgressHelper.updateStep(progressId, {
-      currentStep: processedStores,
-      message: message,
-      details: details,
-    });
-
-    logger.debug(`Progress updated: ${processedStores}/${totalStores} (${percentage}%)`);
-  }
-
-  /**
-   * Ensure the service is initialized before performing operations
-   * @deprecated Use ensureDataLoaded() instead for TTL-based loading
-   */
-  async ensureInitialized() {
-    if (!this.initialized) {
-      await this.initialize();
-    }
-  }
 
   /**
    * Synchronize data from database to JSON file
@@ -417,137 +341,39 @@ class RekonWtHarianService {
   /**
    * Reconcile data for all branches
    * @param {string} period - Period in YYMM format
-   * @param {string} progressId - Progress tracking ID (optional, will create new if not provided)
+   * @param {string} progressId - Progress tracking ID
+   * @param {number} totalStores - Total stores across all branches
    * @returns {Promise<Object>} Reconciliation results for all branches
    */
-  async reconcileAllBranches(period, progressId = null) {
+  async reconcileAllBranches(period, progressId, totalStores, force = false) {
     try {
-      // Ensure storeService is initialized
       await storeService.ensureInitialized();
 
-      // Get all unique branch codes
       const allStores = storeService.stores;
       const branches = [...new Set(allStores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))];
 
       logger.info(`Found ${branches.length} branches to process`);
 
-      // Calculate total stores across all branches for accurate progress tracking
-      let totalStores = 0;
-      const branchStoreMap = {};
-      for (const cab of branches) {
-        const branchStores = await storeService.getStoresByBranch(cab, true);
-        branchStoreMap[cab] = branchStores;
-        totalStores += branchStores.length;
-      }
-
-      logger.info(`Total stores across all branches: ${totalStores}`);
-
-      // Use existing progressId or create new one if not provided
-      if (!progressId) {
-        progressId = ProgressHelper.start({
-          processType: "rekon_wt_harian",
-          identifier: `ALL_${period}`,
-          totalSteps: totalStores, // Use total stores for granular progress
-          title: "Rekon WT Harian - All Branches",
-          description: `Processing rekon for ${totalStores} stores across ${branches.length} branches, period ${period}`,
-          metadata: {
-            period,
-            totalBranches: branches.length,
-            totalStores: totalStores,
-            processType: "all_branches",
-          },
-        });
-        logger.info(`Created new progress tracking with ID: ${progressId}`);
-      } else {
-        logger.info(`Using existing progress tracking with ID: ${progressId}`);
-
-        // Update progress with initial state and correct total steps
-        ProgressHelper.updateStep(progressId, {
-          currentStep: 0,
-          message: `Memulai rekonsiliasi untuk ${totalStores} toko di ${branches.length} cabang`,
-          details: {
-            totalStores: totalStores,
-            totalBranches: branches.length,
-            processedStores: 0,
-            period: period,
-            processType: "all_branches",
-          },
-        });
-      }
-
-      // Set up progress tracking variables (like single branch)
       let processedStores = 0;
       let storesWithDifferences = 0;
       let totalDifferences = 0;
-      let currentBranch = "";
 
-      // Set up progress update interval - update every 2 seconds (like single branch)
-      const PROGRESS_UPDATE_INTERVAL = 2000;
-      const progressInterval = setInterval(() => {
-        // Calculate percentage directly here
-        const percentage = totalStores > 0 ? Math.round((processedStores / totalStores) * 100) : 0;
-
-        // Update progress even if no new stores have been processed
-        ProgressHelper.updateStep(progressId, {
-          currentStep: processedStores,
-          message: `Memproses toko: ${processedStores}/${totalStores} (${percentage}%) - Cabang: ${currentBranch}`,
-          details: {
-            currentProgress: `${processedStores}/${totalStores} toko`,
-            percentage: percentage,
-            currentBranch: currentBranch,
-            storesWithDifferences: storesWithDifferences,
-            totalDifferences: totalDifferences,
-            period: period,
-          },
-        });
-
-        logger.debug(`Progress update: ${processedStores}/${totalStores} stores processed (${percentage}%)`);
-      }, PROGRESS_UPDATE_INTERVAL);
-
-      // Override the processStore method to track progress per store (like single branch)
-      const originalProcessStore = this.processStore;
-      logger.info(`🔧 OVERRIDE: Setting up processStore override for all branches progress tracking`);
-      this.processStore = async (store, cab, period, wrcData) => {
-        logger.info(`🔧 OVERRIDE CALLED: Processing store ${store.storeCode} in branch ${cab} - ALL BRANCHES MODE`);
-
-        // Update current branch being processed
-        currentBranch = cab;
-
-        // Process the store with all required parameters
-        const result = await originalProcessStore.apply(this, [store, cab, period, wrcData]);
-
-        // Update progress tracking variables
-        if (result && result.errors.length == 0) {
+      const onStoreProcessed = (result, cab) => {
+        if (result && result.errors.length === 0) {
           processedStores++;
         }
-        logger.info(`Store ${store.storeCode} processed with differences result:`, result.length);
-
-        // Update differences if any
         if (result && result.differences && result.differences.length > 0) {
           storesWithDifferences++;
           totalDifferences += result.differences.length;
         }
-
-        logger.info(`🔧 PROGRESS UPDATE: Store ${store.storeCode} processed. Total: ${processedStores}/${totalStores}`);
-
-        // Update progress using the new function
-        this.updateProgressBar(progressId, {
-          processedStores: processedStores,
-          totalStores: totalStores,
-          currentStore: store.storeCode,
-          storesWithDifferences: storesWithDifferences,
-          totalDifferences: totalDifferences,
-          cab: cab,
-          period: period,
-          customMessage: `Memproses toko: ${processedStores}/${totalStores} - Cabang: ${cab}`,
+        const percentage = totalStores > 0 ? Math.round((processedStores / totalStores) * 100) : 0;
+        progressService.updateProgress(progressId, processedStores, {
+          message: `Memproses toko: ${processedStores}/${totalStores} (${percentage}%) - Cabang: ${cab}`,
+          currentStore: result?.storeCode,
+          currentBranch: cab,
+          storesWithDifferences,
+          totalDifferences,
         });
-
-        // Log detailed progress information
-        logger.debug(
-          `Store ${store.storeCode} processed. Progress: ${processedStores}/${totalStores} (${percentage}%)`
-        );
-
-        return result;
       };
 
       const results = {
@@ -557,61 +383,41 @@ class RekonWtHarianService {
         branchesWithDifferences: 0,
         totalDifferences: 0,
         details: [],
-        progressId, // Include progress ID in results
+        progressId,
       };
 
-      // TRULY PARALLEL PROCESSING: Process branches with controlled concurrency
       const BRANCH_CONCURRENCY_LIMIT = config.parallelProcessing?.branchConcurrencyLimit || 3;
       logger.info(`Processing ${branches.length} branches with concurrency limit of ${BRANCH_CONCURRENCY_LIMIT}`);
 
-      // Use semaphore-like approach for branches too
       const processConcurrentBranches = async (branchCodes, limit) => {
         const results = [];
         const executing = [];
-        let processedCount = 0;
 
         for (const cab of branchCodes) {
-          const promise = this.processBranch(cab, period, progressId).then(result => {
+          const promise = this.processBranch(cab, period, progressId, onStoreProcessed, force).then(result => {
             executing.splice(executing.indexOf(promise), 1);
-
-            // Update progress after each branch is processed
-            processedCount++;
-            ProgressHelper.updateStep(progressId, {
-              currentStep: processedCount,
-              message: `Processed branch ${cab} (${processedCount}/${branches.length})`,
-              details: {
-                lastProcessedBranch: cab,
-                completedBranches: processedCount,
-                remainingBranches: branches.length - processedCount,
-              },
-            });
-
             return result;
           });
 
           results.push(promise);
           executing.push(promise);
 
-          // If we've reached the concurrency limit, wait for one to complete
           if (executing.length >= limit) {
             await Promise.race(executing);
           }
         }
 
-        // Wait for all remaining promises to complete
         return await Promise.allSettled(results);
       };
 
       logger.info(`Starting parallel processing of ${branches.length} branches...`);
       const branchStartTime = Date.now();
 
-      // Process all branches with controlled concurrency
       const allBranchResults = await processConcurrentBranches(branches, BRANCH_CONCURRENCY_LIMIT);
 
       const branchEndTime = Date.now();
       logger.info(`Completed branch parallel processing in ${(branchEndTime - branchStartTime) / 1000} seconds`);
 
-      // Process branch results
       let totalProcessedStores = 0;
       let totalStoresWithDifferences = 0;
 
@@ -620,7 +426,6 @@ class RekonWtHarianService {
           const branchResult = result.value;
           results.processedBranches++;
 
-          // Count total processed stores across all branches
           totalProcessedStores += branchResult.processedStores || 0;
           totalStoresWithDifferences += branchResult.storesWithDifferences || 0;
 
@@ -639,58 +444,20 @@ class RekonWtHarianService {
         }
       }
 
-      // Restore original method (like single branch)
-      this.processStore = originalProcessStore;
-
-      // Clear the interval (like single branch)
-      clearInterval(progressInterval);
-
-      // Store total processed stores in results
       results.totalProcessedStores = totalProcessedStores;
       results.totalStoresWithDifferences = totalStoresWithDifferences;
-
-      // Add timestamp to results
       results.timestamp = new Date().toISOString();
       results.period = period;
 
-      // Mark progress as completed
-      ProgressHelper.complete(
-        progressId,
-        `Rekonsiliasi selesai: ${results.totalProcessedStores} toko diproses, ${results.totalStoresWithDifferences} toko memiliki perbedaan`,
-        {
-          details: {
-            totalBranches: results.processedBranches,
-            branchesWithDifferences: results.branchesWithDifferences,
-            totalProcessedStores: results.totalProcessedStores,
-            totalStoresWithDifferences: results.totalStoresWithDifferences,
-            totalDifferences: results.totalDifferences,
-            period: period,
-            completedAt: new Date().toISOString(),
-          },
-        }
-      );
+      await progressService.completeProgress(progressId);
 
       logger.info(`Completed processing ${results.processedBranches}/${results.totalBranches} branches`);
       return results;
     } catch (error) {
       logger.error(`Error reconciling all branches: ${error.message}`);
 
-      // Cleanup: Restore original method and clear interval if they exist
-      if (typeof originalProcessStore !== "undefined") {
-        this.processStore = originalProcessStore;
-      }
-      if (typeof progressInterval !== "undefined") {
-        clearInterval(progressInterval);
-      }
-
-      // Mark progress as failed
       if (progressId) {
-        ProgressHelper.fail(progressId, error.message, {
-          errorType: error.name,
-          stack: error.stack,
-          period: period,
-          failedAt: new Date().toISOString(),
-        });
+        await progressService.failProgress(progressId, error.message);
       }
 
       throw error;
@@ -702,16 +469,17 @@ class RekonWtHarianService {
    * @param {string} cab - Branch code
    * @param {string} period - Period in YYMM format
    * @param {string} progressId - Progress ID for tracking reconciliation progress
+   * @param {Function} onStoreProcessed - Callback invoked after each store is processed
    * @returns {Promise<Object>} Branch processing result
    */
-  async processBranch(cab, period, progressId) {
+  async processBranch(cab, period, progressId, onStoreProcessed, force = false) {
     try {
       logger.info(`Processing branch ${cab}`);
-      const branchResult = await this.reconcileData(cab, period, progressId);
+      const branchResult = await this.reconcileData(cab, period, progressId, onStoreProcessed, force);
       return branchResult;
     } catch (error) {
       logger.error(`Error processing branch ${cab}: ${error.message}`);
-      throw error; // Let Promise.allSettled handle the rejection
+      throw error;
     }
   }
 
@@ -719,31 +487,22 @@ class RekonWtHarianService {
    * Reconcile all branches with progress tracking (non-blocking)
    * @param {string} period - Period in YYMM format
    * @param {string} progressId - Progress tracking ID
+   * @param {number} totalStores - Total stores across all branches
    */
-  async reconcileAllBranchesWithProgress(period, progressId) {
+  async reconcileAllBranchesWithProgress(period, progressId, totalStores, force = false) {
     try {
-      // Run in background (non-blocking)
       setTimeout(async () => {
         try {
-          await this.reconcileAllBranches(period, progressId);
+          await this.reconcileAllBranches(period, progressId, totalStores, force);
         } catch (error) {
           logger.error(`Error in background reconciliation: ${error.message}`);
-          // Progress status will be updated to 'failed' by reconcileAllBranches
         }
       }, 0);
 
       logger.info(`Started non-blocking reconciliation for all branches with progress ID: ${progressId}`);
     } catch (error) {
       logger.error(`Error starting non-blocking reconciliation: ${error.message}`);
-      ProgressHelper.fail(progressId, {
-        errorType: "reconciliation_error",
-        message: error.message,
-        stack: error.stack,
-        details: {
-          operation: "reconcileAllBranchesWithProgress",
-          failedAt: new Date().toISOString(),
-        },
-      });
+      await progressService.failProgress(progressId, error.message);
     }
   }
 
@@ -752,134 +511,56 @@ class RekonWtHarianService {
    * @param {string} cab - Branch code
    * @param {string} period - Period in YYMM format
    * @param {string} progressId - Progress tracking ID
+   * @param {number} totalStores - Total stores in branch
    */
-  async reconcileDataWithProgress(cab, period, progressId) {
+  async reconcileDataWithProgress(cab, period, progressId, totalStores, force = false) {
     try {
-      // Run in background (non-blocking)
       setTimeout(async () => {
         try {
           await storeService.ensureInitialized();
-          const branchStores = await storeService.getStoresByBranch(cab, true);
-          const totalStores = branchStores.length;
 
-          // Inisialisasi progress dengan nilai awal menggunakan function baru
-          this.updateProgressBar(progressId, {
-            processedStores: 0,
-            totalStores: totalStores,
-            cab: cab,
-            period: period,
-            customMessage: `Memulai proses rekonsiliasi untuk ${totalStores} toko`,
-          });
-
-          // Log initialization with explicit percentage
-          logger.info(`Starting reconciliation for ${cab} with ${totalStores} stores (0%)`);
-
-          // Set up progress tracking variables
           let processedStores = 0;
           let storesWithDifferences = 0;
           let totalDifferences = 0;
 
-          // Set up progress update interval - update every 2 seconds
-          const PROGRESS_UPDATE_INTERVAL = 2000;
-          const progressInterval = setInterval(() => {
-            // Calculate percentage directly here
-            // Update progress even if no new stores have been processed
-            this.updateProgressBar(progressId, {
-              processedStores: processedStores,
-              totalStores: totalStores,
-              storesWithDifferences: storesWithDifferences,
-              totalDifferences: totalDifferences,
-              cab: cab,
-              period: period,
-            });
-
-            logger.debug(`Progress update: ${processedStores}/${totalStores} stores processed`);
-          }, PROGRESS_UPDATE_INTERVAL);
-
-          // Override the processStore method to track progress
-          const originalProcessStore = this.processStore;
-          this.processStore = async (store, cab, period, wrcData) => {
-            logger.debug(`Processing store ${store.storeCode}`);
-
-            // Process the store with all required parameters
-            const result = await originalProcessStore.apply(this, [store, cab, period, wrcData]);
-
-            // Update progress tracking variables
-            if (result && result.errors.length == 0) {
+          const onStoreProcessed = (result) => {
+            if (result && result.errors.length === 0) {
               processedStores++;
             }
-            logger.info(`Store ${store.storeCode} processed with differences result:`, result.length);
-
-            return result;
+            if (result && result.differences && result.differences.length > 0) {
+              storesWithDifferences++;
+              totalDifferences += result.differences.length;
+            }
+            const percentage = totalStores > 0 ? Math.round((processedStores / totalStores) * 100) : 0;
+            progressService.updateProgress(progressId, processedStores, {
+              message: `Memproses toko: ${processedStores}/${totalStores} (${percentage}%)`,
+              currentStore: result?.storeCode,
+              storesWithDifferences,
+              totalDifferences,
+            });
           };
 
-          // Run the reconciliation
-          const result = await this.reconcileData(cab, period, progressId);
+          const result = await this.reconcileData(cab, period, progressId, onStoreProcessed, force);
 
-          // Restore original method
-          this.processStore = originalProcessStore;
-
-          // Clear the interval
-          clearInterval(progressInterval);
-
-          // Simpan semua perbedaan dari file temporary ke database
           await this.saveDifferencesToDatabase(cab, period);
           await this.syncToJsonFile();
 
-          // Final progress update
-          ProgressHelper.complete(
-            progressId,
-            `Rekonsiliasi selesai: ${result.storesWithDifferences} dari ${totalStores} toko memiliki perbedaan`,
-            {
-              details: {
-                totalStores: totalStores,
-                storesWithDifferences: result.storesWithDifferences,
-                totalDifferences: result.totalDifferences,
-                totalWaves: result.waves ? result.waves.length : 1,
-                waveDetails: result.waves || [],
-                cab: cab,
-                period: period,
-                completedAt: new Date().toISOString(),
-              },
-            }
-          );
+          await progressService.completeProgress(progressId);
 
-          // Log final progress
-          logger.info(`Reconciliation completed for ${cab}: ${totalStores}/${totalStores} stores processed (100%)`);
-
+          logger.info(`Reconciliation completed for ${cab}: ${processedStores}/${totalStores} stores processed`);
           logger.info(
-            `Completed reconciliation for ${cab}: ${result.storesWithDifferences}/${totalStores} stores with differences`
+            `Completed reconciliation for ${cab}: ${storesWithDifferences}/${totalStores} stores with differences`
           );
         } catch (error) {
           logger.error(`Error in background reconciliation: ${error.message}`);
-          ProgressHelper.fail(progressId, {
-            errorType: "reconciliation_error",
-            message: error.message,
-            stack: error.stack,
-            details: {
-              operation: "reconcileDataWithProgress",
-              cab: cab,
-              period: period,
-              failedAt: new Date().toISOString(),
-            },
-          });
+          await progressService.failProgress(progressId, error.message);
         }
       }, 0);
 
       logger.info(`Started non-blocking reconciliation for branch ${cab} with progress ID: ${progressId}`);
     } catch (error) {
       logger.error(`Error starting non-blocking reconciliation: ${error.message}`);
-      ProgressHelper.fail(progressId, {
-        errorType: "reconciliation_startup_error",
-        message: error.message,
-        stack: error.stack,
-        details: {
-          operation: "reconcileDataWithProgress_startup",
-          cab: cab,
-          period: period,
-          failedAt: new Date().toISOString(),
-        },
-      });
+      await progressService.failProgress(progressId, error.message);
     }
   }
 
@@ -949,7 +630,7 @@ class RekonWtHarianService {
       }
 
       // Save differences to database for this specific shop
-      await this.saveDifferencesToDatabaseForShop(cab, period, toko);
+      await this.saveDifferencesToDatabase(cab, period, toko);
       await this.syncToJsonFile();
 
       // Clean up temporary WRC data file
@@ -1018,9 +699,10 @@ class RekonWtHarianService {
    * @param {string} cab - Branch code
    * @param {string} period - Period in YYMM format
    * @param {string} progressId - Progress ID for tracking reconciliation progress
+   * @param {Function} onStoreProcessed - Callback invoked after each store is processed
    * @returns {Promise<Object>} Reconciliation results
    */
-  async reconcileData(cab, period, progressId) {
+  async reconcileData(cab, period, progressId, onStoreProcessed, force = false) {
     try {
       // Get WRC data
       const wrcDataFile = await this.getWrcData(cab, period);
@@ -1081,26 +763,18 @@ class RekonWtHarianService {
         logger.info(`\n🌊 Starting Wave ${wave} with ${currentStores.length} stores...`);
         const waveStartTime = Date.now();
 
-        // Update progress without wave information
+        // Update progress with wave information
         if (progressId) {
-          const progress = ProgressHelper.getProgress(progressId);
-          if (progress) {
-            ProgressHelper.updateStep(progressId, {
-              currentStep: branchStores.length - currentStores.length,
-              message: `Wave ${wave}: Memproses ${currentStores.length} toko`,
-              details: {
-                ...progress.details,
-                currentWave: wave,
-                storeProgress: `${currentStores.length} toko`,
-                cab: cab,
-                period: period,
-              },
-            });
-          }
+          progressService.updateProgress(progressId, branchStores.length - currentStores.length, {
+            message: `Wave ${wave}: Memproses ${currentStores.length} toko`,
+            currentWave: wave,
+            cab: cab,
+            period: period,
+          });
         }
 
         // Process current wave of stores
-        const waveResults = await this.processStoreWave(currentStores, cab, period, wrcData, CONCURRENCY_LIMIT, wave);
+        const waveResults = await this.processStoreWave(currentStores, cab, period, wrcData, CONCURRENCY_LIMIT, wave, force);
 
         const waveEndTime = Date.now();
         const waveDuration = (waveEndTime - waveStartTime) / 1000;
@@ -1113,6 +787,16 @@ class RekonWtHarianService {
         for (const result of waveResults) {
           if (result.status === "fulfilled" && result.value) {
             const storeResult = result.value;
+
+            // Handle skipped stores (screening guard)
+            if (storeResult.skipped) {
+              results.processedStores++;
+              if (onStoreProcessed) {
+                onStoreProcessed(storeResult, cab);
+              }
+              logger.info(`[Wave ${wave}] ${storeResult.storeCode}: Skipped — ${storeResult.skipReason}`);
+              continue;
+            }
 
             // Check if store timed out - be more specific about timeout detection
             const isTimeout =
@@ -1151,6 +835,10 @@ class RekonWtHarianService {
                 // Store completed (successfully or permanently failed)
                 completedStores.push(storeResult);
                 results.processedStores++;
+              }
+
+              if (onStoreProcessed) {
+                onStoreProcessed(storeResult, cab);
               }
 
               // Count successful differences
@@ -1203,25 +891,17 @@ class RekonWtHarianService {
           logger.info(`⚠️ Timeout stores in wave ${wave}: ${timeoutStores.map(s => s.storeCode).join(", ")}`);
         }
 
-        // Update progress after each wave with current totalDifferences
-        const activeProcess = ProgressHelper.getActiveProcess(cab, period);
-
-        if (activeProcess) {
-          ProgressHelper.updateStep(activeProcess.id, {
-            currentStep: results.processedStores,
-            message: `Wave ${wave} selesai: ${completedStores.length} berhasil, ${timeoutStores.length} timeout`,
-            details: {
-              totalDifferences: results.totalDifferences,
-              storesWithDifferences: results.storesWithDifferences,
-              currentWave: wave,
-              completedInWave: completedStores.length,
-              timeoutsInWave: timeoutStores.length,
-              errorsInWave: storeErrors.length,
-              cab: cab,
-              period: period,
-            },
-          });
+        // Update progress after each wave
+        if (onStoreProcessed) {
+          onStoreProcessed({ errors: [], storeCode: `wave-${wave}-complete` }, cab);
         }
+
+        progressService.updateProgress(progressId, results.processedStores, {
+          message: `Wave ${wave} selesai: ${completedStores.length} berhasil, ${timeoutStores.length} timeout`,
+          currentWave: wave,
+          totalDifferences: results.totalDifferences,
+          storesWithDifferences: results.storesWithDifferences,
+        });
 
         // Prepare for next wave with timeout stores
         currentStores = timeoutStores;
@@ -1301,24 +981,7 @@ class RekonWtHarianService {
         results.rekapRemoteLogError = error.message;
       }
 
-      // Final progress update with complete results
-      const activeProcess = ProgressHelper.getActiveProcess(cab, period);
-
-      if (activeProcess) {
-        ProgressHelper.updateStep(activeProcess.id, {
-          currentStep: results.processedStores,
-          message: `Rekonsiliasi selesai untuk ${cab}`,
-          details: {
-            totalDifferences: results.totalDifferences,
-            storesWithDifferences: results.storesWithDifferences,
-            totalStores: results.totalStores,
-            totalDuration: totalDuration,
-            saveResult: results.saveResult,
-            cab: cab,
-            period: period,
-          },
-        });
-      }
+      // Final progress update is handled by the caller (reconcileDataWithProgress / reconcileAllBranches)
 
       return results;
     } catch (error) {
@@ -1337,14 +1000,14 @@ class RekonWtHarianService {
    * @param {number} waveNumber - Current wave number for logging
    * @returns {Promise<Array>} Promise.allSettled results
    */
-  async processStoreWave(stores, cab, period, wrcData, concurrencyLimit, waveNumber) {
+  async processStoreWave(stores, cab, period, wrcData, concurrencyLimit, waveNumber, force = false) {
     // Use a semaphore-like approach to control concurrency
     const processConcurrentStores = async (stores, limit) => {
       const results = [];
       const executing = [];
 
       for (const store of stores) {
-        const promise = this.processStoreWithTimeout(store, cab, period, wrcData, waveNumber).then(result => {
+        const promise = this.processStoreWithTimeout(store, cab, period, wrcData, waveNumber, force).then(result => {
           executing.splice(executing.indexOf(promise), 1);
           return result;
         });
@@ -1374,27 +1037,33 @@ class RekonWtHarianService {
    * @param {number} waveNumber - Current wave number (optional, for logging)
    * @returns {Promise<Object>} Store processing result
    */
-  async processStoreWithTimeout(store, cab, period, wrcData, waveNumber = 1) {
+  async processStoreWithTimeout(store, cab, period, wrcData, waveNumber = 1, force = false) {
     const storeCode = store.storeCode;
-    const STORE_TIMEOUT = config.parallelProcessing?.storeTimeoutMs || 10000; // Reduced to 10 seconds for more realistic timeout testing
+    const STORE_TIMEOUT = config.parallelProcessing?.storeTimeoutMs || 10000;
+
+    // Daily screening guard: skip store if already successfully screened today
+    if (!force) {
+      try {
+        const guard = await screeningGuard.isSuccessToday("rekon_wt_harian", storeCode);
+        if (guard.screened) {
+          logger.info(`[Wave ${waveNumber}] [${storeCode}] Skip — sudah screen hari ini (${guard.updtime})`);
+          return {
+            storeCode,
+            storeName: store.storeName || storeCode,
+            differences: [],
+            errors: [],
+            skipped: true,
+            skipReason: `Sudah screen ${guard.updtime}`,
+          };
+        }
+      } catch (err) {
+        logger.warn(`[Wave ${waveNumber}] [${storeCode}] Guard check error, proceeding: ${err.message}`);
+      }
+    }
 
     logger.info(`[Wave ${waveNumber}] [${storeCode}] Starting processing...`);
 
-    // Update progress to show current store being processed
-    const activeProcess = ProgressHelper.getActiveProcess(cab, period);
-
-    if (activeProcess) {
-      ProgressHelper.updateStep(activeProcess.id, {
-        message: `[Wave ${waveNumber}] Memproses toko ${storeCode}`,
-        details: {
-          currentStore: storeCode,
-          currentStoreName: store.storeName,
-          currentWave: waveNumber,
-          cab: cab,
-          period: period,
-        },
-      });
-    }
+    // Progress is tracked via onStoreProcessed callback in the calling method
 
     // Create a timeout promise that returns error info instead of rejecting
     const timeoutPromise = new Promise(resolve => {
@@ -1564,36 +1233,37 @@ class RekonWtHarianService {
   }
 
   /**
-   * Save all differences from temporary files to database
+   * Save differences from temporary files to database
    * @param {string} cab - Branch code
    * @param {string} period - Period in YYMM format
+   * @param {string} toko - Store code (optional, filters to specific shop)
    * @returns {Promise<Object>} Result of database save operation
    */
-  async saveDifferencesToDatabase(cab, period) {
+  async saveDifferencesToDatabase(cab, period, toko = null) {
     try {
-      logger.info(`Saving all differences for ${cab} ${period} from temporary files to database`);
+      const label = toko ? `shop ${toko} in ${cab}` : `${cab}`;
+      logger.info(`Saving differences for ${label} ${period} from temporary files to database`);
 
-      // Buat path untuk direktori temporary
       const tempDir = os.tmpdir();
-
-      // Cari semua file temporary yang sesuai dengan pola
       const files = await fs.readdir(tempDir);
+      const prefix = toko
+        ? `differences_wtharian_${cab}_${period}_${toko}`
+        : `differences_wtharian_${cab}_${period}_`;
       const differenceFiles = files.filter(file => {
-        return file.startsWith(`differences_wtharian_${cab}_${period}_`) && file.endsWith(".json");
+        return file.startsWith(prefix) && file.endsWith(".json");
       });
 
       if (differenceFiles.length === 0) {
-        logger.info(`No difference files found for ${cab} ${period}`);
+        logger.info(`No difference files found for ${label} ${period}`);
         return { success: true, message: "No differences to save", savedCount: 0 };
       }
 
-      logger.info(`Found ${differenceFiles.length} difference files for ${cab} ${period}`);
+      logger.info(`Found ${differenceFiles.length} difference files for ${label} ${period}`);
 
       let totalDifferences = 0;
       let totalSaved = 0;
       let totalErrors = 0;
 
-      // Proses setiap file perbedaan
       for (const file of differenceFiles) {
         try {
           const filePath = path.join(tempDir, file);
@@ -1607,158 +1277,15 @@ class RekonWtHarianService {
           totalDifferences += differences.length;
           logger.info(`Processing ${differences.length} differences from ${file}`);
 
-          // Simpan perbedaan ke database dalam batch menggunakan bulk upsert
-          const BATCH_SIZE = 300; // Increase batch size for bulk operations
-          for (let i = 0; i < differences.length; i += BATCH_SIZE) {
-            const batch = differences.slice(i, i + BATCH_SIZE);
-            try {
-              // Set recid untuk semua record dalam batch
-              batch.forEach(difference => {
-                difference.recid = "*";
-                difference.updtime = new Date().toISOString().slice(0, 19).replace("T", " ");
-              });
-
-              // Gunakan bulkCreate dengan updateOnDuplicate untuk bulk upsert
-              const result = await RekonWtHarian.bulkCreate(batch, {
-                updateOnDuplicate: [
-                  "gross_wrc",
-                  "ppn_wrc",
-                  "gross_idm_wrc",
-                  "ppn_idm_wrc",
-                  "gross_store",
-                  "ppn_store",
-                  "gross_idm_store",
-                  "ppn_idm_store",
-                  "selisih_gross",
-                  "selisih_ppn",
-                  "selisih_gross_idm",
-                  "selisih_ppn_idm",
-                  "recid",
-                  "updtime",
-                ],
-                returning: false, // Don't return records for better performance
-                ignoreDuplicates: false, // We want to update duplicates
-              });
-
-              const savedCount = batch.length; // All records in batch are processed
-              totalSaved += savedCount;
-
-              logger.info(
-                `Bulk upsert completed: ${savedCount} records processed in batch ${Math.floor(i / BATCH_SIZE) + 1}`
-              );
-            } catch (error) {
-              logger.error(`Error in bulk upsert for batch ${Math.floor(i / BATCH_SIZE) + 1}: ${error.message}`);
-              totalErrors += batch.length;
-
-              // Fallback: try individual upserts for this batch if bulk fails
-              logger.info(`Attempting fallback individual upserts for failed batch...`);
-              let fallbackSaved = 0;
-              for (const difference of batch) {
-                try {
-                  await RekonWtHarian.upsert(difference);
-                  fallbackSaved++;
-                } catch (fallbackError) {
-                  logger.error(`Fallback upsert failed for record: ${fallbackError.message}`);
-                }
-              }
-
-              if (fallbackSaved > 0) {
-                totalSaved += fallbackSaved;
-                totalErrors -= fallbackSaved; // Adjust error count
-                logger.info(`Fallback saved ${fallbackSaved} records from failed batch`);
-              }
-            }
-          }
-
-          // Sync to JSON file after processing all batches for this file
-          await this.syncToJsonFile();
-
-          // Hapus file temporary setelah berhasil disimpan ke database
-          await fs.unlink(filePath);
-          logger.info(`Deleted temporary file ${file} after saving to database`);
-        } catch (error) {
-          logger.error(`Error processing file ${file}: ${error.message}`);
-        }
-      }
-
-      logger.info(
-        `Completed saving differences to database: ${totalSaved} saved, ${totalErrors} errors out of ${totalDifferences} total`
-      );
-
-      return {
-        success: true,
-        message: `Saved ${totalSaved} differences to database`,
-        savedCount: totalSaved,
-        errorCount: totalErrors,
-        totalCount: totalDifferences,
-      };
-    } catch (error) {
-      logger.error(`Error saving differences to database: ${error.message}`);
-      return {
-        success: false,
-        message: `Error saving differences to database: ${error.message}`,
-        error: error.message,
-      };
-    }
-  }
-
-  /**
-   * Save differences to database for specific shop
-   * @param {string} cab - Branch code
-   * @param {string} period - Period in YYMM format
-   * @param {string} toko - Store code
-   * @returns {Promise<Object>} Save result
-   */
-  async saveDifferencesToDatabaseForShop(cab, period, toko) {
-    try {
-      logger.info(`Saving differences for shop ${toko} in ${cab} ${period} from temporary files to database`);
-
-      // Buat path untuk direktori temporary
-      const tempDir = os.tmpdir();
-
-      // Cari file temporary yang spesifik untuk toko ini
-      const files = await fs.readdir(tempDir);
-      const differenceFiles = files.filter(file => {
-        return file.startsWith(`differences_wtharian_${cab}_${period}_${toko}`) && file.endsWith(".json");
-      });
-
-      if (differenceFiles.length === 0) {
-        logger.info(`No difference files found for shop ${toko} in ${cab} ${period}`);
-        return { success: true, message: "No differences to save", savedCount: 0 };
-      }
-
-      logger.info(`Found ${differenceFiles.length} difference files for shop ${toko} in ${cab} ${period}`);
-
-      let totalDifferences = 0;
-      let totalSaved = 0;
-      let totalErrors = 0;
-
-      // Proses setiap file perbedaan
-      for (const file of differenceFiles) {
-        try {
-          const filePath = path.join(tempDir, file);
-          const fileContent = await fs.readFile(filePath, "utf8");
-          const differences = JSON.parse(fileContent);
-
-          if (differences.length === 0) {
-            continue;
-          }
-
-          totalDifferences += differences.length;
-          logger.info(`Processing ${differences.length} differences from ${file}`);
-
-          // Simpan perbedaan ke database dalam batch menggunakan bulk upsert
           const BATCH_SIZE = 300;
           for (let i = 0; i < differences.length; i += BATCH_SIZE) {
             const batch = differences.slice(i, i + BATCH_SIZE);
             try {
-              // Set recid untuk semua record dalam batch
               batch.forEach(difference => {
                 difference.recid = "*";
                 difference.updtime = new Date().toISOString().slice(0, 19).replace("T", " ");
               });
 
-              // Gunakan bulkCreate dengan updateOnDuplicate untuk bulk upsert
               await RekonWtHarian.bulkCreate(batch, {
                 updateOnDuplicate: [
                   "gross_wrc",
@@ -1780,67 +1307,54 @@ class RekonWtHarianService {
                 ignoreDuplicates: false,
               });
 
-              const savedCount = batch.length;
-              totalSaved += savedCount;
-
+              totalSaved += batch.length;
               logger.info(
-                `Bulk upsert completed for shop ${toko}: ${savedCount} records processed in batch ${
-                  Math.floor(i / BATCH_SIZE) + 1
-                }`
+                `Bulk upsert completed: ${batch.length} records in batch ${Math.floor(i / BATCH_SIZE) + 1}`
               );
             } catch (error) {
-              logger.error(
-                `Error in bulk upsert for shop ${toko} batch ${Math.floor(i / BATCH_SIZE) + 1}: ${error.message}`
-              );
+              logger.error(`Error in bulk upsert batch ${Math.floor(i / BATCH_SIZE) + 1}: ${error.message}`);
               totalErrors += batch.length;
 
-              // Fallback: try individual upserts for this batch if bulk fails
-              logger.info(`Attempting fallback individual upserts for failed batch...`);
               let fallbackSaved = 0;
               for (const difference of batch) {
                 try {
                   await RekonWtHarian.upsert(difference);
                   fallbackSaved++;
                 } catch (fallbackError) {
-                  logger.error(`Fallback upsert failed for record: ${fallbackError.message}`);
+                  logger.error(`Fallback upsert failed: ${fallbackError.message}`);
                 }
               }
 
               if (fallbackSaved > 0) {
                 totalSaved += fallbackSaved;
                 totalErrors -= fallbackSaved;
-                logger.info(`Fallback saved ${fallbackSaved} records from failed batch`);
               }
             }
           }
 
-          // Sync to JSON file after processing all batches for this file
           await this.syncToJsonFile();
 
-          // Hapus file temporary setelah berhasil disimpan ke database
           await fs.unlink(filePath);
-          logger.info(`Deleted temporary file ${file} after saving to database`);
+          logger.info(`Deleted temporary file ${file}`);
         } catch (error) {
           logger.error(`Error processing file ${file}: ${error.message}`);
         }
       }
 
-      logger.info(
-        `Completed saving differences for shop ${toko} to database: ${totalSaved} saved, ${totalErrors} errors out of ${totalDifferences} total`
-      );
+      logger.info(`Completed saving differences for ${label}: ${totalSaved} saved, ${totalErrors} errors out of ${totalDifferences}`);
 
       return {
         success: true,
-        message: `Saved ${totalSaved} differences for shop ${toko} to database`,
+        message: `Saved ${totalSaved} differences for ${label}`,
         savedCount: totalSaved,
         errorCount: totalErrors,
         totalCount: totalDifferences,
       };
     } catch (error) {
-      logger.error(`Error saving differences for shop ${toko} to database: ${error.message}`);
+      logger.error(`Error saving differences to database: ${error.message}`);
       return {
         success: false,
-        message: `Error saving differences for shop ${toko} to database: ${error.message}`,
+        message: `Error saving differences to database: ${error.message}`,
         error: error.message,
       };
     }

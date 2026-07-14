@@ -2,16 +2,15 @@
  * Controller for WT reconciliation
  */
 import rekonWtHarianService from "./rekon_wt_harian.service.js";
-import { ProgressHelper } from "../../services/progress/index.js";
+import progressService from "../progress/progress.service.js";
+import notesService from "../notes/notes.service.js";
+import UserService from "../user/user.service.js";
 import logger from "../../config/logger.js";
 import config from "../../config/rekon_wt_harian.config.js";
 import storeService from "../../modules/store/storeService.js";
 
 /**
  * Cleanup temporary files used in reconciliation
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
  */
 export const cleanupTempFiles = async (req, res, next) => {
   try {
@@ -28,22 +27,16 @@ export const cleanupTempFiles = async (req, res, next) => {
 
 /**
  * Start reconciliation process
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
  */
 export const startReconciliation = async (req, res, next) => {
   try {
-    const { cab, periode } = req.body;
+    const { cab, periode, force } = req.body;
+    const isForce = force === "true" || force === true;
 
     if (!periode) {
-      return res.status(400).json({
-        success: false,
-        message: "Periode harus diisi",
-      });
+      return res.status(400).json({ success: false, message: "Periode harus diisi" });
     }
 
-    // Validate periode format (YYMM)
     if (!/^\d{4}$/.test(periode)) {
       return res.status(400).json({
         success: false,
@@ -51,91 +44,83 @@ export const startReconciliation = async (req, res, next) => {
       });
     }
 
-    //cleanup old temp files
     await rekonWtHarianService.cleanupTempFiles();
 
-    // Check if there's already an active process in the entire system
     const cabParam = cab === "SEMUA" || !cab ? "All" : cab;
-    const activeProcess = ProgressHelper.hasAnyActiveProcess();
 
-    if (activeProcess) {
-      // Extract cab and period from metadata
-      const activeCab = activeProcess.metadata?.cab || "Unknown";
-      const activePeriod = activeProcess.metadata?.period || "Unknown";
+    // Check for any active reconciliation task
+    const activeTask = findActiveRekonTask();
+    if (activeTask) {
+      const activeCab = activeTask.info?.cab || "Unknown";
+      const activePeriode = activeTask.info?.period || "Unknown";
 
       return res.status(409).json({
         success: false,
         message: `Proses rekonsiliasi untuk ${
           activeCab === "All" ? "semua cabang" : `cabang ${activeCab}`
-        } periode ${activePeriod} sedang berjalan. Silakan tunggu hingga proses selesai.`,
+        } periode ${activePeriode} sedang berjalan. Silakan tunggu hingga proses selesai.`,
         activeProcess: {
-          id: activeProcess.id,
+          id: activeTask.id,
           cab: activeCab,
-          periode: activePeriod,
-          status: activeProcess.status,
-          percentage: activeProcess.percentage,
-          startTime: activeProcess.startTime,
-          totalItems: activeProcess.totalItems || 0,
-          processedItems: activeProcess.processedItems || 0,
+          periode: activePeriode,
+          status: activeTask.status,
+          percentage: activeTask.percentage,
+          startTime: activeTask.createdAt,
+          totalItems: activeTask.total || 0,
+          processedItems: activeTask.current || 0,
         },
       });
     }
 
-    // Handle 'SEMUA CABANG' option
+    await storeService.ensureInitialized();
+
     if (cabParam === "All") {
-      // Initialize progress tracking
-      await storeService.ensureInitialized();
       const allStores = storeService.stores;
       const branches = [...new Set(allStores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))];
-
-      // Count total stores across all branches instead of just branch count
       const totalStores = allStores.filter(s => s.notes === "INDUK").length;
-      const progressId = ProgressHelper.start({
+
+      const taskId = `rekon_wt_harian_All_${periode}_${Date.now()}`;
+      await progressService.startProgress(taskId, totalStores, {
+        module: "rekon_wt_harian",
+        title: "Rekon WT Harian - Semua Cabang",
         cab: "All",
         period: periode,
-        message: `Memulai rekonsiliasi untuk semua cabang periode ${periode}`,
-        details: {
-          totalStores: totalStores,
-          branches: branches.length,
-          operation: "reconcile_all_branches",
-        },
+        totalStores,
+        branches: branches.length,
+        operation: "reconcile_all_branches",
       });
 
-      // Start reconciliation process for all branches (non-blocking)
-      // Data lama akan dihapus setelah proses rekon selesai, bukan di awal
-      rekonWtHarianService.reconcileAllBranchesWithProgress(periode, progressId);
+      rekonWtHarianService.reconcileAllBranchesWithProgress(periode, taskId, totalStores, isForce);
 
       return res.status(200).json({
         success: true,
         message: "Proses rekonsiliasi dimulai",
-        progressId,
+        taskId,
         totalBranches: branches.length,
-        totalStores: totalStores,
+        totalStores,
       });
     }
 
-    // Initialize progress tracking
-    await storeService.ensureInitialized();
     const branchStores = await storeService.getStoresByBranch(cab, true);
-    const progressId = ProgressHelper.start({
-      cab: cab,
+    const totalStores = branchStores.length;
+
+    const taskId = `rekon_wt_harian_${cabParam}_${periode}_${Date.now()}`;
+    await progressService.startProgress(taskId, totalStores, {
+      module: "rekon_wt_harian",
+      title: `Rekon WT Harian - Cabang ${cabParam}`,
+      cab: cabParam,
       period: periode,
-      message: `Memulai rekonsiliasi cabang ${cab} periode ${periode}`,
-      details: {
-        totalStores: branchStores.length,
-        operation: "reconcile_branch",
-      },
+      totalStores,
+      operation: "reconcile_branch",
     });
 
-    // Start reconciliation process (non-blocking)
-    // Data lama akan dihapus setelah proses rekon selesai, bukan di awal
-    rekonWtHarianService.reconcileDataWithProgress(cab, periode, progressId);
+    rekonWtHarianService.reconcileDataWithProgress(cabParam, periode, taskId, totalStores, isForce);
 
     res.status(200).json({
       success: true,
       message: "Proses rekonsiliasi dimulai",
-      progressId,
-      totalStores: branchStores.length,
+      taskId,
+      totalStores,
     });
   } catch (error) {
     logger.error(`Error in startReconciliation: ${error.message}`);
@@ -145,20 +130,14 @@ export const startReconciliation = async (req, res, next) => {
 
 /**
  * Get reconciliation results
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
  */
-export const getResults = async (req, res) => {
+export const getResults = async (req, res, next) => {
   try {
     const { cab, periode, toko } = req.params;
     const { page, limit, tipe, tgl1, searchQuery, sortColumn, sortOrder, toleranceAmount } = req.query;
 
     if (!periode) {
-      return res.status(400).json({
-        success: false,
-        message: "Periode harus diisi",
-      });
+      return res.status(400).json({ success: false, message: "Periode harus diisi" });
     }
 
     const results = await rekonWtHarianService.getResults(cab, periode, toko, {
@@ -181,22 +160,15 @@ export const getResults = async (req, res) => {
 
 /**
  * Get summary of reconciliation results
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
  */
 export const getSummary = async (req, res, next) => {
   try {
     const { cab, periode } = req.params;
 
     if (!periode) {
-      return res.status(400).json({
-        success: false,
-        message: "Periode harus diisi",
-      });
+      return res.status(400).json({ success: false, message: "Periode harus diisi" });
     }
 
-    // Handle 'SEMUA CABANG' option
     let summary;
     if (cab === "SEMUA" || cab === "All" || !cab) {
       summary = await rekonWtHarianService.getAllCabangSummary(periode);
@@ -204,10 +176,7 @@ export const getSummary = async (req, res, next) => {
       summary = await rekonWtHarianService.getSummary(cab, periode);
     }
 
-    res.status(200).json({
-      success: true,
-      data: summary,
-    });
+    res.status(200).json({ success: true, data: summary });
   } catch (error) {
     logger.error(`Error in getSummary: ${error.message}`);
     next(error);
@@ -216,25 +185,17 @@ export const getSummary = async (req, res, next) => {
 
 /**
  * Delete reconciliation results
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
  */
 export const deleteResults = async (req, res, next) => {
   try {
     const { cab, periode } = req.params;
 
     if (!periode) {
-      return res.status(400).json({
-        success: false,
-        message: "Periode harus diisi",
-      });
+      return res.status(400).json({ success: false, message: "Periode harus diisi" });
     }
 
-    // Handle 'SEMUA CABANG' option
     if (cab === "SEMUA") {
       const count = await rekonWtHarianService.deleteAllCabangResults(periode);
-
       return res.status(200).json({
         success: true,
         message: `${count} data rekonsiliasi untuk semua cabang berhasil dihapus`,
@@ -243,7 +204,6 @@ export const deleteResults = async (req, res, next) => {
     }
 
     const count = await rekonWtHarianService.deleteResults(cab, periode);
-
     res.status(200).json({
       success: true,
       message: `${count} data berhasil dihapus`,
@@ -257,34 +217,21 @@ export const deleteResults = async (req, res, next) => {
 
 /**
  * Get reconciliation progress
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
  */
 export const getProgress = async (req, res, next) => {
   try {
-    const { progressId } = req.params;
+    const { taskId } = req.params;
 
-    if (!progressId) {
-      return res.status(400).json({
-        success: false,
-        message: "Progress ID harus diisi",
-      });
+    if (!taskId) {
+      return res.status(400).json({ success: false, message: "Task ID harus diisi" });
     }
 
-    const progress = ProgressHelper.getProgress(progressId);
-
-    if (!progress) {
-      return res.status(404).json({
-        success: false,
-        message: "Progress tidak ditemukan",
-      });
+    const task = progressService.progressMap.get(taskId);
+    if (!task) {
+      return res.status(404).json({ success: false, message: "Progress tidak ditemukan" });
     }
 
-    res.status(200).json({
-      success: true,
-      data: progress,
-    });
+    res.status(200).json({ success: true, data: task });
   } catch (error) {
     logger.error(`Error in getProgress: ${error.message}`);
     next(error);
@@ -293,35 +240,23 @@ export const getProgress = async (req, res, next) => {
 
 /**
  * Get latest reconciliation progress for a branch and period
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
  */
 export const getLatestProgress = async (req, res, next) => {
   try {
     const { cab, periode } = req.params;
 
     if (!periode) {
-      return res.status(400).json({
-        success: false,
-        message: "Periode harus diisi",
-      });
+      return res.status(400).json({ success: false, message: "Periode harus diisi" });
     }
 
     const cabParam = cab === "SEMUA" ? "All" : cab;
-    const progress = ProgressHelper.getLatestProgress(cabParam, periode);
+    const latest = findLatestRekonTask(cabParam, periode);
 
-    if (!progress) {
-      return res.status(404).json({
-        success: false,
-        message: "Progress tidak ditemukan",
-      });
+    if (!latest) {
+      return res.status(404).json({ success: false, message: "Progress tidak ditemukan" });
     }
 
-    res.status(200).json({
-      success: true,
-      data: progress,
-    });
+    res.status(200).json({ success: true, data: latest });
   } catch (error) {
     logger.error(`Error in getLatestProgress: ${error.message}`);
     next(error);
@@ -329,10 +264,7 @@ export const getLatestProgress = async (req, res, next) => {
 };
 
 /**
- * Get daily shop summary - rekap data per toko per tanggal
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
+ * Get daily shop summary
  */
 export const getDailyShopSummary = async (req, res, next) => {
   try {
@@ -340,16 +272,10 @@ export const getDailyShopSummary = async (req, res, next) => {
     const { page = 1, limit = 50, toko, tgl1, searchQuery, sortColumn = "tanggal", sortOrder = "asc" } = req.query;
 
     if (!periode) {
-      return res.status(400).json({
-        success: false,
-        message: "Periode harus diisi",
-      });
+      return res.status(400).json({ success: false, message: "Periode harus diisi" });
     }
 
-    // Handle 'SEMUA CABANG' option
     const cabFilter = cab === "SEMUA CABANG" ? "All" : cab;
-
-    logger.info(`getDailyShopSummary request: cab=${cabFilter}, periode=${periode}, page=${page}, limit=${limit}`);
 
     const results = await rekonWtHarianService.getDailyShopSummary(cabFilter, periode, {
       page: parseInt(page),
@@ -370,9 +296,6 @@ export const getDailyShopSummary = async (req, res, next) => {
 
 /**
  * Start reconciliation process for specific shop
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
  */
 export const refreshShopReconciliation = async (req, res, next) => {
   try {
@@ -385,7 +308,6 @@ export const refreshShopReconciliation = async (req, res, next) => {
       });
     }
 
-    // Validate periode format (YYMM)
     if (!/^\d{4}$/.test(periode)) {
       return res.status(400).json({
         success: false,
@@ -393,39 +315,15 @@ export const refreshShopReconciliation = async (req, res, next) => {
       });
     }
 
-    try {
-      // Start reconciliation process and wait for completion
-      const result = await rekonWtHarianService.reconcileSpecificShop(
-        cab, 
-        periode, 
-        toko
-      );
+    const result = await rekonWtHarianService.reconcileSpecificShop(cab, periode, toko);
 
-      logger.info(`Rekonsiliasi toko ${toko} cabang ${cab} periode ${periode} selesai`);
-      
-      res.status(200).json({
-        success: true,
-        message: `Rekonsiliasi untuk toko ${toko} cabang ${cab} periode ${periode} telah selesai`,
-        data: {
-          cab: cab,
-          periode: periode,
-          toko: toko,
-          result: result
-        },
-      });
-    } catch (reconciliationError) {
-      logger.error(`Error in shop reconciliation: ${reconciliationError.message}`);
-      
-      res.status(500).json({
-        success: false,
-        message: `Gagal melakukan rekonsiliasi: ${reconciliationError.message}`,
-        data: {
-          cab: cab,
-          periode: periode,
-          toko: toko
-        },
-      });
-    }
+    logger.info(`Rekonsiliasi toko ${toko} cabang ${cab} periode ${periode} selesai`);
+
+    res.status(200).json({
+      success: true,
+      message: `Rekonsiliasi untuk toko ${toko} cabang ${cab} periode ${periode} telah selesai`,
+      data: { cab, periode, toko, result },
+    });
   } catch (error) {
     logger.error(`Error in refreshShopReconciliation: ${error.message}`);
     next(error);
@@ -434,14 +332,10 @@ export const refreshShopReconciliation = async (req, res, next) => {
 
 /**
  * Invalidate cache manually
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
  */
 export const invalidateCache = async (req, res, next) => {
   try {
     rekonWtHarianService.invalidateCache();
-
     res.status(200).json({
       success: true,
       message: "Cache invalidated successfully. Data will be reloaded on next request.",
@@ -452,4 +346,83 @@ export const invalidateCache = async (req, res, next) => {
   }
 };
 
-// Removed default export - using named exports only
+/**
+ * Update or create note for a specific store and period
+ * PUT /api/rekon-wt-harian/note
+ */
+export const updateNote = async (req, res) => {
+  try {
+    const { cabang, toko, periode, noteText } = req.body;
+    const pic = req.user?.username || "system";
+    const tableName = "rekon_wt_harian";
+    const unixKey = `${toko}${periode}`;
+
+    if (!cabang || !toko || !periode) {
+      return res.status(400).json({ success: false, message: "cabang, toko, dan periode wajib diisi" });
+    }
+
+    if (noteText === undefined) {
+      return res.status(400).json({ success: false, message: "noteText wajib diisi" });
+    }
+
+    const userService = new UserService();
+    const user = await userService.findByCredentials(pic);
+
+    if (String(noteText).trim().length === 0) {
+      const deleted = await notesService.removeByKey(tableName, unixKey);
+      return res.status(200).json({ success: true, data: { deleted, unixKey } });
+    }
+
+    const noteData = {
+      Cabang: cabang,
+      unixKey,
+      noteText: noteText || "",
+      pic,
+      categoryId: null,
+      tableName,
+    };
+
+    const note = await notesService.upsert(noteData);
+    const result = { ...note.toJSON(), fullName: user?.fullName || null };
+
+    return res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    logger.error(`[rekon_wt_harian.controller] Error updating note: ${error.message}`);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// --- Helper functions ---
+
+/**
+ * Find active rekon_wt_harian task in progressMap
+ */
+function findActiveRekonTask() {
+  for (const [, task] of progressService.progressMap) {
+    if (
+      task.info?.module === "rekon_wt_harian" &&
+      (task.status === "running" || task.status === "pending")
+    ) {
+      return task;
+    }
+  }
+  return null;
+}
+
+/**
+ * Find latest rekon_wt_harian task matching cab and period
+ */
+function findLatestRekonTask(cab, period) {
+  const matching = [];
+  for (const [, task] of progressService.progressMap) {
+    if (
+      task.info?.module === "rekon_wt_harian" &&
+      task.info?.cab === cab &&
+      task.info?.period === period
+    ) {
+      matching.push(task);
+    }
+  }
+  matching.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  return matching[0] || null;
+}

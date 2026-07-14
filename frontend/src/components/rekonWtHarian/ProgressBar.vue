@@ -92,15 +92,7 @@ const props = defineProps({
     type: Number,
     default: undefined
   },
-  maxWaves: {
-    type: Number,
-    default: 1
-  },
   currentBranch: {
-    type: String,
-    default: ''
-  },
-  currentItem: {
     type: String,
     default: ''
   },
@@ -117,10 +109,6 @@ const props = defineProps({
     default: true
   },
   showTimeElapsed: {
-    type: Boolean,
-    default: true
-  },
-  showWaveInfo: {
     type: Boolean,
     default: true
   },

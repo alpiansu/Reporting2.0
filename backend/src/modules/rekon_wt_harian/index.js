@@ -10,6 +10,7 @@ import {
   getProgress,
   getLatestProgress,
   getDailyShopSummary,
+  updateNote,
 } from './rekon_wt_harian.controller.js';
 import rekonWtHarianRoutes from './rekon_wt_harian.routes.js';
 import RekonWtHarianService from './rekon_wt_harian.service.js';
@@ -22,6 +23,7 @@ const RekonWtHarianController = {
   getProgress,
   getLatestProgress,
   getDailyShopSummary,
+  updateNote,
 };
 
 export default {

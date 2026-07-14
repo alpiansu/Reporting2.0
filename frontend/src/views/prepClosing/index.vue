@@ -20,7 +20,7 @@
         </template>
         <template #actions>
           <Button icon="pi pi-refresh" label="Refresh" class="p-button-outlined" style="margin-right: 4px;" :disabled="isScreening || loading" @click="handleRefresh" />
-          <Button icon="pi pi-bolt" label="Mulai Screening" class="p-button-primary" :disabled="!filters.periode || isScreening || !isCurrentPeriod" :loading="isScreening" @click="handleStartScreening" />
+          <Button icon="pi pi-bolt" label="Mulai Screening" class="p-button-primary" :disabled="!filters.periode || isScreening || !isCurrentPeriod || wrcNotSynced" :loading="isScreening" @click="handleStartScreening" />
         </template>
       </RekonFormComponent>
 
@@ -42,6 +42,28 @@
         <Button icon="pi pi-database" label="Config WRC Engine" class="p-button-outlined p-button-warning p-button-sm mr-2" :disabled="isScreening || loading" @click="showWrcConfig = true" />
         &nbsp;
         <Button icon="pi pi-cog" label="Rule Management" class="p-button-outlined p-button-secondary p-button-sm" :disabled="isScreening || loading" @click="showRuleConfig = true" />
+      </div>
+
+      <!-- WRC Sync Status Banner -->
+      <div v-if="filters.periode" class="wrc-status-banner" :class="{ 'banner-error': wrcNotSynced, 'banner-warn': !wrcNotSynced && isWrcStale, 'banner-ok': !wrcNotSynced && !isWrcStale }">
+        <div class="banner-content">
+          <i :class="wrcNotSynced ? 'pi pi-times-circle' : (!isWrcStale ? 'pi pi-check-circle' : 'pi pi-exclamation-triangle')" class="banner-icon"></i>
+          <div class="banner-text">
+            <span v-if="wrcNotSynced" class="banner-title">Data WRC Belum Di-Sync</span>
+            <span v-else-if="isWrcStale" class="banner-title">Data WRC Mungkin Sudah Update</span>
+            <span v-else class="banner-title">Data WRC Sudah Di-Sync</span>
+            <span v-if="lastWrcSyncAt" class="banner-subtitle">
+              Terakhir sync: {{ dayjs(lastWrcSyncAt).tz('Asia/Jakarta').format('DD MMM YYYY HH:mm') }}
+            </span>
+            <span v-if="!wrcNotSynced && isWrcStale" class="banner-subtitle">
+              Ada kemungkinan data WRC sudah terbaru. Disarankan untuk melakukan sync ulang.
+            </span>
+            <span v-if="wrcNotSynced" class="banner-subtitle">
+              Silakan buka Config WRC Engine untuk menarik data WRC sebelum melakukan screening.
+            </span>
+          </div>
+          <Button v-if="wrcNotSynced || isWrcStale" icon="pi pi-sync" label="Sync WRC Sekarang" class="p-button-outlined p-button-sm banner-action" @click="showWrcConfig = true" />
+        </div>
       </div>
 
       <!-- Processing Loading State -->
@@ -93,6 +115,7 @@
       v-model:visible="showWrcConfig"
       :selectedPeriode="filters.periode"
       :selectedCabang="filters.cabang"
+      :lastSyncAt="lastWrcSyncAt ? dayjs(lastWrcSyncAt).tz('Asia/Jakarta').format('DD MMM YYYY HH:mm') : null"
     />
   </div>
 </template>
@@ -188,6 +211,39 @@ const isCurrentPeriod = computed(() => {
   return filters.periode === currentPeriode;
 });
 
+const lastWrcSyncAt = computed(() => {
+  if (!wrcSyncStatus.value.length) return null;
+  const syncedItems = wrcSyncStatus.value.filter(s => s.synced && s.last_synced_at);
+  if (!syncedItems.length) return null;
+  return syncedItems[0].last_synced_at;
+});
+
+const requiredWrcCabs = computed(() => {
+  if (filters.cabang === 'All') {
+    return wrcSyncStatus.value.map(s => s.cab);
+  }
+  return [filters.cabang];
+});
+
+const wrcNotSynced = computed(() => {
+  if (!wrcSyncStatus.value.length) return true;
+  const required = requiredWrcCabs.value;
+  return required.some(cab => {
+    const status = wrcSyncStatus.value.find(s => s.cab === cab);
+    return !status || !status.synced;
+  });
+});
+
+const isWrcStale = computed(() => {
+  if (!lastWrcSyncAt.value || !filters.periode) return false;
+  const now = dayjs().tz('Asia/Jakarta');
+  const currentPeriode = now.format('YYMM');
+  if (filters.periode !== currentPeriode) return false;
+  const lastSync = dayjs(lastWrcSyncAt.value);
+  const startOfMonth = now.startOf('month');
+  return lastSync.isBefore(startOfMonth);
+});
+
 const today = ref(new Date());
 const periodeDate = ref(null);
 const cabangOptions = ref([]);
@@ -199,6 +255,7 @@ const savingNote = ref(false);
 const isMassScreening = ref(false);
 const showRuleConfig = ref(false);
 const showWrcConfig = ref(false);
+const wrcSyncStatus = ref([]);
 
 // Initialize
 onMounted(async () => {
@@ -218,6 +275,7 @@ onMounted(async () => {
 
   // Load initial data
   await loadData();
+  await checkWrcSyncStatus();
 });
 
 // Watch periode and cabang changes
@@ -225,6 +283,13 @@ watch([() => filters.periode, () => filters.cabang], async () => {
   if (filters.periode) {
     resetFilters();
     await loadData();
+    await checkWrcSyncStatus();
+  }
+});
+
+watch(showWrcConfig, async (newVal) => {
+  if (!newVal) {
+    await checkWrcSyncStatus();
   }
 });
 
@@ -302,6 +367,20 @@ const loadData = async () => {
       searchQuery: searchQuery.value || undefined
     }
   );
+};
+
+const checkWrcSyncStatus = async () => {
+  try {
+    if (!filters.periode) {
+      wrcSyncStatus.value = [];
+      return;
+    }
+    const statusList = await prepClosingApi.getWrcSyncStatus(filters.periode);
+    wrcSyncStatus.value = statusList || [];
+  } catch (err) {
+    console.warn('Failed to fetch WRC sync status:', err.message);
+    wrcSyncStatus.value = [];
+  }
 };
 
 const handleRefresh = async () => {
@@ -423,31 +502,23 @@ const handleStartScreening = async () => {
     // Reset progress sebelum memulai screening baru
     resetProgress();
 
-    // === WRC GUARD: cek sync status sebelum screening ===
-    let statusList = [];
-    try {
-      statusList = await prepClosingApi.getWrcSyncStatus(filters.periode);
-    } catch (err) {
-      console.warn('⚠️ Failed to fetch WRC sync status, proceeding without guard:', err.message);
+    // === WRC GUARD: hard-block jika ada cabang yang belum sync ===
+    if (wrcNotSynced.value) {
+      const unsynced = requiredWrcCabs.value.filter(cab => {
+        const status = wrcSyncStatus.value.find(s => s.cab === cab);
+        return !status || !status.synced;
+      });
+      if (filters.cabang === 'All') {
+        toast.showError('Error', `Data WRC belum di-sync untuk cabang: ${unsynced.join(', ')}. Silakan buka Config WRC Engine dan lakukan Sync terlebih dahulu.`);
+      } else {
+        toast.showError('Error', `Data WRC cabang ${filters.cabang} belum di-sync. Silakan buka Config WRC Engine dan lakukan Sync terlebih dahulu.`);
+      }
+      return;
     }
 
-    if (filters.cabang === 'All') {
-      const unsynced = statusList.filter(s => !s.synced);
-      if (unsynced.length > 0) {
-        const syncedCount = statusList.length - unsynced.length;
-        if (syncedCount === 0) {
-          toast.showError('Error', 'Data WRC belum di-sync untuk semua cabang. Silakan buka Config WRC Engine dan lakukan Sync terlebih dahulu.');
-          return;
-        }
-        const msg = `${unsynced.length} cabang belum sync WRC: ${unsynced.map(s => s.cab).join(', ')}\n\nScreening hanya akan diproses untuk ${syncedCount} cabang yang sudah sync. Lanjutkan?`;
-        if (!window.confirm(msg)) return;
-      }
-    } else {
-      const cabStatus = statusList.find(s => s.cab === filters.cabang);
-      if (!cabStatus || !cabStatus.synced) {
-        toast.showError('Error', `Data WRC cabang ${filters.cabang} belum di-sync. Silakan buka Config WRC Engine dan lakukan Sync terlebih dahulu.`);
-        return;
-      }
+    if (isWrcStale.value && lastWrcSyncAt.value) {
+      const lastSyncFormatted = dayjs(lastWrcSyncAt.value).tz('Asia/Jakarta').format('DD MMM YYYY HH:mm');
+      toast.showWarn('Peringatan', `WRC terakhir di-sync pada ${lastSyncFormatted}. Jika ada data update di WRC setelah itu, disarankan untuk melakukan sync ulang.`);
     }
 
     // Pastikan ini mass screening
@@ -476,6 +547,12 @@ const handleStartScreening = async () => {
 
 const handleReScreenStore = async (store) => {
   try {
+    const cabStatus = wrcSyncStatus.value.find(s => s.cab === store.CAB);
+    if (!cabStatus || !cabStatus.synced) {
+      toast.showError('Error', `Data WRC cabang ${store.CAB} belum di-sync. Silakan buka Config WRC Engine dan lakukan Sync terlebih dahulu.`);
+      return;
+    }
+
     // Set flag bahwa ini BUKAN mass screening
     isMassScreening.value = false;
 
@@ -584,6 +661,73 @@ const handleCategoryFilter = (category) => {
   gap: 1.5rem;
 }
 
+.wrc-status-banner {
+  padding: 0.875rem 1rem;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+}
+
+.banner-ok {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+
+.banner-warn {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+.banner-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.banner-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.banner-icon {
+  font-size: 1.25rem;
+  margin-top: 0.125rem;
+  flex-shrink: 0;
+}
+
+.banner-ok .banner-icon { color: #16a34a; }
+.banner-warn .banner-icon { color: #d97706; }
+.banner-error .banner-icon { color: #dc2626; }
+
+.banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.banner-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.banner-ok .banner-title { color: #166534; }
+.banner-warn .banner-title { color: #92400e; }
+.banner-error .banner-title { color: #991b1b; }
+
+.banner-subtitle {
+  font-size: 0.8rem;
+}
+
+.banner-ok .banner-subtitle { color: #15803d; }
+.banner-warn .banner-subtitle { color: #b45309; }
+.banner-error .banner-subtitle { color: #b91c1c; }
+
+.banner-action {
+  flex-shrink: 0;
+  align-self: center;
+}
 
 @media (max-width: 768px) {
   .prep-closing-view {
@@ -592,6 +736,10 @@ const handleCategoryFilter = (category) => {
 
   .content-container {
     gap: 1rem;
+  }
+
+  .banner-content {
+    flex-wrap: wrap;
   }
 }
 </style>

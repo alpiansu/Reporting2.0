@@ -145,10 +145,11 @@ export const prepClosingApi = {
     const response = await api.get(`${BASE_URL}/wrc-sync-status`, {
       params: { periode },
     });
-    // response.data = { success: true, data: [...] }
     const payload = response.data;
-    const list = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : [];
-    return list;
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.data)) return payload.data;
+    if (Array.isArray(payload?.result)) return payload.result;
+    return [];
   },
 
   async getWrcExtractRules() {

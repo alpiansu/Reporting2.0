@@ -14,6 +14,7 @@ import {
   getLatestProgress,
   invalidateCache,
   getDailyShopSummary,
+  updateNote,
 } from "./rekon_wt_harian.controller.js";
 import { authenticateJWT, authorizeRole } from "../../middlewares/index.js";
 
@@ -28,6 +29,7 @@ const rekonWtHarianController = {
   getLatestProgress,
   invalidateCache,
   getDailyShopSummary,
+  updateNote,
 };
 
 // Start reconciliation process
@@ -38,12 +40,27 @@ router.post("/", authenticateJWT, authorizeRole(["admin", "manager"]), rekonWtHa
 // Start reconciliation process for specific shop
 // POST /api/rekon-wt-harian/refresh-shop/:periode/:cab/:toko
 // Access: Private (Admin/Manager only)
-router.post("/refresh-shop/:periode/:cab/:toko", authenticateJWT, rekonWtHarianController.refreshShopReconciliation);
+router.post(
+  "/refresh-shop/:periode/:cab/:toko",
+  authenticateJWT,
+  authorizeRole(["admin", "manager"]),
+  rekonWtHarianController.refreshShopReconciliation
+);
+
+// Update or create note for a store
+// PUT /api/rekon-wt-harian/note
+// Access: Private (Admin/Manager only)
+router.put(
+  "/note",
+  authenticateJWT,
+  authorizeRole(["admin", "manager"]),
+  rekonWtHarianController.updateNote
+);
 
 // Get reconciliation progress
-// GET /api/rekon-wt-harian/progress/:progressId
+// GET /api/rekon-wt-harian/progress/:taskId
 // Access: Private
-router.get("/progress/:progressId", authenticateJWT, rekonWtHarianController.getProgress);
+router.get("/progress/:taskId", authenticateJWT, rekonWtHarianController.getProgress);
 
 // Get latest reconciliation progress for a branch and period
 // GET /api/rekon-wt-harian/latest-progress/:cab/:periode
@@ -76,9 +93,9 @@ router.delete(
 );
 
 // Clean up temporary difference files
-// GET /api/rekon-wt-harian/cleanup-temp-files
+// POST /api/rekon-wt-harian/cleanup-temp-files
 // Access: Private (Admin/Superadmin only)
-router.get(
+router.post(
   "/cleanup-temp-files",
   authenticateJWT,
   authorizeRole(["admin", "superadmin"]),

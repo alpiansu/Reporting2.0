@@ -1,5 +1,9 @@
 <template>
   <Dialog v-model:visible="localVisible" header="Detail Bulanan" :modal="true" :style="{ width: '1000px' }">
+    <div v-if="detailLoading && !detail" class="detail-loading">
+      <i class="pi pi-spinner pi-spin"></i>
+      <span>Memuat detail toko...</span>
+    </div>
     <div v-if="detail">
       <TabView>
         <TabPanel header="Ringkasan">
@@ -113,6 +117,7 @@ import { formatNumber, formatDecimal, getSelisihClass } from '../utils/formatter
 const props = defineProps({
   visible: { type: Boolean, default: false },
   detail: { type: Object, default: () => null },
+  detailLoading: { type: Boolean, default: false },
   differences: { type: [Array, Object], default: () => [] },
   diffLoading: { type: Boolean, default: false },
   kodePesananIssues: { type: [Array, Object], default: () => [] },
@@ -205,5 +210,19 @@ const emitOpenNote = () => {
 }
 :deep(.p-datatable .p-datatable-tbody > tr:hover) {
   background: var(--surface-hover) !important;
+}
+
+.detail-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 3rem 1rem;
+  color: var(--text-color-secondary);
+}
+.detail-loading i {
+  font-size: 2rem;
+  color: var(--primary-color);
 }
 </style>

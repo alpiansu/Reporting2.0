@@ -30,13 +30,14 @@
 
       <StoreListTable :data="stores" :loading="loading" :pagination="pagination" :sortColumn="sortColumn"
         :sortOrder="sortOrder" :searchQuery="searchQuery" :loadingStores="loadingStores"
-        :highlightedItems="highlightedItems" @page-change="handlePageChange" @sort-change="handleSortChange"
+        :detailLoadingStores="detailLoadingStores" :highlightedItems="highlightedItems"
+        @page-change="handlePageChange" @sort-change="handleSortChange"
         @view-details="openDetail" @re-screen="handleReScreen" @edit-note="openNote" @export="exportExcel"
         @search-change="handleSearchChange" />
 
-      <StoreDetailModal v-model:visible="detailVisible" :detail="selectedDetail" :differences="differences"
-        :diffLoading="diffLoading" :kodePesananIssues="kodePesananIssues" :kodeLoading="kodeLoading"
-        @open-note="openNote" @view-live-check="handleViewLiveCheck" />
+      <StoreDetailModal v-model:visible="detailVisible" :detail="selectedDetail" :detailLoading="detailLoading"
+        :differences="differences" :diffLoading="diffLoading" :kodePesananIssues="kodePesananIssues"
+        :kodeLoading="kodeLoading" @open-note="openNote" @view-live-check="handleViewLiveCheck" />
 
       <MtranVsCdLiveCheckDialog v-model:visible="liveCheckVisible" :items="liveCheckItems"
         :loading="liveCheckLoading" :error="liveCheckError" :shiftInfo="liveCheckShiftInfo" />
@@ -105,6 +106,9 @@ const {
 const cabangOptions = ref([]);
 const detailVisible = ref(false);
 const selectedDetail = ref(null);
+const detailLoading = ref(false);
+const detailLoadingStores = ref(new Set());
+let detailRequestToken = 0;
 const differences = ref([]);
 const diffLoading = ref(false);
 const kodePesananIssues = ref([]);
@@ -245,14 +249,37 @@ watch(progressError, (newVal) => {
 });
 
 const openDetail = async (row) => {
+  const kdtk = row.KDTK;
+  if (!kdtk) return;
+  const key = `${row.CABANG || row.CAB || 'Unknown'}_${kdtk}`;
+  // Guard: cegah request berulang untuk toko yang sedang dimuat detailnya
+  if (detailLoadingStores.value.has(key)) return;
+  detailLoadingStores.value.add(key);
+  // Token untuk menghindari race condition bila user membuka toko lain saat load belum selesai
+  const token = ++detailRequestToken;
+
+  // Buka dialog langsung agar user mendapat feedback instan tanpa menunggu response backend
+  detailVisible.value = true;
+  detailLoading.value = true;
+  selectedDetail.value = null;
+  differences.value = [];
+  kodePesananIssues.value = [];
+
   try {
-    const det = await fetchStoreDetails({ kdtk: row.KDTK });
+    const det = await fetchStoreDetails({ kdtk });
+    if (token !== detailRequestToken) return;
     selectedDetail.value = det.data || det;
-    detailVisible.value = true;
     diffLoading.value = true; kodeLoading.value = true;
-    try { const diffRes = await fetchDifferences({ kdtk: row.KDTK, page: 1, limit: 100 }); differences.value = diffRes.data || diffRes; } catch { differences.value = []; } finally { diffLoading.value = false; }
-    try { const kodeRes = await fetchKodePesananIssues({ kdtk: row.KDTK }); kodePesananIssues.value = kodeRes.data || kodeRes; } catch { kodePesananIssues.value = []; } finally { kodeLoading.value = false; }
-  } catch (err) { toast.showError('Error', err.message || 'Gagal mengambil detail'); }
+    try { const diffRes = await fetchDifferences({ kdtk, page: 1, limit: 100 }); if (token !== detailRequestToken) return; differences.value = diffRes.data || diffRes; } catch { if (token !== detailRequestToken) return; differences.value = []; } finally { if (token === detailRequestToken) diffLoading.value = false; }
+    try { const kodeRes = await fetchKodePesananIssues({ kdtk }); if (token !== detailRequestToken) return; kodePesananIssues.value = kodeRes.data || kodeRes; } catch { if (token !== detailRequestToken) return; kodePesananIssues.value = []; } finally { if (token === detailRequestToken) kodeLoading.value = false; }
+  } catch (err) {
+    if (token !== detailRequestToken) return;
+    toast.showError('Error', err.message || 'Gagal mengambil detail');
+    detailVisible.value = false;
+  } finally {
+    detailLoading.value = false;
+    detailLoadingStores.value.delete(key);
+  }
 };
 
 const openNote = (rowOrDetail) => {

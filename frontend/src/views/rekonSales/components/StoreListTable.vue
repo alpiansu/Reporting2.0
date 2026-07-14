@@ -99,7 +99,9 @@
                 @mouseleave="startHideTimer"
                 @click="$emit('edit-note', slotProps.data)" />
               <Button icon="pi pi-eye" size="small" outlined
-                v-tooltip.top="'Detail'"
+                v-tooltip.top="isDetailLoading(slotProps.data) ? 'Memuat...' : 'Detail'"
+                :loading="isDetailLoading(slotProps.data)"
+                :disabled="isDetailLoading(slotProps.data)"
                 @click="$emit('view-details', slotProps.data)" />
               <Button icon="pi pi-refresh" size="small" severity="secondary" outlined
                 v-tooltip.top="isLoading(slotProps.data) ? 'Processing...' : 'Re-screen'"
@@ -155,7 +157,8 @@ const props = defineProps({
   sortOrder: { type: String, default: 'ASC' },
   searchQuery: { type: String, default: '' },
   loadingStores: { type: Object, default: () => new Set() },
-  highlightedItems: { type: Object, default: () => new Set() }
+  highlightedItems: { type: Object, default: () => new Set() },
+  detailLoadingStores: { type: Object, default: () => new Set() }
 });
 
 const emit = defineEmits([
@@ -196,6 +199,8 @@ const onSort = (ev) => emit('sort-change', {
 });
 
 const isLoading = (row) => props.loadingStores.has(`${row.CABANG || row.CAB}_${row.KDTK}`);
+
+const isDetailLoading = (row) => props.detailLoadingStores.has(`${row.CABANG || row.CAB}_${row.KDTK}`);
 
 const amountClass = getSelisihClass;
 

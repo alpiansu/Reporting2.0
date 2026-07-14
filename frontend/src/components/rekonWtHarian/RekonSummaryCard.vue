@@ -134,15 +134,6 @@ const cabangName = computed(() => {
 });
 
 // Utility functions
-const formatCurrency = (value) => {
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-  }).format(value || 0);
-};
-
 const formatCurrencyCompact = (value) => {
   const absValue = Math.abs(value || 0);
   

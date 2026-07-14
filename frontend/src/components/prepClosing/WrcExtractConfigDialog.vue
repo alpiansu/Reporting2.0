@@ -37,6 +37,9 @@
           <div class="info-bar-content">
             <i class="pi pi-info-circle"></i>
             <span>Kueri extraction dijalankan sekali per hari/trigger dan disimpan dalam master <strong>cache in-memory</strong>.</span>
+            <span v-if="props.lastSyncAt" class="ml-2 text-sm">
+              <i class="pi pi-clock mr-1"></i>Terakhir sync: {{ props.lastSyncAt }}
+            </span>
           </div>
           <div class="info-bar-actions">
             <Button
@@ -276,7 +279,8 @@ import prepClosingApi from '../../services/prepClosing.service';
 const props = defineProps({
   visible: { type: Boolean, default: false },
   selectedPeriode: { type: String, default: null },
-  selectedCabang: { type: String, default: 'All' }
+  selectedCabang: { type: String, default: 'All' },
+  lastSyncAt: { type: String, default: null }
 });
 
 const emit = defineEmits(['update:visible']);

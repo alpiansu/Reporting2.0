@@ -65,13 +65,13 @@
         >
           <template #header>
             <div class="flex justify-content-between align-items-center w-full">
-              <span class="table-title-text">{{ rules.length }} Query Terdaftar</span>
               <Button
                 label="Tambah Query"
                 icon="pi pi-plus"
                 class="p-button-sm p-button-success"
                 @click="openAddRule"
               />
+              <span class="table-title-text">{{ rules.length }} Query Terdaftar</span>
             </div>
           </template>
 
@@ -483,6 +483,8 @@ const saveRules = async () => {
   font-size: 0.82rem;
   font-weight: 600;
   color: #64748b;
+  margin: 1rem 0.5rem;
+  font-style: italic;
 }
 
 .key-chip {

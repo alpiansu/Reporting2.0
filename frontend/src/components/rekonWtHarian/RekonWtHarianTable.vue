@@ -111,6 +111,9 @@
         </button>
       </td>
       <td class="text-center">
+        <div class="action-buttons">
+          <button 
+            @click="showDetailModal(item)" 
             class="btn btn-detail"
             title="Lihat Detail Data"
             :disabled="!item.record_count || item.record_count === 0"

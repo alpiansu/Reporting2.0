@@ -510,6 +510,13 @@ async function loadData() {
   if (!periode) return;
 
   loading.value = true;
+  summary.value = null;
+  ftpSummary.value = null;
+  selectedRows.value = [];
+  selectAllChecked.value = false;
+  sentStatusMap.value = {};
+  lastSendDetails.value = [];
+  lastSendSummary.value = { success: 0, skipped: 0, failed: 0 };
   try {
     const res = await ntbVsGlslpApi.getRecords(activeCabang.value, periode, {
       page: currentPage.value,

@@ -292,7 +292,7 @@ const PAGE_DESCRIPTIONS = {
   '/rekon-sales':           'Rekonsiliasi data penjualan antar sistem',
   '/penyesuaian':           'Penyesuaian data transaksi toko',
   '/adjust':                'Adjustment data persediaan & transaksi',
-  '/cetak-bpb':             'Cetak Bukti Penerimaan Barang',
+  '/cetak-bpb':             'Cetak BPB & NRB',
   '/rekap-backup':          'Rekap status backup data toko',
   '/rekon-persediaan':      'Rekonsiliasi data persediaan toko',
   '/rekon-wt-harian':       'Rekonsiliasi Warehouse Transfer Harian',

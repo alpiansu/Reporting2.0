@@ -23,6 +23,7 @@ import notesModule from "./notes/index.js";
 import penyesuaianModule from "./penyesuaian/index.js";
 import rekonSalesModule from "./rekon_sales/index.js";
 import cetakBpbModule from "./cetak_bpb/index.js";
+import cetakNrbModule from "./cetak_nrb/index.js";
 import rekonPersediaanModule from "./rekon_persediaan/index.js";
 import dashboardModule from "./dashboard/index.js";
 import buatRmbModule from "./buat_rmb/index.js";
@@ -33,6 +34,7 @@ import combinedScreeningModule from "./combined-screening/index.js";
 import exportLapDevModule from "./exportLapDev/index.js";
 import ntbVsGlslpModule from "./ntb_vs_glslp/index.js";
 import dthrFtpModule from "./dthr_ftp/index.js";
+import jenisReturModule from "./jenis-retur/index.js";
 
 export default {
   // Export all modules
@@ -56,6 +58,7 @@ export default {
   penyesuaianModule,
   rekonSalesModule,
   cetakBpbModule,
+  cetakNrbModule,
   rekonPersediaanModule,
   dashboardModule,
   buatRmbModule,
@@ -66,6 +69,7 @@ export default {
   exportLapDevModule,
   ntbVsGlslpModule,
   dthrFtpModule,
+  jenisReturModule,
 
   // Initialize all modules
   initialize: app => {
@@ -89,6 +93,7 @@ export default {
     const penyesuaian = penyesuaianModule.initialize(app);
     const rekonSales = rekonSalesModule.initialize(app);
     const cetakBpb = cetakBpbModule.initialize(app);
+    const cetakNrb = cetakNrbModule.initialize(app);
     const rekonPersediaan = rekonPersediaanModule.initialize(app);
     const dashboard = dashboardModule.initialize(app);
     const buatRmb = buatRmbModule.initialize(app);
@@ -99,6 +104,7 @@ export default {
     const exportLapDev = exportLapDevModule.initialize(app);
     const ntbVsGlslp = ntbVsGlslpModule.initialize(app);
     const dthrFtp = dthrFtpModule.initialize(app);
+    const jenisRetur = jenisReturModule.initialize(app);
 
     // Initialize menu manager module
     app.use("/api/menu-manager", menuManagerModule.routes);
@@ -123,6 +129,7 @@ export default {
       penyesuaian,
       rekonSales,
       cetakBpb,
+      cetakNrb,
       rekonPersediaan,
       dashboard,
       buatRmb,
@@ -133,6 +140,7 @@ export default {
       exportLapDev,
       ntbVsGlslp,
       dthrFtp,
+      jenisRetur,
       menuManager: true,
     };
   },

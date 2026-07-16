@@ -5,14 +5,19 @@ import { CONFIG } from "./ntb_vs_glslp.config.js";
 const ALLOWED_SORT_COLUMNS = new Set([
   "KODE_PROMO",
   "KODE_GUDANG",
+  "JENIS_TOKO",
   "KODE_TOKO",
   "TGL_TRANSAKSI",
-  "RP_NTB",
-  "RP_GLSLP",
-  "SELISIH_RP",
+  "RP_NTB_LHDR",
+  "RP_GLSLP_LHDR",
+  "SELISIH_RP_LHDR",
+  "RP_NTB_EDP",
+  "RP_GLSLP_EDP",
+  "SELISIH_RP_EDP",
   "HASIL_CEK",
   "RECID",
   "TGL_CEK",
+  "IP_CEK",
 ]);
 
 class NtbVsGlslpService {
@@ -23,8 +28,8 @@ class NtbVsGlslpService {
   klasifikasiCase() {
     return `
       CASE
-        WHEN SELISIH_RP = 0 THEN 'SESUAI'
-        WHEN ABS(SELISIH_RP) <= ${CONFIG.TOLERANCE} THEN 'TOLERANSI'
+        WHEN SELISIH_RP_EDP = 0 THEN 'SESUAI'
+        WHEN ABS(SELISIH_RP_EDP) <= ${CONFIG.TOLERANCE} THEN 'TOLERANSI'
         ELSE 'SELISIH'
       END AS KLASIFIKASI
     `;
@@ -54,7 +59,7 @@ class NtbVsGlslpService {
     if (searchQuery) {
       const q = `%${searchQuery}%`;
       conditions.push(
-        `(${table}.KODE_PROMO LIKE :search OR ${table}.KODE_TOKO LIKE :search OR ${table}.NAMA_FILE LIKE :search OR ${table}.HASIL_CEK LIKE :search)`,
+        `(${table}.KODE_PROMO LIKE :search OR ${table}.KODE_TOKO LIKE :search OR ${table}.JENIS_TOKO LIKE :search OR ${table}.NAMA_FILE LIKE :search OR ${table}.HASIL_CEK LIKE :search)`,
       );
       replacements.search = q;
     }
@@ -127,10 +132,10 @@ class NtbVsGlslpService {
     const sql = `
       SELECT
         COUNT(*) AS total,
-        SUM(CASE WHEN SELISIH_RP = 0 THEN 1 ELSE 0 END) AS sesui,
-        SUM(CASE WHEN ABS(SELISIH_RP) > 0 AND ABS(SELISIH_RP) <= ${CONFIG.TOLERANCE} THEN 1 ELSE 0 END) AS toleransi,
-        SUM(CASE WHEN ABS(SELISIH_RP) > ${CONFIG.TOLERANCE} THEN 1 ELSE 0 END) AS selisih,
-        COALESCE(SUM(ABS(SELISIH_RP)), 0) AS total_abs_selisih
+        SUM(CASE WHEN SELISIH_RP_EDP = 0 THEN 1 ELSE 0 END) AS sesui,
+        SUM(CASE WHEN ABS(SELISIH_RP_EDP) > 0 AND ABS(SELISIH_RP_EDP) <= ${CONFIG.TOLERANCE} THEN 1 ELSE 0 END) AS toleransi,
+        SUM(CASE WHEN ABS(SELISIH_RP_EDP) > ${CONFIG.TOLERANCE} THEN 1 ELSE 0 END) AS selisih,
+        COALESCE(SUM(ABS(SELISIH_RP_EDP)), 0) AS total_abs_selisih
       FROM ${table}
       ${whereSQL}
     `;

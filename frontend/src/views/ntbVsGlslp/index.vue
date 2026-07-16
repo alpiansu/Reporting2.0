@@ -203,25 +203,41 @@
           </Column>
           <Column field="KODE_PROMO" header="Kode Promo" :sortable="true" style="min-width:120px" />
           <Column field="KODE_GUDANG" header="Gudang" :sortable="true" style="width:80px" />
+          <Column field="JENIS_TOKO" header="Jenis Toko" :sortable="true" style="min-width:120px" />
           <Column field="KODE_TOKO" header="Toko" :sortable="true" style="width:80px" />
           <Column field="TGL_TRANSAKSI" header="Tanggal" :sortable="true" style="width:110px">
             <template #body="{ data: row }">
               {{ formatDate(row.TGL_TRANSAKSI) }}
             </template>
           </Column>
-          <Column field="RP_NTB" header="Rp NTB" :sortable="true" style="width:130px">
+          <Column field="RP_NTB_LHDR" header="Rp NTB LHDR" :sortable="true" style="width:130px">
             <template #body="{ data: row }">
-              {{ formatNumber(row.RP_NTB) }}
+              {{ formatNumber(row.RP_NTB_LHDR) }}
             </template>
           </Column>
-          <Column field="RP_GLSLP" header="Rp GLSLP" :sortable="true" style="width:130px">
+          <Column field="RP_GLSLP_LHDR" header="Rp GLSLP LHDR" :sortable="true" style="width:130px">
             <template #body="{ data: row }">
-              {{ formatNumber(row.RP_GLSLP) }}
+              {{ formatNumber(row.RP_GLSLP_LHDR) }}
             </template>
           </Column>
-          <Column field="SELISIH_RP" header="Selisih" :sortable="true" style="width:130px">
+          <Column field="SELISIH_RP_LHDR" header="Selisih LHDR" :sortable="true" style="width:130px">
             <template #body="{ data: row }">
-              <span :class="selisihClass(row.SELISIH_RP)">{{ formatNumber(row.SELISIH_RP) }}</span>
+              {{ formatNumber(row.SELISIH_RP_LHDR) }}
+            </template>
+          </Column>
+          <Column field="RP_NTB_EDP" header="Rp NTB EDP" :sortable="true" style="width:130px">
+            <template #body="{ data: row }">
+              {{ formatNumber(row.RP_NTB_EDP) }}
+            </template>
+          </Column>
+          <Column field="RP_GLSLP_EDP" header="Rp GLSLP EDP" :sortable="true" style="width:130px">
+            <template #body="{ data: row }">
+              {{ formatNumber(row.RP_GLSLP_EDP) }}
+            </template>
+          </Column>
+          <Column field="SELISIH_RP_EDP" header="Selisih EDP" :sortable="true" style="width:130px">
+            <template #body="{ data: row }">
+              <span :class="selisihClass(row.SELISIH_RP_EDP)">{{ formatNumber(row.SELISIH_RP_EDP) }}</span>
             </template>
           </Column>
           <Column field="KLASIFIKASI" header="Klasifikasi" :sortable="false" style="width:130px">
@@ -237,6 +253,11 @@
           <Column field="TGL_CEK" header="Tgl Cek" style="width:100px">
             <template #body="{ data: row }">
               {{ row.TGL_CEK ? formatDate(row.TGL_CEK) : '-' }}
+            </template>
+          </Column>
+          <Column field="IP_CEK" header="IP Cek" style="width:100px">
+            <template #body="{ data: row }">
+              <span :class="row.IP_CEK ? '' : 'text-muted'">{{ row.IP_CEK || '-' }}</span>
             </template>
           </Column>
           <Column header="Aksi" style="width:100px">
@@ -319,20 +340,36 @@
             <span>{{ cekRecord.KODE_TOKO }}</span>
           </div>
           <div class="field-row">
+            <label>Jenis Toko:</label>
+            <span>{{ cekRecord.JENIS_TOKO || '-' }}</span>
+          </div>
+          <div class="field-row">
             <label>Tanggal:</label>
             <span>{{ formatDate(cekRecord.TGL_TRANSAKSI) }}</span>
           </div>
           <div class="field-row">
-            <label>Rp NTB:</label>
-            <span>{{ formatNumber(cekRecord.RP_NTB) }}</span>
+            <label>Rp NTB LHDR:</label>
+            <span>{{ formatNumber(cekRecord.RP_NTB_LHDR) }}</span>
           </div>
           <div class="field-row">
-            <label>Rp GLSLP:</label>
-            <span>{{ formatNumber(cekRecord.RP_GLSLP) }}</span>
+            <label>Rp GLSLP LHDR:</label>
+            <span>{{ formatNumber(cekRecord.RP_GLSLP_LHDR) }}</span>
           </div>
           <div class="field-row">
-            <label>Selisih:</label>
-            <span :class="selisihClass(cekRecord.SELISIH_RP)">{{ formatNumber(cekRecord.SELISIH_RP) }}</span>
+            <label>Selisih LHDR:</label>
+            <span>{{ formatNumber(cekRecord.SELISIH_RP_LHDR) }}</span>
+          </div>
+          <div class="field-row">
+            <label>Rp NTB EDP:</label>
+            <span>{{ formatNumber(cekRecord.RP_NTB_EDP) }}</span>
+          </div>
+          <div class="field-row">
+            <label>Rp GLSLP EDP:</label>
+            <span>{{ formatNumber(cekRecord.RP_GLSLP_EDP) }}</span>
+          </div>
+          <div class="field-row">
+            <label>Selisih EDP:</label>
+            <span :class="selisihClass(cekRecord.SELISIH_RP_EDP)">{{ formatNumber(cekRecord.SELISIH_RP_EDP) }}</span>
           </div>
           <div class="field-row">
             <label>Klasifikasi:</label>
@@ -940,14 +977,20 @@ async function exportExcel() {
       Status: r.RECID === '1' ? 'OK' : 'Belum',
       'Kode Promo': r.KODE_PROMO,
       Gudang: r.KODE_GUDANG,
+      'Jenis Toko': r.JENIS_TOKO || '',
       Toko: r.KODE_TOKO,
       Tanggal: r.TGL_TRANSAKSI,
-      'Rp NTB': r.RP_NTB,
-      'Rp GLSLP': r.RP_GLSLP,
-      Selisih: r.SELISIH_RP,
+      'Rp NTB LHDR': r.RP_NTB_LHDR,
+      'Rp GLSLP LHDR': r.RP_GLSLP_LHDR,
+      'Selisih LHDR': r.SELISIH_RP_LHDR,
+      'Rp NTB EDP': r.RP_NTB_EDP,
+      'Rp GLSLP EDP': r.RP_GLSLP_EDP,
+      'Selisih EDP': r.SELISIH_RP_EDP,
       Klasifikasi: r.KLASIFIKASI,
+      'Nama File': r.NAMA_FILE || '',
       'Hasil Cek': r.HASIL_CEK || '',
       'Tgl Cek': r.TGL_CEK || '',
+      'IP Cek': r.IP_CEK || '',
     }));
     const sheet = XLSX.utils.json_to_sheet(exportData);
     XLSX.utils.book_append_sheet(wb, sheet, 'Data');

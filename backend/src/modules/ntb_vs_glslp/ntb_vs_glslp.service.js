@@ -211,10 +211,12 @@ class NtbVsGlslpService {
 
     const sheet = workbook.addWorksheet("NTB vs GLSLP");
 
-    // Title
+    // Title — merged across all columns so it doesn't affect auto-width
     sheet.addRow([]);
     const titleRow = sheet.addRow([`Rekonsiliasi NTB vs GLSLP — ${periode}`]);
     titleRow.font = { bold: true, size: 14, color: { argb: "FF1A237E" } };
+    titleRow.alignment = { horizontal: "left", vertical: "middle" };
+    sheet.mergeCells(`A${titleRow.number}:Q${titleRow.number}`);
     sheet.addRow([]);
 
     // Headers
@@ -297,11 +299,14 @@ class NtbVsGlslpService {
       });
     });
 
-    // Auto-width
+    // Auto-width — hitung hanya dari data rows (mulai row 5), skip title & header
+    const dataStartRow = 5;
     [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17].forEach(idx => {
       const col = sheet.getColumn(idx);
       let maxLen = 10;
       col.eachCell({ includeEmpty: false }, cell => {
+        // Skip title/spacer/header rows — only data from row 5 onward
+        if (cell.row < dataStartRow) return;
         const len = cell.value ? String(cell.value).length : 0;
         if (len > maxLen) maxLen = len;
       });

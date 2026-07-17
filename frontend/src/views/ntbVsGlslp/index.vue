@@ -40,12 +40,21 @@
 
             <div class="filter-actions">
               <Button icon="pi pi-refresh" label="Refresh" class="p-button-outlined" @click="loadData" />
-              <Button icon="pi pi-file-excel" label="Export Excel" class="p-button-success" :disabled="!data.length"
-                @click="exportExcel" />
+              <Button icon="pi pi-file-excel" label="Export Excel" class="p-button-success" :disabled="!data.length || exporting"
+  :loading="exporting" @click="exportExcel" />
             </div>
           </div>
         </template>
       </Card>
+
+      <!-- Chart Section -->
+      <RekonsiliasiChart
+        v-if="periodeDate"
+        :items="chartData"
+        :loading="chartLoading"
+        :error="chartError"
+        @retry="loadChart"
+      />
 
       <div v-if="data.length > 0" class="bulk-toolbar">
         <div class="bulk-info">
@@ -392,7 +401,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import PageHeader from '../../components/PageHeader.vue';
 import Card from 'primevue/card';
 import Calendar from 'primevue/calendar';
@@ -412,7 +421,7 @@ import { useCabangStore } from '@/stores';
 import { useToast } from 'primevue/usetoast';
 import ntbVsGlslpApi from '@/services/ntbVsGlslp.service.js';
 import progressApi from '@/services/progress.service.js';
-import * as XLSX from 'xlsx';
+import RekonsiliasiChart from './components/RekonsiliasiChart.vue';
 
 const cabangStore = useCabangStore();
 
@@ -437,7 +446,15 @@ const sortColumn = ref('TGL_TRANSAKSI');
 const sortOrder = ref('DESC');
 const summary = ref(null);
 
+// Chart
+const chartData = ref([]);
+const chartLoading = ref(false);
+const chartError = ref(false);
+
 const toast = useToast();
+
+// Export state
+const exporting = ref(false);
 
 const selectedRows = ref([]);
 const selectAllChecked = ref(false);
@@ -510,6 +527,9 @@ async function loadData() {
   if (!periode) return;
 
   loading.value = true;
+  // Kick off chart reload in background (parallel with table)
+  chartLoading.value = true;
+  loadChart();
   summary.value = null;
   ftpSummary.value = null;
   selectedRows.value = [];
@@ -573,6 +593,22 @@ function clearSearch() {
   currentPage.value = 1;
   loadData();
 }
+
+// ── Chart: lazy load independently when filter changes ──
+watch(
+  [periodeDate, activeCabang],
+  ([newPeriode]) => {
+    if (newPeriode) {
+      chartLoading.value = true;
+      chartError.value = false;
+      loadChart();
+    }
+  },
+  { immediate: false },
+);
+
+// ── Refresh chart after table operations (sort, page, search) ──
+// These don't affect the chart, so no reload needed
 
 function openCekModal(row) {
   cekRecord.value = row;
@@ -822,18 +858,25 @@ async function copySendResult() {
 
 function exportSendResult() {
   if (!lastSendDetails.value.length) return;
-  const exportData = lastSendDetails.value.map((r, i) => ({
-    No: i + 1,
-    KDTK: r.kdtk,
-    'Nama Toko': r.namaToko,
-    Tanggal: r.tglTransaksi || '',
-    'Nama File': r.nama_file,
-    Status: r.status === 'success' ? 'Sukses' : r.status === 'skipped' ? 'Skip' : 'Gagal',
-  }));
-  const wb = XLSX.utils.book_new();
-  const sheet = XLSX.utils.json_to_sheet(exportData);
-  XLSX.utils.book_append_sheet(wb, sheet, 'Hasil Kirim');
-  XLSX.writeFile(wb, `hasil_kirim_ftp_${Date.now()}.xlsx`);
+  const header = 'No,KDTK,Nama Toko,Tanggal,Nama File,Status';
+  const rows = lastSendDetails.value.map((r, i) => {
+    const status = r.status === 'success' ? 'Sukses' : r.status === 'skipped' ? 'Skip' : 'Gagal';
+    const escape = v => {
+      const s = String(v ?? '');
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    return `${i + 1},${escape(r.kdtk)},${escape(r.namaToko)},${escape(r.tglTransaksi)},${escape(r.nama_file)},${escape(status)}`;
+  });
+  const csv = `\uFEFF${header}\n${rows.join('\n')}`;
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `hasil_kirim_ftp_${Date.now()}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
 async function handleSendToFtp() {
@@ -971,39 +1014,60 @@ async function saveHasilCek() {
   }
 }
 
+async function loadChart() {
+  const periode = getPeriode();
+  if (!periode) return;
+
+  chartLoading.value = true;
+  chartError.value = false;
+  try {
+    const res = await ntbVsGlslpApi.getCabangChart(activeCabang.value, periode);
+    chartData.value = res.data || [];
+  } catch {
+    chartData.value = [];
+    chartError.value = true;
+  } finally {
+    chartLoading.value = false;
+  }
+}
+
 async function exportExcel() {
   const periode = getPeriode();
-  if (!periode || !data.value.length) return;
+  if (!periode || !data.value.length || exporting.value) return;
 
+  exporting.value = true;
   try {
-    const res = await ntbVsGlslpApi.getAllRecords(activeCabang.value, periode, recidFilter.value);
-    const rows = res.data || [];
+    const res = await ntbVsGlslpApi.exportExcel(activeCabang.value, periode, {
+      recidFilter: recidFilter.value,
+      searchQuery: searchQuery.value || undefined,
+    });
 
-    const wb = XLSX.utils.book_new();
-    const exportData = rows.map(r => ({
-      Status: r.RECID === '1' ? 'OK' : 'Belum',
-      'Kode Promo': r.KODE_PROMO,
-      Gudang: r.KODE_GUDANG,
-      'Jenis Toko': r.JENIS_TOKO || '',
-      Toko: r.KODE_TOKO,
-      Tanggal: r.TGL_TRANSAKSI,
-      'Rp NTB LHDR': r.RP_NTB_LHDR,
-      'Rp GLSLP LHDR': r.RP_GLSLP_LHDR,
-      'Selisih LHDR': r.SELISIH_RP_LHDR,
-      'Rp NTB EDP': r.RP_NTB_EDP,
-      'Rp GLSLP EDP': r.RP_GLSLP_EDP,
-      'Selisih EDP': r.SELISIH_RP_EDP,
-      Klasifikasi: r.KLASIFIKASI,
-      'Nama File': r.NAMA_FILE || '',
-      'Hasil Cek': r.HASIL_CEK || '',
-      'Tgl Cek': r.TGL_CEK || '',
-      'IP Cek': r.IP_CEK || '',
-    }));
-    const sheet = XLSX.utils.json_to_sheet(exportData);
-    XLSX.utils.book_append_sheet(wb, sheet, 'Data');
-    XLSX.writeFile(wb, `ntb_vs_glslp_${periode}_${activeCabang.value}_${Date.now()}.xlsx`);
+    // Trigger download from Blob with filename from Content-Disposition header
+    const contentDisp = res.headers?.['content-disposition'] || '';
+    const filenameMatch = contentDisp.match(/filename="?([^";\n]+)"?/);
+    let fileName = `ntb_vs_glslp_${periode}_${activeCabang.value}.xlsx`;
+    if (filenameMatch) {
+      fileName = decodeURIComponent(filenameMatch[1]);
+    }
+
+    const blob = new Blob([res.data], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast.add({ severity: 'success', summary: 'File berhasil diunduh', life: 3000 });
   } catch (err) {
     console.error('Export error:', err);
+    toast.add({ severity: 'error', summary: 'Gagal mengekspor data', life: 3000 });
+  } finally {
+    exporting.value = false;
   }
 }
 

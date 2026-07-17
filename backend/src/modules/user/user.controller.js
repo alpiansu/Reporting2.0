@@ -37,7 +37,7 @@ export const searchUsers = async (req, res, next) => {
 
     // Filter users based on search query
     const filteredUsers = allUsers.filter(
-      user => user.username && user.fullName.toLowerCase().includes(q.toLowerCase())
+      user => user.username && user.fullName.toLowerCase().includes(q.toLowerCase()),
     );
 
     res.status(200).json({
@@ -203,10 +203,13 @@ export const resetPassword = async (req, res, next) => {
   try {
     const userId = parseInt(req.params.id, 10);
 
-    // Generate a random password or use a default one
-    const newPassword = Math.random().toString(36).slice(-8);
+    // Reset ke password default
+    const defaultPassword = "123456";
 
-    const result = await userService.updateUser(userId, { password: newPassword });
+    // Generate a random password or use a default one
+    // const newPassword = Math.random().toString(36).slice(-8);
+
+    const result = await userService.updateUser(userId, { password: defaultPassword });
 
     if (!result) {
       return res.status(404).json({
@@ -218,7 +221,7 @@ export const resetPassword = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: "Password berhasil direset",
-      data: { newPassword },
+      data: { defaultPassword },
     });
   } catch (error) {
     logger.error(`Reset password error: ${error.message}`);

@@ -908,8 +908,6 @@ class RekonSalesService {
             if (!force) {
               const guard = await screeningGuard.isSuccessToday("rekon_sales", storeCode);
               if (guard.screened) {
-                screenedStores.add(storeCode);
-                activeStores.add(storeCode);
                 await incrementProgress(storeCode, `Skip (sudah screen ${guard.updtime})`);
                 return;
               }

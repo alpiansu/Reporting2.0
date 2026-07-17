@@ -116,12 +116,42 @@ const addDynamicRoutes = async () => {
           roles: ["admin", "manager", "user", "superadmin"],
         },
       },
+      // Rute user-manager — selalu ada, di luar sistem Menu Manager
+      // Hanya superadmin yang bisa mengakses
+      {
+        path: "user-manager",
+        name: "UserManager",
+        component: () => import("../views/userManager/index.vue"),
+        meta: {
+          requiresAuth: true,
+          title: "Manage User",
+          layout: "main",
+          roles: ["superadmin"],
+        },
+      },
+      // Rute menu-manager — selalu ada, di luar sistem Menu Manager
+      // Tidak bisa dihapus/diedit via Menu Manager itu sendiri
+      // Bisa diakses oleh admin dan superadmin
+      {
+        path: "menu-manager",
+        name: "MenuManager",
+        component: () => import("../views/menuManager/index.vue"),
+        meta: {
+          requiresAuth: true,
+          title: "Menu Manager",
+          layout: "main",
+          roles: ["admin", "superadmin"],
+        },
+      },
     ];
 
     // Tambahkan routes untuk setiap menu item
     allMenuItems.forEach(item => {
       if (item.path && item.path !== "/dashboard") {
         // Skip dashboard karena sudah ada
+        // Skip menu-manager karena sudah ditambahkan sebagai static route di atas
+        if (item.path === "/menu-manager") return;
+
         const routeName = item.text.replace(/\s+/g, "");
         const component = getComponent(item.path);
 

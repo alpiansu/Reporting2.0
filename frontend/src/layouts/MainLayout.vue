@@ -134,7 +134,53 @@ const isNavigating = ref(false);
 
 // Menu store
 const menuStore = useMenuStore();
-const menuCategories = computed(() => menuStore.menuCategories);
+
+// Gabungkan menu dari Menu Manager dengan menu statis (Administrasi)
+// Static menu (Manage User & Menu Manager) tidak terdaftar di Menu Manager,
+// selalu muncul di sidebar untuk role superadmin/admin
+const menuCategories = computed(() => {
+  const baseCategories = menuStore.menuCategories;
+  const userRole = authStore.user?.role;
+  const isPrivileged = userRole === 'superadmin' || userRole === 'admin';
+
+  if (isPrivileged) {
+    const adminCategory = {
+      id: 'static-admin',
+      name: 'Administrasi',
+      order: 999, // Selalu di bagian paling bawah
+      items: [
+        // Menu Manager — untuk admin & superadmin
+        {
+          id: 'menu-manager',
+          text: 'Menu Manager',
+          path: '/menu-manager',
+          icon: 'pi pi-sliders-h',
+          roles: ['admin', 'superadmin'],
+        },
+        // Manage User — hanya superadmin
+        ...(userRole === 'superadmin'
+          ? [{
+              id: 'user-manager',
+              text: 'Manage User',
+              path: '/user-manager',
+              icon: 'pi pi-users',
+              roles: ['superadmin'],
+            }]
+          : []),
+      ],
+    };
+
+    // Pastikan tidak duplikat jika somehow sudah ada
+    const alreadyExists = baseCategories.some(
+      (cat) => cat.id === 'static-admin'
+    );
+    if (alreadyExists) return baseCategories;
+
+    return [...baseCategories, adminCategory];
+  }
+
+  return baseCategories;
+});
 // const menuLoading = computed(() => menuStore.loading);
 
 // Setup navigation loading indicator

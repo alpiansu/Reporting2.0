@@ -63,6 +63,26 @@ const service = {
     const response = await api.post(`/dthr-ftp/dispatch-unsent`, { cabang, periode, force });
     return response.data;
   },
+
+  getCabangChart: async (cabang, periode) => {
+    const params = { cabang: cabang || 'All', periode };
+    const response = await api.get(`/${fixedPattern}/cabang-chart`, { params });
+    return response.data;
+  },
+
+  exportExcel: async (cabang, periode, { recidFilter = '1', searchQuery } = {}) => {
+    const params = {
+      cabang: cabang || 'All',
+      periode,
+      recidFilter,
+      ...(searchQuery && { searchQuery }),
+    };
+    const response = await api.get(`/${fixedPattern}/export`, {
+      params,
+      responseType: 'blob',
+    });
+    return response;
+  },
 };
 
 export default service;

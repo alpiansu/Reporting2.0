@@ -78,6 +78,36 @@ export const getBranches = async (req, res) => {
   }
 };
 
+export const getCabangChart = async (req, res) => {
+  try {
+    const { cabang = "All", periode } = req.query;
+
+    if (!periode) return apiResponse.badRequest(res, "Periode wajib diisi");
+
+    const result = await service.getCabangChart({ periode, cabang });
+    return apiResponse.success(res, result);
+  } catch (error) {
+    logger.error(`[ntb_vs_glslp.controller] Error getCabangChart: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+export const exportExcel = async (req, res) => {
+  try {
+    const { cabang = "All", periode, recidFilter = "1", searchQuery } = req.query;
+
+    if (!periode) return apiResponse.badRequest(res, "Periode wajib diisi");
+
+    await service.exportExcel({ cabang, periode, recidFilter, searchQuery, res });
+  } catch (error) {
+    logger.error(`[ntb_vs_glslp.controller] Error exportExcel: ${error.message}`);
+    // Response might already be partially sent if stream started
+    if (!res.headersSent) {
+      return apiResponse.error(res, error.message);
+    }
+  }
+};
+
 export const updateRecord = async (req, res) => {
   try {
     const { kodePromo, kodeToko, kodeGudang, tglTransaksi, hasilCek, periode } = req.body;

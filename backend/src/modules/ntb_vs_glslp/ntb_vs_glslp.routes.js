@@ -9,6 +9,8 @@ router.get("/", controller.getRecords);
 router.get("/all", controller.getAllRecords);
 router.get("/summary", controller.getSummary);
 router.get("/branches", controller.getBranches);
+router.get("/cabang-chart", controller.getCabangChart);
+router.get("/export", controller.exportExcel);
 router.patch("/record", controller.updateRecord);
 
 export default router;

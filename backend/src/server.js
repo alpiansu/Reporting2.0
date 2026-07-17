@@ -84,6 +84,15 @@ async function startServer() {
     // Create HTTP server
     const server = http.createServer(expressApp);
 
+    // ── Socket timeouts ──
+    // requestTimeout: waktu max dari request diterima sampai response selesai dikirim
+    // (default Node.js = 300s / 5 menit — naikkan untuk report export yang bisa >5 menit)
+    server.requestTimeout = 10 * 60 * 1000; // 10 menit
+
+    // keepAliveTimeout: waktu idle sebelum socket ditutup untuk reuse
+    // (default Node.js = 5s — naikkan supaya tidak terlalu agresif)
+    server.keepAliveTimeout = 60 * 1000; // 60 detik
+
     // Start listening for requests
     server.listen(PORT, () => {
       logger.info(`Server running in ${config.nodeEnv} mode on port ${PORT}`);

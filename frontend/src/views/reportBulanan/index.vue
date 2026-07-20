@@ -3,7 +3,7 @@
     <PageHeader
       title="Laporan Bulanan"
       subtitle="Generate dan kelola laporan bulanan per cabang"
-      description="Pilih cabang, periode, dan laporan yang ingin diekspor. Laporan akan diunduh dalam format Excel (.xlsx) langsung ke perangkat Anda."
+      description="Pilih cabang, periode, dan laporan yang ingin diekspor. Laporan akan diunduh dalam format yang sesuai (Excel / PDF) langsung ke perangkat Anda."
     />
 
     <div class="content-container">
@@ -22,6 +22,7 @@
       <ReportList
         :reports="reportList"
         :loading="loadingReports"
+        :disabled="isExporting"
         v-model:selected-ids="selectedIds"
         @refresh="loadReports"
       />
@@ -132,14 +133,31 @@ const handleExport = async () => {
         prd: periode.value,
       });
 
+      // ── Deteksi format dari response headers ──
+      const contentType = res.headers?.['content-type'] || '';
+      const contentDisp = res.headers?.['content-disposition'] || '';
+
+      let fileExt = '.xlsx';
+      let mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+      if (contentType.includes('application/pdf')) {
+        fileExt = '.pdf';
+        mimeType = 'application/pdf';
+      }
+
+      // Parse filename dari Content-Disposition header jika ada
+      let fileName = `${reportName}_${periode.value}${fileExt}`;
+      const filenameMatch = contentDisp.match(/filename="?([^";\n]+)"?/);
+      if (filenameMatch) {
+        fileName = decodeURIComponent(filenameMatch[1]);
+      }
+
       // Trigger download dari Blob
-      const blob = new Blob([res.data], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      });
+      const blob = new Blob([res.data], { type: mimeType });
       const url  = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href  = url;
-      link.download = `${reportName}_${periode.value}.xlsx`;
+      link.download = fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

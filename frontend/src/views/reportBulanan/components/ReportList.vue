@@ -15,12 +15,12 @@
         />
       </div>
       <div class="report-list__header-right">
-        <small class="text-color-secondary">Centang laporan yang ingin diekspor ke Excel</small>
+        <small class="text-color-secondary">Centang laporan yang ingin diekspor</small>
         <Button
           icon="pi pi-refresh"
           :class="['p-button-text p-button-sm p-button-secondary refresh-btn', { 'spinning': loading }]"
           v-tooltip.top="'Muat ulang daftar laporan'"
-          :disabled="loading"
+          :disabled="loading || disabled"
           @click="$emit('refresh')"
         />
       </div>
@@ -46,12 +46,16 @@
         v-for="report in reports"
         :key="report['id-reports']"
         class="report-item"
-        :class="{ 'report-item--selected': isSelected(report['id-reports']) }"
-        @click="toggleSelect(report['id-reports'])"
+        :class="{
+          'report-item--selected': isSelected(report['id-reports']),
+          'report-item--disabled': disabled
+        }"
+        @click="!disabled && toggleSelect(report['id-reports'])"
       >
         <Checkbox
           :model-value="isSelected(report['id-reports'])"
           :binary="true"
+          :disabled="disabled"
           @click.stop
           @change="toggleSelect(report['id-reports'])"
           class="report-item__checkbox"
@@ -78,14 +82,14 @@
         class="p-button-text p-button-sm"
         icon="pi pi-check-square"
         @click="selectAll"
-        :disabled="selectedIds.length === reports.length"
+        :disabled="disabled || selectedIds.length === reports.length"
       />
       <Button
         label="Hapus Pilihan"
         class="p-button-text p-button-secondary p-button-sm"
         icon="pi pi-times"
         @click="clearAll"
-        :disabled="selectedIds.length === 0"
+        :disabled="disabled || selectedIds.length === 0"
       />
     </div>
   </div>
@@ -100,6 +104,7 @@ import Skeleton from 'primevue/skeleton';
 const props = defineProps({
   reports:     { type: Array,   default: () => [] },
   loading:     { type: Boolean, default: false },
+  disabled:    { type: Boolean, default: false },
   selectedIds: { type: Array,   default: () => [] },
 });
 
@@ -202,6 +207,11 @@ const clearAll = () => {
   gap: 0.5rem;
 }
 
+.report-list__items:has(.report-item--disabled) {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 .report-item {
   display: flex;
   align-items: center;
@@ -250,5 +260,10 @@ const clearAll = () => {
   margin-top: 0.875rem;
   padding-top: 0.875rem;
   border-top: 1px solid var(--surface-border, #e9ecef);
+}
+
+.report-list__footer:has(.p-button:disabled) {
+  opacity: 0.55;
+  pointer-events: none;
 }
 </style>

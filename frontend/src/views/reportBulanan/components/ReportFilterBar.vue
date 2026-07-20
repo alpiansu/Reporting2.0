@@ -63,7 +63,7 @@
         <label class="field-label field-label--spacer">&nbsp;</label>
         <Button
           :label="isExporting ? 'Memproses...' : `Export Laporan${selectedCount > 0 ? ` (${selectedCount})` : ''}`"
-          :icon="isExporting ? 'pi pi-spin pi-spinner' : 'pi pi-file-excel'"
+          :icon="isExporting ? 'pi pi-spin pi-spinner' : 'pi pi-download'"
           class="p-button-success export-btn"
           :disabled="isButtonDisabled"
           @click="$emit('export-clicked')"

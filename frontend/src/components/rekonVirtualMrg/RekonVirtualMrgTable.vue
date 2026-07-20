@@ -85,7 +85,12 @@
 
     <!-- Table Row -->
     <template #table-row="{ item }">
-      <td class="text-center">{{ item.CABANG }}</td>
+      <td class="text-center">
+        <span class="status-icon-badge" :class="getStatusInfo(item).class" v-tooltip.top="getStatusInfo(item).tooltip">
+          <i class="pi" :class="getStatusInfo(item).icon"></i>
+        </span>
+        {{ item.CABANG }}
+      </td>
       <td class="text-center">{{ item.SHOP }}</td>
       <td class="text-center">{{ formatDate(item.TANGGAL) }}</td>
       <td class="text-center">{{ item.PRDCD }}</td>
@@ -306,9 +311,48 @@ const getCategoryClass = (categoryName) => {
   return `category-${categoryName.toLowerCase().replace(/\s+/g, '-')}`;
 };
 
-//  TAMBAHKAN: Method untuk get row class
+// Method untuk mendapatkan info status item (icon, class, tooltip)
+const getStatusInfo = (item) => {
+  if (item.RECID === '1') {
+    return {
+      icon: 'pi-check-circle',
+      class: 'status-adjusted',
+      tooltip: 'Sudah di-adjust'
+    };
+  }
+  if (item.note && item.note.noteText && item.note.noteText.trim() !== '') {
+    return {
+      icon: 'pi-comment',
+      class: 'status-has-note',
+      tooltip: 'Sudah ada catatan'
+    };
+  }
+  return {
+    icon: 'pi-question-circle',
+    class: 'status-unchecked',
+    tooltip: 'Belum dicek'
+  };
+};
+
+//  Method untuk get row class dengan status color
 const getRowClass = (item) => {
-  return isItemHighlighted(item) ? 'row-updated' : '';
+  const classes = [];
+  
+  // Highlight animation class
+  if (isItemHighlighted(item)) {
+    classes.push('row-updated');
+  }
+  
+  // Status class based on adjust & note status
+  if (item.RECID === '1') {
+    classes.push('row-adjusted');
+  } else if (item.note && item.note.noteText && item.note.noteText.trim() !== '') {
+    classes.push('row-has-note');
+  } else {
+    classes.push('row-unchecked');
+  }
+  
+  return classes.join(' ');
 };
 
 // Formatting methods

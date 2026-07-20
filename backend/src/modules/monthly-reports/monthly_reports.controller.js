@@ -208,8 +208,8 @@ export const exportReport = async (req, res) => {
     // ── 4. Eksekusi WRC (sequential per-report, paralel antar-report)
     wrcResults = await executeReport({ reportConfig, cab, userId, prd, prdYear, prdMonth });
 
-    // ── 4. Resolve exporter & Export ke Excel dan stream ke response
-    const exporter = await resolveExporter(reportConfig["id-reports"]);
+    // ── 4. Resolve exporter & stream ke response (Excel / PDF / custom)
+    const exporter = await resolveExporter(reportConfig["id-reports"], reportConfig["format"]);
     await exporter.exportToResponse({ reportConfig, results: wrcResults, res, prd, cab });
 
     logger.info(`[monthly_reports.controller] exportReport selesai: id=${id} | cab=${cab} | prd=${prd} | user=${userId}`);

@@ -47,7 +47,7 @@ const monthlyReportsService = {
     api.post(
       `/${BASE}/${id}/export`,
       { cab, prd },
-      { responseType: "blob" }
+      { responseType: "blob", timeout: 600000 } // 10 menit — export bisa butuh waktu lama
     ),
 };
 

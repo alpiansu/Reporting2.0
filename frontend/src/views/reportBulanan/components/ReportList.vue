@@ -41,65 +41,94 @@
     </div>
 
     <!-- Checklist items -->
-    <div v-else class="report-list__items">
-      <div
-        v-for="report in reports"
-        :key="report['id-reports']"
-        class="report-item"
-        :class="{
-          'report-item--selected': isSelected(report['id-reports']),
-          'report-item--disabled': disabled
-        }"
-        @click="!disabled && toggleSelect(report['id-reports'])"
-      >
-        <Checkbox
-          :model-value="isSelected(report['id-reports'])"
-          :binary="true"
-          :disabled="disabled"
-          @click.stop
-          @change="toggleSelect(report['id-reports'])"
-          class="report-item__checkbox"
-        />
-        <div class="report-item__info">
-          <span class="report-item__name">{{ report['name-reports'] }}</span>
-          <span class="report-item__meta">
-            {{ report['queries-export']?.length || 0 }} sheet
-            &bull;
-            {{ report['queries-wrc']?.length || 0 }} query WRC
-          </span>
+    <template v-else>
+      <!-- Search bar -->
+      <div class="report-list__search">
+        <IconField>
+          <InputIcon><i class="pi pi-search" /></InputIcon>
+          <InputText
+            v-model="searchQuery"
+            placeholder="Cari laporan..."
+            class="w-full"
+            :disabled="disabled"
+          />
+        </IconField>
+        <small v-if="searchQuery" class="text-color-secondary">
+          {{ filteredReports.length }} dari {{ reports.length }} laporan
+        </small>
+      </div>
+
+      <div class="report-list__items">
+        <div
+          v-if="filteredReports.length === 0"
+          class="report-list__no-result"
+        >
+          <i class="pi pi-search text-2xl text-color-secondary mb-2" />
+          <p class="text-sm text-color-secondary">Tidak ada laporan yang cocok</p>
         </div>
-        <i
-          v-if="isSelected(report['id-reports'])"
-          class="pi pi-check-circle text-green-500 text-xl"
+        <div
+          v-for="report in filteredReports"
+          :key="report['id-reports']"
+          class="report-item"
+          :class="{
+            'report-item--selected': isSelected(report['id-reports']),
+            'report-item--disabled': disabled
+          }"
+          @click="!disabled && toggleSelect(report['id-reports'])"
+        >
+          <Checkbox
+            :model-value="isSelected(report['id-reports'])"
+            :binary="true"
+            :disabled="disabled"
+            @click.stop
+            @change="toggleSelect(report['id-reports'])"
+            class="report-item__checkbox"
+          />
+          <div class="report-item__info">
+            <span class="report-item__name">{{ report['name-reports'] }}</span>
+            <span class="report-item__meta">
+              {{ report['queries-export']?.length || 0 }} sheet
+              &bull;
+              {{ report['queries-wrc']?.length || 0 }} query WRC
+            </span>
+          </div>
+          <i
+            v-if="isSelected(report['id-reports'])"
+            class="pi pi-check-circle text-green-500 text-xl"
+          />
+        </div>
+      </div>
+
+      <!-- Select all / clear -->
+      <div class="report-list__footer">
+        <Button
+          :label="allSelected ? 'Batal Pilih Semua' : 'Pilih Semua'"
+          class="p-button-text p-button-sm"
+          :icon="allSelected ? 'pi pi-minus-square' : 'pi pi-check-square'"
+          @click="allSelected ? clearAll() : selectAll()"
+          :disabled="disabled || reports.length === 0"
+        />
+        <Button
+          label="Hapus Pilihan"
+          class="p-button-text p-button-secondary p-button-sm"
+          icon="pi pi-times"
+          @click="clearAll"
+          :disabled="disabled || selectedIds.length === 0"
         />
       </div>
-    </div>
-
-    <!-- Select all / clear -->
-    <div v-if="reports.length > 0" class="report-list__footer">
-      <Button
-        label="Pilih Semua"
-        class="p-button-text p-button-sm"
-        icon="pi pi-check-square"
-        @click="selectAll"
-        :disabled="disabled || selectedIds.length === reports.length"
-      />
-      <Button
-        label="Hapus Pilihan"
-        class="p-button-text p-button-secondary p-button-sm"
-        icon="pi pi-times"
-        @click="clearAll"
-        :disabled="disabled || selectedIds.length === 0"
-      />
-    </div>
+    </template>
   </div>
 </template>
 
 <script setup>
+import { ref, computed, watch } from 'vue';
 import Checkbox from 'primevue/checkbox';
 import Badge    from 'primevue/badge';
 import Button   from 'primevue/button';
 import Skeleton from 'primevue/skeleton';
+import InputText from 'primevue/inputtext';
+import IconField from 'primevue/iconfield';
+import InputIcon from 'primevue/inputicon';
 
 const props = defineProps({
   reports:     { type: Array,   default: () => [] },
@@ -109,6 +138,24 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['update:selectedIds', 'refresh']);
+
+const searchQuery = ref('');
+
+watch(() => props.reports, () => {
+  searchQuery.value = '';
+});
+
+const filteredReports = computed(() => {
+  if (!searchQuery.value.trim()) return props.reports;
+  const q = searchQuery.value.toLowerCase();
+  return props.reports.filter(r =>
+    r['name-reports']?.toLowerCase().includes(q)
+  );
+});
+
+const allSelected = computed(() =>
+  props.reports.length > 0 && props.selectedIds.length === props.reports.length
+);
 
 const isSelected = (id) => props.selectedIds.includes(id);
 
@@ -205,6 +252,9 @@ const clearAll = () => {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
 }
 
 .report-list__items:has(.report-item--disabled) {
@@ -262,8 +312,20 @@ const clearAll = () => {
   border-top: 1px solid var(--surface-border, #e9ecef);
 }
 
-.report-list__footer:has(.p-button:disabled) {
-  opacity: 0.55;
-  pointer-events: none;
+/* ─── Search ─── */
+.report-list__search {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+/* ─── No Result ─── */
+.report-list__no-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.5rem 1rem;
+  text-align: center;
 }
 </style>

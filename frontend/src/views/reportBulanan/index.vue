@@ -217,12 +217,12 @@ const doDelete = async () => {
   if (!deletingReport.value) return;
   deleting.value = true;
   try {
-    await monthlyReportsService.deleteReport(deletingReport.value['id-reports']);
+    const deletedId = deletingReport.value['id-reports'];
+    await monthlyReportsService.deleteReport(deletedId);
     toast.showSuccess('Sukses', `Laporan "${deletingReport.value['name-reports']}" berhasil dihapus`);
     showDeleteConfirm.value = false;
     deletingReport.value = null;
-    // Hapus dari selectedIds jika ada
-    selectedIds.value = selectedIds.value.filter(id => id !== deletingReport.value?.['id-reports']);
+    selectedIds.value = selectedIds.value.filter(id => id !== deletedId);
     await loadReports();
   } catch (err) {
     const errMsg = err.response?.data?.message || err.message;

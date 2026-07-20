@@ -16,7 +16,7 @@
             </template>
 
             <div class="issues-container">
-                <IssueCard v-for="(issue, issueIndex) in group.issues" :key="issueIndex" :issue="issue" />
+                <IssueCard v-for="(issue, issueIndex) in group.issues" :key="issueIndex" :issue="issue" :ruleInfo="rulesMap[issue.ruleKey] || null" />
             </div>
         </AccordionTab>
     </Accordion>
@@ -34,6 +34,10 @@ const props = defineProps({
     issues: {
         type: Array,
         default: () => []
+    },
+    rulesMap: {
+        type: Object,
+        default: () => ({})
     }
 });
 

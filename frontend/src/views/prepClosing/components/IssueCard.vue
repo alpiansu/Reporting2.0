@@ -37,6 +37,36 @@
 
             <Transition name="expand">
                 <div v-if="expanded" class="issue-details">
+                    <!-- Technical Query Section -->
+                    <div v-if="ruleInfo && ruleInfo.query" class="query-section">
+                        <h5 class="query-section-title">
+                            <i class="pi pi-database"></i>
+                            Technical Query
+                        </h5>
+
+                        <div class="query-meta-tags">
+                            <Tag :value="ruleInfo.query.type" severity="info" />
+                            <Tag :value="ruleInfo.validation.operator" severity="warn" />
+                            <Tag v-if="extractedTables.length > 0" :value="`Table: ${extractedTables.join(', ')}`" severity="secondary" />
+                        </div>
+
+                        <div class="query-sql-block">
+                            <div class="sql-header">
+                                <i class="pi pi-code"></i>
+                                <span>SQL Query</span>
+                                <button class="copy-btn" :class="{ 'copy-btn-done': copyFeedback }" @click="copyToClipboard(ruleInfo.query.sql)" :title="copyFeedback ? 'Tersalin!' : 'Salin SQL'">
+                                    <i :class="copyFeedback ? 'pi pi-check' : 'pi pi-copy'"></i>
+                                </button>
+                            </div>
+                            <pre class="sql-code"><code>{{ ruleInfo.query.sql }}</code></pre>
+                        </div>
+
+                        <div v-if="ruleInfo.description" class="query-description">
+                            <i class="pi pi-info-circle"></i>
+                            <span>{{ ruleInfo.description }}</span>
+                        </div>
+                    </div>
+
                     <div class="help-section">
                         <h5><i class="pi pi-question-circle"></i> Help</h5>
                         <p>{{ issue.ui.helpText }}</p>
@@ -86,10 +116,15 @@ const props = defineProps({
     issue: {
         type: Object,
         required: true
+    },
+    ruleInfo: {
+        type: Object,
+        default: null
     }
 });
 
 const expanded = ref(false);
+const copyFeedback = ref(false);
 
 const severityConfig = computed(() => SEVERITY_CONFIG[props.issue.severity]);
 
@@ -101,6 +136,34 @@ const severityStyle = computed(() => ({
 
 const toggleExpand = () => {
     expanded.value = !expanded.value;
+};
+
+// Extract table names from SQL query for display
+const extractedTables = computed(() => {
+    if (!props.ruleInfo?.query?.sql) return [];
+    const sql = props.ruleInfo.query.sql.toUpperCase();
+    const tablePattern = /(?:FROM|JOIN|INTO|UPDATE|TABLE)\s+`?([a-zA-Z_][a-zA-Z0-9_]*)`?/g;
+    const tables = new Set();
+    let match;
+    while ((match = tablePattern.exec(sql)) !== null) {
+        const table = match[1];
+        // Skip SQL keywords that might be matched
+        if (!['SELECT', 'WHERE', 'AND', 'OR', 'SET', 'VALUES', 'IN', 'AS', 'ON', 'DATABASE', 'SCHEMA', 'COUNT', 'COALESCE', 'IFNULL', 'SUM', 'DISTINCT', 'REPLACE', 'CAST', 'GROUP_CONCAT', 'CONCAT', 'MAX'].includes(table)) {
+            tables.add(table);
+        }
+    }
+    return Array.from(tables);
+});
+
+// Copy to clipboard helper with visual feedback
+const copyToClipboard = async (text) => {
+    try {
+        await navigator.clipboard.writeText(text);
+        copyFeedback.value = true;
+        setTimeout(() => { copyFeedback.value = false; }, 1500);
+    } catch {
+        console.warn('Failed to copy to clipboard');
+    }
 };
 
 const formatValue = (value) => {
@@ -328,6 +391,139 @@ const getDeltaClass = (delta) => {
     opacity: 0;
 }
 
+/* ==============================
+   Technical Query Section
+   ============================== */
+.query-section {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: #0f172a;
+    border-radius: 8px;
+    border: 1px solid #1e293b;
+}
+
+.query-section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0 0 0.75rem 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #e2e8f0;
+}
+
+.query-section-title i {
+    color: #3b82f6;
+}
+
+.query-meta-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.query-meta-tags :deep(.p-tag) {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+
+.query-sql-block {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.sql-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: #1a2332;
+    border-bottom: 1px solid #334155;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.sql-header i {
+    font-size: 0.8rem;
+}
+
+.copy-btn {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: transparent;
+    color: #64748b;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.copy-btn:hover {
+    background: #334155;
+    color: #e2e8f0;
+}
+
+.copy-btn:active {
+    transform: scale(0.9);
+}
+
+.copy-btn-done {
+    color: #22c55e !important;
+}
+
+.copy-btn-done:hover {
+    background: #14532d !important;
+    color: #22c55e !important;
+}
+
+.sql-code {
+    margin: 0;
+    padding: 0.75rem;
+    overflow-x: auto;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+    font-size: 0.78rem;
+    line-height: 1.6;
+    color: #e2e8f0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.sql-code code {
+    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+    color: #e2e8f0;
+}
+
+.query-description {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    padding: 0.625rem 0.75rem;
+    background: #1a2332;
+    border-radius: 6px;
+    border: 1px solid #334155;
+    font-size: 0.78rem;
+    color: #94a3b8;
+    line-height: 1.5;
+}
+
+.query-description i {
+    color: #3b82f6;
+    margin-top: 0.125rem;
+    flex-shrink: 0;
+}
+
 @media (max-width: 768px) {
     .issue-values {
         grid-template-columns: 1fr;
@@ -340,6 +536,15 @@ const getDeltaClass = (delta) => {
     .header-left {
         flex-direction: column;
         align-items: flex-start;
+    }
+
+    .sql-code {
+        font-size: 0.7rem;
+        padding: 0.5rem;
+    }
+
+    .query-section {
+        padding: 0.75rem;
     }
 }
 </style>

@@ -65,7 +65,7 @@
                     <span>Issues Ditemukan</span>
                     <Badge :value="store.ISSUES.length" severity="danger" class="ml-auto" />
                 </div>
-                <IssuesAccordion :issues="groupedIssues" />
+                <IssuesAccordion :issues="groupedIssues" :rulesMap="rulesMap" />
             </div>
 
             <!-- No Issues State -->
@@ -119,6 +119,7 @@ import ProgressSpinner from 'primevue/progressspinner';
 import IssuesAccordion from './IssuesAccordion.vue';
 import { formatDateTime } from '../utils/formatters';
 import { CATEGORIES } from '../utils/constants';
+import { prepClosingApi } from '@/services/prepClosing.service';
 
 const props = defineProps({
     visible: Boolean,
@@ -169,6 +170,36 @@ const handleClose = () => {
     localVisible.value = false;
     emit('close');
 };
+
+// Rules Map: ruleKey → { query, validation, description }
+const rulesMap = ref({});
+
+const fetchRulesConfig = async () => {
+    try {
+        const response = await prepClosingApi.getRulesConfig();
+        const rulesData = response.data || response;
+        const rules = rulesData.rules || [];
+        const map = {};
+        for (const rule of rules) {
+            map[rule.key] = {
+                query: rule.query || null,
+                validation: rule.validation || null,
+                description: rule.description || '',
+                name: rule.name || '',
+            };
+        }
+        rulesMap.value = map;
+    } catch (err) {
+        console.warn('[StoreDetailModal] Failed to fetch rules config:', err.message);
+        rulesMap.value = {};
+    }
+};
+watch(() => props.visible, (newVal) => {
+    if (newVal) {
+        // Fetch rules config each time modal opens (in case rules were updated)
+        fetchRulesConfig();
+    }
+});
 
 const handleEditNote = () => {
     emit('edit-note', props.store);

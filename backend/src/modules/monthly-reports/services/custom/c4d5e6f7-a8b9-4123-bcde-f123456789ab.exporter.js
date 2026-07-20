@@ -28,8 +28,18 @@ import SalesPerDept from "../../../../models/sales_per_dept.model.js";
 function getMonthNameFull(prd) {
   if (!prd || prd.length !== 4) return prd;
   const monthNames = [
-    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-    "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+    "Januari",
+    "Februari",
+    "Maret",
+    "April",
+    "Mei",
+    "Juni",
+    "Juli",
+    "Agustus",
+    "September",
+    "Oktober",
+    "November",
+    "Desember",
   ];
   const year = `20${prd.substring(0, 2)}`;
   const monthIdx = parseInt(prd.substring(2, 4), 10) - 1;
@@ -42,7 +52,10 @@ function getPrevPrd(prd) {
   const mm = parseInt(prd.substring(2, 4), 10);
   let prevYY = yy;
   let prevMM = mm - 1;
-  if (prevMM === 0) { prevMM = 12; prevYY = yy - 1; }
+  if (prevMM === 0) {
+    prevMM = 12;
+    prevYY = yy - 1;
+  }
   return `${String(prevYY).padStart(2, "0")}${String(prevMM).padStart(2, "0")}`;
 }
 
@@ -62,6 +75,30 @@ const THIN_BORDER = {
   bottom: { style: "thin" },
   right: { style: "thin" },
 };
+
+/**
+ * Apply border ke SEMUA cell dalam merge range.
+ * Excel menentukan border merged cell dari border cell individu di tepi merge range:
+ *   - Left edge  = first cell's left border
+ *   - Right edge = last cell's right border
+ *   - Top edge   = first cell's top border
+ *   - Bottom edge= last cell's bottom border
+ * Tanpa ini, merged cell hanya punya border di 1 kolom saja.
+ */
+function applyMergeBorders(sheet, rangeStr, borderStyle) {
+  const [startRef, endRef] = rangeStr.split(":");
+  const startCell = sheet.getCell(startRef);
+  const endCell = sheet.getCell(endRef);
+  const startRow = startCell.row;
+  const startCol = startCell.col;
+  const endRow = endCell.row;
+  const endCol = endCell.col;
+  for (let r = startRow; r <= endRow; r++) {
+    for (let c = startCol; c <= endCol; c++) {
+      sheet.getCell(r, c).border = borderStyle;
+    }
+  }
+}
 
 const STYLE_HEADER_CELL = {
   font: { bold: true, size: 10 },
@@ -121,13 +158,19 @@ function mergeDeptData(deptMap, nowRows, prevRows) {
   if (nowRows && Array.isArray(nowRows)) {
     nowRows.forEach(r => {
       const kd = String(r.dep_kd || "").trim();
-      if (kd) { nowMap.set(kd, r); allDeptCodes.add(kd); }
+      if (kd) {
+        nowMap.set(kd, r);
+        allDeptCodes.add(kd);
+      }
     });
   }
   if (prevRows && Array.isArray(prevRows)) {
     prevRows.forEach(r => {
       const kd = String(r.dep_kd || "").trim();
-      if (kd) { prevMap.set(kd, r); allDeptCodes.add(kd); }
+      if (kd) {
+        prevMap.set(kd, r);
+        allDeptCodes.add(kd);
+      }
     });
   }
 
@@ -147,7 +190,11 @@ function mergeDeptData(deptMap, nowRows, prevRows) {
 
     const deptName = deptMap.has(dep_kd)
       ? deptMap.get(dep_kd)
-      : (now && now.dep_name ? now.dep_name : (prev && prev.dep_name ? prev.dep_name : `Department ${dep_kd}`));
+      : now && now.dep_name
+        ? now.dep_name
+        : prev && prev.dep_name
+          ? prev.dep_name
+          : `Department ${dep_kd}`;
 
     // ── Current Period ──
     const qty = Number(now?.qty_sales ?? 0);
@@ -237,9 +284,7 @@ async function persistToSalesPerDept(cab, prd, deptMap, nowAll, nowReg, nowFrc) 
       const marginPercent = sales > 0 ? (marginRp / sales) * 100 : 0;
       const hargaJual = qty > 0 ? sales / qty : 0;
       const hppPerPcs = qty > 0 ? hpp / qty : 0;
-      const deptName = deptMap.has(dep_kd)
-        ? deptMap.get(dep_kd)
-        : (row.dep_name || `Department ${dep_kd}`);
+      const deptName = deptMap.has(dep_kd) ? deptMap.get(dep_kd) : row.dep_name || `Department ${dep_kd}`;
 
       try {
         await SalesPerDept.upsert({
@@ -288,8 +333,12 @@ function buildSheet(sheet, mergedData, tipestore, prd, prdPrev, branchName, lpmN
   const prdPrevMonth = getMonthNameFull(prdPrev || getPrevPrd(prd));
 
   // ─── Column Widths ──────────────────────────────────────────────────────────
-  const colWidths = [2, 14, 28, 3, 10, 16, 16, 16, 16, 16, 16, 3, 16, 16, 16, 16, 16, 16, 3, 16, 16, 16, 16, 16, 16, 16, 16, 16];
-  colWidths.forEach((w, i) => { sheet.getColumn(i + 1).width = w; });
+  const colWidths = [
+    2, 14, 28, 3, 10, 16, 16, 16, 16, 16, 16, 3, 16, 16, 16, 16, 16, 16, 16, 3, 16, 16, 16, 16, 16, 16, 16, 16, 16,
+  ];
+  colWidths.forEach((w, i) => {
+    sheet.getColumn(i + 1).width = w;
+  });
 
   // ─── Title ──────────────────────────────────────────────────────────────────
   const titleCell = sheet.getCell(`B${baris}`);
@@ -324,7 +373,10 @@ function buildSheet(sheet, mergedData, tipestore, prd, prdPrev, branchName, lpmN
     const cell = sheet.getCell(`${colLetter}${hdrRow}`);
     cell.value = ["DEPARTEMEN", "KETERANGAN"][n];
     cell.style = { ...STYLE_HEADER_CELL, fill: GREEN_FILL };
+    cell.border = THIN_BORDER;
   }
+  applyMergeBorders(sheet, `B${hdrRow}:B${hdrRow + 1}`, THIN_BORDER);
+  applyMergeBorders(sheet, `C${hdrRow}:C${hdrRow + 1}`, THIN_BORDER);
 
   // D (col 4): spacer column — skip
 
@@ -333,78 +385,73 @@ function buildSheet(sheet, mergedData, tipestore, prd, prdPrev, branchName, lpmN
   let cell = sheet.getCell(`E${hdrRow}`);
   cell.value = prdMonth;
   cell.style = { ...STYLE_HEADER_CELL, fill: YELLOW_FILL };
+  cell.border = THIN_BORDER;
+  applyMergeBorders(sheet, `E${hdrRow}:K${hdrRow}`, THIN_BORDER);
 
   // M:S merged → Last month period name
   sheet.mergeCells(`M${hdrRow}:S${hdrRow}`);
   cell = sheet.getCell(`M${hdrRow}`);
   cell.value = prdPrevMonth;
   cell.style = { ...STYLE_HEADER_CELL, fill: ORANGE_FILL };
+  applyMergeBorders(sheet, `M${hdrRow}:S${hdrRow}`, THIN_BORDER);
 
   // U:AC merged → "VARIANCE / GROWTH"
   sheet.mergeCells(`U${hdrRow}:AC${hdrRow}`);
   cell = sheet.getCell(`U${hdrRow}`);
   cell.value = "VARIANCE / GROWTH";
   cell.style = { ...STYLE_HEADER_CELL, fill: BLUE_FILL };
+  applyMergeBorders(sheet, `U${hdrRow}:AC${hdrRow}`, THIN_BORDER);
 
   // ─── Row 7: Sub-headers ────────────────────────────────────────────────────
   baris = hdrRow + 1;
 
   // Sub-headers array (25 items, starting from column E/col 5)
   const subHeaders = [
-    "Qty Sales",           // E (col 5)
-    "Sales",               // F (col 6)
-    "HPP",                 // G (col 7)
-    "Margin Rp",           // H (col 8)
-    "Margin %",            // I (col 9)
-    "Harga Jual/pcs",      // J (col 10)
-    "HPP/Pcs",             // K (col 11)
-    "",                    // L (col 12) - spacer
-    "Qty Sales",           // M (col 13)
-    "Sales",               // N (col 14)
-    "HPP",                 // O (col 15)
-    "Margin Rp",           // P (col 16)
-    "Margin %",            // Q (col 17)
-    "Harga Jual/pcs",      // R (col 18)
-    "HPP/Pcs",             // S (col 19)
-    "",                    // T (col 20) - spacer
-    "Qty Sales",           // U (col 21)
-    "Sales",               // V (col 22)
-    "Margin Rp",           // W (col 23)
-    "Margin %",            // X (col 24)
-    "Harga Jual/pcs",      // Y (col 25)
-    "HPP/Pcs",             // Z (col 26)
+    "Qty Sales", // E (col 5)
+    "Sales", // F (col 6)
+    "HPP", // G (col 7)
+    "Margin Rp", // H (col 8)
+    "Margin %", // I (col 9)
+    "Harga Jual/pcs", // J (col 10)
+    "HPP/Pcs", // K (col 11)
+    "", // L (col 12) - spacer
+    "Qty Sales", // M (col 13)
+    "Sales", // N (col 14)
+    "HPP", // O (col 15)
+    "Margin Rp", // P (col 16)
+    "Margin %", // Q (col 17)
+    "Harga Jual/pcs", // R (col 18)
+    "HPP/Pcs", // S (col 19)
+    "", // T (col 20) - spacer
+    "Qty Sales", // U (col 21)
+    "Sales", // V (col 22)
+    "Margin Rp", // W (col 23)
+    "Margin %", // X (col 24)
+    "Harga Jual/pcs", // Y (col 25)
+    "HPP/Pcs", // Z (col 26)
     "Rp. Selisih Kenaikan Harga jual VS HPP (per pcs)", // AA (col 27)
     "(FAKTOR G) TO MARGIN", // AB (col 28)
     "(FAKTOR A) TO MARGIN", // AC (col 29)
   ];
 
-  // Apply sub-header styles
-  const subFillMap = {
-    // cols 5-11: Yellow
-    // cols 13-19: Orange
-    // cols 21-29: Blue
-  };
-
-  for (let i = 0; i < subHeaders.length; i++) {
-    const colIdx = 5 + i; // Starting from column E (col 5)
-    const cellSub = sheet.getCell(baris, colIdx);
-    cellSub.value = subHeaders[i];
-    cellSub.border = THIN_BORDER;
-    cellSub.font = { bold: true, size: 10 };
-    cellSub.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
-
-    // Set fill based on column range
-    if (colIdx >= 5 && colIdx <= 11) {
-      cellSub.fill = YELLOW_FILL;
-    } else if (colIdx >= 13 && colIdx <= 19) {
-      cellSub.fill = ORANGE_FILL;
-    } else if (colIdx >= 21) {
-      cellSub.fill = BLUE_FILL;
+  // Apply sub-header styles — 3 group ranges (skip spacers L and T)
+  function styleSubHeader(colStart, colEnd, fill) {
+    for (let colIdx = colStart; colIdx <= colEnd; colIdx++) {
+      const cellSub = sheet.getCell(baris, colIdx);
+      cellSub.value = subHeaders[colIdx - 5];
+      cellSub.border = THIN_BORDER;
+      cellSub.font = { bold: true, size: 10 };
+      cellSub.fill = fill;
+      cellSub.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
     }
   }
-
-  // B and C in row 7: retain the green fill style from merged cells
-  // (ExcelJS handles this automatically for merged cells)
+  // E-K (cols 5-11): Yellow
+  styleSubHeader(5, 11, YELLOW_FILL);
+  // M-S (cols 13-19): Orange
+  styleSubHeader(13, 19, ORANGE_FILL);
+  // U-AC (cols 21-29): Blue
+  styleSubHeader(21, 29, BLUE_FILL);
+  // L(12), T(20) — spacer columns, NO border or fill (biarkan kosong)
 
   sheet.getRow(baris).height = 75; // Make sub-header row tall for wrapped text
 
@@ -415,31 +462,73 @@ function buildSheet(sheet, mergedData, tipestore, prd, prdPrev, branchName, lpmN
   // 25 data items: 7 current + spacer(L) + 7 prev + spacer(T) + 9 variance
   const dataKeysForRow = [
     // Current month (cols 5-11 = E-K): 7 items
-    "qty_sales", "total_sales", "total_hpp", "margin_rp", "margin_percent",
-    "harga_jual_per_pcs", "hpp_per_pcs",
+    "qty_sales",
+    "total_sales",
+    "total_hpp",
+    "margin_rp",
+    "margin_percent",
+    "harga_jual_per_pcs",
+    "hpp_per_pcs",
     null, // spacer untuk col 12 (L)
     // Previous month (cols 13-19 = M-S): 7 items
-    "qty_sales2", "total_sales2", "total_hpp2", "margin_rp2", "margin_percent2",
-    "harga_jual_per_pcs2", "hpp_per_pcs2",
+    "qty_sales2",
+    "total_sales2",
+    "total_hpp2",
+    "margin_rp2",
+    "margin_percent2",
+    "harga_jual_per_pcs2",
+    "hpp_per_pcs2",
     null, // spacer untuk col 20 (T)
     // Variance (cols 21-29 = U-AC): 9 items
-    "sel_sales", "sel_total_sales", "sel_margin_rp", "sel_margin_percent",
-    "sel_harga_jual_per_pcs", "sel_hpp_per_pcs",
-    "sel_kenaikan", "faktor_g", "faktor_a",
+    "sel_sales",
+    "sel_total_sales",
+    "sel_margin_rp",
+    "sel_margin_percent",
+    "sel_harga_jual_per_pcs",
+    "sel_hpp_per_pcs",
+    "sel_kenaikan",
+    "faktor_g",
+    "faktor_a",
   ];
   const dataStartRow = baris;
 
   // Accumulators for grand total (match legacy: sum ALL numeric fields, even non-summable ones)
-  let totalQty = 0, totalSales = 0, totalHpp = 0, totalMarginRp = 0, totalMarginPct = 0, totalHjual = 0, totalHppPcs = 0;
-  let totalQty2 = 0, totalSales2 = 0, totalHpp2 = 0, totalMarginRp2 = 0, totalMarginPct2 = 0, totalHjual2 = 0, totalHppPcs2 = 0;
-  let totalSelQty = 0, totalSelSales = 0, totalSelMarginRp = 0, totalSelMarginPct = 0, totalSelHjual = 0, totalSelHpp = 0, totalSelKenaikan = 0, totalFaktorG = 0, totalFaktorA = 0;
+  let totalQty = 0,
+    totalSales = 0,
+    totalHpp = 0,
+    totalMarginRp = 0,
+    totalMarginPct = 0,
+    totalHjual = 0,
+    totalHppPcs = 0;
+  let totalQty2 = 0,
+    totalSales2 = 0,
+    totalHpp2 = 0,
+    totalMarginRp2 = 0,
+    totalMarginPct2 = 0,
+    totalHjual2 = 0,
+    totalHppPcs2 = 0;
+  let totalSelQty = 0,
+    totalSelSales = 0,
+    totalSelMarginRp = 0,
+    totalSelMarginPct = 0,
+    totalSelHjual = 0,
+    totalSelHpp = 0,
+    totalSelKenaikan = 0,
+    totalFaktorG = 0,
+    totalFaktorA = 0;
 
-  // Helper: apply border + font to all cells B-AC (cols 2-29) for a given row
-  function styleDataRowBorder(rowNum) {
-    for (let c = 2; c <= 29; c++) {
-      const cell = sheet.getCell(rowNum, c);
-      cell.border = THIN_BORDER;
-    }
+  // Helper: apply THIN_BORDER to data columns ONLY (skip spacers D, L, T)
+  // B-C (cols 2-3), E-K (cols 5-11), M-S (cols 13-19), U-AC (cols 21-29)
+  function applyDataBorders(rowNum) {
+    // B, C
+    for (let c = 2; c <= 3; c++) sheet.getCell(rowNum, c).border = THIN_BORDER;
+    // E-K (current month)
+    for (let c = 5; c <= 11; c++) sheet.getCell(rowNum, c).border = THIN_BORDER;
+    // M-S (prev month)
+    for (let c = 13; c <= 19; c++) sheet.getCell(rowNum, c).border = THIN_BORDER;
+    // U-AC (variance)
+    for (let c = 21; c <= 29; c++) sheet.getCell(rowNum, c).border = THIN_BORDER;
+    // D(4), L(12), T(20) — NO border (spacers)
   }
 
   for (const row of mergedData) {
@@ -475,8 +564,8 @@ function buildSheet(sheet, mergedData, tipestore, prd, prdPrev, branchName, lpmN
       }
     }
 
-    // Pastikan semua kolom B-AC dapat border (termasuk D, L, T)
-    styleDataRowBorder(baris);
+    // Apply border hanya ke kolom data (B-C, E-K, M-S, U-AC) — skip spacer D, L, T
+    applyDataBorders(baris);
 
     // Accumulate for grand total (sum all numeric fields — matches legacy behavior)
     totalQty += row.qty_sales;
@@ -512,6 +601,7 @@ function buildSheet(sheet, mergedData, tipestore, prd, prdPrev, branchName, lpmN
 
   // Merge B:C for "GRAND TOTAL"
   sheet.mergeCells(`B${totalRow}:C${totalRow}`);
+  applyMergeBorders(sheet, `B${totalRow}:C${totalRow}`, THIN_BORDER);
   const gtCell = sheet.getCell(`B${totalRow}`);
   gtCell.value = "GRAND TOTAL";
   gtCell.style = {
@@ -561,12 +651,8 @@ function buildSheet(sheet, mergedData, tipestore, prd, prdPrev, branchName, lpmN
     cellGT.fill = TOTAL_BLUE_FILL;
     if (colIdx >= 5 && grandTotalData[i] !== "") cellGT.numFmt = "#,##0";
   }
-  // Ensure spacer cells in grand total also have border
-  if (sheet.getCell(totalRow, 12).value === "") { sheet.getCell(totalRow, 12).border = THIN_BORDER; sheet.getCell(totalRow, 12).fill = TOTAL_BLUE_FILL; }
-  if (sheet.getCell(totalRow, 20).value === "") { sheet.getCell(totalRow, 20).border = THIN_BORDER; sheet.getCell(totalRow, 20).fill = TOTAL_BLUE_FILL; }
-  if (sheet.getCell(totalRow, 4).value === undefined) { sheet.getCell(totalRow, 4).border = THIN_BORDER; sheet.getCell(totalRow, 4).fill = TOTAL_BLUE_FILL; }
-  // Also ensure col D (col 4) for grand total row
-  styleDataRowBorder(totalRow);
+  // Apply border ke grand total row (B-C, E-K, M-S, U-AC) — D, L, T tanpa border
+  applyDataBorders(totalRow);
 
   baris = totalRow + 1;
 
@@ -581,6 +667,7 @@ function buildSheet(sheet, mergedData, tipestore, prd, prdPrev, branchName, lpmN
 
   // Merge B:C for "NILAI LPM SALES"
   sheet.mergeCells(`B${lpmRow}:C${lpmRow}`);
+  applyMergeBorders(sheet, `B${lpmRow}:C${lpmRow}`, THIN_BORDER);
   const lpmLabelCell = sheet.getCell(`B${lpmRow}`);
   lpmLabelCell.value = "NILAI LPM SALES";
   lpmLabelCell.style = {
@@ -604,8 +691,8 @@ function buildSheet(sheet, mergedData, tipestore, prd, prdPrev, branchName, lpmN
   // P (col 16): LPM margin previous
   setLpmCell(sheet, lpmRow, 16, lpmPrevNet - lpmPrevHpp);
 
-  // Pastikan semua kolom B-AC di LPM row dapat border
-  styleDataRowBorder(lpmRow);
+  // LPM row: border hanya di B-C (merged), F(6), G(7), H(8), N(14), O(15), P(16)
+  // Sudah dihandle oleh setLpmCell dan merged cell style — spacer columns tanpa border
 
   baris++;
 
@@ -613,6 +700,7 @@ function buildSheet(sheet, mergedData, tipestore, prd, prdPrev, branchName, lpmN
   const selisihRow = baris;
 
   sheet.mergeCells(`B${selisihRow}:C${selisihRow}`);
+  applyMergeBorders(sheet, `B${selisihRow}:C${selisihRow}`, THIN_BORDER);
   const selisihLabelCell = sheet.getCell(`B${selisihRow}`);
   selisihLabelCell.value = "SELISIH";
   selisihLabelCell.style = {
@@ -636,8 +724,8 @@ function buildSheet(sheet, mergedData, tipestore, prd, prdPrev, branchName, lpmN
   // P (col 16): totalMarginRp2 - (LPM prev net - LPM prev hpp) — menggunakan totalMarginRp2
   setLpmCell(sheet, selisihRow, 16, Math.round((totalMarginRp2 - (lpmPrevNet - lpmPrevHpp)) * 100) / 100);
 
-  // Pastikan semua kolom B-AC di SELISIH row dapat border
-  styleDataRowBorder(selisihRow);
+  // SELISIH row: border hanya di B-C (merged), F(6), G(7), H(8), N(14), O(15), P(16)
+  // Sudah dihandle oleh setLpmCell dan merged cell style — spacer columns tanpa border
 
   // Hide gridlines
   sheet.views = [{ showGridLines: false }];
@@ -691,7 +779,9 @@ export async function exportToResponse({ reportConfig, results, res, prd, cab })
   const mergedReg = mergeDeptData(deptMap, nowReg, prevReg);
   const mergedFrc = mergeDeptData(deptMap, nowFrc, prevFrc);
 
-  logger.info(`[spd_exporter] Data merged: ALL=${mergedAll.length} dept, REG=${mergedReg.length}, FRC=${mergedFrc.length}`);
+  logger.info(
+    `[spd_exporter] Data merged: ALL=${mergedAll.length} dept, REG=${mergedReg.length}, FRC=${mergedFrc.length}`,
+  );
 
   // ── 4. Persist to sales_per_dept ─────────────────────────────────────────
   try {
@@ -717,10 +807,20 @@ export async function exportToResponse({ reportConfig, results, res, prd, cab })
   ];
 
   // Collect all unique queries-export keys we've already processed
-  const processedKeys = new Set(["NOW_ALL", "NOW_REG", "NOW_FRC",
-    "PREV_ALL", "PREV_REG", "PREV_FRC",
-    "LPM_NOW_ALL", "LPM_NOW_REG", "LPM_NOW_FRC",
-    "LPM_PREV_ALL", "LPM_PREV_REG", "LPM_PREV_FRC"]);
+  const processedKeys = new Set([
+    "NOW_ALL",
+    "NOW_REG",
+    "NOW_FRC",
+    "PREV_ALL",
+    "PREV_REG",
+    "PREV_FRC",
+    "LPM_NOW_ALL",
+    "LPM_NOW_REG",
+    "LPM_NOW_FRC",
+    "LPM_PREV_ALL",
+    "LPM_PREV_REG",
+    "LPM_PREV_FRC",
+  ]);
 
   for (const def of sheetDefs) {
     logger.info(`[spd_exporter] Building sheet: "${def.label}" (${def.merged.length} dept)`);
@@ -756,7 +856,7 @@ export async function exportToResponse({ reportConfig, results, res, prd, cab })
 
     valueToExport.forEach((rowData, idx) => {
       const row = simpleSheet.addRow(rowData);
-      row.eachCell({ includeEmpty: true }, (cell) => {
+      row.eachCell({ includeEmpty: true }, cell => {
         cell.border = THIN_BORDER;
         cell.font = { size: 10 };
       });

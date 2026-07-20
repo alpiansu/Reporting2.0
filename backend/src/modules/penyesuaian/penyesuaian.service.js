@@ -1356,7 +1356,58 @@ class PenyesuaianService {
   }
 
   /**
+   * Parse snapshot dari noteText yang disimpan dengan format pipelane:
+   *   {noteText}|{snapshotSesuai}|{snapshotUpdtime}
+   *
+   * @param {string} fullNoteText - Raw noteText dari DB (dengan atau tanpa snapshot)
+   * @param {Object|null} freshSnapshot - Snapshot terbaru (opsional, untuk response simpan)
+   * @returns {{ noteText: string, snapshot: Object|null }}
+   */
+  parseNoteSnapshot(fullNoteText, freshSnapshot = null) {
+    if (!fullNoteText) {
+      return { noteText: "", snapshot: null };
+    }
+
+    // Jika ada freshSnapshot dari save (response), langsung parse tanpa split
+    if (freshSnapshot) {
+      return {
+        noteText: fullNoteText,
+        snapshot: {
+          sesuaSaatNote: freshSnapshot.snapshotSesuai,
+          updtimeSaatNote: freshSnapshot.snapshotUpdtime,
+        },
+      };
+    }
+
+    // Split dari belakang: ambil 2 segmen terakhir sebagai snapshot
+    const parts = fullNoteText.split("|");
+
+    if (parts.length < 3) {
+      // Legacy note — tanpa snapshot
+      return { noteText: fullNoteText, snapshot: null };
+    }
+
+    const snapshotSesuaiRaw = parts[parts.length - 2];
+    const snapshotUpdtimeRaw = parts[parts.length - 1];
+    const cleanNoteText = parts.slice(0, -2).join("|");
+
+    // Validasi format snapshot: angka integer + datetime
+    if (!/^-?\d+$/.test(snapshotSesuaiRaw) || !/^\d{4}-\d{2}-\d{2}/.test(snapshotUpdtimeRaw)) {
+      return { noteText: fullNoteText, snapshot: null };
+    }
+
+    return {
+      noteText: cleanNoteText,
+      snapshot: {
+        sesuaSaatNote: parseInt(snapshotSesuaiRaw, 10),
+        updtimeSaatNote: snapshotUpdtimeRaw,
+      },
+    };
+  }
+
+  /**
    * Merge notes and category info into penyesuaianData
+   * Parse snapshot dari noteText yang disimpan dengan format pipelane
    */
   async enrichWithNotes(data) {
     try {
@@ -1372,14 +1423,18 @@ class PenyesuaianService {
           return { ...item, note: null };
         }
 
+        // ✨ Parse snapshot dari noteText
+        const parsed = this.parseNoteSnapshot(note.noteText);
+
         return {
           ...item,
           note: {
             unixKey: note.unixKey,
-            noteText: note.noteText,
+            noteText: parsed.noteText,           // clean text tanpa snapshot
             pic: note.pic,
             fullName: note.fullName || null,
             updated_at: note.updated_at || null,
+            snapshot: parsed.snapshot,           // { sesuaSaatNote, updtimeSaatNote } atau null
           },
         };
       });
@@ -1411,14 +1466,18 @@ class PenyesuaianService {
           const legacyNote = this.legacyNotesCache.get(legacyIdNote);
 
           if (legacyNote) {
+            // ✨ Parse snapshot dari legacy note juga
+            const parsed = this.parseNoteSnapshot(legacyNote.noteText);
+
             return {
               ...item,
               note: {
                 unixKey: legacyNote.unixKey,
-                noteText: legacyNote.noteText,
+                noteText: parsed.noteText,           // clean text tanpa snapshot
                 pic: legacyNote.pic,
                 fullName: legacyNote.fullName,
                 updated_at: legacyNote.updated_at,
+                snapshot: parsed.snapshot,           // { sesuaSaatNote, updtimeSaatNote } atau null
               },
             };
           }

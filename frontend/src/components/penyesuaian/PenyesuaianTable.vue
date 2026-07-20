@@ -98,6 +98,12 @@
             Add note...
           </div>
           <div class="note-meta-icons" v-if="item.note">
+            <!-- Snapshot Badge -->
+            <span v-if="getSnapshotInfo(item)" class="snapshot-badge"
+              :class="getSnapshotBadgeClass(item)"
+              v-tooltip.top="getSnapshotTooltip(item)">
+              {{ getSnapshotLabel(item) }}
+            </span>
             <i class="pi pi-user note-icon note-icon-pic"
               v-tooltip.top="item.note.fullName || item.note.pic || 'Unknown'"></i>
             <i class="pi pi-clock note-icon note-icon-time"
@@ -129,7 +135,8 @@
   </DataTable>
 
   <PenyesuaianDetailModal :show="detailModalVisible" :periode="periode" :cab="selectedItem?.CABANG"
-    :kdtk="selectedItem?.KDTK || ''" :sesuai="formatCurrency(selectedItem?.SESUAI) " @close="closeDetailModal" />
+    :kdtk="selectedItem?.KDTK || ''" :sesuai="formatCurrency(selectedItem?.SESUAI)"
+    :noteSnapshotData="getSnapshotInfo(selectedItem)" @close="closeDetailModal" />
 </template>
 
 <style src="./PenyesuaianTable.css" scoped></style>
@@ -334,7 +341,7 @@ const exportToExcel = async () => {
       'Periode': item.PERIODE,
       'Nilai Sesuai': item.SESUAI,
       'Terakhir Update': formatDateTime(item.UPDTIME),
-      'Note': item.note ? item.note.noteText : '',
+      'Note': item.note ? stripSnapshotFromText(item.note.noteText, item.note.snapshot) : '',
       'PIC Note': item.note ? (item.note.fullName || item.note.pic || '') : ''
     }));
 
@@ -351,6 +358,62 @@ const exportToExcel = async () => {
     toast.showError('Error', 'Gagal mengekspor data ke Excel');
   }
 };
+
+// ─── Snapshot Helpers ────────────────────────────────────────────────
+// Hitung delta antara snapshot SESUAI saat note dibuat vs nilai sekarang
+const getSnapshotInfo = (item) => {
+  if (!item || !item.note?.snapshot) return null;
+  const { sesuaSaatNote } = item.note.snapshot;
+  const sesuaSekarang = Number(item.SESUAI) || 0;
+  if (!sesuaSaatNote) return null;
+
+  const selisih = sesuaSekarang - sesuaSaatNote;
+  const persen = sesuaSaatNote !== 0
+    ? Math.round((Math.abs(selisih) / Math.abs(sesuaSaatNote)) * 100)
+    : 0;
+  const membaik = Math.abs(sesuaSekarang) < Math.abs(sesuaSaatNote);
+
+  return { sesuaSaatNote, sesuaSekarang, selisih, persen, membaik };
+};
+
+const getSnapshotBadgeClass = (item) => {
+  const info = getSnapshotInfo(item);
+  if (!info) return '';
+  return info.membaik ? 'snapshot-badge-improved' : 'snapshot-badge-worsened';
+};
+
+const getSnapshotLabel = (item) => {
+  const info = getSnapshotInfo(item);
+  if (!info) return '';
+  const arrow = info.membaik ? '\u25BC' : '\u25B2';
+  return `${arrow} ${info.persen}%`;
+};
+
+const getSnapshotTooltip = (item) => {
+  const info = getSnapshotInfo(item);
+  if (!info) return 'Tidak ada data histori';
+  const arrow = info.membaik ? '\u25BC membaik' : '\u25B2 memburuk';
+  const fmt = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
+  return [
+    `Saat note: ${fmt(info.sesuaSaatNote)}`,
+    `Sekarang:  ${fmt(info.sesuaSekarang)}`,
+    `Bergerak:  ${info.selisih >= 0 ? '+' : ''}${fmt(info.selisih)} (${arrow})`,
+  ].join('\n');
+};
+
+// Strip snapshot suffix dari noteText untuk export (safety fallback)
+function stripSnapshotFromText(noteText, snapshot) {
+  // Jika sudah ada snapshot di response, noteText sudah clean dari backend
+  if (snapshot) return noteText;
+  // Fallback: manual split dari belakang
+  if (!noteText) return '';
+  const parts = noteText.split('|');
+  if (parts.length < 3) return noteText;
+  const ses = parts[parts.length - 2];
+  const upd = parts[parts.length - 1];
+  if (!/^-?\d+$/.test(ses) || !/^\d{4}-\d{2}-\d{2}/.test(upd)) return noteText;
+  return parts.slice(0, -2).join('|');
+}
 
 // Note editing functionality
 const startEditingNote = (item) => {

@@ -269,8 +269,37 @@ export const getSingleResumeKdtk = async (req, res) => {
 };
 
 /**
+ * Ambil snapshot SESUAI dari sesuai_toko_summary untuk disimpan bersama note.
+ * Format snapshot: |{snapshotSesuai}|{snapshotUpdtime}
+ * Contoh: "Penjelasan|1250000|2026-07-15 14:30:00"
+ */
+async function getSnapshotSesuai(cabang, kdtk, periode) {
+  try {
+    const SesuaiTokoSummary = (await import("./penyesuaian_summary.model.js")).default;
+    const summary = await SesuaiTokoSummary.findOne({
+      where: { CABANG: cabang, KDTK: kdtk, PERIODE: periode },
+    });
+    if (!summary) return null;
+
+    const snapshotSesuai = Math.round(Number(summary.SESUAI) || 0);
+    const snapshotUpdtime = summary.UPDTIME
+      ? new Date(summary.UPDTIME).toISOString().replace("T", " ").substring(0, 19)
+      : new Date().toISOString().replace("T", " ").substring(0, 19);
+
+    return { snapshotSesuai, snapshotUpdtime };
+  } catch (err) {
+    logger.warn(`[penyesuaian.controller] Gagal mengambil snapshot SESUAI: ${err.message}`);
+    return null;
+  }
+}
+
+/**
  * Update or create note for a specific record
  * PUT /api/penyesuaian/note/
+ *
+ * Saat menyimpan note, secara otomatis mengambil snapshot SESUAI
+ * dari sesuai_toko_summary dan menyimpannya dalam format pipelane:
+ *   {noteText}|{snapshotSesuai}|{snapshotUpdtime}
  */
 export const updateNote = async (req, res) => {
   try {
@@ -290,10 +319,19 @@ export const updateNote = async (req, res) => {
     const userService = new UserService();
     const user = await userService.findByCredentials(pic);
 
+    // ✨ Ambil snapshot SESUAI saat ini dari summary
+    const snapshot = await getSnapshotSesuai(cabang, kdtk, periode);
+
+    // Bangun noteText dengan snapshot suffix
+    let fullNoteText = noteText || "";
+    if (snapshot) {
+      fullNoteText = `${fullNoteText}|${snapshot.snapshotSesuai}|${snapshot.snapshotUpdtime}`;
+    }
+
     const noteData = {
       Cabang: cabang,
       unixKey,
-      noteText: noteText || "",
+      noteText: fullNoteText,
       pic: pic,
       categoryId: null,
       tableName: tableName,
@@ -301,7 +339,15 @@ export const updateNote = async (req, res) => {
 
     const note = await notesService.upsert(noteData);
 
-    const result = { ...note.toJSON(), fullName: user?.fullName || null };
+    // Parse snapshot dari note yang baru disimpan untuk response
+    const parsedNote = penyesuaianService.parseNoteSnapshot(noteText || "", snapshot);
+
+    const result = {
+      ...note.toJSON(),
+      noteText: parsedNote.noteText,
+      snapshot: parsedNote.snapshot,
+      fullName: user?.fullName || null,
+    };
 
     return apiResponse.success(res, result);
   } catch (error) {

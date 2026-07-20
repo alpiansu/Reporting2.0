@@ -33,6 +33,34 @@
             <div class="info-value">{{ sesuai }}</div>
           </div>
         </div>
+
+        <!-- Snapshot Card -->
+        <div v-if="noteSnapshot" class="snapshot-card">
+          <div class="snapshot-card-header">
+            <i class="pi pi-history"></i>
+            <span>Riwayat Pengecekan Note</span>
+          </div>
+          <div class="snapshot-card-body">
+            <div class="snapshot-row">
+              <span class="snapshot-label">Saat dicatat:</span>
+              <span class="snapshot-value">{{ formatCurrency(noteSnapshot.sesuaSaatNote) }}</span>
+              <span class="snapshot-date">({{ noteSnapshot.updtimeSaatNote ? formatDateTime(noteSnapshot.updtimeSaatNote).split(' ').slice(0,2).join(' ') : '-' }})</span>
+            </div>
+            <div class="snapshot-row">
+              <span class="snapshot-label">Sekarang:</span>
+              <span class="snapshot-value">{{ formatCurrency(noteSnapshot.sesuaSekarang) }}</span>
+              <span class="snapshot-date">({{ formatDateTime(updtimeSekarang) }})</span>
+            </div>
+            <div class="snapshot-row" :class="noteSnapshot.membaik ? 'snapshot-improved' : 'snapshot-worsened'">
+              <span class="snapshot-label">Pergerakan:</span>
+              <span class="snapshot-delta">
+                {{ noteSnapshot.membaik ? '\u25BC' : '\u25B2' }}
+                {{ noteSnapshot.selisih >= 0 ? '+' : '' }}{{ formatCurrency(noteSnapshot.selisih) }}
+                ({{ noteSnapshot.persen }}%)
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
     </template>
     <template #content>
@@ -195,9 +223,49 @@ const props = defineProps({
   cab: { type: String, required: true },
   kdtk: { type: String, required: true },
   sesuai: {type: String, required: true},
+  // Opsional: note snapshot dari tabel/resume data
+  noteSnapshotData: { type: Object, default: null },
 })
 
 const emit = defineEmits(['close'])
+
+// ─── Snapshot computation ────────────────────────────────────
+const noteSnapshot = ref(null)
+const updtimeSekarang = ref('')
+
+watch(() => props.noteSnapshotData, (val) => {
+  if (val) {
+    noteSnapshot.value = val
+  }
+}, { immediate: true })
+
+// Juga coba parse dari props.sesuai
+watch(() => props.show, (val) => {
+  if (val && !noteSnapshot.value) {
+    // Fallback: parse dari sesuai string (yang sudah diformat)
+    updtimeSekarang.value = new Date().toISOString().replace('T', ' ').substring(0, 19)
+  }
+})
+
+function formatCurrency(value) {
+  const num = Number(value) || 0
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    maximumFractionDigits: 0,
+  }).format(num)
+}
+
+function formatDateTime(date) {
+  if (!date) return '-'
+  return new Date(date).toLocaleString('id-ID', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
 
 const columnDefs = [
   // { field: 'RECID', label: 'Rec ID', align: 'center' },
@@ -226,15 +294,6 @@ const selectedBegbal = ref('');
 const insight = ref(null);
 const insightLoading = ref(false);
 const detailWarning = ref('');
-
-function formatCurrency(value) {
-  const num = Number(value) || 0;
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    maximumFractionDigits: 0,
-  }).format(num);
-}
 
 const chartData = computed(() => {
   if (!insight.value || !insight.value.topItems || insight.value.topItems.length === 0) {
@@ -794,5 +853,104 @@ async function fetchDetail(params) {
 .value-sesuai {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-weight: 600;
+}
+
+/* ─── Snapshot Card ──────────────────────────────────────────── */
+.snapshot-card {
+  margin-top: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.snapshot-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-bottom: 1px solid #bae6fd;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #0369a1;
+}
+
+.snapshot-card-header i {
+  font-size: 0.9375rem;
+  color: #0284c7;
+}
+
+.snapshot-card-body {
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.snapshot-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  padding: 0.25rem 0;
+}
+
+.snapshot-label {
+  font-weight: 600;
+  color: #6b7280;
+  min-width: 100px;
+  flex-shrink: 0;
+}
+
+.snapshot-value {
+  font-weight: 700;
+  color: #1e293b;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.8125rem;
+}
+
+.snapshot-date {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin-left: 0.25rem;
+}
+
+.snapshot-delta {
+  font-weight: 700;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.8125rem;
+}
+
+.snapshot-improved {
+  background: #f0fdf4;
+  border-radius: 6px;
+  padding: 0.375rem 0.5rem;
+  margin: 0 -0.5rem;
+}
+
+.snapshot-improved .snapshot-delta {
+  color: #166534;
+}
+
+.snapshot-worsened {
+  background: #fef2f2;
+  border-radius: 6px;
+  padding: 0.375rem 0.5rem;
+  margin: 0 -0.5rem;
+}
+
+.snapshot-worsened .snapshot-delta {
+  color: #991b1b;
+}
+
+@media (max-width: 480px) {
+  .snapshot-row {
+    flex-wrap: wrap;
+  }
+  .snapshot-label {
+    min-width: 80px;
+  }
 }
 </style>

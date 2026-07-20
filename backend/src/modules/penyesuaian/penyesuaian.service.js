@@ -1434,6 +1434,196 @@ class PenyesuaianService {
     }
   }
   /**
+   * Get the single max positive and single max negative item per cabang.
+   * Query langsung sesuai_toko untuk nilai SESUAI ekstrem per cabang.
+   * @param {string} periode - Period in YYMM format
+   * @returns {Promise<Object>} Branch extreme values
+   */
+  async getBranchExtremes(periode) {
+    if (!periode) throw new Error("Periode wajib diisi");
+
+    try {
+      await storeService.ensureInitialized();
+
+      const model = await SesuaiToko.getModel();
+      const sequelize = model.sequelize;
+      const { Sequelize } = await import("sequelize");
+
+      // Query: max positive (item dgn SESUAI positif tertinggi) per cabang
+      const maxPositiveQuery = `
+        SELECT a.CABANG, a.PRDCD, a.SINGKATAN, a.KDTK, CAST(a.SESUAI AS SIGNED) AS SESUAI
+        FROM sesuai_toko a
+        INNER JOIN (
+          SELECT CABANG, MAX(SESUAI) AS max_val
+          FROM sesuai_toko
+          WHERE PERIODE = :periode AND RECID = '*' AND SESUAI > 0
+          GROUP BY CABANG
+        ) b ON a.CABANG = b.CABANG AND a.SESUAI = b.max_val
+        WHERE a.PERIODE = :periode AND a.RECID = '*'
+        ORDER BY a.CABANG
+      `;
+
+      // Query: min negative (item dgn SESUAI negatif terendah) per cabang
+      const maxNegativeQuery = `
+        SELECT a.CABANG, a.PRDCD, a.SINGKATAN, a.KDTK, CAST(a.SESUAI AS SIGNED) AS SESUAI
+        FROM sesuai_toko a
+        INNER JOIN (
+          SELECT CABANG, MIN(SESUAI) AS min_val
+          FROM sesuai_toko
+          WHERE PERIODE = :periode AND RECID = '*' AND SESUAI < 0
+          GROUP BY CABANG
+        ) b ON a.CABANG = b.CABANG AND a.SESUAI = b.min_val
+        WHERE a.PERIODE = :periode AND a.RECID = '*'
+        ORDER BY a.CABANG
+      `;
+
+      // Query: semua cabang unik yang punya data
+      const cabangQuery = `
+        SELECT DISTINCT CABANG
+        FROM sesuai_toko
+        WHERE PERIODE = :periode AND RECID = '*'
+        ORDER BY CABANG
+      `;
+
+      const [maxPositiveRows, maxNegativeRows, cabangRows] = await Promise.all([
+        sequelize.query(maxPositiveQuery, {
+          replacements: { periode },
+          type: Sequelize.QueryTypes.SELECT,
+        }),
+        sequelize.query(maxNegativeQuery, {
+          replacements: { periode },
+          type: Sequelize.QueryTypes.SELECT,
+        }),
+        sequelize.query(cabangQuery, {
+          replacements: { periode },
+          type: Sequelize.QueryTypes.SELECT,
+        }),
+      ]);
+
+      // Index by CABANG for fast lookup
+      const maxPosByCab = {};
+      for (const r of maxPositiveRows) {
+        if (!maxPosByCab[r.CABANG] || Math.abs(Number(r.SESUAI)) > Math.abs(Number(maxPosByCab[r.CABANG].SESUAI))) {
+          maxPosByCab[r.CABANG] = { prdcd: r.PRDCD, name: r.SINGKATAN, kdtk: r.KDTK, sesui: Math.round(Number(r.SESUAI)) };
+        }
+      }
+
+      const maxNegByCab = {};
+      for (const r of maxNegativeRows) {
+        if (!maxNegByCab[r.CABANG] || Math.abs(Number(r.SESUAI)) > Math.abs(Number(maxNegByCab[r.CABANG].SESUAI))) {
+          maxNegByCab[r.CABANG] = { prdcd: r.PRDCD, name: r.SINGKATAN, kdtk: r.KDTK, sesui: Math.round(Number(r.SESUAI)) };
+        }
+      }
+
+      // Build branch name map from storeService's in-memory cache
+      const branchNameMap = new Map();
+      try {
+        const allStores = storeService.stores;
+        if (allStores && allStores.length > 0) {
+          for (const s of allStores) {
+            const branchCode = s.branch || s.cab;
+            if (branchCode && !branchNameMap.has(branchCode)) {
+              branchNameMap.set(branchCode, s.branchName || s.namaCabang || branchCode);
+            }
+          }
+        }
+      } catch {}
+
+      const results = [];
+      for (const row of cabangRows) {
+        const cab = row.CABANG;
+        results.push({
+          cabang: cab,
+          namaCabang: branchNameMap.get(cab) || cab,
+          maxPositive: maxPosByCab[cab] || null,
+          maxNegative: maxNegByCab[cab] || null,
+        });
+      }
+
+      return {
+        data: results,
+        total: results.length,
+      };
+    } catch (error) {
+      logger.error(`[penyesuaian.service] Error getting branch summary: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get top 10 items causing adjustments in a specific branch.
+   * Query langsung sesuai_toko diurutkan oleh ABS(SESUAI) DESC.
+   * @param {string} cabang - Branch code
+   * @param {string} periode - Period in YYMM format
+   * @returns {Promise<Object>} Top items for the branch
+   */
+  async getBranchTopItems(cabang, periode) {
+    if (!periode) throw new Error("Periode wajib diisi");
+    if (!cabang) throw new Error("Cabang wajib diisi");
+
+    try {
+      const model = await SesuaiToko.getModel();
+      const sequelize = model.sequelize;
+      const { Sequelize } = await import("sequelize");
+
+      // Query top items by absolute SESUAI value
+      const query = `
+        SELECT
+          PRDCD,
+          SINGKATAN,
+          KDTK,
+          CAST(SESUAI AS SIGNED) AS SESUAI
+        FROM sesuai_toko
+        WHERE PERIODE = :periode AND CABANG = :cabang AND RECID = '*'
+        ORDER BY ABS(SESUAI) DESC
+        LIMIT 10
+      `;
+
+      const rows = await sequelize.query(query, {
+        replacements: { periode, cabang },
+        type: Sequelize.QueryTypes.SELECT,
+      });
+
+      // Enrich with store names
+      const items = [];
+      for (const r of rows) {
+        let storeName = r.KDTK;
+        try {
+          const storeInfo = await storeService.getStoreByCode(r.KDTK);
+          if (storeInfo?.storeName) storeName = storeInfo.storeName;
+        } catch {}
+
+        items.push({
+          prdcd: r.PRDCD,
+          name: r.SINGKATAN,
+          sesui: Math.round(Number(r.SESUAI)),
+          kdtk: r.KDTK,
+          storeName,
+        });
+      }
+
+      // Count total items in this branch
+      const countQuery = `
+        SELECT COUNT(*) AS total FROM sesuai_toko
+        WHERE PERIODE = :periode AND CABANG = :cabang AND RECID = '*'
+      `;
+      const [countRow] = await sequelize.query(countQuery, {
+        replacements: { periode, cabang },
+        type: Sequelize.QueryTypes.SELECT,
+      });
+
+      return {
+        data: items,
+        total: items.length,
+        totalRecords: Number(countRow?.total) || 0,
+      };
+    } catch (error) {
+      logger.error(`[penyesuaian.service] Error getting branch top items: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * Get store-level insights from detail records.
    * Identifies top items contributing to the store's total SESUAI,
    * filtered by sign direction (plus/minus) matching the store total.

@@ -334,6 +334,52 @@ export const getStoreInsight = async (req, res) => {
   }
 };
 
+/**
+ * Get branch extremes: max positive item & max negative item per cabang
+ * GET /api/penyesuaian/branch-extremes
+ */
+export const getBranchExtremes = async (req, res) => {
+  try {
+    const { periode } = req.query;
+
+    if (!periode) {
+      return apiResponse.badRequest(res, "Periode is required");
+    }
+
+    logger.info(`[penyesuaian.controller] Getting branch extremes for periode: ${periode}`);
+
+    const result = await penyesuaianService.getBranchExtremes(periode);
+
+    return apiResponse.success(res, result);
+  } catch (error) {
+    logger.error(`[penyesuaian.controller] Error getting branch extremes: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+/**
+ * Get branch top items: top 10 items by ABS(SESUAI) for a branch
+ * GET /api/penyesuaian/branch-top-items/:cabang/:periode
+ */
+export const getBranchTopItems = async (req, res) => {
+  try {
+    const { cabang, periode } = req.params;
+
+    if (!cabang || !periode) {
+      return apiResponse.badRequest(res, "cabang and periode are required");
+    }
+
+    logger.info(`[penyesuaian.controller] Getting branch top items for cabang: ${cabang}, periode: ${periode}`);
+
+    const result = await penyesuaianService.getBranchTopItems(cabang, periode);
+
+    return apiResponse.success(res, result);
+  } catch (error) {
+    logger.error(`[penyesuaian.controller] Error getting branch top items: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
 export const getStoreItem = async (req, res) => {
   try {
     const { kdtk, prdcd } = req.params;

@@ -34,6 +34,12 @@ router.get("/:cabang/:kdtk/:periode/:prdcd", penyesuaianController.getRecord);
 // Update or create note for a specific store and periode
 router.put("/note/", penyesuaianController.updateNote);
 
+// Get branch extremes: max positive & max negative item per cabang
+router.get("/branch-extremes", penyesuaianController.getBranchExtremes);
+
+// Get branch top items: top 10 items by ABS(SESUAI) per cabang
+router.get("/branch-top-items/:cabang/:periode", penyesuaianController.getBranchTopItems);
+
 // Get store-level insight (top items contributing to total SESUAI)
 router.get("/insight/:kdtk/:periode", penyesuaianController.getStoreInsight);
 

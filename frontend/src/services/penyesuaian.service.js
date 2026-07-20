@@ -183,6 +183,29 @@ class PenyesuaianService {
   }
 
   /**
+   * Get branch extremes: max positive & max negative item per cabang
+   * @param {string} periode - Period in YYMM format
+   * @returns {Promise<Object>} Branch extremes data
+   */
+  async getBranchExtremes(periode) {
+    const response = await api.get(`/${this.fixedPattern}/branch-extremes`, {
+      params: { periode },
+    });
+    return response.data;
+  }
+
+  /**
+   * Get branch top items: top 10 items by ABS(SESUAI) for a branch
+   * @param {string} cabang - Branch code
+   * @param {string} periode - Period in YYMM format
+   * @returns {Promise<Object>} Top items for the branch
+   */
+  async getBranchTopItems(cabang, periode) {
+    const response = await api.get(`/${this.fixedPattern}/branch-top-items/${cabang}/${periode}`);
+    return response.data;
+  }
+
+  /**
    * Get store item details (prodmast, mstran, mtran, protect) from store DB
    */
   async getStoreItem(kdtk, prdcd, periode = "") {

@@ -640,12 +640,8 @@ export async function exportToResponse({ reportConfig, results, res, prd, cab })
     }
   }
 
-  // ── Stream response ──
-  const safeName = String(reportName).replace(/[^a-zA-Z0-9_\-\u00C0-\u024F]/g, "_");
-  const now = new Date();
-  const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
-  const prdSuffix = prd ? `_${prd}` : "";
-  const filename = `${safeName}${prdSuffix}_${dateStr}.xlsx`;
+  // ── Stream response (legacy naming: "{report_name} Cabang {cab} {prd}.xlsx") ──
+  const filename = `${reportName} Cabang ${cab || ""} ${prd || ""}.xlsx`;
 
   logger.info(`[custom_exporter_coffee] Streaming file: ${filename}`);
 

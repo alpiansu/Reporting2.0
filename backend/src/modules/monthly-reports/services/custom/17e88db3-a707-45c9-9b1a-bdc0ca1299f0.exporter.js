@@ -3,7 +3,20 @@ import logger from "../../../../config/logger.js";
 
 function getMonthName(prd) {
   if (!prd || prd.length !== 4) return prd;
-  const monthNames = ["JANUARI", "FEBRUARI", "MARET", "APRIL", "MEI", "JUNI", "JULI", "AGUSTUS", "SEPTEMBER", "OKTOBER", "NOVEMBER", "DESEMBER"];
+  const monthNames = [
+    "JANUARI",
+    "FEBRUARI",
+    "MARET",
+    "APRIL",
+    "MEI",
+    "JUNI",
+    "JULI",
+    "AGUSTUS",
+    "SEPTEMBER",
+    "OKTOBER",
+    "NOVEMBER",
+    "DESEMBER",
+  ];
   const year = `20${prd.substring(0, 2)}`;
   const monthIdx = parseInt(prd.substring(2, 4), 10) - 1;
   const month = monthNames[monthIdx] || prd.substring(2, 4);
@@ -52,7 +65,7 @@ export async function exportToResponse({ reportConfig, results, res, prd, cab })
     baris++;
 
     // --- Column Widths ---
-    const colWidths = [4, 6, 25, 13, 7, 8, 6, 3, 13, 7, 18];
+    const colWidths = [4, 7, 25, 14, 8, 9, 7, 4, 13, 7, 18];
     colWidths.forEach((w, i) => {
       sheet.getColumn(i + 1).width = w;
     });
@@ -65,14 +78,16 @@ export async function exportToResponse({ reportConfig, results, res, prd, cab })
       font: { bold: true, size: 10 },
       alignment: { vertical: "middle", horizontal: "center" },
       border: {
-        top: { style: "thin" }, left: { style: "thin" },
-        bottom: { style: "thin" }, right: { style: "thin" }
+        top: { style: "thin" },
+        left: { style: "thin" },
+        bottom: { style: "thin" },
+        right: { style: "thin" },
       },
-      fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9E1F2" } }
+      fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9E1F2" } },
     };
 
     const headerRow = sheet.addRow(headers);
-    headerRow.eachCell({ includeEmpty: true }, (cell) => {
+    headerRow.eachCell({ includeEmpty: true }, cell => {
       cell.style = headerStyle;
     });
 
@@ -92,15 +107,17 @@ export async function exportToResponse({ reportConfig, results, res, prd, cab })
       const values = Object.values(rowObj);
       const sales = rowObj.SALES || 0;
       const item = rowObj.ITEM || 0;
-      const ketLpg = (item !== 0 || sales !== 0) ? "JUAL" : "TIDAK JUAL";
+      const ketLpg = item !== 0 || sales !== 0 ? "JUAL" : "TIDAK JUAL";
       const rowData = [rowsNumber++, ...values, ketLpg];
 
       const dataRow = sheet.addRow(rowData);
 
       dataRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
         cell.border = {
-          top: { style: "thin" }, left: { style: "thin" },
-          bottom: { style: "thin" }, right: { style: "thin" }
+          top: { style: "thin" },
+          left: { style: "thin" },
+          bottom: { style: "thin" },
+          right: { style: "thin" },
         };
         cell.font = { size: 10 };
 
@@ -140,8 +157,10 @@ export async function exportToResponse({ reportConfig, results, res, prd, cab })
     sheet.mergeCells(`A${baris}:C${baris}`);
     totalRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
       cell.border = {
-        top: { style: "thin" }, left: { style: "thin" },
-        bottom: { style: "thin" }, right: { style: "thin" }
+        top: { style: "thin" },
+        left: { style: "thin" },
+        bottom: { style: "thin" },
+        right: { style: "thin" },
       };
       cell.font = { bold: true, size: 10 };
       cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFB8CCE4" } };
@@ -156,12 +175,8 @@ export async function exportToResponse({ reportConfig, results, res, prd, cab })
     sheet.views = [{ showGridLines: false }];
   }
 
-  // --- Response ---
-  const safeName = String(reportName).replace(/[^a-zA-Z0-9_\-\u00C0-\u024F]/g, "_");
-  const now = new Date();
-  const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
-  const prdSuffix = prd ? `_${prd}` : "";
-  const filename = `${safeName}${prdSuffix}_${dateStr}.xlsx`;
+  // --- Response (legacy naming: "{report_name} Cabang {cab} {prd}.xlsx") ---
+  const filename = `${reportName} Cabang ${cab || ""} ${prd || ""}.xlsx`;
 
   logger.info(`[custom_exporter] Streaming file: ${filename}`);
 

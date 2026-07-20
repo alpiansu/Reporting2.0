@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import logger from "../../../../config/logger.js";
+import MCabang from "../../../../models/m_cabang.model.js";
 
 function getMonthName(prd) {
   if (!prd || prd.length !== 4) return prd;
@@ -32,6 +33,9 @@ export async function exportToResponse({ reportConfig, results, res, prd, cab })
   const reportName = reportConfig["name-reports"] || "Laporan Sales LPG";
   const queriesExport = reportConfig["queries-export"] || [];
 
+  const cabang = cab ? await MCabang.findByPk(cab) : null;
+  const branchName = cabang ? cabang.namacab : cab;
+
   logger.info(`[custom_exporter] Mulai build custom Excel: "${reportName}"`);
 
   const sheetKeys = Object.keys(results || {});
@@ -60,7 +64,7 @@ export async function exportToResponse({ reportConfig, results, res, prd, cab })
     sheet.getRow(baris).font = { bold: true, size: 12 };
     baris++;
 
-    sheet.getCell(`A${baris}`).value = `Cab. ${cab || ""}`;
+    sheet.getCell(`A${baris}`).value = `Cab. ${branchName}`;
     sheet.getRow(baris).font = { bold: true, size: 11 };
     baris++;
 

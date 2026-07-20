@@ -12,21 +12,7 @@ import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
 import { logoIndomaret } from "../../styles/custom/logoIndomaret.js";
 import logger from "../../../../config/logger.js";
-
-// ─── Branch Name Mapping ───────────────────────────────────────────────────
-const branchMap = {
-  G026: "Tangerang 1",
-  G033: "Tangerang 2",
-  G107: "Parung",
-  G113: "Bogor 1",
-  G117: "Bogor 2",
-  G157: "Lebak",
-  G295: "Sukabumi(Supply)",
-};
-
-function getBranchName(cab) {
-  return branchMap[cab] || `Cab ${cab}`;
-}
+import MCabang from "../../../../models/m_cabang.model.js";
 
 function formatPeriod(prd) {
   if (!prd || !/^\d{4}$/.test(prd)) return prd || "-";
@@ -67,7 +53,8 @@ export async function exportToResponse({ reportConfig, results, res, prd, cab })
   const combinedRows = [...valData, ...valTot];
   const rows = combinedRows.map(item => Object.values(item));
 
-  const stringBranch = getBranchName(cab);
+  const cabang = cab ? await MCabang.findByPk(cab) : null;
+  const stringBranch = cabang ? cabang.namacab : cab;
   const strDate = formatPeriod(prd);
   const fileName = `LPP Pdf-${cab} ${strDate}`;
 

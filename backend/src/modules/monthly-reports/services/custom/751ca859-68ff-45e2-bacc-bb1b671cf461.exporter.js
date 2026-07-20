@@ -1,19 +1,8 @@
 import ExcelJS from "exceljs";
 import logger from "../../../../config/logger.js";
+import MCabang from "../../../../models/m_cabang.model.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function getMonthName(prd) {
-  if (!prd || prd.length !== 4) return prd;
-  const monthNames = [
-    "JANUARI", "FEBRUARI", "MARET", "APRIL", "MEI", "JUNI",
-    "JULI", "AGUSTUS", "SEPTEMBER", "OKTOBER", "NOVEMBER", "DESEMBER",
-  ];
-  const year = `20${prd.substring(0, 2)}`;
-  const monthIdx = parseInt(prd.substring(2, 4), 10) - 1;
-  const month = monthNames[monthIdx] || prd.substring(2, 4);
-  return `${month} ${year}`;
-}
 
 function getMonthNameFull(prd) {
   if (!prd || prd.length !== 4) return prd;
@@ -39,19 +28,6 @@ function CHR(index) {
     i = Math.floor(i / 26) - 1;
   }
   return col;
-}
-
-function branchText(cab) {
-  const branchMap = {
-    G026: "Tangerang 1",
-    G033: "Tangerang 2",
-    G107: "Parung",
-    G113: "Bogor 1",
-    G117: "Bogor 2",
-    G157: "Lebak",
-    G295: "Sukabumi(Supply)",
-  };
-  return branchMap[cab] || cab;
 }
 
 const THIN_BORDER = {
@@ -188,7 +164,7 @@ function buildMasterPlu(sheet, rows) {
  *   Row 6+: Data rows
  *   Last: Total row
  */
-function buildPointCoffee(sheet, rows, prd, cab) {
+function buildPointCoffee(sheet, rows, prd, branchName) {
   if (!rows || rows.length === 0) return;
 
   let baris = 1;
@@ -211,7 +187,6 @@ function buildPointCoffee(sheet, rows, prd, cab) {
   baris++;
 
   // ── Branch ──
-  const branchName = branchText(cab);
   sheet.getCell(`C${baris}`).value = `Cab. ${branchName}`;
   sheet.getRow(baris).font = { bold: true, size: 11 };
   baris++;
@@ -324,7 +299,7 @@ function buildPointCoffee(sheet, rows, prd, cab) {
 /**
  * Build YUMMY COFFE sheet — 9 columns, each column merged 2 rows for header.
  */
-function buildYummyCoffee(sheet, rows, prd, cab) {
+function buildYummyCoffee(sheet, rows, prd, branchName) {
   if (!rows || rows.length === 0) return;
 
   let baris = 1;
@@ -347,7 +322,6 @@ function buildYummyCoffee(sheet, rows, prd, cab) {
   baris++;
 
   // ── Branch ──
-  const branchName = branchText(cab);
   sheet.getCell(`C${baris}`).value = `Cab. ${branchName}`;
   sheet.getRow(baris).font = { bold: true, size: 11 };
   baris++;
@@ -424,7 +398,7 @@ function buildYummyCoffee(sheet, rows, prd, cab) {
  *   Row 6+: Data rows
  *   Last: Total row
  */
-function buildGoldCoffee(sheet, rows, prd, cab) {
+function buildGoldCoffee(sheet, rows, prd, branchName) {
   if (!rows || rows.length === 0) return;
 
   let baris = 1;
@@ -447,7 +421,6 @@ function buildGoldCoffee(sheet, rows, prd, cab) {
   baris++;
 
   // ── Branch ──
-  const branchName = branchText(cab);
   sheet.getCell(`C${baris}`).value = `Cab. ${branchName}`;
   sheet.getRow(baris).font = { bold: true, size: 11 };
   baris++;
@@ -600,6 +573,9 @@ export async function exportToResponse({ reportConfig, results, res, prd, cab })
   const reportName = reportConfig["name-reports"] || "Sales Coffee";
   const queriesExport = reportConfig["queries-export"] || [];
 
+  const cabang = cab ? await MCabang.findByPk(cab) : null;
+  const branchName = cabang ? cabang.namacab : cab;
+
   logger.info(`[custom_exporter_coffee] Mulai build custom Excel: "${reportName}"`);
 
   const sheetKeys = Object.keys(results || {});
@@ -626,13 +602,13 @@ export async function exportToResponse({ reportConfig, results, res, prd, cab })
         buildMasterPlu(sheet, valueToExport);
         break;
       case "POINT COFFE":
-        buildPointCoffee(sheet, valueToExport, prd, cab);
+        buildPointCoffee(sheet, valueToExport, prd, branchName);
         break;
       case "YUMMY COFFE":
-        buildYummyCoffee(sheet, valueToExport, prd, cab);
+        buildYummyCoffee(sheet, valueToExport, prd, branchName);
         break;
       case "YCOFFE GOLD":
-        buildGoldCoffee(sheet, valueToExport, prd, cab);
+        buildGoldCoffee(sheet, valueToExport, prd, branchName);
         break;
       default:
         buildDetailSheet(sheet, valueToExport, sheetName);

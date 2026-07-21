@@ -437,6 +437,19 @@ class PrepClosingService {
 
     const totalInserted = await this.bulkUpsertRecords(records);
 
+    // Update resolved records: flip RECID to '1' for stores without issues
+    const activeStoreList = records.filter(r => r.IS_READY === false).map(r => r.KDTK);
+    const screenedStoreList = records.map(r => r.KDTK);
+
+    if (screenedStoreList.length > 0) {
+      await this.updateResolvedRecords({
+        periode,
+        level: 1,
+        screenedStores: screenedStoreList,
+        activeStores: activeStoreList,
+      });
+    }
+
     // Sync JSON FIRST — if this fails, temp files are preserved for retry
     await this.syncToJsonFile(periode);
 

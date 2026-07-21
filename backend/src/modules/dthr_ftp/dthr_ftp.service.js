@@ -184,6 +184,7 @@ class DthrFtpService {
 
   async dispatchBatch(items, username, fullName, force = false) {
     await this.validateWorkingDir();
+    await this.cleanupStalePending();
 
     // Dedup: only one dispatch per (kdtk, tglTransaksi) / per filename
     const seen = new Set();
@@ -228,43 +229,77 @@ class DthrFtpService {
     const totalItems = items.length;
     const limit = pLimit(3);
     let completedCount = 0;
+    const results = [];
 
-    const results = await Promise.allSettled(
-      items.map((item) =>
-        limit(async () => {
-          const result = await dispatchOne({ ...item, username, force });
-          completedCount++;
-          const statusIcon = result.status === "success" ? "✓" : result.status === "skipped" ? "⏭" : "✗";
-          await progressService.updateProgress(taskId, completedCount, {
-            description: `${result.fileName} → ${result.status} ${statusIcon} (${completedCount}/${totalItems})`,
-            status: "Mengirim DTHR...",
-          });
-          return result;
-        }),
-      ),
-    );
+    for (const item of items) {
+      if (progressService.isAborted(taskId)) {
+        logger.info(`[dthr_ftp] Batch aborted — ${totalItems - completedCount} item(s) remaining`);
+        break;
+      }
+
+      const result = await limit(() =>
+        dispatchOne({ ...item, username, force }).catch((err) => ({
+          fileName: "?",
+          status: "failed",
+          error: err.message,
+          kdtk: item.kdtk,
+          tglTransaksi: item.tglTransaksi,
+        })),
+      );
+
+      completedCount++;
+      results.push({ status: "fulfilled", value: result });
+
+      const statusIcon = result.status === "success" ? "✓" : result.status === "skipped" ? "⏭" : "✗";
+      await progressService.updateProgress(taskId, completedCount, {
+        description: `${result.fileName} → ${result.status} ${statusIcon} (${completedCount}/${totalItems})`,
+        status: "Mengirim DTHR...",
+      }).catch(() => {});
+    }
+
+    const cancelledCount = totalItems - completedCount;
+    for (let i = completedCount; i < totalItems; i++) {
+      const item = items[i];
+      results.push({
+        status: "fulfilled",
+        value: {
+          fileName: buildDthrFilename({ kdtk: item.kdtk, tglTransaksi: item.tglTransaksi }),
+          status: "cancelled",
+          kdtk: item.kdtk,
+          tglTransaksi: item.tglTransaksi,
+          namaToko: "",
+          error: "Dibatalkan oleh pengguna",
+        },
+      });
+    }
 
     const summary = this._summarize(results);
 
-    const timeCompleted = moment().format("YYYY-MM-DD HH:mm:ss");
-    await progressService.updateProgress(taskId, totalItems, {
-      description: `Selesai: ${summary.success} sukses, ${summary.skipped} skip, ${summary.failed} gagal dari ${totalItems} item`,
-      status: "completed",
-      completedAt: timeCompleted,
-      success: summary.success,
-      skipped: summary.skipped,
-      failed: summary.failed,
-      total: totalItems,
-      details: summary.details,
-    });
+    try {
+      const timeCompleted = moment().format("YYYY-MM-DD HH:mm:ss");
+      await progressService.updateProgress(taskId, totalItems, {
+        description: `Selesai: ${summary.success} sukses, ${summary.skipped} skip, ${summary.failed} gagal, ${summary.cancelled} dibatalkan dari ${totalItems} item`,
+        status: "completed",
+        completedAt: timeCompleted,
+        success: summary.success,
+        skipped: summary.skipped,
+        failed: summary.failed,
+        cancelled: summary.cancelled,
+        total: totalItems,
+        details: summary.details,
+      });
 
-    await progressService.completeProgress(taskId);
+      await progressService.completeProgress(taskId);
+    } catch (err) {
+      logger.info(`[dthr_ftp] Batch finished but progress task already removed (likely cancelled): ${err.message}`);
+    }
   }
 
   _summarize(results) {
     let success = 0;
     let skipped = 0;
     let failed = 0;
+    let cancelled = 0;
     const errors = [];
     const details = [];
 
@@ -272,28 +307,29 @@ class DthrFtpService {
       if (r.status === "rejected") {
         failed++;
         errors.push(r.reason?.message || "Unknown error");
-        details.push({ kdtk: '?', tglTransaksi: '?', nama_file: '?', namaToko: '', status: 'failed', error: r.reason?.message });
+        details.push({ kdtk: "?", tglTransaksi: "?", nama_file: "?", namaToko: "", status: "failed", error: r.reason?.message });
       } else {
         const v = r.value;
         const st = v.status;
         if (st === "success") success++;
         else if (st === "skipped") skipped++;
+        else if (st === "cancelled") cancelled++;
         else {
           failed++;
           errors.push(v.error || "Unknown error");
         }
         details.push({
-          kdtk: v.kdtk || '',
-          tglTransaksi: v.tglTransaksi || '',
-          nama_file: v.fileName || '',
-          namaToko: v.namaToko || '',
+          kdtk: v.kdtk || "",
+          tglTransaksi: v.tglTransaksi || "",
+          nama_file: v.fileName || "",
+          namaToko: v.namaToko || "",
           status: st,
           error: v.error || null,
         });
       }
     }
 
-    return { success, skipped, failed, errors, details };
+    return { success, skipped, failed, cancelled, errors, details };
   }
 
   async getLogs({ cabang, periode, status, page = 1, limit = 20 }) {

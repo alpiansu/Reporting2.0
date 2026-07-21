@@ -153,7 +153,7 @@
           <h3><i class="pi pi-file"></i> Hasil Pengiriman</h3>
           <div class="send-result-actions">
             <span class="result-summary">
-              {{ lastSendSummary.success }} sukses, {{ lastSendSummary.skipped }} skip, {{ lastSendSummary.failed }} gagal
+              {{ lastSendSummary.success }} sukses, {{ lastSendSummary.skipped }} skip, {{ lastSendSummary.failed }} gagal<template v-if="lastSendSummary.cancelled > 0">, {{ lastSendSummary.cancelled }} dibatalkan</template>
             </span>
             <Button icon="pi pi-copy" label="Copy" class="p-button-sm p-button-outlined" @click="copySendResult" />
             <Button icon="pi pi-file-excel" label="Export Excel" class="p-button-sm p-button-success" @click="exportSendResult" />
@@ -178,8 +178,10 @@
           <Column field="nama_file" header="Nama File" style="min-width:200px" />
           <Column field="status" header="Status" style="width:100px">
             <template #body="{ data: row }">
-              <Tag :severity="row.status === 'success' ? 'success' : row.status === 'failed' ? 'danger' : 'warn'"
-                :value="row.status === 'success' ? 'Sukses' : row.status === 'skipped' ? 'Skip' : 'Gagal'" />
+              <Tag
+                :severity="row.status === 'success' ? 'success' : row.status === 'failed' ? 'danger' : row.status === 'cancelled' ? 'secondary' : 'warn'"
+                :value="row.status === 'success' ? 'Sukses' : row.status === 'skipped' ? 'Skip' : row.status === 'cancelled' ? 'Dibatalkan' : 'Gagal'"
+              />
             </template>
           </Column>
         </DataTable>
@@ -288,13 +290,22 @@
       </div>
     </div>
 
+    <ConfirmDialog
+      v-model="confirmDialogVisible"
+      :title="confirmDialogTitle"
+      :message="confirmDialogMessage"
+      confirm-text="Ya, Kirim"
+      cancel-text="Batal"
+      @confirm="handleConfirmSend"
+    />
+
     <Dialog
       v-model:visible="progressDialogVisible"
       header="Mengirim DTHR ke FTP Nielsen"
       :modal="true"
-      :closable="!sending"
+      :closable="sending"
       :style="{ width: '580px' }"
-      @hide="cancelProgressTimeout"
+      @hide="handleProgressDialogHide"
     >
       <div class="progress-dialog-body">
         <ProgressBar :value="sendProgress.percentage" class="mb-3"></ProgressBar>
@@ -312,7 +323,7 @@
             class="result-row"
             :class="'result-' + r.status"
           >
-            <i :class="r.status === 'success' ? 'pi pi-check-circle text-success' : r.status === 'failed' ? 'pi pi-times-circle text-danger' : 'pi pi-info-circle text-warning'"></i>
+            <i :class="r.status === 'success' ? 'pi pi-check-circle text-success' : r.status === 'failed' ? 'pi pi-times-circle text-danger' : r.status === 'cancelled' ? 'pi pi-ban text-muted' : 'pi pi-info-circle text-warning'"></i>
             <span class="result-file ml-2">{{ r.fileName }}</span>
             <small class="result-status ml-auto">{{ r.status }}</small>
           </div>
@@ -422,6 +433,7 @@ import { useToast } from 'primevue/usetoast';
 import ntbVsGlslpApi from '@/services/ntbVsGlslp.service.js';
 import progressApi from '@/services/progress.service.js';
 import RekonsiliasiChart from './components/RekonsiliasiChart.vue';
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue';
 
 const cabangStore = useCabangStore();
 
@@ -473,12 +485,17 @@ const elapsedTimer = ref(null);
 const activeEventSource = ref(null);
 const currentTaskId = ref(null);
 const lastSendDetails = ref([]);
-const lastSendSummary = ref({ success: 0, skipped: 0, failed: 0 });
+const lastSendSummary = ref({ success: 0, skipped: 0, failed: 0, cancelled: 0 });
 
 const cekModalVisible = ref(false);
 const cekRecord = ref({});
 const cekHasil = ref('');
 const saving = ref(false);
+
+const confirmDialogVisible = ref(false);
+const confirmDialogTitle = ref('');
+const confirmDialogMessage = ref('');
+const confirmDialogCallback = ref(null);
 
 const sortDir = computed(() => sortOrder.value === 'ASC' ? 1 : -1);
 
@@ -536,7 +553,7 @@ async function loadData() {
   selectAllChecked.value = false;
   sentStatusMap.value = {};
   lastSendDetails.value = [];
-  lastSendSummary.value = { success: 0, skipped: 0, failed: 0 };
+  lastSendSummary.value = { success: 0, skipped: 0, failed: 0, cancelled: 0 };
   try {
     const res = await ntbVsGlslpApi.getRecords(activeCabang.value, periode, {
       page: currentPage.value,
@@ -693,6 +710,13 @@ async function loadFtpSummary() {
 }
 
 async function handleDispatchUnsent(cabang) {
+  confirmDialogTitle.value = 'Kirim ke FTP Nielsen';
+  confirmDialogMessage.value = `Anda akan mengirim semua item belum terkirim untuk cabang ${cabang}.${forceSend.value ? ' Mode kirim ulang aktif.' : ''}`;
+  confirmDialogCallback.value = () => _executeDispatchUnsent(cabang);
+  confirmDialogVisible.value = true;
+}
+
+async function _executeDispatchUnsent(cabang) {
   const periode = getPeriode();
   if (!periode) return;
 
@@ -717,6 +741,7 @@ async function handleDispatchUnsent(cabang) {
       sendingCabang.value = null;
       stopElapsedTimer();
       await loadFtpSummary();
+      await loadSentStatus();
       toast.add({ severity: 'info', summary: 'Semua item sudah terkirim', life: 3000 });
       return;
     }
@@ -755,6 +780,7 @@ async function handleDispatchUnsent(cabang) {
           success: pinfo?.success ?? 0,
           skipped: pinfo?.skipped ?? 0,
           failed: pinfo?.failed ?? 0,
+          cancelled: pinfo?.cancelled ?? 0,
         };
         sendProgress.value = {
           completed: progressData?.completed ?? totalItems,
@@ -782,6 +808,7 @@ async function handleDispatchUnsent(cabang) {
           };
         }
         await loadFtpSummary();
+        await loadSentStatus();
         toast.add({ severity: 'error', summary: 'Pengiriman gagal', life: 5000 });
       },
       async () => {
@@ -794,6 +821,7 @@ async function handleDispatchUnsent(cabang) {
         cancelProgressTimeout();
         progressDialogVisible.value = false;
         await loadFtpSummary();
+        await loadSentStatus();
         toast.add({ severity: 'warn', summary: 'Pengiriman dibatalkan', life: 3000 });
       },
     );
@@ -815,37 +843,58 @@ async function handleDispatchUnsent(cabang) {
 }
 
 async function handleCancelSend() {
-  if (activeEventSource.value) {
-    activeEventSource.value.close();
-    activeEventSource.value = null;
-  }
-  if (progressTimeout.value) {
-    clearTimeout(progressTimeout.value);
-    progressTimeout.value = null;
-  }
   if (currentTaskId.value) {
     try {
       await progressApi.cancelTask(currentTaskId.value);
     } catch { /* ignore if task already gone */ }
-    currentTaskId.value = null;
   }
+
+  if (activeEventSource.value) {
+    activeEventSource.value.close();
+    activeEventSource.value = null;
+  }
+
+  if (progressTimeout.value) {
+    clearTimeout(progressTimeout.value);
+    progressTimeout.value = null;
+  }
+
   sending.value = false;
   sendingCabang.value = null;
   stopElapsedTimer();
   progressDialogVisible.value = false;
+  currentTaskId.value = null;
+
+  await loadFtpSummary();
+  await loadSentStatus();
+  clearSendResult();
+
   toast.add({ severity: 'info', summary: 'Pengiriman dibatalkan', life: 3000 });
+}
+
+function handleConfirmSend() {
+  if (confirmDialogCallback.value) {
+    confirmDialogCallback.value();
+    confirmDialogCallback.value = null;
+  }
+}
+
+function handleProgressDialogHide() {
+  if (sending.value) {
+    handleCancelSend();
+  }
 }
 
 function clearSendResult() {
   lastSendDetails.value = [];
-  lastSendSummary.value = { success: 0, skipped: 0, failed: 0 };
+  lastSendSummary.value = { success: 0, skipped: 0, failed: 0, cancelled: 0 };
 }
 
 async function copySendResult() {
   if (!lastSendDetails.value.length) return;
   const header = 'KDTK\tNama Toko\tTanggal\tNama File\tStatus';
   const rows = lastSendDetails.value.map(r =>
-    `${r.kdtk}\t${r.namaToko}\t${r.tglTransaksi}\t${r.nama_file}\t${r.status === 'success' ? 'Sukses' : r.status === 'skipped' ? 'Skip' : 'Gagal'}`
+    `${r.kdtk}\t${r.namaToko}\t${r.tglTransaksi}\t${r.nama_file}\t${r.status === 'success' ? 'Sukses' : r.status === 'skipped' ? 'Skip' : r.status === 'cancelled' ? 'Dibatalkan' : 'Gagal'}`
   );
   const text = `No\t${header}\n${rows.map((r, i) => `${i + 1}\t${r}`).join('\n')}`;
   try {
@@ -860,7 +909,7 @@ function exportSendResult() {
   if (!lastSendDetails.value.length) return;
   const header = 'No,KDTK,Nama Toko,Tanggal,Nama File,Status';
   const rows = lastSendDetails.value.map((r, i) => {
-    const status = r.status === 'success' ? 'Sukses' : r.status === 'skipped' ? 'Skip' : 'Gagal';
+    const status = r.status === 'success' ? 'Sukses' : r.status === 'skipped' ? 'Skip' : r.status === 'cancelled' ? 'Dibatalkan' : 'Gagal';
     const escape = v => {
       const s = String(v ?? '');
       return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
@@ -896,6 +945,13 @@ async function handleSendToFtp() {
     return;
   }
 
+  confirmDialogTitle.value = 'Kirim ke FTP Nielsen';
+  confirmDialogMessage.value = `Anda akan mengirim ${items.length} file DTHR ke FTP Nielsen.${forceSend.value ? ' Mode kirim ulang aktif — file yang sudah terkirim akan dikirim ulang.' : ''}`;
+  confirmDialogCallback.value = () => _executeSendToFtp(items);
+  confirmDialogVisible.value = true;
+}
+
+async function _executeSendToFtp(items) {
   sending.value = true;
   progressDialogVisible.value = true;
   sendProgress.value = { completed: 0, total: items.length, percentage: 0 };
@@ -941,6 +997,7 @@ async function handleSendToFtp() {
           success: pinfo?.success ?? 0,
           skipped: pinfo?.skipped ?? 0,
           failed: pinfo?.failed ?? 0,
+          cancelled: pinfo?.cancelled ?? 0,
         };
         sendProgress.value = {
           completed: progressData?.completed ?? items.length,
@@ -948,6 +1005,7 @@ async function handleSendToFtp() {
           percentage: 100,
         };
         await loadSentStatus();
+        await loadFtpSummary();
         toast.add({ severity: 'success', summary: 'Pengiriman selesai', life: 3000 });
         setTimeout(() => { progressDialogVisible.value = false; }, 1500);
       },
@@ -965,6 +1023,8 @@ async function handleSendToFtp() {
             percentage: progressData.percentage || 0,
           };
         }
+        await loadFtpSummary();
+        await loadSentStatus();
         toast.add({ severity: 'error', summary: 'Pengiriman gagal', life: 5000 });
       },
       async () => {
@@ -975,6 +1035,8 @@ async function handleSendToFtp() {
         stopElapsedTimer();
         cancelProgressTimeout();
         progressDialogVisible.value = false;
+        await loadFtpSummary();
+        await loadSentStatus();
         toast.add({ severity: 'warn', summary: 'Pengiriman dibatalkan', life: 3000 });
       },
     );

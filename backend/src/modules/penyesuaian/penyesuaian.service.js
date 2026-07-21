@@ -40,6 +40,12 @@ class PenyesuaianService {
     this.legacyNotesCachedAt = 0;
     this.legacyNotesTTL = 30 * 60 * 1000; // 30 menit
     this.legacyNotesPeriode = null;
+
+    // 🏪 Branch aggregate caches (branch-extremes, branch-top items)
+    // Menyimpan hasil aggregasi per cabang untuk menghindari query DB setiap kali
+    this.branchExtremesCache = new Map(); // Map<periode, { data, cachedAt }>
+    this.branchTopItemsCache = new Map(); // Map<`${cabang}:${periode}`, { data, cachedAt }>
+    this.aggregateCacheTTL = 5 * 60 * 1000; // 5 minutes
   }
 
   /**
@@ -226,6 +232,26 @@ class PenyesuaianService {
         logger.debug(`[penyesuaian.service] Cache expired & removed for key=${key}`);
       }
     }
+    this.cleanupAggregateCache();
+  }
+
+  /**
+   * Cleanup expired aggregate cache entries (branch-extremes, branch-top-items)
+   */
+  cleanupAggregateCache() {
+    const now = Date.now();
+    for (const [key, entry] of this.branchExtremesCache.entries()) {
+      if (now - entry.cachedAt > this.aggregateCacheTTL) {
+        this.branchExtremesCache.delete(key);
+        logger.debug(`[penyesuaian.service] Branch extremes cache expired & removed for periode=${key}`);
+      }
+    }
+    for (const [key, entry] of this.branchTopItemsCache.entries()) {
+      if (now - entry.cachedAt > this.aggregateCacheTTL) {
+        this.branchTopItemsCache.delete(key);
+        logger.debug(`[penyesuaian.service] Branch top items cache expired & removed for key=${key}`);
+      }
+    }
   }
 
   /**
@@ -306,6 +332,8 @@ class PenyesuaianService {
     this.isLoading = false;
     this.cacheDetailData.clear();
     this.invalidateLegacyCache();
+    this.branchExtremesCache.clear();
+    this.branchTopItemsCache.clear();
     logger.info("Penyesuaian cache invalidated manually");
   }
 
@@ -368,6 +396,15 @@ class PenyesuaianService {
       await this.saveToFile(periode);
       this.loadedPeriod = periode;
       this.lastLoadTime = Date.now();
+
+      // 🧹 Invalidate aggregate caches untuk periode ini karena data berubah
+      this.branchExtremesCache.delete(periode);
+      // Hapus semua branchTopItemsCache yang menyangkut periode ini
+      for (const key of this.branchTopItemsCache.keys()) {
+        if (key.endsWith(`:${periode}`)) {
+          this.branchTopItemsCache.delete(key);
+        }
+      }
 
       logger.info(
         `[penyesuaian.service] Synced ${this.penyesuaianData.length} records from Summary to JSON for period ${periode}`,
@@ -1501,6 +1538,14 @@ class PenyesuaianService {
   async getBranchExtremes(periode) {
     if (!periode) throw new Error("Periode wajib diisi");
 
+    // 🔄 Cek cache dulu
+    const cached = this.branchExtremesCache.get(periode);
+    if (cached && Date.now() - cached.cachedAt < this.aggregateCacheTTL) {
+      logger.debug(`[penyesuaian.service] Branch extremes cache HIT for periode=${periode}`);
+      return cached.data;
+    }
+    logger.debug(`[penyesuaian.service] Branch extremes cache MISS for periode=${periode}, querying DB...`);
+
     try {
       await storeService.ensureInitialized();
 
@@ -1599,12 +1644,20 @@ class PenyesuaianService {
         });
       }
 
-      return {
+      const result = {
         data: results,
         total: results.length,
       };
+
+      // 📦 Simpan ke cache
+      this.branchExtremesCache.set(periode, { data: result, cachedAt: Date.now() });
+      logger.debug(`[penyesuaian.service] Branch extremes cached for periode=${periode}`);
+
+      return result;
     } catch (error) {
       logger.error(`[penyesuaian.service] Error getting branch summary: ${error.message}`);
+      // Hapus cache yang mungkin corrupt
+      this.branchExtremesCache.delete(periode);
       throw error;
     }
   }
@@ -1619,6 +1672,15 @@ class PenyesuaianService {
   async getBranchTopItems(cabang, periode) {
     if (!periode) throw new Error("Periode wajib diisi");
     if (!cabang) throw new Error("Cabang wajib diisi");
+
+    // 🔄 Cek cache dulu
+    const cacheKey = `${cabang}:${periode}`;
+    const cached = this.branchTopItemsCache.get(cacheKey);
+    if (cached && Date.now() - cached.cachedAt < this.aggregateCacheTTL) {
+      logger.debug(`[penyesuaian.service] Branch top items cache HIT for key=${cacheKey}`);
+      return cached.data;
+    }
+    logger.debug(`[penyesuaian.service] Branch top items cache MISS for key=${cacheKey}, querying DB...`);
 
     try {
       const model = await SesuaiToko.getModel();
@@ -1671,13 +1733,21 @@ class PenyesuaianService {
         type: Sequelize.QueryTypes.SELECT,
       });
 
-      return {
+      const result = {
         data: items,
         total: items.length,
         totalRecords: Number(countRow?.total) || 0,
       };
+
+      // 📦 Simpan ke cache
+      this.branchTopItemsCache.set(cacheKey, { data: result, cachedAt: Date.now() });
+      logger.debug(`[penyesuaian.service] Branch top items cached for key=${cacheKey}`);
+
+      return result;
     } catch (error) {
       logger.error(`[penyesuaian.service] Error getting branch top items: ${error.message}`);
+      // Hapus cache yang mungkin corrupt
+      this.branchTopItemsCache.delete(cacheKey);
       throw error;
     }
   }

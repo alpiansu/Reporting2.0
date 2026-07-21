@@ -26,6 +26,7 @@ export default {
       ABS(SUM(CAST(PPn AS DECIMAL(25,7)))) AS PPN, 
       ABS(SUM(CAST(Price_Idm AS DECIMAL(25,3)) * QTY)) AS GROSS_IDM, 
       ABS(SUM(CAST(PPnRp_Idm AS DECIMAL(25,3)))) AS PPN_IDM FROM wt_{date} 
+      WHERE RTYPE != 'Z'
       GROUP BY tipe,toko,shop,date(tgl1)`,
 
     // Store query template
@@ -49,6 +50,7 @@ export default {
       ABS(SUM(CAST(A.Price_Idm AS DECIMAL(25,2)) * QTY)) AS GROSS_IDM, 
       ABS(SUM(CAST(A.PPn_Rp_Idm AS DECIMAL(25,3)))) AS PPN_IDM FROM mstran A WHERE 
       bukti_tgl RLIKE '{period}' and date(bukti_tgl) != curdate() AND ISTYPE NOT IN('RMB','GGC') AND QTY<>0 
+      AND RTYPE != 'Z'
       GROUP BY tipe,toko,shop,tgl1`,
   },
 
@@ -70,9 +72,9 @@ export default {
   // Parallel processing configuration
   parallelProcessing: {
     // Maximum number of stores to process concurrently
-    concurrencyLimit: 5,
+    concurrencyLimit: 8,
     // Maximum number of branches to process concurrently (for reconcileAllBranches)
-    branchConcurrencyLimit: 3,
+    branchConcurrencyLimit: 2,
     // Timeout for individual store processing (milliseconds)
     storeTimeoutMs: 10000, // 10 seconds - reduced for better timeout testing
     // Timeout for individual query execution (milliseconds)

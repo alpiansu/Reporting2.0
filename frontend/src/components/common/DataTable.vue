@@ -72,7 +72,11 @@
         <div class="table-responsive elegant-shadow">
           <table class="results-table">
             <thead>
-              <tr>
+              <tr v-if="$slots['table-header-group']" class="group-header-row">
+                <th v-if="showRowNumbers" class="group-header-cell"></th>
+                <slot name="table-header-group"></slot>
+              </tr>
+              <tr class="sortable-header-row">
                 <th v-if="showRowNumbers" class="text-center">No</th>
                 <slot
                   name="table-header-sortable"
@@ -586,6 +590,37 @@ watch(
 
 .elegant-shadow:hover {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+}
+
+/* Group Header Row */
+.group-header-row {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+}
+
+.group-header-row th {
+  background: #eef2f7 !important;
+  color: #4b5563;
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  padding: 0.5rem 0.875rem;
+  border-bottom: 2px solid #cbd5e1;
+  text-align: center;
+  position: static;
+  box-shadow: none;
+}
+
+.group-header-row + .sortable-header-row th {
+  top: 32px;
+}
+
+.sortable-header-row th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 /* perhalus efek hover baris tabel */

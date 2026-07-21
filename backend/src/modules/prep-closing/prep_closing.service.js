@@ -307,7 +307,7 @@ class PrepClosingService {
       // 2. Issues Map file (KDTK -> ISSUES) — hanya untuk RECID='*' (unresolved)
       const issuesMap = {};
       for (const r of finalRows) {
-        if (r.RECID === '*' && Array.isArray(r.ISSUES) && r.ISSUES.length > 0) {
+        if (r.RECID === "*" && Array.isArray(r.ISSUES) && r.ISSUES.length > 0) {
           issuesMap[r.KDTK] = r.ISSUES;
         }
       }
@@ -316,7 +316,7 @@ class PrepClosingService {
       // 3. Detail Map file (KDTK -> full record termasuk ISSUES) — hanya untuk RECID='*'
       const detailMap = {};
       for (const r of finalRows) {
-        if (r.RECID !== '*') continue;
+        if (r.RECID !== "*") continue;
         detailMap[r.KDTK] = {
           RECID: r.RECID,
           CAB: r.CAB,
@@ -1193,7 +1193,7 @@ class PrepClosingService {
       const filteredData = this.prepClosingData.filter(filterFn);
       // Calculate statistics
       const uniqueStores = new Set(filteredData.map(item => item.KDTK));
-      const readyStores = filteredData.filter(item => item.IS_READY).length;
+      const readyStores = filteredData.filter(item => item.RECID !== '*').length;
       const criticalIssues = filteredData.reduce((sum, item) => sum + (item.CRITICAL_ISSUES || 0), 0);
 
       return {
@@ -1307,7 +1307,7 @@ class PrepClosingService {
       await storeService.ensureInitialized();
 
       let filtered = this.prepClosingData.filter(
-        i => i.PRD_CLOSING === periode && (cabang === "All" || i.CAB === cabang) && i.IS_READY == false,
+        i => i.PRD_CLOSING === periode && (cabang === "All" || i.CAB === cabang) && i.RECID == "*",
       );
 
       if (Array.isArray(ruleKeys) && ruleKeys.length > 0) {
@@ -1601,7 +1601,7 @@ class PrepClosingService {
       const notesByKey = new Map(notes.filter(n => n.tableName === "screening_praclosing").map(n => [n.unixKey, n]));
 
       const allStores = this.prepClosingData.filter(
-        i => i.PRD_CLOSING === periode && (cabang === "All" || i.CAB === cabang),
+        i => i.PRD_CLOSING === periode && (cabang === "All" || i.CAB === cabang) && i.RECID === '*',
       );
 
       const ruleKeySet = Array.isArray(ruleKeys) && ruleKeys.length > 0 ? new Set(ruleKeys) : null;

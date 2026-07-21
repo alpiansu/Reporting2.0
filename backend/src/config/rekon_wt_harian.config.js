@@ -46,7 +46,7 @@ export default {
       (SELECT kdtk FROM toko) AS shop,DATE(bukti_tgl) AS TGL1, 
       ABS(SUM(CAST(a.GROSS AS DECIMAL(25,0)))) AS GROSS, 
       ABS(SUM(CAST(a.PPn AS DECIMAL(25,7)))) AS PPN, 
-      ABS(SUM(CAST(A.Price_Idm AS DECIMAL(25,3)) * QTY)) AS GROSS_IDM, 
+      ABS(SUM(CAST(A.Price_Idm AS DECIMAL(25,2)) * QTY)) AS GROSS_IDM, 
       ABS(SUM(CAST(A.PPn_Rp_Idm AS DECIMAL(25,3)))) AS PPN_IDM FROM mstran A WHERE 
       bukti_tgl RLIKE '{period}' and date(bukti_tgl) != curdate() AND ISTYPE NOT IN('RMB','GGC') AND QTY<>0 
       GROUP BY tipe,toko,shop,tgl1`,
@@ -78,6 +78,10 @@ export default {
     // Timeout for individual query execution (milliseconds)
     queryTimeoutMs: 8000, // 8 seconds - reduced for better timeout testing
   },
+
+  // Default tolerance amount for difference matching (in IDR)
+  // Stores with all differences <= this value are considered "matched"
+  toleranceAmount: 50,
 
   // Testing configuration
   testing: {

@@ -69,7 +69,8 @@ export function useProgress(options = {}) {
         progress.value = {
           ...response,
           percentage: response?.percentage || 0,
-          current: response?.current || 0,
+          // Backend sends 'completed', frontend expects 'current'
+          current: response?.completed || response?.current || 0,
           total: response?.total || 0,
           status: response?.status || "processing",
           info: response?.info || {},
@@ -159,11 +160,11 @@ export function useProgress(options = {}) {
     sseConnection = progressService.monitorProgress(
       currentTaskId,
       // onUpdate callback
-      progressData => {
-        progress.value = {
+      progressData => {          progress.value = {
           ...progressData,
           percentage: progressData?.percentage || 0,
-          current: progressData?.current || 0,
+          // Backend sends 'completed', frontend expects 'current'
+          current: progressData?.completed || progressData?.current || 0,
           total: progressData?.total || 0,
           status: progressData?.status || "processing",
           info: progressData?.info || {},

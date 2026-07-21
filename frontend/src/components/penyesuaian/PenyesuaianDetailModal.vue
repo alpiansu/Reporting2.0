@@ -38,7 +38,7 @@
         <div v-if="noteSnapshot" class="snapshot-card">
           <div class="snapshot-card-header">
             <i class="pi pi-history"></i>
-            <span>Riwayat Pengecekan Note</span>
+            <span>Riwayat Terakhir Pengecekan</span>
           </div>
           <div class="snapshot-card-body">
             <div class="snapshot-row">
@@ -234,16 +234,15 @@ const noteSnapshot = ref(null)
 const updtimeSekarang = ref('')
 
 watch(() => props.noteSnapshotData, (val) => {
-  if (val) {
-    noteSnapshot.value = val
-  }
+  noteSnapshot.value = val || null
 }, { immediate: true })
 
 // Juga coba parse dari props.sesuai
 watch(() => props.show, (val) => {
-  if (val && !noteSnapshot.value) {
-    // Fallback: parse dari sesuai string (yang sudah diformat)
-    updtimeSekarang.value = new Date().toISOString().replace('T', ' ').substring(0, 19)
+  if (val) {
+    const now = new Date()
+    const pad = n => String(n).padStart(2, '0')
+    updtimeSekarang.value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
   }
 })
 

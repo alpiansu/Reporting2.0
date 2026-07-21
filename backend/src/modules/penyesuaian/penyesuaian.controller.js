@@ -282,9 +282,14 @@ async function getSnapshotSesuai(cabang, kdtk, periode) {
     if (!summary) return null;
 
     const snapshotSesuai = Math.round(Number(summary.SESUAI) || 0);
+    const formatLocal = (d) => {
+      const date = d instanceof Date ? d : new Date(d);
+      const pad = n => String(n).padStart(2, "0");
+      return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    };
     const snapshotUpdtime = summary.UPDTIME
-      ? new Date(summary.UPDTIME).toISOString().replace("T", " ").substring(0, 19)
-      : new Date().toISOString().replace("T", " ").substring(0, 19);
+      ? formatLocal(summary.UPDTIME)
+      : formatLocal(new Date());
 
     return { snapshotSesuai, snapshotUpdtime };
   } catch (err) {

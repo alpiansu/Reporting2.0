@@ -63,6 +63,7 @@
                         <th>KDTK</th>
                         <th>QTY_ADJ</th>
                         <th>KETER</th>
+                        <th>TGL_SELISIH</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -78,6 +79,7 @@
                           <td>{{ row.KDTK }}</td>
                           <td>{{ row.QTY_ADJ }}</td>
                           <td class="keter-cell" :title="row.KETER">{{ truncate(row.KETER, 40) }}</td>
+                          <td :title="row.TGL_SELISIH">{{ row.TGL_SELISIH }}</td>
                         </tr>
                       </template>
                     </tbody>
@@ -110,9 +112,17 @@
           </div>
 
           <div class="field-summary">
-            <div class="summary-item" v-for="h in requiredHeaders" :key="h">
+            <div class="summary-item" v-for="h in requiredHeaders" :key="h" :class="{ 'has-error': fieldErrors[h] > 0 }">
               <div class="summary-label">{{ h }}</div>
-              <div class="summary-value">Kosong: {{ blankCounts[h] || 0 }}</div>
+              <div class="summary-value" v-if="fieldErrors[h] > 0">
+                <span class="error-text"><i class="pi pi-exclamation-triangle"></i> {{ fieldErrors[h] }} error</span>
+              </div>
+              <div class="summary-value" v-else-if="blankCounts[h] > 0">
+                <span class="warn-text">Kosong: {{ blankCounts[h] }}</span>
+              </div>
+              <div class="summary-value" v-else>
+                <span class="ok-text"><i class="pi pi-check-circle"></i> OK</span>
+              </div>
             </div>
           </div>
 
@@ -136,8 +146,9 @@
               currentPageReportTemplate="Showing {first} to {last} of {totalRecords} entries">
               <Column field="KDTK" header="KDTK" />
               <Column field="PRDCD" header="PRDCD" />
-              <Column field="QTY_ADJ" header="QTY_ADJ" />
+              <Column field="QTY_ADJ" header="QTY_ADJ" style="width:100px" />
               <Column field="KETER" header="KETER" />
+              <Column field="TGL_SELISIH" header="TGL_SELISIH" style="width:120px" />
               <template v-if="showAllColumns">
                 <Column v-for="col in extraHeaders" :key="col" :field="col" :header="col" />
               </template>
@@ -155,7 +166,7 @@
             <i class="pi pi-times"></i>
             Batal
           </button>
-          <button type="button" class="btn btn-primary" :disabled="missingHeaders.length > 0 || totalRows === 0 || duplicateGroups.length > 0" :title="duplicateGroups.length > 0 ? 'Terdapat PLU duplikat — perbaiki file CSV terlebih dahulu' : ''" @click="handleConfirm">
+          <button type="button" class="btn btn-primary" :disabled="missingHeaders.length > 0 || totalRows === 0 || duplicateGroups.length > 0 || hasFieldErrors" :title="hasFieldErrors ? 'Terdapat error pada data — perbaiki isi CSV Anda' : duplicateGroups.length > 0 ? 'Terdapat PLU duplikat — perbaiki file CSV terlebih dahulu' : ''" @click="handleConfirm">
             <i class="pi pi-check"></i>
             Setujui & Siap Proses
           </button>
@@ -195,6 +206,21 @@ const blankCounts = computed(() => {
   }
   return counts;
 });
+
+const fieldErrors = computed(() => {
+  const errors = { KDTK: 0, PRDCD: 0, QTY_ADJ: 0, KETER: 0, TGL_SELISIH: 0 };
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  for (const row of props.rows) {
+    if (!row.KDTK || !String(row.KDTK).trim()) errors.KDTK++;
+    if (!row.PRDCD || !String(row.PRDCD).trim()) errors.PRDCD++;
+    if (row.QTY_ADJ === '' || row.QTY_ADJ == null || isNaN(Number(row.QTY_ADJ))) errors.QTY_ADJ++;
+    if (!row.KETER || !String(row.KETER).trim()) errors.KETER++;
+    if (!row.TGL_SELISIH || !dateRegex.test(String(row.TGL_SELISIH).trim())) errors.TGL_SELISIH++;
+  }
+  return errors;
+});
+
+const hasFieldErrors = computed(() => Object.values(fieldErrors.value).some(c => c > 0));
 
 // Detect duplicate entries — each KDTK + PRDCD combination must be unique
 const duplicateGroups = computed(() => {
@@ -288,10 +314,14 @@ const handleConfirm = () => emit('confirm');
 .validation-item.warn { color: #b91c1c; }
 .validation-item.info { color: #0ea5e9; }
 
-.field-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1rem; }
-.summary-item { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 0.75rem; }
+.field-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+.summary-item { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 0.75rem; transition: border-color 0.2s, background 0.2s; }
+.summary-item.has-error { border-color: #fecaca; background: #fff5f5; }
 .summary-label { font-weight: 600; color: #334155; margin-bottom: 0.25rem; }
 .summary-value { color: #475569; }
+.error-text { color: #dc2626; font-weight: 600; display: flex; align-items: center; gap: 0.3rem; }
+.warn-text { color: #d97706; }
+.ok-text { color: #16a34a; display: flex; align-items: center; gap: 0.3rem; }
 
 .table-section { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; }
 .table-header { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid #e2e8f0; }

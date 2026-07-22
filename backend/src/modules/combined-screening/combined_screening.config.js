@@ -56,6 +56,14 @@ export default {
         strYear: ctx.strYear,
       }),
     },
+    {
+      name: "rekon_wt_harian",
+      enabled: true,
+      requiresWrcCache: false,
+      resolveParams: ctx => ({
+        strPeriode: ctx.strPeriode,
+      }),
+    },
   ],
 
   /**
@@ -65,6 +73,16 @@ export default {
     concurrencyLimit: 15, // max stores processed concurrently
     storeTimeoutMs: 180000, // 3 minutes per store (longer because multi-module)
   },
+
+  /**
+   * Schedules: defines which modules run at which time.
+   * Each schedule = 1 cron job. Modules run sequentially per store (1 connection).
+   */
+  schedules: [
+    { time: "06:00", modules: ["rekon_virtual_mrg", "penyesuaian", "prep_closing", "rekon_sales"], enabled: true, description: "Pagi - All Modules" },
+    { time: "12:15", modules: ["rekon_virtual_mrg", "penyesuaian", "prep_closing", "rekon_sales"], enabled: true, description: "Siang - All Modules" },
+    { time: "20:00", modules: ["rekon_wt_harian"], enabled: true, description: "Malam - WT Harian" },
+  ],
 
   /**
    * Progress task name

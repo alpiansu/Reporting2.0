@@ -13,6 +13,7 @@ import storeService from "../store/storeService.js";
 import pLimit from "p-limit";
 import moment from "moment-timezone";
 import mysql from "mysql2/promise";
+import fs from "fs/promises";
 import screeningGuard from "../../utils/screeningGuard.js";
 import progressService from "../progress/progress.service.js";
 import RekapRemoteService from "../rekap_remote/rekap_remote.service.js";
@@ -24,6 +25,7 @@ import penyesuaianService from "../penyesuaian/penyesuaian.service.js";
 import prepClosingService from "../prep-closing/prep_closing.service.js";
 import rekonPersediaanService from "../rekon_persediaan/rekon_persediaan.service.js";
 import rekonSalesService from "../rekon_sales/rekon_sales.service.js";
+import rekonWtHarianService from "../rekon_wt_harian/rekon_wt_harian.service.js";
 import { wrcExtractorService } from "../prep-closing/wrc_extractor.service.js";
 import wrcBulananService from "../../services/wrc.service.js";
 import WrcDataHelper from "../rekon_sales/helpers/wrc.data.helper.js";
@@ -38,7 +40,10 @@ class CombinedScreeningService {
       prep_closing: prepClosingService,
       rekon_persediaan: rekonPersediaanService,
       rekon_sales: rekonSalesService,
+      rekon_wt_harian: rekonWtHarianService,
     };
+    // Step 6: in-memory differences accumulator per cab (reset per screening run)
+    this.wtHarianDifferencesByCab = new Map();
   }
 
   // Helper to persist module screening result to RekapRemoteService
@@ -52,9 +57,12 @@ class CombinedScreeningService {
    * @param {Object} options - { cabang, periode, username, fullName, force }
    */
   async screening(options) {
+    // Reset in-memory accumulator FIRST (before any operation that could throw)
+    this.wtHarianDifferencesByCab = new Map();
+
     await storeService.ensureInitialized();
 
-    const { cabang, periode, username, fullName, force } = options;
+    const { cabang, periode, username, fullName, force, modules: filterModules } = options;
     const taskId = `${config.taskProgressName}_${username}`;
 
     // ── 1. Resolve global context ─────────────────────────────────────────
@@ -67,11 +75,19 @@ class CombinedScreeningService {
     const moduleSuccessTracker = new Map(); // moduleName → Array<{cab, storeCode}>
 
     logger.info(
-      `[combined_screening] Starting combined screening: cabang=${cabang}, periode=${periode}, force=${force}, by=${username}`,
+      `[combined_screening] Starting combined screening: cabang=${cabang}, periode=${periode}, force=${force}, modules=${filterModules ? filterModules.join(",") : "all"}, by=${username}`,
     );
 
-    // ── 2. Pre-load WRC cache (for prep_closing) ─────────────────────────
-    const enabledModules = config.modules.filter(m => m.enabled);
+    // ── 2. Determine enabled modules (filter by modules param if provided) ─
+    let enabledModules = config.modules.filter(m => m.enabled);
+    if (Array.isArray(filterModules) && filterModules.length > 0) {
+      enabledModules = enabledModules.filter(m => filterModules.includes(m.name));
+      logger.info(`[combined_screening] Filtered to ${enabledModules.length} module(s): ${enabledModules.map(m => m.name).join(", ")}`);
+    }
+    if (enabledModules.length === 0) {
+      logger.warn(`[combined_screening] No modules to run — skipping`);
+      return { success: true, message: "No modules enabled for this schedule", processedCount: 0, syncedModules: [] };
+    }
     if (enabledModules.some(m => m.requiresWrcCache)) {
       try {
         await wrcExtractorService.loadCache();
@@ -128,6 +144,31 @@ class CombinedScreeningService {
         } catch (err) {
           logger.warn(`[combined_screening] GL data fetch failed for ${cab}: ${err.message}`);
           glDataByBranch.set(cab, []);
+        }
+      }
+    }
+
+    // WRC data for rekon_wt_harian (per branch)
+    const wrcDataByBranch = new Map();
+    if (enabledModules.some(m => m.name === "rekon_wt_harian")) {
+      for (const cab of branches) {
+        try {
+          logger.info(`[combined_screening] Fetching WRC WT data for branch: ${cab}`);
+          const wrcDataFile = await rekonWtHarianService.getWrcData(cab, strPeriode);
+          if (wrcDataFile) {
+            const wrcDataRaw = await fs.readFile(wrcDataFile, "utf8");
+            const wrcData = JSON.parse(wrcDataRaw);
+            wrcDataByBranch.set(cab, wrcData);
+            logger.info(`[combined_screening] Branch ${cab}: ${wrcData.length} WRC records`);
+            // Clean up temporary WRC file (like reconcileData does)
+            try { await fs.unlink(wrcDataFile); } catch (e) { logger.warn(`[combined_screening] WRC temp file cleanup failed for ${cab}: ${e.message}`); }
+          } else {
+            logger.warn(`[combined_screening] No WRC data file returned for ${cab}`);
+            wrcDataByBranch.set(cab, []);
+          }
+        } catch (err) {
+          logger.warn(`[combined_screening] WRC data fetch failed for ${cab}: ${err.message}`);
+          wrcDataByBranch.set(cab, []);
         }
       }
     }
@@ -252,6 +293,7 @@ class CombinedScreeningService {
                   wrcDataCache,
                   fetchWrcBatch,
                   glDataByBranch,
+                  wrcDataByBranch,
                 }),
                 storeTimeoutMs,
                 `store ${storeCode} exceeded ${storeTimeoutMs / 1000}s timeout`,
@@ -295,6 +337,22 @@ class CombinedScreeningService {
       // Sync JSON files for each enabled module (once after all stores)
       const syncedModules = [];
       if (config.syncAfterAllStores) {
+        // ── Persist rekon_wt_harian differences from memory to DB before sync (Step 6) ──
+        if (enabledModules.some(m => m.name === "rekon_wt_harian")) {
+          logger.info(`[combined_screening] [FINALIZATION] Persisting rekon_wt_harian differences to database...`);
+          for (const cab of branches) {
+            try {
+              const cabMap = this.wtHarianDifferencesByCab.get(cab);
+              await rekonWtHarianService.saveDifferencesToDatabase(cab, strPeriode, null, cabMap || null);
+              logger.info(`[combined_screening] [FINALIZATION]   → ${cab}: differences saved`);
+            } catch (e) {
+              logger.warn(`[combined_screening] [FINALIZATION]   → ${cab}: save failed: ${e.message}`);
+            }
+          }
+          // Clean up accumulator after finalization
+          this.wtHarianDifferencesByCab.clear();
+        }
+
         logger.info(
           `[combined_screening] [FINALIZATION 1/3] Syncing JSON files for ${enabledModules.length} modules...`,
         );
@@ -378,6 +436,9 @@ class CombinedScreeningService {
     } finally {
       progressService.clearProcessingStores(taskId);
 
+      // Clean up in-memory differences accumulator
+      this.wtHarianDifferencesByCab.clear();
+
       // Close all WRC pools
       for (const pool of wrcPools.values()) {
         try {
@@ -394,7 +455,7 @@ class CombinedScreeningService {
    */
   async _processStoreAllModules(store, globalContext, force, enabledModules, branchResources) {
     const { cab, storeCode } = store;
-    const { dates, wrcPools, wrcDataCache, fetchWrcBatch, glDataByBranch } = branchResources;
+    const { dates, wrcPools, wrcDataCache, fetchWrcBatch, glDataByBranch, wrcDataByBranch } = branchResources;
     const moduleResults = {};
 
     // ── Get store info ───────────────────────────────────────────────────
@@ -469,6 +530,7 @@ class CombinedScreeningService {
             dates,
             wrcContext,
             glDataByBranch,
+            wrcDataByBranch,
           });
 
           const moduleElapsed = Date.now() - moduleStart;
@@ -507,7 +569,7 @@ class CombinedScreeningService {
    * Dispatch to the correct module's processSingleStore with shared connection.
    */
   async _executeModuleScreening(moduleConfig, store, globalContext, sharedConnection, resources) {
-    const { dates, wrcContext, glDataByBranch } = resources;
+    const { dates, wrcContext, glDataByBranch, wrcDataByBranch } = resources;
     const { cab } = store;
     const service = this.moduleServiceMap[moduleConfig.name];
 
@@ -564,6 +626,21 @@ class CombinedScreeningService {
           { deferSave: false },
           sharedConnection,
         );
+      }
+
+      case "rekon_wt_harian": {
+        const wrcData = (wrcDataByBranch && wrcDataByBranch.get(cab)) || [];
+        const result = await service.processStore(store, cab, params.strPeriode, wrcData, sharedConnection);
+        // Step 6: accumulate differences in-memory (no temp files)
+        if (result.differences && result.differences.length > 0) {
+          if (!this.wtHarianDifferencesByCab.has(cab)) {
+            this.wtHarianDifferencesByCab.set(cab, new Map());
+          }
+          this.wtHarianDifferencesByCab.get(cab).set(store.storeCode, result.differences);
+        }
+        return {
+          success: !(result.errors && result.errors.length > 0),
+        };
       }
 
       default:

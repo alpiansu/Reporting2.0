@@ -7,6 +7,7 @@ const syncService = new SyncService();
 import syncConfig from "../../config/sync.config.js";
 import logger from "../../config/logger.js";
 import combinedScreeningService from "../combined-screening/combined_screening.service.js";
+import combinedConfig from "../combined-screening/combined_screening.config.js";
 import moment from "moment-timezone";
 
 class CronScheduler {
@@ -88,50 +89,68 @@ class CronScheduler {
    * Schedule combined screening jobs
    * Morning at 06:00 and Afternoon at 12:15
    */
+  /**
+   * Schedule combined screening jobs based on schedules config.
+   * Each schedule = 1 cron job → screening({ modules: schedule.modules }).
+   * Modules run sequentially per store using 1 shared connection.
+   */
   scheduleCombinedScreening() {
-    // Morning schedule: 06:00
-    try {
-      const morningJob = cron.schedule("0 6 * * *", async () => {
-        await this._runCombinedScreening("pagi");
-      });
-      this.jobs.push(morningJob);
-      logger.info("[scheduler] Combined screening morning schedule registered at 06:00");
-    } catch (error) {
-      logger.error(`[scheduler] Failed to register morning combined screening: ${error.message}`);
+    const { schedules } = combinedConfig;
+
+    if (!schedules || !Array.isArray(schedules) || schedules.length === 0) {
+      logger.warn("[scheduler] No combined screening schedules configured");
+      return;
     }
 
-    // Afternoon schedule: 12:15
-    try {
-      const afternoonJob = cron.schedule("15 12 * * *", async () => {
-        await this._runCombinedScreening("siang");
-      });
-      this.jobs.push(afternoonJob);
-      logger.info("[scheduler] Combined screening afternoon schedule registered at 12:15");
-    } catch (error) {
-      logger.error(`[scheduler] Failed to register afternoon combined screening: ${error.message}`);
-    }
+    schedules.filter(s => s.enabled !== false).forEach((schedule) => {
+      const [hour, minute] = schedule.time.split(":");
+      if (hour === undefined || minute === undefined) {
+        logger.warn(`[scheduler] Invalid schedule time: ${schedule.time} — skipping`);
+        return;
+      }
+
+      const cronExp = `${minute} ${hour} * * *`;
+
+      try {
+        const job = cron.schedule(cronExp, async () => {
+          await this._runScheduledScreening(schedule);
+        });
+
+        this.jobs.push(job);
+        logger.info(
+          `[scheduler] Combined screening "${schedule.description || schedule.time}" registered at ${schedule.time} — modules: [${schedule.modules.join(", ")}]`,
+        );
+      } catch (error) {
+        logger.error(`[scheduler] Failed to register schedule "${schedule.description}": ${error.message}`);
+      }
+    });
+
+    const csCount = schedules.filter(s => s.enabled !== false).length;
+    logger.info(`[scheduler] Registered ${csCount} combined screening schedule(s)`);
   }
 
   /**
-   * Run combined screening for a specific session
+   * Run combined screening for a specific schedule
    */
-  async _runCombinedScreening(sesi) {
+  async _runScheduledScreening(schedule) {
     const periode = moment().tz("Asia/Jakarta").format("YYMM");
+    const label = schedule.description || schedule.time;
 
-    logger.info(`[scheduler] Combined screening ${sesi} dimulai, periode: ${periode}`);
+    logger.info(`[scheduler] Combined screening "${label}" dimulai, periode: ${periode}, modules: [${schedule.modules.join(", ")}]`);
 
     try {
       await combinedScreeningService.screening({
         cabang: "All",
         periode,
-        username: `scheduler_${sesi}`,
-        fullName: `Auto Scheduler (${sesi})`,
+        username: `scheduler_${schedule.time.replace(":", "")}`,
+        fullName: `Auto Scheduler (${label})`,
         force: false, // guard remains active on scheduler runs
+        modules: schedule.modules, // only run modules in this schedule
       });
 
-      logger.info(`[scheduler] Combined screening ${sesi} selesai`);
+      logger.info(`[scheduler] Combined screening "${label}" selesai`);
     } catch (error) {
-      logger.error(`[scheduler] Combined screening ${sesi} failed: ${error.message}`);
+      logger.error(`[scheduler] Combined screening "${label}" failed: ${error.message}`);
     }
   }
 

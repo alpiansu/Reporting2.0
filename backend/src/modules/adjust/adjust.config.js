@@ -118,9 +118,9 @@ export default {
     // Maximum number of branches to process concurrently (for reconcileAllBranches)
     branchConcurrencyLimit: 3,
     // Timeout for individual store processing (milliseconds)
-    storeTimeoutMs: 10000, // 10 seconds - reduced for better timeout testing
+    storeTimeoutMs: 40000,
     // Timeout for individual query execution (milliseconds)
-    queryTimeoutMs: 8000, // 8 seconds - reduced for better timeout testing
+    queryTimeoutMs: 30000,
   },
 
   taskProgressName: "adjustmentTask",

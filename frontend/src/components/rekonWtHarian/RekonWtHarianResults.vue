@@ -31,7 +31,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, watch, nextTick } from 'vue';
 import { rekonWtHarianService } from '../../services';
 import RekonSummaryCard from './RekonSummaryCard.vue';
 import RekonWtHarianTable from './RekonWtHarianTable.vue';
@@ -69,10 +69,13 @@ const toleranceAmount = ref(50);
 
 // Methods
 // Ekspos fungsi loadResults ke komponen induk
-const loadResults = async (options = {}) => {
+const loadResults = async (options = {}, preserveScroll = false) => {
   // Hanya memeriksa periode, karena cabang bisa kosong (untuk semua cabang)
   if (!props.periode) return;
-  
+
+  const scrollEl = preserveScroll ? document.querySelector('.table-responsive') : null;
+  const scrollPos = scrollEl ? { left: scrollEl.scrollLeft, top: scrollEl.scrollTop } : null;
+
   loading.value = true;
   error.value = null;
   
@@ -131,6 +134,11 @@ pagination.value = {
     }
   } finally {
     loading.value = false;
+    if (scrollPos && scrollEl) {
+      await nextTick();
+      scrollEl.scrollLeft = scrollPos.left;
+      scrollEl.scrollTop = scrollPos.top;
+    }
   }
 };
 
@@ -149,7 +157,7 @@ const handleRefresh = (data = {}, event) => {
     pagination.value.itemsPerPage = data.itemsPerPage;
   }
   // Pass all parameters to loadResults
-  loadResults(data);
+  loadResults(data, true);
 };
 
 // Handle page change
@@ -174,7 +182,7 @@ const handleSortChange = (data) => {
   // Reset to first page when sorting changes
   pagination.value.currentPage = 1;
   // Load results with new sorting parameters
-  loadResults();
+  loadResults({}, true);
 };
 
 // Handle shop updated event - update specific shop data reactively

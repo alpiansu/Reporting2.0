@@ -1,5 +1,5 @@
 <template>
-  <Dialog v-model:visible="visible" header="Catatan" :modal="true" :style="{ width: '600px' }">
+  <Dialog v-model:visible="visible" :header="dialogHeader" :modal="true" :style="{ width: '600px' }">
     <div class="note-form">
       <div class="meta">
         <div><strong>{{ store?.shop || store?.toko }}</strong> - {{ store?.store_name || store?.namaToko || 'Tidak dikenal' }}</div>
@@ -21,7 +21,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import Textarea from 'primevue/textarea';
@@ -38,6 +38,13 @@ const emit = defineEmits(['update:visible', 'save', 'delete']);
 
 const visible = ref(props.visible);
 const noteText = ref('');
+
+const dialogHeader = computed(() => {
+  if (!props.visible) return 'Catatan';
+  const kode = props.store?.shop || props.store?.toko || '';
+  const nama = props.store?.store_name || props.store?.namaToko || '';
+  return kode ? `Catatan - ${kode}${nama ? ` (${nama})` : ''}` : 'Catatan';
+});
 
 watch(() => props.visible, (v) => { 
   visible.value = v; 

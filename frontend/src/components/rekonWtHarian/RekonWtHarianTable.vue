@@ -119,7 +119,6 @@
           class="btn-note"
           :class="{ 'btn-note-active': item.note, 'btn-note-empty': !item.note }"
           @click="openNoteDialog(item)"
-          :title="item.note ? item.note.noteText : 'Tambah catatan'"
         >
           <span class="note-indicator-group">
             <span v-if="item.note" class="note-dot"></span>

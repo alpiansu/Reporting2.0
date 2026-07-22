@@ -37,11 +37,16 @@ const props = defineProps({
 const emit = defineEmits(['update:visible', 'save', 'delete']);
 
 const visible = ref(props.visible);
-const noteText = ref(props.defaultText);
+const noteText = ref('');
 
-watch(() => props.visible, (v) => { visible.value = v; });
+watch(() => props.visible, (v) => { 
+  visible.value = v; 
+  if (v) {
+    noteText.value = props.defaultText ?? '';
+  }
+});
 watch(visible, (v) => emit('update:visible', v));
-watch(() => props.defaultText, (v) => { noteText.value = v ?? ''; }, { immediate: true });
+watch(() => props.defaultText, (v) => { noteText.value = v ?? ''; });
 
 const onSave = () => emit('save', { text: noteText.value });
 const onDelete = () => emit('delete');

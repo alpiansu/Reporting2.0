@@ -473,8 +473,11 @@ const updateShopDataReactive = async (cab, shop) => {
       );
     }
   } catch (error) {
-    // Fallback to full refresh if reactive update fails
-    emit('refresh');
+    toast.showError(
+      'Refresh Gagal',
+      'Gagal memperbarui data toko. Silakan coba lagi nanti.',
+      3000
+    );
   }
 };
 
@@ -655,7 +658,7 @@ const openNoteDialog = (item) => {
   noteDialogVisible.value = true;
 };
 
-const handleSaveNote = async ({ text }) => {
+  const handleSaveNote = async ({ text }) => {
   noteSaving.value = true;
   try {
     await rekonWtHarianService.updateNote({
@@ -666,7 +669,13 @@ const handleSaveNote = async ({ text }) => {
     });
     toast.showSuccess('Berhasil', 'Catatan berhasil disimpan');
     noteDialogVisible.value = false;
-    emit('refresh');
+    if (selectedNoteStore.value) {
+      selectedNoteStore.value.note = {
+        noteText: text,
+        fullName: selectedNoteStore.value.note?.fullName || null,
+        updatedAt: new Date().toISOString()
+      };
+    }
   } catch (err) {
     toast.showError('Gagal', err.response?.data?.message || 'Gagal menyimpan catatan');
   } finally {
@@ -685,7 +694,9 @@ const handleDeleteNote = async () => {
     });
     toast.showSuccess('Berhasil', 'Catatan berhasil dihapus');
     noteDialogVisible.value = false;
-    emit('refresh');
+    if (selectedNoteStore.value) {
+      selectedNoteStore.value.note = null;
+    }
   } catch (err) {
     toast.showError('Gagal', err.response?.data?.message || 'Gagal menghapus catatan');
   } finally {

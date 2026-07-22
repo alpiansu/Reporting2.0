@@ -16,6 +16,7 @@ import screeningGuard from "../../utils/screeningGuard.js";
 import RekapRemoteService from "../rekap_remote/rekap_remote.service.js";
 import RekapRemoteStagingService from "../rekap_remote/rekap_remote_staging.service.js";
 import notesService from "../notes/notes.service.js";
+import { runXcmd, buildDthrFilename } from "../../utils/xcmd.utils.js";
 
 // Path untuk file JSON rekon_wt_harian
 const REKON_WT_HARIAN_JSON_PATH = path.join(process.cwd(), "data/rekon_wt_harian.json");
@@ -724,6 +725,51 @@ class RekonWtHarianService {
     return wrcUtils.getWrcData(cab, period, tableType, config.queries.wrc);
   }
 
+  async _handleZeroWrcPush(cab, storeCode, period, storeWrcData) {
+    const XCMD_WORKING_DIR = process.env.XCMD_WORKING_DIR;
+    const XCMD_TIMEOUT_MS = parseInt(process.env.XCMD_TIMEOUT_MS, 10) || 60_000;
+    const XCMD_RETRY_WAIT_MS = 15_000;
+
+    if (!XCMD_WORKING_DIR) {
+      logger.warn(`[rekon_wt_harian] [${storeCode}] XCMD_WORKING_DIR not configured, skipping xcmd retry`);
+      return null;
+    }
+
+    const dates = [...new Set(storeWrcData.map(item => item.TGL1).filter(Boolean))];
+
+    for (const tgl1 of dates) {
+      try {
+        const fileName = buildDthrFilename({ kdtk: storeCode, tglTransaksi: tgl1 });
+        await runXcmd(["PUSHDTHR", cab, "WRC", fileName], {
+          cwd: XCMD_WORKING_DIR,
+          timeoutMs: XCMD_TIMEOUT_MS,
+        });
+        logger.info(`[rekon_wt_harian] [${storeCode}] xcmd pushdthr success for ${tgl1}: ${fileName}`);
+      } catch (err) {
+        logger.error(`[rekon_wt_harian] [${storeCode}] xcmd pushdthr failed for ${tgl1}: ${err.message}`);
+      }
+    }
+
+    await new Promise(resolve => setTimeout(resolve, XCMD_RETRY_WAIT_MS));
+
+    try {
+      const refreshedData = await wrcUtils.getWrcData(cab, period, "wt", config.queries.wrc, [storeCode]);
+      if (refreshedData) {
+        const raw = await fs.readFile(refreshedData, "utf8");
+        const refreshed = JSON.parse(raw);
+        const refreshedFiltered = refreshed.filter(item => item.shop === storeCode);
+
+        try { await fs.unlink(refreshedData); } catch {}
+
+        return refreshedFiltered;
+      }
+    } catch (err) {
+      logger.error(`[rekon_wt_harian] [${storeCode}] Re-fetch WRC data failed: ${err.message}`);
+    }
+
+    return null;
+  }
+
   /**
    * Process a list of stores with wave-based retry (reusable, no progress coupling)
    * Pure screening logic — caller manages progress via onStoreProcessed callback.
@@ -1313,7 +1359,7 @@ class RekonWtHarianService {
     }
 
     // Filter WRC data for this store
-    const storeWrcData = wrcData.filter(item => item.shop === storeCode);
+    let storeWrcData = wrcData.filter(item => item.shop === storeCode);
 
     // Compare data
     if (storeWrcData.length === 0) {
@@ -1324,6 +1370,19 @@ class RekonWtHarianService {
         differences: [],
         errors: [],
       };
+    }
+
+    if (storeWrcData.every(item =>
+      Number(item.GROSS || 0) === 0 &&
+      Number(item.PPN || 0) === 0 &&
+      Number(item.GROSS_IDM || 0) === 0 &&
+      Number(item.PPN_IDM || 0) === 0
+    )) {
+      logger.info(`[${storeCode}] All WRC values are zero, running xcmd pushdthr...`);
+      const refreshedFiltered = await this._handleZeroWrcPush(cab, storeCode, period, storeWrcData);
+      if (refreshedFiltered) {
+        storeWrcData = refreshedFiltered;
+      }
     }
 
     logger.debug(`[${storeCode}] Comparing ${storeWrcData.length} WRC records with ${storeData.length} store records`);

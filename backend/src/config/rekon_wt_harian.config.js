@@ -24,7 +24,7 @@ export default {
       TOKO, shop, date(TGL1) as TGL1, 
       ABS(SUM(CAST(GROSS AS DECIMAL(25,0)))) AS GROSS, 
       ABS(SUM(CAST(PPn AS DECIMAL(25,7)))) AS PPN, 
-      ABS(SUM(CAST(Price_Idm AS DECIMAL(25,3)) * QTY)) AS GROSS_IDM, 
+      ABS(SUM(CAST(Price_Idm AS DECIMAL(25,2)) * QTY)) AS GROSS_IDM, 
       ABS(SUM(CAST(PPnRp_Idm AS DECIMAL(25,3)))) AS PPN_IDM FROM wt_{date} 
       WHERE RTYPE != 'Z'
       GROUP BY tipe,toko,shop,date(tgl1)`,

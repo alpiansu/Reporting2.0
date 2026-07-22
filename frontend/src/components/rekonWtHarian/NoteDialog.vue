@@ -2,7 +2,7 @@
   <Dialog v-model:visible="visible" header="Catatan" :modal="true" :style="{ width: '600px' }">
     <div class="note-form">
       <div class="meta">
-        <div><strong>{{ store?.toko }}</strong> - {{ store?.namaToko }}</div>
+        <div><strong>{{ store?.shop || store?.toko }}</strong> - {{ store?.store_name || store?.namaToko || 'Tidak dikenal' }}</div>
       </div>
       <Textarea v-model="noteText" rows="6" class="w-full" placeholder="Tulis catatan..." />
       <div class="controls">

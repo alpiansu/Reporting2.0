@@ -41,12 +41,18 @@ export default {
    * Get summary of reconciliation results
    * @param {String} cab - Branch code (empty string for all branches)
    * @param {String} periode - Period in YYMM format
+   * @param {Object} [options] - Additional options
+   * @param {Number} [options.toleranceAmount] - Tolerance in IDR
    * @returns {Promise}
    */
-  getSummary(cab, periode) {
+  getSummary(cab, periode, options = {}) {
     // Jika cab kosong, gunakan 'SEMUA' sebagai nilai default
     const cabParam = cab || "SEMUA";
-    return api.get(`/rekon-wt-harian/summary/${cabParam}/${periode}`);
+    const params = {};
+    if (options.toleranceAmount) {
+      params.toleranceAmount = options.toleranceAmount;
+    }
+    return api.get(`/rekon-wt-harian/summary/${cabParam}/${periode}`, { params });
   },
 
   /**
@@ -61,6 +67,8 @@ export default {
     const cabParam = cab || "All";
     return api.get(`/rekon-wt-harian/daily-summary/${periode}/${cabParam}`, { params });
   },
+
+
 
   /**
    * Get detailed reconciliation results for specific shop

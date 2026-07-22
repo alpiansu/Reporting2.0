@@ -1,7 +1,14 @@
 <template>
   <div class="results-container">
     <!-- Summary Card -->
-    <RekonSummaryCard v-if="summary && !loading && !error" :summary="summary" :periode="periode" :cab="cab" />
+    <RekonSummaryCard
+      v-if="summary && !loading && !error"
+      :summary="summary"
+      :periode="periode"
+      :cab="cab"
+      :loading="loading"
+      :tolerance-amount="toleranceAmount"
+    />
 
     <!-- Table Component -->
     <RekonWtHarianTable 
@@ -57,6 +64,8 @@ const pagination = ref({
 });
 const sortColumn = ref(null);
 const sortOrder = ref('asc');
+// Default tolerance from backend config is 50
+const toleranceAmount = ref(50);
 
 // Methods
 // Ekspos fungsi loadResults ke komponen induk
@@ -87,6 +96,9 @@ const loadResults = async (options = {}) => {
       params.sortOrder = sortOrder.value;
     }
     
+    // Add toleranceAmount to query params for table filtering
+    params.toleranceAmount = toleranceAmount.value;
+
     // Load results using getDailyShopSummary
 const resultsResponse = await rekonWtHarianService.getDailyShopSummary(
   props.cab, 
@@ -104,10 +116,11 @@ pagination.value = {
   itemsPerPage: resultsResponse.data.limit || pagination.value.itemsPerPage
 };
     
-    // Load summary
+    // Load summary dengan toleranceAmount
     const summaryResponse = await rekonWtHarianService.getSummary(
       props.cab, 
-      props.periode
+      props.periode,
+      { toleranceAmount: toleranceAmount.value }
     );
     summary.value = summaryResponse.data.data;
   } catch (err) {
@@ -190,7 +203,8 @@ const handleShopUpdated = async (data) => {
   try {
     const summaryResponse = await rekonWtHarianService.getSummary(
       props.cab, 
-      props.periode
+      props.periode,
+      { toleranceAmount: toleranceAmount.value }
     );
     summary.value = summaryResponse.data.data;
   } catch (error) {
@@ -224,7 +238,8 @@ const handleShopRemoved = async (data) => {
   try {
     const summaryResponse = await rekonWtHarianService.getSummary(
       props.cab, 
-      props.periode
+      props.periode,
+      { toleranceAmount: toleranceAmount.value }
     );
     summary.value = summaryResponse.data.data;
   } catch (error) {

@@ -27,6 +27,17 @@
       </div>
     </template>
 
+    <!-- Group Header Row -->
+    <template #table-header-group>
+      <th colspan="3" class="group-label">Info Toko</th>
+      <th colspan="4" class="group-label group-selisih">Selisih (WRC &#8722; Toko)</th>
+      <th class="group-label group-rec">Jumlah</th>
+      <th class="group-label group-time">Waktu</th>
+      <th class="group-label group-status">Status</th>
+      <th class="group-label group-note">Catatan</th>
+      <th class="group-label group-action">Aksi</th>
+    </template>
+
     <!-- Table Header with Sorting -->
     <template #table-header-sortable="{ sortColumn, sortOrder, handleSort }">
       <th class="sortable" :class="{ 'sort-asc': sortColumn === 'cab' && sortOrder === 'asc', 'sort-desc': sortColumn === 'cab' && sortOrder === 'desc' }" @click="handleSort('cab')">
@@ -37,35 +48,39 @@
         Shop
         <i v-if="sortColumn === 'shop'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
       </th>
+      <th class="sortable" :class="{ 'sort-asc': sortColumn === 'store_name' && sortOrder === 'asc', 'sort-desc': sortColumn === 'store_name' && sortOrder === 'desc' }" @click="handleSort('store_name')">
+        Nama Toko
+        <i v-if="sortColumn === 'store_name'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
+      </th>
       <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'sum_sel_gross' && sortOrder === 'asc', 'sort-desc': sortColumn === 'sum_sel_gross' && sortOrder === 'desc' }" @click="handleSort('sum_sel_gross')">
-        Total Selisih Gross
+        Sel. Gross
         <i v-if="sortColumn === 'sum_sel_gross'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
       </th>
       <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'sum_sel_ppn' && sortOrder === 'asc', 'sort-desc': sortColumn === 'sum_sel_ppn' && sortOrder === 'desc' }" @click="handleSort('sum_sel_ppn')">
-        Total Selisih PPN
+        Sel. PPN
         <i v-if="sortColumn === 'sum_sel_ppn'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
       </th>
       <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'sum_sel_gross_idm' && sortOrder === 'asc', 'sort-desc': sortColumn === 'sum_sel_gross_idm' && sortOrder === 'desc' }" @click="handleSort('sum_sel_gross_idm')">
-        Total Selisih Gross IDM
+        Sel. Gross IDM
         <i v-if="sortColumn === 'sum_sel_gross_idm'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
       </th>
       <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'sum_sel_ppn_idm' && sortOrder === 'asc', 'sort-desc': sortColumn === 'sum_sel_ppn_idm' && sortOrder === 'desc' }" @click="handleSort('sum_sel_ppn_idm')">
-        Total Selisih PPN IDM
+        Sel. PPN IDM
         <i v-if="sortColumn === 'sum_sel_ppn_idm'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
       </th>
       <th class="text-right sortable" :class="{ 'sort-asc': sortColumn === 'record_count' && sortOrder === 'asc', 'sort-desc': sortColumn === 'record_count' && sortOrder === 'desc' }" @click="handleSort('record_count')">
-        Jumlah Record
+        Record
         <i v-if="sortColumn === 'record_count'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
       </th>
       <th class="sortable" :class="{ 'sort-asc': sortColumn === 'updtime' && sortOrder === 'asc', 'sort-desc': sortColumn === 'updtime' && sortOrder === 'desc' }" @click="handleSort('updtime')">
-        Update Time
+        Update
         <i v-if="sortColumn === 'updtime'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
       </th>
       <th class="text-center sortable" :class="{ 'sort-asc': sortColumn === 'status' && sortOrder === 'asc', 'sort-desc': sortColumn === 'status' && sortOrder === 'desc' }" @click="handleSort('status')">
         Status
         <i v-if="sortColumn === 'status'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
       </th>
-      <th>Catatan</th>
+      <th class="text-center">Catatan</th>
       <th class="text-center">Aksi</th>
     </template>
 
@@ -73,6 +88,7 @@
     <template #table-row="{ item }">
       <td>{{ item.cab }}</td>
       <td>{{ item.shop }}</td>
+      <td class="store-name-cell" :title="item.store_name">{{ item.store_name || '-' }}</td>
       <td class="text-right" :class="getAmountClass(item.sum_sel_gross)">
         {{ formatCurrency(item.sum_sel_gross) }}
       </td>
@@ -98,17 +114,39 @@
           {{ getStatusText(item.status) }}
         </span>
       </td>
-      <td>
+      <td class="note-cell">
         <button
           class="btn-note"
-          :class="{ 'btn-note-active': item.note }"
+          :class="{ 'btn-note-active': item.note, 'btn-note-empty': !item.note }"
           @click="openNoteDialog(item)"
           :title="item.note ? item.note.noteText : 'Tambah catatan'"
         >
-          <i class="pi" :class="item.note ? 'pi-comment' : 'pi-comment'"></i>
-          <span v-if="item.note" class="note-text">{{ item.note.noteText }}</span>
-          <span v-else class="note-text note-empty">-</span>
+          <span class="note-indicator-group">
+            <span v-if="item.note" class="note-dot"></span>
+            <span v-else class="note-dot note-dot-empty"></span>
+            <i class="pi" :class="item.note ? 'pi-comment-fill' : 'pi-comment'"></i>
+          </span>
+          <span v-if="item.note" class="note-text">{{ truncateNote(item.note.noteText, 22) }}</span>
+          <span v-else class="note-text note-empty">Tambah</span>
         </button>
+        <!-- Note preview tooltip on hover (only for rows with notes) -->
+        <div v-if="item.note" class="note-preview">
+          <div class="note-preview-header">
+            <i class="pi pi-comment-fill"></i>
+            <span>Catatan</span>
+          </div>
+          <p class="note-preview-text">{{ item.note.noteText }}</p>
+          <div class="note-preview-meta">
+            <span v-if="item.note.fullName || item.note.pic" class="note-preview-pic">
+              <i class="pi pi-user"></i>
+              {{ item.note.fullName || item.note.pic }}
+            </span>
+            <span v-if="item.note.updatedAt" class="note-preview-date">
+              <i class="pi pi-clock"></i>
+              {{ formatDateTime(item.note.updatedAt) }}
+            </span>
+          </div>
+        </div>
       </td>
       <td class="text-center">
         <div class="action-buttons">
@@ -445,8 +483,9 @@ const getRowClass = (item) => {
   const shopKey = `${item.cab}_${item.shop}`;
   const baseClass = hasDifference(item) ? 'has-diff' : '';
   const highlightClass = highlightedShops.value.has(shopKey) ? 'row-updated' : '';
+  const noteClass = item.note ? 'has-note' : '';
   
-  return [baseClass, highlightClass].filter(Boolean).join(' ');
+  return [baseClass, highlightClass, noteClass].filter(Boolean).join(' ');
 };
 
 const hasDifference = (item) => {
@@ -497,6 +536,13 @@ const formatDateTime = (dateTimeString) => {
   } catch (error) {
     return dateTimeString;
   }
+};
+
+// Truncate note text for display
+const truncateNote = (text, maxLength = 30) => {
+  if (!text) return '';
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + '...';
 };
 
 // Get class for amount display

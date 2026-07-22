@@ -35,7 +35,12 @@ const rekonWtHarianController = {
 // Start reconciliation process
 // POST /api/rekon-wt-harian
 // Access: Private (Admin/Manager only)
-router.post("/", authenticateJWT, authorizeRole(["admin", "manager"]), rekonWtHarianController.startReconciliation);
+router.post(
+  "/",
+  authenticateJWT,
+  authorizeRole(["admin", "manager", "superadmin"]),
+  rekonWtHarianController.startReconciliation,
+);
 
 // Start reconciliation process for specific shop
 // POST /api/rekon-wt-harian/refresh-shop/:periode/:cab/:toko
@@ -43,8 +48,8 @@ router.post("/", authenticateJWT, authorizeRole(["admin", "manager"]), rekonWtHa
 router.post(
   "/refresh-shop/:periode/:cab/:toko",
   authenticateJWT,
-  authorizeRole(["admin", "manager"]),
-  rekonWtHarianController.refreshShopReconciliation
+  authorizeRole(["admin", "manager", "superadmin"]),
+  rekonWtHarianController.refreshShopReconciliation,
 );
 
 // Update or create note for a store
@@ -53,8 +58,8 @@ router.post(
 router.put(
   "/note",
   authenticateJWT,
-  authorizeRole(["admin", "manager"]),
-  rekonWtHarianController.updateNote
+  authorizeRole(["admin", "manager", "superadmin"]),
+  rekonWtHarianController.updateNote,
 );
 
 // Get reconciliation progress
@@ -89,7 +94,7 @@ router.delete(
   "/:cab/:periode",
   authenticateJWT,
   authorizeRole(["admin", "superadmin"]),
-  rekonWtHarianController.deleteResults
+  rekonWtHarianController.deleteResults,
 );
 
 // Clean up temporary difference files
@@ -99,7 +104,7 @@ router.post(
   "/cleanup-temp-files",
   authenticateJWT,
   authorizeRole(["admin", "superadmin"]),
-  rekonWtHarianController.cleanupTempFiles
+  rekonWtHarianController.cleanupTempFiles,
 );
 
 // Invalidate cache manually
@@ -109,7 +114,7 @@ router.post(
   "/invalidate-cache",
   authenticateJWT,
   authorizeRole(["admin", "superadmin"]),
-  rekonWtHarianController.invalidateCache
+  rekonWtHarianController.invalidateCache,
 );
 
 // SSE endpoint has been moved to /api/progress/sse/:progressId

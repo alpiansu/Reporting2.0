@@ -15,6 +15,7 @@ import wrcUtils from "../../utils/wrc.utils.js";
 import screeningGuard from "../../utils/screeningGuard.js";
 import RekapRemoteService from "../rekap_remote/rekap_remote.service.js";
 import RekapRemoteStagingService from "../rekap_remote/rekap_remote_staging.service.js";
+import notesService from "../notes/notes.service.js";
 
 // Path untuk file JSON rekon_wt_harian
 const REKON_WT_HARIAN_JSON_PATH = path.join(process.cwd(), "data/rekon_wt_harian.json");
@@ -654,8 +655,12 @@ class RekonWtHarianService {
         logger.error(`Error saving rekap_remote logs: ${error.message}`);
       }
 
-      // Save differences to database for this specific shop
-      await this.saveDifferencesToDatabase(cab, period, toko);
+      // Save differences to database for this specific shop (in-memory, no temp files)
+      const singleStoreMap = new Map();
+      if (result.differences && result.differences.length > 0) {
+        singleStoreMap.set(toko, result.differences);
+      }
+      await this.saveDifferencesToDatabase(cab, period, null, singleStoreMap);
       await this.syncToJsonFile();
 
       // Clean up temporary WRC data file
@@ -720,7 +725,223 @@ class RekonWtHarianService {
   }
 
   /**
-   * Get store data and compare with WRC data
+   * Process a list of stores with wave-based retry (reusable, no progress coupling)
+   * Pure screening logic — caller manages progress via onStoreProcessed callback.
+   * @param {Array} stores - Array of store objects to process
+   * @param {string} cab - Branch code
+   * @param {string} period - Period in YYMM format
+   * @param {Array} wrcData - WRC data for the branch
+   * @param {Function} onStoreProcessed - Callback invoked after each store is processed
+   * @param {Object} [options] - Additional options
+   * @param {number} [options.concurrencyLimit] - Max concurrent stores (default from config)
+   * @param {number} [options.maxWaves] - Max retry waves (default 3)
+   * @param {boolean} [options.force] - Force re-screening even if already screened today
+   * @param {string} [options.progressId] - Progress ID for abort checking only
+   * @returns {Promise<Object>} Processing results
+   */
+  async processStoreList(stores, cab, period, wrcData, onStoreProcessed, options = {}) {
+    const {
+      concurrencyLimit = config.parallelProcessing?.concurrencyLimit || 5,
+      maxWaves = 3,
+      force = false,
+      progressId = null, // Only for abort checking, NOT for progress updates
+    } = options;
+
+    const results = {
+      success: true,
+      totalStores: stores.length,
+      processedStores: 0,
+      storesWithDifferences: 0,
+      totalDifferences: 0,
+      details: [],
+      waves: [], // Track wave processing
+      differencesMap: new Map(), // Step 6: storeCode → differences[] (in-memory, no temp files)
+    };
+
+    logger.info(`Starting wave-based processing of ${stores.length} stores with ${maxWaves} waves max`);
+    const totalStartTime = Date.now();
+
+    // Process stores in waves, retrying timeout stores
+    let currentStores = stores.slice(); // Copy of all stores
+    let wave = 1;
+
+    while (wave <= maxWaves && currentStores.length > 0) {
+      logger.info(`\n🌊 Starting Wave ${wave} with ${currentStores.length} stores...`);
+      const waveStartTime = Date.now();
+
+      // Process current wave of stores (onStoreProcessed fires real-time per store inside processStoreWave)
+      const waveResults = await this.processStoreWave(currentStores, cab, period, wrcData, concurrencyLimit, wave, force, progressId, onStoreProcessed);
+
+      const waveEndTime = Date.now();
+      const waveDuration = (waveEndTime - waveStartTime) / 1000;
+
+      // Process wave results
+      const timeoutStores = [];
+      const completedStores = [];
+      const storeErrors = [];
+
+      for (const result of waveResults) {
+        if (result.status === "fulfilled" && result.value) {
+          const storeResult = result.value;
+
+          // Handle skipped stores (screening guard) — progress already reported via real-time callback
+          if (storeResult.skipped) {
+            results.processedStores++;
+            logger.info(`[Wave ${wave}] ${storeResult.storeCode}: Skipped — ${storeResult.skipReason}`);
+            continue;
+          }
+
+          // Check if store timed out - be more specific about timeout detection
+          const isTimeout =
+            storeResult.errors &&
+            storeResult.errors.some(
+              error =>
+                error.includes("Processing timeout after") ||
+                error.includes("Query timeout") ||
+                error.toLowerCase().includes("timeout")
+            );
+
+          logger.debug(
+            `[Wave ${wave}] ${storeResult.storeCode}: isTimeout=${isTimeout}, errors=${JSON.stringify(storeResult.errors)}`
+          );
+
+          if (isTimeout && wave < maxWaves) {
+            // Store timed out, add to retry list
+            const store = currentStores.find(s => s.storeCode === storeResult.storeCode);
+            if (store) {
+              timeoutStores.push(store);
+              const msg = `[Wave ${wave}] ${storeResult.storeCode} timeout - will retry in next wave`;
+              logger.warn(`${msg}`);
+              await RekapRemoteService.addToTemp(cab, storeResult.storeCode, "rekon_wt_harian", `${msg}`);
+            }
+          } else {
+            // Collect non-timeout errors
+            if (storeResult.errors && storeResult.errors.length > 0 && !isTimeout) {
+              storeErrors.push({
+                store: storeResult.storeCode,
+                storeName: storeResult.storeName,
+                errors: storeResult.errors,
+              });
+            } else {
+              // Store completed (successfully or permanently failed)
+              completedStores.push(storeResult);
+              results.processedStores++;
+
+              // Report progress for finalized stores WITH errors (not reported in .then())
+              // Only for permanent timeout (last wave), NOT for connection errors
+              if (onStoreProcessed && storeResult.errors && storeResult.errors.length > 0) {
+                // Clear errors so callback counts this as finalized (no more retries)
+                onStoreProcessed({ ...storeResult, errors: [] }, cab);
+              }
+            }
+
+            // Count successful differences
+            logger.debug(
+              `[Wave ${wave}] ${storeResult.storeCode}: differences found = ${
+                storeResult.differences ? storeResult.differences.length : "undefined"
+              }`
+            );
+
+            if (storeResult.differences && storeResult.differences.length > 0) {
+              results.storesWithDifferences += 1;
+              results.totalDifferences += storeResult.differences.length;
+              results.details.push({
+                store: storeResult.storeCode,
+                storeName: storeResult.storeName,
+                differences: storeResult.differences.length,
+              });
+              // Step 6: accumulate full differences in memory (no temp files)
+              results.differencesMap.set(storeResult.storeCode, storeResult.differences);
+              logger.info(
+                `[Wave ${wave}] ${storeResult.storeCode}: Added ${storeResult.differences.length} differences. Total: ${results.totalDifferences}, Stores with differences: ${results.storesWithDifferences}`
+              );
+            } else {
+              logger.debug(`[Wave ${wave}] ${storeResult.storeCode}: No differences found`);
+            }
+          }
+        } else if (result.status === "rejected") {
+          logger.error(`Unexpected store processing rejection: ${result.reason}`);
+          storeErrors.push({
+            store: "unknown",
+            storeName: "unknown",
+            errors: [`Unexpected error: ${result.reason}`],
+          });
+        }
+      }
+
+      // Save wave results
+      results.waves.push({
+        wave: wave,
+        duration: waveDuration,
+        attempted: currentStores.length,
+        completed: completedStores.length,
+        timeouts: timeoutStores.length,
+        errors: storeErrors.length,
+      });
+
+      logger.info(
+        `🌊 Wave ${wave} completed in ${waveDuration}s: ${completedStores.length} completed, ${timeoutStores.length} timeouts, ${storeErrors.length} errors`
+      );
+
+      if (timeoutStores.length > 0) {
+        logger.info(`⚠️ Timeout stores in wave ${wave}: ${timeoutStores.map(s => s.storeCode).join(", ")}`);
+      }
+
+      // Prepare for next wave with timeout stores
+      currentStores = timeoutStores;
+      wave++;
+
+      // Add brief delay between waves to let resources recover
+      if (currentStores.length > 0) {
+        logger.info(`⏳ Waiting 2 seconds before next wave... (${currentStores.length} stores will be retried)`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
+
+    // Handle any remaining timeout stores after max waves
+    if (currentStores.length > 0) {
+      logger.warn(`⚠️ ${currentStores.length} stores still timeout after ${maxWaves} waves, marking as failed`);
+      const failedStores = currentStores.map(store => ({
+        store: store.storeCode,
+        storeName: store.storeName,
+        errors: [`Failed after ${maxWaves} waves - persistent timeout`],
+      }));
+
+      // Log permanently failed stores to rekap_remote
+      for (const store of currentStores) {
+        await RekapRemoteService.addToTemp(
+          cab,
+          store.storeCode,
+          "rekon_wt_harian",
+          "failure",
+          `Failed after ${maxWaves} waves - persistent timeout`
+        );
+      }
+
+      if (!results.storeErrors) results.storeErrors = [];
+      results.storeErrors.push(...failedStores);
+    }
+
+    const totalEndTime = Date.now();
+    const totalDuration = (totalEndTime - totalStartTime) / 1000;
+
+    logger.info(
+      `\n🎯 All waves completed in ${totalDuration}s: ${results.processedStores}/${results.totalStores} stores processed`
+    );
+
+    // Add timestamp and summary to results
+    results.timestamp = new Date().toISOString();
+    results.branch = cab;
+    results.period = period;
+    results.totalDuration = totalDuration;
+
+    return results;
+  }
+
+  /**
+   * Get store data and compare with WRC data (wrapper that calls processStoreList)
+   * Manages progress for pre/post phases only (fetching, saving, syncing).
+   * Per-store progress is handled by the onStoreProcessed callback from the caller.
    * @param {string} cab - Branch code
    * @param {string} period - Period in YYMM format
    * @param {string} progressId - Progress ID for tracking reconciliation progress
@@ -770,228 +991,18 @@ class RekonWtHarianService {
       );
       logger.info(`Updated recid to '1' and updtime for all existing records in ${cab} for period ${period}`);
 
-      // Get store connection and data for each store
-      const results = {
-        success: true,
-        totalStores: branchStores.length,
-        processedStores: 0,
-        storesWithDifferences: 0,
-        totalDifferences: 0,
-        details: [],
-        waves: [], // Track wave processing
-      };
+      // Delegate wave-based processing to reusable processStoreList
+      const results = await this.processStoreList(branchStores, cab, period, wrcData, onStoreProcessed, {
+        progressId, // Only for abort checking
+        force,
+      });
 
-      // WAVE-BASED PROCESSING with retry for timeouts
-      const MAX_WAVES = 3;
-      const CONCURRENCY_LIMIT = config.parallelProcessing?.concurrencyLimit || 5;
-
-      logger.info(`Starting wave-based processing of ${branchStores.length} stores with ${MAX_WAVES} waves max`);
-      const totalStartTime = Date.now();
-
-      // Process stores in waves, retrying timeout stores
-      let currentStores = branchStores.slice(); // Copy of all stores
-      let wave = 1;
-
-      while (wave <= MAX_WAVES && currentStores.length > 0) {
-        logger.info(`\n🌊 Starting Wave ${wave} with ${currentStores.length} stores...`);
-        const waveStartTime = Date.now();
-
-        // Update progress with wave information
-        if (progressId) {
-          progressService.updateProgress(progressId, branchStores.length - currentStores.length, {
-            description: `🌊 Wave ${wave}: Memproses ${currentStores.length} toko...`,
-            status: "screening_stores",
-            currentWave: wave,
-            cab: cab,
-            period: period,
-          });
-        }
-
-        // Process current wave of stores
-        const waveResults = await this.processStoreWave(currentStores, cab, period, wrcData, CONCURRENCY_LIMIT, wave, force, progressId);
-
-        const waveEndTime = Date.now();
-        const waveDuration = (waveEndTime - waveStartTime) / 1000;
-
-        // Process wave results
-        const timeoutStores = [];
-        const completedStores = [];
-        const storeErrors = [];
-
-        for (const result of waveResults) {
-          if (result.status === "fulfilled" && result.value) {
-            const storeResult = result.value;
-
-            // Handle skipped stores (screening guard)
-            if (storeResult.skipped) {
-              results.processedStores++;
-              if (onStoreProcessed) {
-                onStoreProcessed(storeResult, cab);
-              }
-              logger.info(`[Wave ${wave}] ${storeResult.storeCode}: Skipped — ${storeResult.skipReason}`);
-              continue;
-            }
-
-            // Check if store timed out - be more specific about timeout detection
-            const isTimeout =
-              storeResult.errors &&
-              storeResult.errors.some(
-                error =>
-                  error.includes("Processing timeout after") ||
-                  error.includes("Query timeout") ||
-                  error.toLowerCase().includes("timeout")
-              );
-
-            logger.debug(
-              `[Wave ${wave}] ${storeResult.storeCode}: isTimeout=${isTimeout}, errors=${JSON.stringify(
-                storeResult.errors
-              )}`
-            );
-
-            if (isTimeout && wave < MAX_WAVES) {
-              // Store timed out, add to retry list
-              const store = currentStores.find(s => s.storeCode === storeResult.storeCode);
-              if (store) {
-                timeoutStores.push(store);
-                const msg = `[Wave ${wave}] ${storeResult.storeCode} timeout - will retry in next wave`;
-                logger.warn(`${msg}`);
-                await RekapRemoteService.addToTemp(cab, storeResult.storeCode, "rekon_wt_harian", `${msg}`);
-              }
-            } else {
-              // Collect non-timeout errors
-              if (storeResult.errors && storeResult.errors.length > 0 && !isTimeout) {
-                storeErrors.push({
-                  store: storeResult.storeCode,
-                  storeName: storeResult.storeName,
-                  errors: storeResult.errors,
-                });
-              } else {
-                // Store completed (successfully or permanently failed)
-                completedStores.push(storeResult);
-                results.processedStores++;
-              }
-
-              if (onStoreProcessed) {
-                onStoreProcessed(storeResult, cab);
-              }
-
-              // Count successful differences
-              logger.debug(
-                `[Wave ${wave}] ${storeResult.storeCode}: differences found = ${
-                  storeResult.differences ? storeResult.differences.length : "undefined"
-                }`
-              );
-
-              if (storeResult.differences && storeResult.differences.length > 0) {
-                results.storesWithDifferences += 1;
-                results.totalDifferences += storeResult.differences.length;
-                results.details.push({
-                  store: storeResult.storeCode,
-                  storeName: storeResult.storeName,
-                  differences: storeResult.differences.length,
-                });
-                logger.info(
-                  `[Wave ${wave}] ${storeResult.storeCode}: Added ${storeResult.differences.length} differences. Total: ${results.totalDifferences}, Stores with differences: ${results.storesWithDifferences}`
-                );
-              } else {
-                logger.debug(`[Wave ${wave}] ${storeResult.storeCode}: No differences found`);
-              }
-            }
-          } else if (result.status === "rejected") {
-            logger.error(`Unexpected store processing rejection: ${result.reason}`);
-            storeErrors.push({
-              store: "unknown",
-              storeName: "unknown",
-              errors: [`Unexpected error: ${result.reason}`],
-            });
-          }
-        }
-
-        // Save wave results
-        results.waves.push({
-          wave: wave,
-          duration: waveDuration,
-          attempted: currentStores.length,
-          completed: completedStores.length,
-          timeouts: timeoutStores.length,
-          errors: storeErrors.length,
-        });
-
-        logger.info(
-          `🌊 Wave ${wave} completed in ${waveDuration}s: ${completedStores.length} completed, ${timeoutStores.length} timeouts, ${storeErrors.length} errors`
-        );
-
-        if (timeoutStores.length > 0) {
-          logger.info(`⚠️ Timeout stores in wave ${wave}: ${timeoutStores.map(s => s.storeCode).join(", ")}`);
-        }
-
-        // Update progress after each wave
-        if (onStoreProcessed) {
-          onStoreProcessed({ errors: [], storeCode: `wave-${wave}-complete` }, cab);
-        }
-
-        progressService.updateProgress(progressId, results.processedStores, {
-          description: `✅ Wave ${wave} selesai: ${completedStores.length} berhasil, ${timeoutStores.length} timeout`,
-          status: "screening_stores",
-          currentWave: wave,
-          totalDifferences: results.totalDifferences,
-          storesWithDifferences: results.storesWithDifferences,
-        });
-
-        // Prepare for next wave with timeout stores
-        currentStores = timeoutStores;
-        wave++;
-
-        // Add brief delay between waves to let resources recover
-        if (currentStores.length > 0) {
-          logger.info(`⏳ Waiting 2 seconds before next wave... (${currentStores.length} stores will be retried)`);
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-      }
-
-      // Handle any remaining timeout stores after max waves
-      if (currentStores.length > 0) {
-        logger.warn(`⚠️ ${currentStores.length} stores still timeout after ${MAX_WAVES} waves, marking as failed`);
-        const failedStores = currentStores.map(store => ({
-          store: store.storeCode,
-          storeName: store.storeName,
-          errors: [`Failed after ${MAX_WAVES} waves - persistent timeout`],
-        }));
-
-        // Log permanently failed stores to rekap_remote
-        for (const store of currentStores) {
-          await RekapRemoteService.addToTemp(
-            cab,
-            store.storeCode,
-            "rekon_wt_harian",
-            "failure",
-            `Failed after ${MAX_WAVES} waves - persistent timeout`
-          );
-        }
-
-        if (!results.storeErrors) results.storeErrors = [];
-        results.storeErrors.push(...failedStores);
-      }
-
-      const totalEndTime = Date.now();
-      const totalDuration = (totalEndTime - totalStartTime) / 1000;
-
-      logger.info(
-        `\n🎯 All waves completed in ${totalDuration}s: ${results.processedStores}/${results.totalStores} stores processed`
-      );
-
-      // Clean up temporary file
+      // Clean up temporary WRC file
       try {
         await fs.unlink(wrcDataFile);
       } catch (error) {
         logger.warn(`Error deleting temporary file ${wrcDataFile}: ${error.message}`);
       }
-
-      // Add timestamp and summary to results
-      results.timestamp = new Date().toISOString();
-      results.branch = cab;
-      results.period = period;
-      results.totalDuration = totalDuration;
 
       // Phase: Saving to database
       if (progressId) {
@@ -1004,7 +1015,7 @@ class RekonWtHarianService {
       // Save differences to database
       try {
         logger.info(`Saving differences to database for branch ${cab} and period ${period}`);
-        const saveResult = await this.saveDifferencesToDatabase(cab, period);
+        const saveResult = await this.saveDifferencesToDatabase(cab, period, null, results.differencesMap);
         logger.info(`Save result: ${JSON.stringify(saveResult)}`);
 
         // Add save result to results
@@ -1051,7 +1062,7 @@ class RekonWtHarianService {
    * @param {number} waveNumber - Current wave number for logging
    * @returns {Promise<Array>} Promise.allSettled results
    */
-  async processStoreWave(stores, cab, period, wrcData, concurrencyLimit, waveNumber, force = false, progressId = null) {
+  async processStoreWave(stores, cab, period, wrcData, concurrencyLimit, waveNumber, force = false, progressId = null, onStoreProcessed = null) {
     // Use a semaphore-like approach to control concurrency
     const processConcurrentStores = async (stores, limit) => {
       const results = [];
@@ -1063,6 +1074,11 @@ class RekonWtHarianService {
         }
         const promise = this.processStoreWithTimeout(store, cab, period, wrcData, waveNumber, force, progressId).then(result => {
           executing.splice(executing.indexOf(promise), 1);
+          // Report progress REAL-TIME: only for stores WITHOUT errors (success, skip)
+          // Timeout & error stores wait for post-wave loop (retry vs permanent failure)
+          if (onStoreProcessed && result && (!result.errors || result.errors.length === 0)) {
+            onStoreProcessed(result, cab);
+          }
           return result;
         }).finally(() => {
           if (progressId) {
@@ -1186,7 +1202,7 @@ class RekonWtHarianService {
    * @param {Array} wrcData - WRC data for the branch
    * @returns {Promise<Object>} Store processing result
    */
-  async processStore(store, cab, period, wrcData) {
+  async processStore(store, cab, period, wrcData, sharedConnection = null) {
     const storeCode = store.storeCode;
     const storeInfo = {
       dbHost: store.dbHost,
@@ -1205,15 +1221,20 @@ class RekonWtHarianService {
         logger.warn(`[${storeCode}] ${connectionError}`);
         await RekapRemoteService.addToTemp(cab, storeCode, "rekon_wt_harian", `${connectionError}`);
       } else {
-        // Try connect to store database
-        const storeConnection = await dbStore.createDbStore(storeInfo.dbHost, 2);
+        // Try connect to store database (use shared connection if provided)
+        const storeConnection = sharedConnection || await dbStore.createDbStore(storeInfo.dbHost, 2);
         if (storeConnection) {
           try {
             // Get store data with timeout
             const storeQuery = this.getStoreQuery(period);
             logger.debug(`[${storeCode}] Executing query...`);
             const queryTimeout = config.parallelProcessing?.queryTimeoutMs || 15000;
-            const queryPromise = storeConnection.query(storeQuery);
+            const queryPromise = storeConnection.query(storeQuery).catch(err => {
+              // Suppress unhandled rejection when pool is closed before query completes
+              // (e.g. timeoutPromise wins the race, pool.end() runs in finally,
+              //  leaving the original query hanging with nowhere to go)
+              logger.warn(`[${storeCode}] Query promise rejected after timeout/close: ${err.message}`);
+            });
 
             const timeoutPromise = new Promise((_, reject) => {
               setTimeout(() => reject(new Error("Query timeout")), queryTimeout);
@@ -1241,8 +1262,8 @@ class RekonWtHarianService {
               logger.error(`[${storeCode}] Error saving store data to JSON: ${err.message}`);
             }
           } finally {
-            // Properly close connection pool
-            if (storeConnection) {
+            // Properly close connection pool (only if we opened it)
+            if (!sharedConnection && storeConnection) {
               try {
                 if (storeConnection.end) {
                   await storeConnection.end();
@@ -1266,7 +1287,7 @@ class RekonWtHarianService {
       await RekapRemoteService.addToTemp(cab, storeCode, "rekon_wt_harian", `${connectionError}`);
     }
 
-    // Jika koneksi gagal, coba baca file JSON lokal
+    // Jika koneksi gagal, coba baca file JSON lokal (sebagai cadangan)
     if (storeData.length === 0 && connectionError) {
       try {
         const fileContent = await fs.readFile(storeJsonFile, "utf8");
@@ -1276,6 +1297,19 @@ class RekonWtHarianService {
         logger.warn(`[${storeCode}] No local store JSON file found: ${storeJsonFile}`);
         storeData = [];
       }
+    }
+
+    // Jika koneksi gagal, JANGAN lanjutkan comparation
+    // Agar data lama di database tidak ter-overwrite oleh selisih palsu
+    // (wrc ada data, toko offline → pasti dianggap selisih, padahal belum tentu)
+    if (connectionError) {
+      logger.info(`[${storeCode}] Connection error — skipping comparison, preserving existing DB state`);
+      return {
+        storeCode,
+        storeName: storeInfo.storeName,
+        differences: [],
+        errors: [connectionError],
+      };
     }
 
     // Filter WRC data for this store
@@ -1288,7 +1322,7 @@ class RekonWtHarianService {
         storeCode,
         storeName: storeInfo.storeName,
         differences: [],
-        errors: connectionError ? [connectionError] : [],
+        errors: [],
       };
     }
 
@@ -1299,7 +1333,7 @@ class RekonWtHarianService {
       storeCode,
       storeName: storeInfo.storeName,
       differences,
-      errors: connectionError ? [connectionError] : [],
+      errors: [],
     };
   }
 
@@ -1310,9 +1344,18 @@ class RekonWtHarianService {
    * @param {string} toko - Store code (optional, filters to specific shop)
    * @returns {Promise<Object>} Result of database save operation
    */
-  async saveDifferencesToDatabase(cab, period, toko = null) {
+  async saveDifferencesToDatabase(cab, period, toko = null, differencesMap = null) {
+    // Step 6: If differencesMap provided, process in-memory (no temp file I/O)
+    const isMemoryMode = differencesMap instanceof Map && differencesMap.size > 0;
+    const label = toko ? `shop ${toko} in ${cab}` : `${cab}`;
+
+    if (isMemoryMode) {
+      logger.info(`Saving differences for ${label} ${period} from in-memory Map (${differencesMap.size} stores)`);
+      return await this._saveFromMemoryMap(cab, period, differencesMap, label);
+    }
+
+    // Fallback: scan temp files (backward compat for callers that still use files)
     try {
-      const label = toko ? `shop ${toko} in ${cab}` : `${cab}`;
       logger.info(`Saving differences for ${label} ${period} from temporary files to database`);
 
       const tempDir = os.tmpdir();
@@ -1335,8 +1378,15 @@ class RekonWtHarianService {
       let totalSaved = 0;
       let totalErrors = 0;
 
-      for (const file of differenceFiles) {
-        try {
+      // Step 4+5: Raw INSERT ... ON DUPLICATE KEY UPDATE dalam 1 transaction
+      const model = await RekonWtHarian.getModel();
+      const sequelize = model.sequelize;
+      let transaction = null;
+      const savedFilePaths = []; // Temp files to clean up after commit
+
+      try {
+        transaction = await sequelize.transaction();
+        for (const file of differenceFiles) {
           const filePath = path.join(tempDir, file);
           const fileContent = await fs.readFile(filePath, "utf8");
           const differences = JSON.parse(fileContent);
@@ -1348,69 +1398,81 @@ class RekonWtHarianService {
           totalDifferences += differences.length;
           logger.info(`Processing ${differences.length} differences from ${file}`);
 
-          const BATCH_SIZE = 300;
+          const BATCH_SIZE = 1000;
           for (let i = 0; i < differences.length; i += BATCH_SIZE) {
             const batch = differences.slice(i, i + BATCH_SIZE);
-            try {
-              batch.forEach(difference => {
-                difference.recid = "*";
-                difference.updtime = new Date().toISOString().slice(0, 19).replace("T", " ");
-              });
 
-              await RekonWtHarian.bulkCreate(batch, {
-                updateOnDuplicate: [
-                  "gross_wrc",
-                  "ppn_wrc",
-                  "gross_idm_wrc",
-                  "ppn_idm_wrc",
-                  "gross_store",
-                  "ppn_store",
-                  "gross_idm_store",
-                  "ppn_idm_store",
-                  "selisih_gross",
-                  "selisih_ppn",
-                  "selisih_gross_idm",
-                  "selisih_ppn_idm",
-                  "recid",
-                  "updtime",
-                ],
-                returning: false,
-                ignoreDuplicates: false,
-              });
+            // Build raw INSERT ... ON DUPLICATE KEY UPDATE
+            const columns = [
+              "cab", "periode", "tipe", "toko", "shop", "tgl1",
+              "gross_wrc", "ppn_wrc", "gross_idm_wrc", "ppn_idm_wrc",
+              "gross_store", "ppn_store", "gross_idm_store", "ppn_idm_store",
+              "selisih_gross", "selisih_ppn", "selisih_gross_idm", "selisih_ppn_idm",
+              "recid", "addtime", "updtime",
+            ];
+            const updateColumns = columns.filter(
+              c => !["cab", "periode", "tipe", "toko", "shop", "tgl1", "addtime"].includes(c)
+            );
 
-              totalSaved += batch.length;
-              logger.info(
-                `Bulk upsert completed: ${batch.length} records in batch ${Math.floor(i / BATCH_SIZE) + 1}`
-              );
-            } catch (error) {
-              logger.error(`Error in bulk upsert batch ${Math.floor(i / BATCH_SIZE) + 1}: ${error.message}`);
-              totalErrors += batch.length;
+            const placeholders = batch
+              .map(() => `(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`)
+              .join(", ");
 
-              let fallbackSaved = 0;
-              for (const difference of batch) {
-                try {
-                  await RekonWtHarian.upsert(difference);
-                  fallbackSaved++;
-                } catch (fallbackError) {
-                  logger.error(`Fallback upsert failed: ${fallbackError.message}`);
-                }
-              }
+            const values = batch.flatMap(d => [
+              d.cab, d.periode, d.tipe, d.toko, d.shop, d.tgl1,
+              d.gross_wrc || 0, d.ppn_wrc || 0, d.gross_idm_wrc || 0, d.ppn_idm_wrc || 0,
+              d.gross_store || 0, d.ppn_store || 0, d.gross_idm_store || 0, d.ppn_idm_store || 0,
+              d.selisih_gross || 0, d.selisih_ppn || 0, d.selisih_gross_idm || 0, d.selisih_ppn_idm || 0,
+              "*",
+            ]);
 
-              if (fallbackSaved > 0) {
-                totalSaved += fallbackSaved;
-                totalErrors -= fallbackSaved;
-              }
-            }
+            const updateSet = updateColumns.map(c => `${c} = VALUES(${c})`).join(", ");
+
+            await sequelize.query(
+              `INSERT INTO rekon_wt_harian (${columns.join(", ")})
+               VALUES ${placeholders}
+               ON DUPLICATE KEY UPDATE ${updateSet}`,
+              { replacements: values, transaction }
+            );
+
+            totalSaved += batch.length;
           }
 
-          await this.syncToJsonFile();
-
-          await fs.unlink(filePath);
-          logger.info(`Deleted temporary file ${file}`);
-        } catch (error) {
-          logger.error(`Error processing file ${file}: ${error.message}`);
+          savedFilePaths.push(filePath); // Hapus file setelah commit sukses
+          logger.info(`Processed ${differences.length} differences from ${file}`);
         }
+
+        await transaction.commit();
+        logger.info(`Transaction committed for ${label}: ${totalSaved} records saved`);
+
+        // Clean up temp files only after successful commit
+        for (const fp of savedFilePaths) {
+          try {
+            await fs.unlink(fp);
+            logger.info(`Deleted temporary file ${path.basename(fp)}`);
+          } catch (e) {
+            logger.warn(`Error deleting temp file ${fp}: ${e.message}`);
+          }
+        }
+      } catch (error) {
+        if (transaction) {
+          await transaction.rollback();
+        }
+        totalErrors = totalDifferences - totalSaved;
+        logger.error(`Transaction rolled back for ${label}: ${error.message}`);
+
+        return {
+          success: false,
+          message: `Transaction failed: ${error.message}`,
+          error: error.message,
+          savedCount: 0,
+          errorCount: totalErrors,
+          totalCount: totalDifferences,
+        };
       }
+
+      // Sync JSON file ONCE after all files are processed (was inside loop = N+1 calls)
+      await this.syncToJsonFile();
 
       logger.info(`Completed saving differences for ${label}: ${totalSaved} saved, ${totalErrors} errors out of ${totalDifferences}`);
 
@@ -1429,6 +1491,111 @@ class RekonWtHarianService {
         error: error.message,
       };
     }
+  }
+
+  /**
+   * Save differences from in-memory Map directly to DB (Step 6 — no temp file I/O)
+   * @param {string} cab - Branch code
+   * @param {string} period - Period in YYMM format
+   * @param {Map<string, Array>} differencesMap - storeCode → differences[]
+   * @param {string} label - Logging label
+   * @returns {Promise<Object>} Result object
+   */
+  async _saveFromMemoryMap(cab, period, differencesMap, label) {
+    const model = await RekonWtHarian.getModel();
+    const sequelize = model.sequelize;
+    let transaction = null;
+
+    try {
+      transaction = await sequelize.transaction();
+
+      let totalSaved = 0;
+      let totalDifferences = 0;
+
+      // Count total differences across all stores
+      for (const [, differences] of differencesMap) {
+        totalDifferences += differences.length;
+      }
+
+      // Step 6: Flush per-store (avoid large batchAccumulator that doubles memory)
+      const BATCH_SIZE = 1000;
+      for (const [, differences] of differencesMap) {
+        for (let i = 0; i < differences.length; i += BATCH_SIZE) {
+          const batch = differences.slice(i, i + BATCH_SIZE);
+          await this._batchInsertRaw(sequelize, batch, transaction);
+          totalSaved += batch.length;
+        }
+      }
+
+      await transaction.commit();
+      logger.info(`Transaction committed for ${label}: ${totalSaved} differences saved (in-memory mode)`);
+
+      // Sync JSON file after commit
+      await this.syncToJsonFile();
+
+      logger.info(`Completed saving differences for ${label}: ${totalSaved} saved out of ${totalDifferences}`);
+
+      return {
+        success: true,
+        message: `Saved ${totalSaved} differences for ${label}`,
+        savedCount: totalSaved,
+        errorCount: 0,
+        totalCount: totalDifferences,
+      };
+    } catch (error) {
+      if (transaction) {
+        await transaction.rollback();
+      }
+      logger.error(`Transaction rolled back for ${label} (in-memory): ${error.message}`);
+      return {
+        success: false,
+        message: `Transaction failed: ${error.message}`,
+        error: error.message,
+        savedCount: 0,
+        errorCount: 0,
+        totalCount: 0,
+      };
+    }
+  }
+
+  /**
+   * Execute a single batch INSERT ... ON DUPLICATE KEY UPDATE
+   * @param {Object} sequelize - Sequelize instance
+   * @param {Array} batch - Array of difference records
+   * @param {Object} transaction - Sequelize transaction
+   */
+  async _batchInsertRaw(sequelize, batch, transaction) {
+    const columns = [
+      "cab", "periode", "tipe", "toko", "shop", "tgl1",
+      "gross_wrc", "ppn_wrc", "gross_idm_wrc", "ppn_idm_wrc",
+      "gross_store", "ppn_store", "gross_idm_store", "ppn_idm_store",
+      "selisih_gross", "selisih_ppn", "selisih_gross_idm", "selisih_ppn_idm",
+      "recid", "addtime", "updtime",
+    ];
+    const updateColumns = columns.filter(
+      c => !["cab", "periode", "tipe", "toko", "shop", "tgl1", "addtime"].includes(c)
+    );
+
+    const placeholders = batch
+      .map(() => `(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`)
+      .join(", ");
+
+    const values = batch.flatMap(d => [
+      d.cab, d.periode, d.tipe, d.toko, d.shop, d.tgl1,
+      d.gross_wrc || 0, d.ppn_wrc || 0, d.gross_idm_wrc || 0, d.ppn_idm_wrc || 0,
+      d.gross_store || 0, d.ppn_store || 0, d.gross_idm_store || 0, d.ppn_idm_store || 0,
+      d.selisih_gross || 0, d.selisih_ppn || 0, d.selisih_gross_idm || 0, d.selisih_ppn_idm || 0,
+      "*",
+    ]);
+
+    const updateSet = updateColumns.map(c => `${c} = VALUES(${c})`).join(", ");
+
+    await sequelize.query(
+      `INSERT INTO rekon_wt_harian (${columns.join(", ")})
+       VALUES ${placeholders}
+       ON DUPLICATE KEY UPDATE ${updateSet}`,
+      { replacements: values, transaction }
+    );
   }
 
   /**
@@ -1621,32 +1788,101 @@ class RekonWtHarianService {
   }
 
   /**
+   * Helper: count how many distinct shops have differences exceeding tolerance
+   * @param {Array} filteredData - Data filtered by period + recid, still at transaction level
+
+
+  /**
    * Get summary of reconciliation results for all branches
+   * Sama dengan logika getDailyShopSummary: group by shop, aggregated sum, filter tolerance.
    * @param {string} period - Period in YYMM format
+   * @param {number} [toleranceAmount] - Tolerance in IDR (default from config)
    * @returns {Promise<Object>} Summary of reconciliation results for all branches
    */
-  async getAllCabangSummary(period) {
+  async getAllCabangSummary(period, toleranceAmount) {
     try {
-      // Ensure data is loaded with TTL-based lazy loading
       await this.ensureDataLoaded();
 
-      // Filter data for the specified period and only show data with recid '*' (still has differences)
+      const tol = toleranceAmount ?? config.toleranceAmount ?? 50;
+
+      // Filter: recid '*' + periode (all branches)
       const filteredData = this.rekonData.filter(item => item.periode === period && item.recid === "*");
 
-      // Use helper function to calculate main summary statistics
+      // Group by shop (aggregated sum) — persis seperti getDailyShopSummary
+      const summaryMap = new Map();
+      for (const item of filteredData) {
+        const key = `${item.cab}-${item.shop}`;
+        if (!summaryMap.has(key)) {
+          summaryMap.set(key, {
+            shop: item.shop,
+            cab: item.cab,
+            sum_sel_gross: 0,
+            sum_sel_ppn: 0,
+            sum_sel_gross_idm: 0,
+            sum_sel_ppn_idm: 0,
+          });
+        }
+        const agg = summaryMap.get(key);
+        agg.sum_sel_gross += parseFloat(item.selisih_gross || 0);
+        agg.sum_sel_ppn += parseFloat(item.selisih_ppn || 0);
+        agg.sum_sel_gross_idm += parseFloat(item.selisih_gross_idm || 0);
+        agg.sum_sel_ppn_idm += parseFloat(item.selisih_ppn_idm || 0);
+      }
+
+      const aggregatedShops = Array.from(summaryMap.values());
+
+      // Hitung total_stores dari data INDUK storeService (m_toko),
+      // bukan dari aggregatedShops (yang hanya berisi toko dengan selisih).
+      await storeService.ensureInitialized();
+      const total_stores = storeService.stores.filter(s => s.notes === "INDUK").length;
+
+      // Terapkan tolerance filter dengan logika SAMA persis seperti getDailyShopSummary
+      let diffList;
+      if (tol && tol > 0) {
+        diffList = aggregatedShops.filter(item => {
+          const absGross = Math.abs(item.sum_sel_gross);
+          const absPpn = Math.abs(item.sum_sel_ppn);
+          const absGrossIdm = Math.abs(item.sum_sel_gross_idm);
+          const absPpnIdm = Math.abs(item.sum_sel_ppn_idm);
+          return absGross > tol || absPpn > tol || absGrossIdm > tol || absPpnIdm > tol;
+        });
+      } else {
+        diffList = [...aggregatedShops];
+      }
+      const storesWithDiff = diffList.length;
+
+      // Kurangi toko yang sudah di-note (sudah di-follow up)
+      // Note unixKey = `${shop}${periode}`, tableName = "rekon_wt_harian"
+      let storesToFollowUp = storesWithDiff;
+      try {
+        const allNotes = await notesService.getAll();
+        const periodNotes = new Set();
+        for (const note of allNotes) {
+          if (note.tableName === "rekon_wt_harian" && note.unixKey && note.unixKey.endsWith(period)) {
+            periodNotes.add(note.unixKey.slice(0, -period.length));
+          }
+        }
+        const notedInDiff = diffList.filter(item => periodNotes.has(item.shop)).length;
+        storesToFollowUp = Math.max(0, storesWithDiff - notedInDiff);
+      } catch (noteError) {
+        logger.warn(`Error fetching notes for summary: ${noteError.message}`);
+      }
+
+      // Gunakan helper yang sudah ada untuk statistik utama
       const mainSummary = this._calculateSummaryStats(filteredData);
-
-      // Use helper function to calculate type statistics
       const typeStats = this._calculateGroupStats(filteredData, "tipe");
-
-      // Use helper function to calculate branch statistics
       const branchStats = this._calculateGroupStats(filteredData, "cab");
 
-      // Combine the main summary with additional stats
       const summary = {
         ...mainSummary,
         typeStats,
         branchStats,
+        total_stores,
+        stores_with_diff: storesWithDiff,
+        stores_to_follow_up: storesToFollowUp,
+        stores_matched: Math.max(0, total_stores - storesWithDiff),
+        toleranceAmount: tol,
+        jml_toko: storesToFollowUp,
       };
 
       return summary;
@@ -1658,22 +1894,95 @@ class RekonWtHarianService {
 
   /**
    * Get summary of reconciliation results
+   * Sama dengan logika getDailyShopSummary: group by shop, aggregated sum, filter tolerance.
    * @param {string} cab - Branch code
    * @param {string} period - Period in YYMM format
+   * @param {number} [toleranceAmount] - Tolerance in IDR (default from config)
    * @returns {Promise<Object>} Summary of reconciliation results
    */
-  async getSummary(cab, period) {
+  async getSummary(cab, period, toleranceAmount) {
     try {
-      // Ensure data is loaded with TTL-based lazy loading
       await this.ensureDataLoaded();
 
-      // Filter data for the specified cab and period, only show data with recid '*' (still has differences)
+      const tol = toleranceAmount ?? config.toleranceAmount ?? 50;
+
+      // Filter: recid '*' + periode + cabang
       const filteredData = this.rekonData.filter(
         item => item.cab === cab && item.periode === period && item.recid === "*"
       );
 
-      // Use helper function to calculate summary statistics
-      const summary = this._calculateSummaryStats(filteredData);
+      // Group by shop (aggregated sum) — persis seperti getDailyShopSummary
+      const summaryMap = new Map();
+      for (const item of filteredData) {
+        const key = item.shop;
+        if (!summaryMap.has(key)) {
+          summaryMap.set(key, {
+            shop: item.shop,
+            sum_sel_gross: 0,
+            sum_sel_ppn: 0,
+            sum_sel_gross_idm: 0,
+            sum_sel_ppn_idm: 0,
+          });
+        }
+        const agg = summaryMap.get(key);
+        agg.sum_sel_gross += parseFloat(item.selisih_gross || 0);
+        agg.sum_sel_ppn += parseFloat(item.selisih_ppn || 0);
+        agg.sum_sel_gross_idm += parseFloat(item.selisih_gross_idm || 0);
+        agg.sum_sel_ppn_idm += parseFloat(item.selisih_ppn_idm || 0);
+      }
+
+      const aggregatedShops = Array.from(summaryMap.values());
+
+      // Hitung total_stores dari data INDUK storeService (m_toko) untuk cabang ini,
+      // bukan dari aggregatedShops (yang hanya berisi toko dengan selisih).
+      await storeService.ensureInitialized();
+      const branchStores = await storeService.getStoresByBranch(cab, true);
+      const total_stores = branchStores.length;
+
+      // Terapkan tolerance filter dengan logika SAMA persis seperti getDailyShopSummary
+      let diffList;
+      if (tol && tol > 0) {
+        diffList = aggregatedShops.filter(item => {
+          const absGross = Math.abs(item.sum_sel_gross);
+          const absPpn = Math.abs(item.sum_sel_ppn);
+          const absGrossIdm = Math.abs(item.sum_sel_gross_idm);
+          const absPpnIdm = Math.abs(item.sum_sel_ppn_idm);
+          return absGross > tol || absPpn > tol || absGrossIdm > tol || absPpnIdm > tol;
+        });
+      } else {
+        diffList = [...aggregatedShops];
+      }
+      const storesWithDiff = diffList.length;
+
+      // Kurangi toko yang sudah di-note (sudah di-follow up)
+      // Note unixKey = `${shop}${periode}`, tableName = "rekon_wt_harian"
+      let storesToFollowUp = storesWithDiff;
+      try {
+        const allNotes = await notesService.getAll();
+        const periodNotes = new Set();
+        for (const note of allNotes) {
+          if (note.tableName === "rekon_wt_harian" && note.unixKey && note.unixKey.endsWith(period)) {
+            periodNotes.add(note.unixKey.slice(0, -period.length));
+          }
+        }
+        const notedInDiff = diffList.filter(item => periodNotes.has(item.shop)).length;
+        storesToFollowUp = Math.max(0, storesWithDiff - notedInDiff);
+      } catch (noteError) {
+        logger.warn(`Error fetching notes for summary: ${noteError.message}`);
+      }
+
+      // Gunakan helper yang sudah ada untuk statistik utama
+      const mainSummary = this._calculateSummaryStats(filteredData);
+
+      const summary = {
+        ...mainSummary,
+        total_stores,
+        stores_with_diff: storesWithDiff,
+        stores_to_follow_up: storesToFollowUp,
+        stores_matched: Math.max(0, total_stores - storesWithDiff),
+        toleranceAmount: tol,
+        jml_toko: storesToFollowUp,
+      };
 
       return summary;
     } catch (error) {
@@ -1697,19 +2006,6 @@ class RekonWtHarianService {
       // Buat struktur data untuk mempercepat lookup
       const wrcMap = new Map();
       const storeMap = new Map();
-
-      // Buat path untuk file temporary
-      const tempDir = os.tmpdir();
-      const tempFile = path.join(tempDir, `differences_wtharian_${cab}_${period}_${storeCode}_${Date.now()}.json`);
-
-      // Ensure temp directory exists
-      try {
-        await fs.mkdir(tempDir, { recursive: true });
-      } catch (error) {
-        if (error.code !== "EEXIST") {
-          throw error;
-        }
-      }
 
       // Normalisasi data WRC dan simpan ke Map
       const taskWrc = wrcData.map(async item => {
@@ -1810,21 +2106,11 @@ class RekonWtHarianService {
         }
       }
 
-      // Simpan semua perbedaan ke file temporary jika ada
+      // Step 6: No more temp file I/O — differences kept in memory
+      // (accumulated at processStoreList level, passed directly to saveDifferencesToDatabase)
+
       if (differences.length > 0) {
-        logger.info(`Saving ${differences.length} differences of ${storeCode} to temporary file`);
-
-        try {
-          // Simpan ke file temporary
-          await fs.writeFile(tempFile, JSON.stringify(differences));
-
-          logger.info(`[${storeCode}] Saved ${differences.length} differences to temporary file`);
-
-          return differences;
-        } catch (error) {
-          logger.error(`[${storeCode}] Error saving differences to temporary file: ${error.message}`);
-          throw error;
-        }
+        logger.info(`[${storeCode}] Found ${differences.length} differences (in-memory)`);
       } else {
         logger.info(`No significant differences found from ${storeCode}`);
       }
@@ -1907,6 +2193,7 @@ class RekonWtHarianService {
         searchQuery,
         sortColumn = "tgl1",
         sortOrder = "asc",
+        toleranceAmount,
       } = options;
 
       // Ensure limit doesn't exceed maximum
@@ -1953,6 +2240,15 @@ class RekonWtHarianService {
         return true;
       });
 
+      // Build store name lookup for enrichment
+      await storeService.ensureInitialized();
+      const storeNameMap = new Map();
+      for (const s of storeService.stores) {
+        if (s.storeCode) {
+          storeNameMap.set(s.storeCode, s.storeName || s.storeCode);
+        }
+      }
+
       // Group data by cab, tanggal, shop untuk membuat summary
       const summaryMap = new Map();
 
@@ -1964,6 +2260,7 @@ class RekonWtHarianService {
           summaryMap.set(key, {
             cab: item.cab,
             shop: item.shop,
+            store_name: storeNameMap.get(item.shop) || item.shop,
             sum_sel_gross: 0,
             sum_sel_ppn: 0,
             sum_sel_gross_idm: 0,
@@ -1990,6 +2287,19 @@ class RekonWtHarianService {
 
       // Convert Map to Array
       let summaryData = Array.from(summaryMap.values());
+
+      // Apply tolerance filter: remove shops where all aggregated differences <= toleranceAmount
+      if (toleranceAmount && toleranceAmount > 0) {
+        const tol = toleranceAmount;
+        summaryData = summaryData.filter(item => {
+          const absGross = Math.abs(parseFloat(item.sum_sel_gross || 0));
+          const absPpn = Math.abs(parseFloat(item.sum_sel_ppn || 0));
+          const absGrossIdm = Math.abs(parseFloat(item.sum_sel_gross_idm || 0));
+          const absPpnIdm = Math.abs(parseFloat(item.sum_sel_ppn_idm || 0));
+          // Keep shop if ANY aggregated difference exceeds tolerance
+          return absGross > tol || absPpn > tol || absGrossIdm > tol || absPpnIdm > tol;
+        });
+      }
 
       // Apply search filter on summary data
       if (searchQuery) {
@@ -2065,6 +2375,33 @@ class RekonWtHarianService {
           updtime: rekapInfo.updtime || item.updtime, // Use rekap_remote updtime if available, otherwise keep original
         };
       });
+
+      // ── Enrich each item with note from notesService ─────────────────
+      try {
+        const allNotes = await notesService.getAll();
+        const TABLE_NAME = "rekon_wt_harian";
+        // Build note lookup: unixKey = shop + periode (sama seperti di controller updateNote)
+        const noteMap = new Map();
+        for (const note of allNotes) {
+          if (note.tableName === TABLE_NAME) {
+            noteMap.set(note.unixKey, {
+              noteText: note.noteText,
+              updatedAt: note.updated_at || note.updtime,
+              pic: note.pic,
+              fullName: note.fullName,
+            });
+          }
+        }
+        summaryData = summaryData.map(item => {
+          const unixKey = `${item.shop}${period}`;
+          const note = noteMap.get(unixKey) || null;
+          return { ...item, note };
+        });
+      } catch (error) {
+        logger.warn(`[rekon_wt_harian] Failed to enrich notes in getDailyShopSummary: ${error.message}`);
+        // Graceful fallback: continue tanpa note
+        summaryData = summaryData.map(item => ({ ...item, note: null }));
+      }
 
       // Apply pagination
       const paginatedData = summaryData.slice(offset, offset + validLimit);

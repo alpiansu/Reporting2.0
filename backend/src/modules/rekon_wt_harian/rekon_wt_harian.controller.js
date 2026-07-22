@@ -172,16 +172,19 @@ export const getResults = async (req, res, next) => {
 export const getSummary = async (req, res, next) => {
   try {
     const { cab, periode } = req.params;
+    const { toleranceAmount } = req.query;
 
     if (!periode) {
       return res.status(400).json({ success: false, message: "Periode harus diisi" });
     }
 
+    const tol = toleranceAmount !== undefined ? parseInt(toleranceAmount) : undefined;
+
     let summary;
     if (cab === "SEMUA" || cab === "All" || !cab) {
-      summary = await rekonWtHarianService.getAllCabangSummary(periode);
+      summary = await rekonWtHarianService.getAllCabangSummary(periode, tol);
     } else {
-      summary = await rekonWtHarianService.getSummary(cab, periode);
+      summary = await rekonWtHarianService.getSummary(cab, periode, tol);
     }
 
     res.status(200).json({ success: true, data: summary });
@@ -277,13 +280,15 @@ export const getLatestProgress = async (req, res, next) => {
 export const getDailyShopSummary = async (req, res, next) => {
   try {
     const { cab, periode } = req.params;
-    const { page = 1, limit = 50, toko, tgl1, searchQuery, sortColumn = "tanggal", sortOrder = "asc" } = req.query;
+    const { page = 1, limit = 50, toko, tgl1, searchQuery, sortColumn = "tanggal", sortOrder = "asc", toleranceAmount } = req.query;
 
     if (!periode) {
       return res.status(400).json({ success: false, message: "Periode harus diisi" });
     }
 
     const cabFilter = cab === "SEMUA CABANG" ? "All" : cab;
+
+    const tol = toleranceAmount !== undefined ? parseInt(toleranceAmount) : undefined;
 
     const results = await rekonWtHarianService.getDailyShopSummary(cabFilter, periode, {
       page: parseInt(page),
@@ -293,6 +298,7 @@ export const getDailyShopSummary = async (req, res, next) => {
       searchQuery,
       sortColumn,
       sortOrder,
+      toleranceAmount: tol,
     });
 
     res.status(200).json(results);

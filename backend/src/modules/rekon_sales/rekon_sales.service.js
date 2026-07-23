@@ -29,7 +29,7 @@ const XCMD_TIMEOUT_MS = parseInt(process.env.XCMD_TIMEOUT_MS, 10) || 60_000;
 const XCMD_RETRY_WAIT_MS = 15_000;
 
 /**
- * Check if the only differences are from Station 99 / Shift 9 (retur) 
+ * Check if the only differences are from Station 99 / Shift 9 (retur)
  * while GL values are within tolerance.
  *
  * Validates:
@@ -42,12 +42,10 @@ const XCMD_RETRY_WAIT_MS = 15_000;
 function isOnlyReturIssue(diffData, mtranData, rekonResults, tolerance) {
   if (!diffData?.length) return false;
 
-  // 1. Semua shift flagged di diffData harus Station 99 / Shift 9
   if (!diffData.every(d => Number(d.STATION) === 99 && Number(d.SHIFT) === 9)) return false;
 
   const diffDates = new Set(diffData.map(d => d.TANGGAL));
 
-  // 2 & 3. Per-shift: non-retur shifts harus aman NET & PPN terhadap CD
   for (const date of diffDates) {
     for (const s of mtranData) {
       if (s.TANGGAL !== date) continue;
@@ -58,11 +56,57 @@ function isOnlyReturIssue(diffData, mtranData, rekonResults, tolerance) {
     }
   }
 
-  // 4 & 5. GL harus aman (NET dan PPN)
-  return rekonResults.every(r =>
-    Math.abs(Number(r.SEL_NET_GL) || 0) <= tolerance &&
-    Math.abs(Number(r.SEL_PPN_GL) || 0) <= tolerance
+  return rekonResults.every(
+    r => Math.abs(Number(r.SEL_NET_GL) || 0) <= tolerance && Math.abs(Number(r.SEL_PPN_GL) || 0) <= tolerance,
   );
+}
+
+/**
+ * Returns a Set of dates where ALL shift differences are from Station 99/Shift 9 retur,
+ * and non-retur shifts are within tolerance, and GL for that date is within tolerance.
+ */
+function getReturOnlyDates(diffData, mtranData, rekonResults, tolerance) {
+  if (!diffData || diffData.length === 0) return new Set();
+
+  const returOnlyDates = new Set();
+  const diffDates = [...new Set(diffData.map(d => d.TANGGAL))];
+
+  for (const date of diffDates) {
+    const dateDiffs = diffData.filter(d => d.TANGGAL === date);
+    const nonReturDiffs = dateDiffs.filter(d => Number(d.STATION) !== 99 || Number(d.SHIFT) !== 9);
+
+    if (nonReturDiffs.length > 0) continue;
+
+    let allSafe = true;
+    for (const s of mtranData) {
+      if (s.TANGGAL !== date) continue;
+      if (Number(s.STATION) === 99 && Number(s.SHIFT) === 9) continue;
+      if (Math.abs(Number(s.NET_MTRAN) - Number(s.NET_ClosingDetail)) > tolerance) {
+        allSafe = false;
+        break;
+      }
+      if (Math.abs(Number(s.PPN_MTRAN) - Number(s.PPN_CD)) > tolerance) {
+        allSafe = false;
+        break;
+      }
+    }
+
+    if (!allSafe) continue;
+
+    const dateResult = rekonResults.find(r => r.TGL === date);
+    if (dateResult) {
+      if (
+        Math.abs(Number(dateResult.SEL_NET_GL) || 0) > tolerance ||
+        Math.abs(Number(dateResult.SEL_PPN_GL) || 0) > tolerance
+      ) {
+        continue;
+      }
+    }
+
+    returOnlyDates.add(date);
+  }
+
+  return returOnlyDates;
 }
 
 class RekonSalesService {
@@ -211,7 +255,9 @@ class RekonSalesService {
       const cacheKey = this.getCacheKey(year, month);
       this.cacheManager.set(cacheKey, formattedData, config.cache.summaryTTL);
 
-      logger.info(`[rekon_sales.service] Synced ${formattedData.length} records to JSON for ${year}-${month} (filtered from ${rows.length} raw records)`);
+      logger.info(
+        `[rekon_sales.service] Synced ${formattedData.length} records to JSON for ${year}-${month} (filtered from ${rows.length} raw records)`,
+      );
 
       return formattedData;
     } catch (error) {
@@ -344,7 +390,7 @@ class RekonSalesService {
 
         // STEP 2: Rekon vs GL using calculator
         // logger.info(`[rekon_sales.service] check value of dataGL : ${JSON.stringify(dataGL)}`);
-        const rekonResults = await RekonCalculator.calculateRekon(
+        let rekonResults = await RekonCalculator.calculateRekon(
           cab,
           storeCode,
           strMonth,
@@ -371,13 +417,18 @@ class RekonSalesService {
           }
 
           // Check if the only differences are Station 99/Shift 9 retur with GL safe
-          const isOnlyRetur = diffData.length > 0 && isOnlyReturIssue(diffData, mtranData, rekonResults, config.tolerance);
-          if (isOnlyRetur) {
-            logger.info(`[${storeCode}] Only Station 99/Shift 9 retur issue — GL safe, treating as no issue`);
+          const returOnlyDates = getReturOnlyDates(diffData, mtranData, rekonResults, config.tolerance);
+          if (returOnlyDates.size > 0) {
+            logger.info(`[${storeCode}] Marking ${returOnlyDates.size} retur-only dates as resolved`);
             for (const r of rekonResults) {
-              r.RECID = '1';
+              if (returOnlyDates.has(r.TGL)) {
+                r.RECID = "1";
+              }
             }
+            diffData = diffData.filter(d => !returOnlyDates.has(d.TANGGAL));
           }
+
+          const isAllReturOnly = returOnlyDates.size === rekonResults.length && rekonResults.length > 0;
 
           // Save immediately if not deferred (single store mode)
           if (!deferSave) {
@@ -399,7 +450,7 @@ class RekonSalesService {
           results.records = rekonResults;
           results.diffData = diffData;
           results.detailData = detailIssues;
-          results.hasIssue = !(isOnlyRetur && detailIssues.length === 0);
+          results.hasIssue = !(isAllReturOnly && detailIssues.length === 0);
           results.success = true;
         } else {
           // No issues found
@@ -447,7 +498,9 @@ class RekonSalesService {
     }
 
     // Step 2: Wait 15 seconds for data propagation (only this thread)
-    logger.info(`[rekon_sales.service] [${storeCode}] Waiting ${XCMD_RETRY_WAIT_MS / 1000}s for GL data propagation...`);
+    logger.info(
+      `[rekon_sales.service] [${storeCode}] Waiting ${XCMD_RETRY_WAIT_MS / 1000}s for GL data propagation...`,
+    );
     await new Promise(resolve => setTimeout(resolve, XCMD_RETRY_WAIT_MS));
 
     // Step 3: Re-fetch GL data for this specific store
@@ -467,7 +520,10 @@ class RekonSalesService {
 
       // Step 4: Re-process the store (with skipMissingGlCheck so it falls back to empty GL instead of requesting another retry)
       const updatedGlData = branchGlData && branchKey ? branchGlData[branchKey] : refreshedGlData;
-      const retryResult = await this.processSingleStore(store, strMonth, strYear, updatedGlData, { deferSave, skipMissingGlCheck: true });
+      const retryResult = await this.processSingleStore(store, strMonth, strYear, updatedGlData, {
+        deferSave,
+        skipMissingGlCheck: true,
+      });
 
       logger.info(
         `[rekon_sales.service] [${storeCode}] Retry completed — success: ${retryResult.success}, hasIssue: ${retryResult.hasIssue}`,
@@ -603,14 +659,10 @@ class RekonSalesService {
    */
   async saveRekonResults(cab, kdtk, strMonth, strYear, rekonResults, diffData) {
     try {
-      // Delete existing records
       await this.deleteRekonSales(kdtk, strMonth, strYear);
 
-      // Prepare rekon sales data
-      // Field names sesuai output RekonCalculator.aggregateByDate:
-      // KDTK (bukan SHOP), TGL (bukan TANGGAL), NET_TOKO (bukan NET_MTRAN),
-      // NET_CLOSINGDETAIL (bukan NET_ClosingDetail), PPN_TOKO (bukan PPN_MTRAN)
-      const rekonSalesData = rekonResults.map(item => ({
+      const activeResults = rekonResults.filter(r => r.RECID !== "1");
+      const rekonSalesData = activeResults.map(item => ({
         RECID: item.RECID || "*",
         CAB: item.CAB,
         KDTK: item.KDTK,
@@ -631,34 +683,39 @@ class RekonSalesService {
         UPDTIME: new Date(),
       }));
 
-      // Save rekon sales
-      await RekonSales.bulkCreate(rekonSalesData, {
-        updateOnDuplicate: [
-          "RECID",
-          "NET_TOKO",
-          "NET_GL",
-          "NET_CLOSINGDETAIL",
-          "SEL_NET_GL",
-          "SEL_NET_CD",
-          "PPN_MTRAN",
-          "PPN_GL",
-          "PPN_CD",
-          "SEL_PPN_GL",
-          "SEL_PPN_CD",
-          "NET_RETUR_ECOM",
-          "PPN_RETUR_ECOM",
-          "RETUR_PPNJP_ISTORE",
-          "UPDTIME",
-        ],
-      });
-
-      // Save mtran vs cd differences if any
-      if (diffData && diffData.length > 0) {
-        await this.deleteMtranVsCd(kdtk, strMonth, strYear);
-        await this.saveMtranVsCd(diffData);
+      if (rekonSalesData.length > 0) {
+        await RekonSales.bulkCreate(rekonSalesData, {
+          updateOnDuplicate: [
+            "RECID",
+            "NET_TOKO",
+            "NET_GL",
+            "NET_CLOSINGDETAIL",
+            "SEL_NET_GL",
+            "SEL_NET_CD",
+            "PPN_MTRAN",
+            "PPN_GL",
+            "PPN_CD",
+            "SEL_PPN_GL",
+            "SEL_PPN_CD",
+            "NET_RETUR_ECOM",
+            "PPN_RETUR_ECOM",
+            "RETUR_PPNJP_ISTORE",
+            "UPDTIME",
+          ],
+        });
       }
 
-      logger.info(`[rekon_sales.service] Saved rekon results for store ${kdtk}`);
+      const activeDiffData = (diffData || []).filter(d => {
+        const returTgls = new Set(activeResults.filter(r => r.RECID === "1").map(r => r.TGL));
+        return !returTgls.has(d.TANGGAL);
+      });
+
+      if (activeDiffData.length > 0) {
+        await this.deleteMtranVsCd(kdtk, strMonth, strYear);
+        await this.saveMtranVsCd(activeDiffData);
+      }
+
+      logger.info(`[rekon_sales.service] Saved rekon results for store ${kdtk} (${activeResults.length} active records)`);
     } catch (error) {
       logger.error(`[rekon_sales.service] Error saving rekon results: ${error.message}`);
       throw error;
@@ -743,9 +800,9 @@ class RekonSalesService {
           });
         }
 
-        // Sync to JSON file
-        this.invalidateCache();
+        // Sync to JSON file first (source of truth)
         await this.syncToJsonFile(strYear, strMonth);
+        this.invalidateCache();
 
         return {
           success: true,
@@ -799,9 +856,8 @@ class RekonSalesService {
 
       // === STEP 2: Collect all stores ===
       const wrcPeriod = strYear.slice(2) + strMonth;
-      const shopSet = options.shops && options.shops.length > 0
-        ? new Set(options.shops.map(s => s.trim().toUpperCase()))
-        : null;
+      const shopSet =
+        options.shops && options.shops.length > 0 ? new Set(options.shops.map(s => s.trim().toUpperCase())) : null;
 
       const storeGroups = await Promise.all(
         branches.map(cab =>
@@ -958,34 +1014,48 @@ class RekonSalesService {
                 if (result.hasIssue) {
                   activeStores.add(storeCode);
                   if (Array.isArray(result.records) && result.records.length > 0) {
-                    allRekonResults.push(
-                      ...result.records.map(item => ({
-                        RECID: item.RECID || "*",
-                        CAB: item.CAB,
-                        KDTK: item.KDTK,
-                        TGL: item.TGL,
-                        NET_TOKO: item.NET_TOKO,
-                        NET_GL: item.NET_GL,
-                        NET_CLOSINGDETAIL: item.NET_CLOSINGDETAIL,
-                        SEL_NET_GL: item.SEL_NET_GL,
-                        SEL_NET_CD: item.SEL_NET_CD,
-                        PPN_MTRAN: item.PPN_TOKO,
-                        PPN_GL: item.PPN_GL,
-                        PPN_CD: item.PPN_CD,
-                        SEL_PPN_GL: item.SEL_PPN_GL,
-                        SEL_PPN_CD: item.SEL_PPN_CD,
-                        NET_RETUR_ECOM: item.NET_RETUR_ECOM,
-                        PPN_RETUR_ECOM: item.PPN_RETUR_ECOM,
-                        RETUR_PPNJP_ISTORE: item.RETUR_PPNJP_ISTORE,
-                        UPDTIME: new Date(),
-                      })),
+                    const returTgls = new Set(
+                      result.records.filter(r => r.RECID === "1").map(r => r.TGL),
                     );
-                  }
-                  if (Array.isArray(result.diffData) && result.diffData.length > 0) {
-                    allDiffData.push(...result.diffData);
-                  }
-                  if (Array.isArray(result.detailData) && result.detailData.length > 0) {
-                    allDetailData.push(...result.detailData);
+                    const activeRecords = result.records.filter(
+                      r => !returTgls.has(r.TGL),
+                    );
+                    if (activeRecords.length > 0) {
+                      allRekonResults.push(
+                        ...activeRecords.map(item => ({
+                          RECID: item.RECID || "*",
+                          CAB: item.CAB,
+                          KDTK: item.KDTK,
+                          TGL: item.TGL,
+                          NET_TOKO: item.NET_TOKO,
+                          NET_GL: item.NET_GL,
+                          NET_CLOSINGDETAIL: item.NET_CLOSINGDETAIL,
+                          SEL_NET_GL: item.SEL_NET_GL,
+                          SEL_NET_CD: item.SEL_NET_CD,
+                          PPN_MTRAN: item.PPN_TOKO,
+                          PPN_GL: item.PPN_GL,
+                          PPN_CD: item.PPN_CD,
+                          SEL_PPN_GL: item.SEL_PPN_GL,
+                          SEL_PPN_CD: item.SEL_PPN_CD,
+                          NET_RETUR_ECOM: item.NET_RETUR_ECOM,
+                          PPN_RETUR_ECOM: item.PPN_RETUR_ECOM,
+                          RETUR_PPNJP_ISTORE: item.RETUR_PPNJP_ISTORE,
+                          UPDTIME: new Date(),
+                        })),
+                      );
+                    }
+                    const activeDiffData = (result.diffData || []).filter(
+                      d => !returTgls.has(d.TANGGAL),
+                    );
+                    if (activeDiffData.length > 0) {
+                      allDiffData.push(...activeDiffData);
+                    }
+                    const activeDetailData = (result.detailData || []).filter(
+                      d => !returTgls.has(d.TGL),
+                    );
+                    if (activeDetailData.length > 0) {
+                      allDetailData.push(...activeDetailData);
+                    }
                   }
                   await incrementProgress(storeCode, `Has Issues ⚠️ (${result.records.length} dates)`);
                 } else {
@@ -1006,98 +1076,140 @@ class RekonSalesService {
         ),
       );
 
-      logger.info(`[rekon_sales.service] Screening completed for periode ${periode}`);
-      logger.info(
-        `[rekon_sales.service] Screened: ${screenedStores.size}, Active (has issues): ${activeStores.size}, Ready: ${
-          screenedStores.size - activeStores.size
-        }`,
-      );
+  logger.info(`[rekon_sales.service] Screening completed for periode ${periode}`);
+  logger.info(
+    `[rekon_sales.service] Screened: ${screenedStores.size}, Active (has issues): ${activeStores.size}, Ready: ${
+      screenedStores.size - activeStores.size
+    }`,
+  );
 
-      // If task was cancelled during store processing, stop before finalizing
-      if (progressService.isAborted(taskId)) {
-        logger.info(`[rekon_sales] Task ${taskId} was cancelled — skipping finalization`);
-        throw new Error("Proses dibatalkan oleh pengguna");
-      }
+  // If task was cancelled during store processing, stop before finalizing
+  if (progressService.isAborted(taskId)) {
+    logger.info(`[rekon_sales] Task ${taskId} was cancelled — skipping finalization`);
+    throw new Error("Proses dibatalkan oleh pengguna");
+  }
 
-      // === STEP 6: Bulk save aggregated results ===
-      await progressService.updateProgress(taskId, processedCount, {
-        description: "Saving aggregated results to database",
-        status: "finalizing",
-      });
+  // === STEP 6: Clear old data for this period before saving new results ===
+  await progressService.updateProgress(taskId, processedCount, {
+    description: "Clearing old data for this period",
+    status: "finalizing",
+  });
 
-      if (allRekonResults.length > 0) {
-        await RekonSales.bulkCreate(allRekonResults, {
-          updateOnDuplicate: [
-            "RECID",
-            "NET_TOKO",
-            "NET_GL",
-            "NET_CLOSINGDETAIL",
-            "SEL_NET_GL",
-            "SEL_NET_CD",
-            "PPN_MTRAN",
-            "PPN_GL",
-            "PPN_CD",
-            "SEL_PPN_GL",
-            "SEL_PPN_CD",
-            "NET_RETUR_ECOM",
-            "PPN_RETUR_ECOM",
-            "RETUR_PPNJP_ISTORE",
-            "UPDTIME",
-          ],
-        });
-      }
+  const modelRekon = await RekonSales.getModel();
+  const modelMtranVsCd = await MtranVsCd.getModel();
+  const detailModel = await DetailRekonSales.getModel();
+  const monthInt = parseInt(strMonth);
+  const yearInt = parseInt(strYear);
 
-      if (allDiffData.length > 0) {
-        await MtranVsCd.bulkCreate(allDiffData, {
-          updateOnDuplicate: Object.keys(allDiffData[0]),
-        });
-      }
+  await modelRekon.destroy({
+    where: {
+      [modelRekon.sequelize.Sequelize.Op.and]: [
+        modelRekon.sequelize.where(modelRekon.sequelize.fn("MONTH", modelRekon.sequelize.col("TANGGAL")), monthInt),
+        modelRekon.sequelize.where(modelRekon.sequelize.fn("YEAR", modelRekon.sequelize.col("TANGGAL")), yearInt),
+      ],
+      ...(cabang !== "All" && cabang !== "ALL" ? { CAB: cabang } : {}),
+    },
+  });
 
-      if (allDetailData.length > 0) {
-        await this.saveDetailRekonSales(allDetailData);
-      }
+  await modelMtranVsCd.destroy({
+    where: {
+      MONTH: strMonth,
+      YEAR: strYear,
+      ...(cabang !== "All" && cabang !== "ALL" ? { CAB: cabang } : {}),
+    },
+  });
 
-      // === STEP 7: Update resolved records ===
-      await progressService.updateProgress(taskId, processedCount, {
-        description: "Updating resolved records (RECID = 1)",
-        status: "finalizing",
-      });
+  const startOfMonth = moment({ year: yearInt, month: monthInt - 1, day: 1 }).startOf("month").format("YYYY-MM-DD");
+  const endOfMonth = moment({ year: yearInt, month: monthInt - 1, day: 1 }).endOf("month").format("YYYY-MM-DD");
 
-      await this.updateResolvedRecords({
-        month: strMonth,
-        year: strYear,
-        level: cabang === "All" || cabang === "ALL" ? 1 : 2,
-        cabang: cabang === "All" || cabang === "ALL" ? null : cabang,
-        screenedStores: Array.from(screenedStores),
-        activeStores: Array.from(activeStores),
-        erroredStores: Array.from(erroredStores),
-      });
+  await detailModel.destroy({
+    where: {
+      TGL: {
+        [detailModel.sequelize.Sequelize.Op.between]: [startOfMonth, endOfMonth],
+      },
+      ...(cabang !== "All" && cabang !== "ALL" ? { CAB: cabang } : {}),
+    },
+  });
 
-      // === STEP 8: Save logs ===
-      await progressService.updateProgress(taskId, processedCount, {
-        description: "Saving logs to database",
-        status: "finalizing",
-      });
+  // === STEP 7: Bulk save aggregated results ===
+  await progressService.updateProgress(taskId, processedCount, {
+    description: "Saving aggregated results to database",
+    status: "finalizing",
+  });
 
-      await RekapRemoteService.saveLogsToDatabase();
+  if (allRekonResults.length > 0) {
+    await RekonSales.bulkCreate(allRekonResults, {
+      updateOnDuplicate: [
+        "RECID",
+        "NET_TOKO",
+        "NET_GL",
+        "NET_CLOSINGDETAIL",
+        "SEL_NET_GL",
+        "SEL_NET_CD",
+        "PPN_MTRAN",
+        "PPN_GL",
+        "PPN_CD",
+        "SEL_PPN_GL",
+        "SEL_PPN_CD",
+        "NET_RETUR_ECOM",
+        "PPN_RETUR_ECOM",
+        "RETUR_PPNJP_ISTORE",
+        "UPDTIME",
+      ],
+    });
+  }
 
-      // === STEP 9: Sync to JSON ===
-      await progressService.updateProgress(taskId, processedCount, {
-        description: "Syncing data to JSON file, please wait...",
-        status: "finalizing",
-      });
+  if (allDiffData.length > 0) {
+    await MtranVsCd.bulkCreate(allDiffData, {
+      updateOnDuplicate: Object.keys(allDiffData[0]),
+    });
+  }
 
-      this.invalidateCache();
-      await this.syncToJsonFile(strYear, strMonth);
-      logger.info(`[rekon_sales.service] Synchronized data to JSON file`);
+  if (allDetailData.length > 0) {
+    await this.saveDetailRekonSales(allDetailData);
+  }
 
-      // === STEP 10: Complete progress ===
-      const timeCompleted = moment().format("YYYY-MM-DD HH:mm:ss");
-      await progressService.completeProgress(taskId, {
-        description: "All stores processed successfully",
-        status: "completed",
-        completedAt: timeCompleted,
-      });
+  // === STEP 8: Update resolved records ===
+  await progressService.updateProgress(taskId, processedCount, {
+    description: "Updating resolved records (RECID = 1)",
+    status: "finalizing",
+  });
+
+  await this.updateResolvedRecords({
+    month: strMonth,
+    year: strYear,
+    level: cabang === "All" || cabang === "ALL" ? 1 : 2,
+    cabang: cabang === "All" || cabang === "ALL" ? null : cabang,
+    screenedStores: Array.from(screenedStores),
+    activeStores: Array.from(activeStores),
+    erroredStores: Array.from(erroredStores),
+  });
+
+  // === STEP 9: Save logs ===
+  await progressService.updateProgress(taskId, processedCount, {
+    description: "Saving logs to database",
+    status: "finalizing",
+  });
+
+  await RekapRemoteService.saveLogsToDatabase();
+
+  // === STEP 10: Sync to JSON ===
+  await progressService.updateProgress(taskId, processedCount, {
+    description: "Syncing data to JSON file, please wait...",
+    status: "finalizing",
+  });
+
+  await this.syncToJsonFile(strYear, strMonth);
+  this.invalidateCache();
+  logger.info(`[rekon_sales.service] Synchronized data to JSON file`);
+
+  // === STEP 11: Complete progress ===
+  const timeCompleted = moment().format("YYYY-MM-DD HH:mm:ss");
+  await progressService.completeProgress(taskId, {
+    description: "All stores processed successfully",
+    status: "completed",
+    completedAt: timeCompleted,
+  });
 
       return {
         success: true,
@@ -1245,7 +1357,9 @@ class RekonSalesService {
 
       // For Level 1 & 2: also reset RECID='1' back to '*' for active stores (stores with issues)
       if ((level === 1 || level === 2) && activeStores && activeStores.length > 0) {
-        const resetQuery = level === 2 ? `
+        const resetQuery =
+          level === 2
+            ? `
           UPDATE rekon_sales
           SET RECID = '*'
           WHERE MONTH(TANGGAL) = :month
@@ -1253,7 +1367,8 @@ class RekonSalesService {
             AND CAB = :cabang
             AND RECID = '1'
             AND KDTK IN (:activeStores)
-        ` : `
+        `
+            : `
           UPDATE rekon_sales
           SET RECID = '*'
           WHERE MONTH(TANGGAL) = :month
@@ -1842,6 +1957,11 @@ class RekonSalesService {
           SHOP: kdtk.trim().toUpperCase(),
           MONTH: month,
           YEAR: year,
+          [Op.and]: [
+            {
+              [Op.or]: [{ STATION: { [Op.ne]: "99" } }, { SHIFT: { [Op.ne]: "9" } }],
+            },
+          ],
         },
         order: [
           ["TANGGAL", "ASC"],
@@ -2099,9 +2219,10 @@ class RekonSalesService {
           const keyItem = `${item.TANGGAL}|${item.STATION}|${item.SHIFT}`;
           const trnEndDateTime = trnEndByShift[keyItem];
           if (item.ADDTIME && trnEndDateTime) {
-            const itemAddtime = typeof item.ADDTIME === "string"
-              ? item.ADDTIME.replace("T", " ").replace(/\.\d+Z$/, "")
-              : new Date(item.ADDTIME).toISOString().slice(0, 19).replace("T", " ");
+            const itemAddtime =
+              typeof item.ADDTIME === "string"
+                ? item.ADDTIME.replace("T", " ").replace(/\.\d+Z$/, "")
+                : new Date(item.ADDTIME).toISOString().slice(0, 19).replace("T", " ");
             isTelatNaik = itemAddtime > trnEndDateTime;
           }
           return { ...item, isTelatNaik };
@@ -2124,17 +2245,12 @@ class RekonSalesService {
     }
   }
 
-  /**
-   * Ensure rekon sales data is loaded for a given period
-   */
+   /**
+     * Ensure rekon sales data is loaded for a given period
+     */
   async ensureDataLoaded(year, month, cabang = "All") {
     if (!year || !month) {
       throw new Error("Year and month are required to load data");
-    }
-
-    // If already loaded for the same period, skip
-    if (this.loadedPeriod && this.loadedPeriod.year === year && this.loadedPeriod.month === month) {
-      return;
     }
 
     const data = await this.loadData(year, month, cabang);

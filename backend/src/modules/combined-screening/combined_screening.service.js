@@ -364,6 +364,9 @@ class CombinedScreeningService {
             try {
               if (mod.name === "rekon_sales") {
                 await service.syncToJsonFile(strYear, strMonth);
+                if (typeof service.invalidateCache === "function") {
+                  service.invalidateCache();
+                }
               } else if (mod.name === "rekon_virtual_mrg") {
                 await service.syncPeriodFromDbToJson(strPeriode);
               } else if (mod.name === "prep_closing") {

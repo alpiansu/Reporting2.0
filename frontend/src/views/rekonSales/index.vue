@@ -354,6 +354,8 @@ const handleViewLiveCheck = async ({ kdtk, month, year, tanggal, station, shift 
     const res = await rekonSalesApi.getLiveCheck({ kdtk, month, year, tanggal, station, shift });
     const data = res?.data || res || {};
     liveCheckItems.value = data.items || [];
+    const shiftArr = Array.isArray(data.shifts) ? data.shifts : [];
+    liveCheckShiftInfo.value = shiftArr.length > 0 ? shiftArr[0] : { TANGGAL: tanggal, STATION: station, SHIFT: shift };
     if (data.error) {
       liveCheckError.value = data.error;
     }

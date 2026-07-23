@@ -225,7 +225,7 @@ class StoreQueryHelper {
           m.TANGGAL, m.STATION, m.SHIFT, m.DOCNO, m.RTYPE, m.PLU,
           p.SINGKATAN,
           m.QTY, m.PRICE, m.GROSS, m.BKP, m.SUB_BKP, m.PPN,
-          m.GROSS_DPP,
+          m.GROSS_DPP, m.ADDTIME,
           CASE WHEN IFNULL(m.SUB_BKP,'N') = 'Y' THEN m.GROSS - IFNULL(m.PPN,0) ELSE m.GROSS END AS HIT_GROSS_DPP,
           m.PPN_RATE,
           p.BKP AS PRODMAST_BKP, p.SUB_BKP AS PRODMAST_SUB_BKP, p.FLAGPROD,
@@ -284,6 +284,84 @@ class StoreQueryHelper {
     } catch (error) {
       logger.error(`[StoreQueryHelper] Error in getAvailableDates: ${error.message}`);
       throw error;
+    }
+  }
+
+  /**
+   * Get initial/opening info per shift from table `initial`
+   * Used for live check to detect late sales upload ("sales telat naik")
+   *
+   * Logic:
+   * - TRN_END is stored as char(8) time "HH:MM:SS"
+   * - If TRN_START < TRN_END: same date
+   * - If TRN_START > TRN_END: TRN_END belongs to H+1
+   * - ADDTIME is full datetime; if ADDTIME > TRN_END dateTime, sales is late
+   *
+   * @param {Object} connection - Store database connection
+   * @param {Array} shifts - Array of { TANGGAL, STATION, SHIFT } objects
+   * @returns {Promise<Object>} Map key "TANGGAL|STATION|SHIFT" -> { addtime, trnStart, trnEnd, isTelatNaik }
+   */
+  async getLiveCheckShiftInfo(connection, shifts) {
+    try {
+      if (!shifts || shifts.length === 0) {
+        return {};
+      }
+
+      const shiftKeys = shifts.map(s => `${s.TANGGAL}|${s.STATION}|${s.SHIFT}`);
+      const placeholders = shiftKeys.map(() => "?").join(", ");
+
+      const query = `
+        SELECT
+          i.TANGGAL,
+          i.STATION,
+          i.SHIFT,
+          i.TRN_START,
+          i.TRN_END,
+          i.ADDTIME
+        FROM initial i
+        WHERE CONCAT(i.TANGGAL, '|', i.STATION, '|', i.SHIFT) IN (${placeholders})
+      `;
+
+      const [rows] = await connection.query(query, shiftKeys);
+      const resultMap = {};
+
+      for (const r of rows) {
+        const key = `${r.TANGGAL}|${r.STATION}|${r.SHIFT}`;
+        const trnStart = r.TRN_START || "00:00:00";
+        const trnEnd = r.TRN_END || "23:59:59";
+
+        let trnEndDate;
+        if (trnStart < trnEnd) {
+          trnEndDate = `${r.TANGGAL} ${trnEnd}`;
+        } else {
+          const nextDay = new Date(r.TANGGAL);
+          nextDay.setDate(nextDay.getDate() + 1);
+          const nextDayStr = nextDay.toISOString().slice(0, 10);
+          trnEndDate = `${nextDayStr} ${trnEnd}`;
+        }
+
+        let isTelatNaik = false;
+        if (r.ADDTIME) {
+          const addtime = typeof r.ADDTIME === "string"
+            ? r.ADDTIME.replace("T", " ").replace(/\.\d+Z$/, "")
+            : new Date(r.ADDTIME).toISOString().slice(0, 19).replace("T", " ");
+          isTelatNaik = addtime > trnEndDate;
+        }
+
+        resultMap[key] = {
+          addtime: r.ADDTIME ? (typeof r.ADDTIME === "string" ? r.ADDTIME.replace("T", " ").replace(/\.\d+Z$/, "") : new Date(r.ADDTIME).toISOString().slice(0, 19).replace("T", " ")) : null,
+          trnStart: trnStart,
+          trnEnd: trnEnd,
+          trnEndDate: trnEndDate,
+          isTelatNaik: isTelatNaik,
+        };
+      }
+
+      logger.info(`[StoreQueryHelper] getLiveCheckShiftInfo: ${Object.keys(resultMap).length} shift records fetched from initial`);
+      return resultMap;
+    } catch (error) {
+      logger.error(`[StoreQueryHelper] Error in getLiveCheckShiftInfo: ${error.message}`);
+      return {};
     }
   }
 }

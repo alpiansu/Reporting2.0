@@ -19,11 +19,27 @@
       <div class="summary-bar">
         <div class="summary-item">
           <span class="label">Total Item</span>
-          <span class="value">{{ items.length }}</span>
+          <span class="value">{{ summary.totalItems }}</span>
         </div>
         <div class="summary-item" v-if="shiftInfo">
           <span class="label">Shift</span>
           <span class="value">{{ shiftInfo.TANGGAL }} / St{{ shiftInfo.STATION }} / S{{ shiftInfo.SHIFT }}</span>
+        </div>
+        <div class="summary-item" v-if="shiftInfo?.trnStart">
+          <span class="label">TRN Start - End</span>
+          <span class="value">{{ shiftInfo.trnStart }} - {{ shiftInfo.trnEnd }}</span>
+        </div>
+        <div class="summary-item">
+          <span class="label">Addtime (Terakhir)</span>
+          <span class="value">{{ summary.maxAddtime || '-' }}</span>
+        </div>
+        <div class="summary-item warning" v-if="summary.lateItemCount > 0">
+          <span class="label">Status Telat Naik</span>
+          <span class="value"><Badge :value="`Ada ${summary.lateItemCount} baris terlambat`" severity="danger" /></span>
+        </div>
+        <div class="summary-item" v-if="summary.lateItemCount === 0 && summary.totalItems > 0">
+          <span class="label">Status Telat Naik</span>
+          <span class="value"><Badge value="Tidak ada yang terlambat" severity="success" /></span>
         </div>
         <div class="summary-item warning" v-if="validationSummary.totalBkpSelisih > 0">
           <span class="label">BKP/SUB_BKP Selisih</span>
@@ -44,9 +60,34 @@
           <i class="pi pi-search search-icon"></i>
           <InputText v-model="globalSearch" placeholder="Cari PLU, DOCNO, Nama Item..." class="search-input" />
         </div>
-        <div class="toggle-filter">
-          <span class="toggle-label">Hanya Selisih</span>
-          <InputSwitch v-model="showOnlySelisih" />
+        <div class="toggle-group">
+          <div class="toggle-filter">
+            <span class="toggle-label">Hanya Selisih</span>
+            <InputSwitch v-model="showOnlySelisih" />
+          </div>
+          <div class="toggle-filter">
+            <span class="toggle-label">Hanya Telat Naik</span>
+            <InputSwitch v-model="showOnlyTelatNaik" />
+          </div>
+        </div>
+      </div>
+
+      <div class="result-info" v-if="showOnlySelisih || showOnlyTelatNaik">
+        <span class="result-count">Menampilkan {{ displayItems.length }} dari {{ processedList.length }} item</span>
+        <div class="active-filters">
+          <Badge v-if="showOnlySelisih" value="Selisih" severity="warning" class="filter-badge" />
+          <Badge v-if="showOnlyTelatNaik" value="Telat Naik" severity="danger" class="filter-badge" />
+        </div>
+      </div>
+
+      <div class="legend-bar" v-if="processedList.length > 0">
+        <div class="legend-item">
+          <span class="legend-dot row-has-issue-dot"></span>
+          <span class="legend-text">Selisih BKP/PPN/Gross DPP</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot row-telat-naik-dot"></span>
+          <span class="legend-text">Sales Telat Naik</span>
         </div>
       </div>
 
@@ -55,7 +96,11 @@
         paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown"
         :rowsPerPageOptions="[25, 50, 100]">
         <template #empty>
-          <div class="empty-state"><i class="pi pi-check-circle"></i>Tidak ada data</div>
+          <div class="empty-state">
+            <i class="pi pi-info-circle" v-if="showOnlySelisih || showOnlyTelatNaik"></i>
+            <i class="pi pi-check-circle" v-else></i>
+            <span>{{ emptyMessage }}</span>
+          </div>
         </template>
 
         <Column field="TANGGAL" header="Tanggal" style="min-width:100px" frozen sortable />
@@ -113,7 +158,6 @@
             </span>
           </template>
         </Column>
-
         <Column header="PPN Rate" style="width:120px" sortable field="PPN_RATE">
           <template #body="{ data }">
             <div class="validation-cell">
@@ -123,6 +167,12 @@
                 v-tooltip="ppnRateTooltip(data)"></i>
               <i v-else class="pi pi-check-circle validation-icon ok-icon"></i>
             </div>
+          </template>
+        </Column>
+
+        <Column field="ADDTIME" header="Addtime" style="width:160px" sortable>
+          <template #body="{ data }">
+            <span :class="data._isTelatNaik ? 'value-mismatch' : ''" class="addtime-cell">{{ data.ADDTIME || '-' }}</span>
           </template>
         </Column>
       </DataTable>
@@ -142,6 +192,7 @@ import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import InputText from 'primevue/inputtext';
 import InputSwitch from 'primevue/inputswitch';
+import Badge from 'primevue/badge';
 import { formatNumber, formatDecimal, getSelisihClass } from '../utils/formatters';
 
 const props = defineProps({
@@ -160,6 +211,7 @@ watch(localVisible, (v) => emit('update:visible', v));
 
 const globalSearch = ref('');
 const showOnlySelisih = ref(true);
+const showOnlyTelatNaik = ref(false);
 
 const dialogHeader = computed(() => {
   const info = props.shiftInfo;
@@ -174,17 +226,32 @@ const hasGrossDppMismatch = (data) => {
 const selisihClass = getSelisihClass;
 
 const processedItems = computed(() => {
-  return props.items.map(item => ({
+  const mapped = props.items.map(item => ({
     ...item,
     SEL_GROSS_DPP: Number(item.HIT_GROSS_DPP || 0) - Number(item.GROSS_DPP || 0),
+    _isTelatNaik: item.isTelatNaik === true,
   }));
+  const totalItems = mapped.length;
+  const lateItemCount = mapped.filter(i => i._isTelatNaik).length;
+  const maxAddtime = mapped.reduce((max, item) => {
+    if (!item.ADDTIME) return max;
+    return !max || item.ADDTIME > max ? item.ADDTIME : max;
+  }, null);
+  return { items: mapped, totalItems, lateItemCount, maxAddtime };
 });
+
+const processedList = computed(() => processedItems.value.items);
+const summary = computed(() => ({
+  totalItems: processedItems.value.totalItems,
+  lateItemCount: processedItems.value.lateItemCount,
+  maxAddtime: processedItems.value.maxAddtime,
+}));
 
 const validationSummary = computed(() => {
   let totalBkpSelisih = 0;
   let totalPpnRateSelisih = 0;
   let totalGrossDppSelisih = 0;
-  for (const item of processedItems.value) {
+  for (const item of processedList.value) {
     if (item.BKP_VALIDATION === 'SELISIH') totalBkpSelisih++;
     if (item.PPN_RATE_VALIDATION !== 'OK') totalPpnRateSelisih++;
     if (hasGrossDppMismatch(item)) totalGrossDppSelisih++;
@@ -193,9 +260,14 @@ const validationSummary = computed(() => {
 });
 
 const displayItems = computed(() => {
-  const items = processedItems.value;
-  if (!showOnlySelisih.value) return items;
-  return items.filter(item => hasGrossDppMismatch(item));
+  let items = processedList.value;
+  if (showOnlySelisih.value) {
+    items = items.filter(item => hasGrossDppMismatch(item));
+  }
+  if (showOnlyTelatNaik.value) {
+    items = items.filter(item => item._isTelatNaik);
+  }
+  return items;
 });
 
 const filteredItems = computed(() => {
@@ -206,6 +278,16 @@ const filteredItems = computed(() => {
       String(val).toLowerCase().includes(q)
     )
   );
+});
+
+const emptyMessage = computed(() => {
+  if (showOnlyTelatNaik.value && displayItems.value.length === 0) {
+    return 'Tidak ada item yang terlambat naik pada shift ini';
+  }
+  if (showOnlySelisih.value && displayItems.value.length === 0) {
+    return 'Tidak ada item dengan selisih';
+  }
+  return 'Tidak ada data';
 });
 
 const bkpStatusClass = (data) => {
@@ -234,6 +316,7 @@ const ppnRateTooltip = (data) => {
 const rowValidationClass = (data) => {
   if (data.BKP_VALIDATION === 'SELISIH' || data.PPN_RATE_VALIDATION !== 'OK') return 'row-has-issue';
   if (hasGrossDppMismatch(data)) return 'row-has-issue';
+  if (data._isTelatNaik) return 'row-telat-naik';
   return '';
 };
 </script>
@@ -252,6 +335,18 @@ const rowValidationClass = (data) => {
 }
 
 .loading-state i { font-size: 1.5rem; }
+
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2.5rem;
+  color: var(--text-color-secondary);
+  font-size: 0.95rem;
+}
+
+.empty-state i { font-size: 1.25rem; }
 
 .summary-bar {
   display: flex;
@@ -292,6 +387,12 @@ const rowValidationClass = (data) => {
   margin-bottom: 0.75rem;
 }
 
+.toggle-group {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
 .search-box {
   position: relative;
   flex: 1;
@@ -325,6 +426,67 @@ const rowValidationClass = (data) => {
   white-space: nowrap;
 }
 
+.result-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface-ground);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--text-color-secondary);
+}
+
+.active-filters {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.filter-badge {
+  font-size: 0.7rem;
+}
+
+.legend-bar {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin-bottom: 0.75rem;
+  padding: 0.4rem 0.75rem;
+  background: var(--surface-ground);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: var(--text-color-secondary);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.row-has-issue-dot {
+  background: rgba(229, 57, 53, 0.25);
+  border: 1px solid rgba(229, 57, 53, 0.6);
+}
+
+.row-telat-naik-dot {
+  background: rgba(229, 57, 53, 0.15);
+  border-left: 2px solid #e53935;
+}
+
+.legend-text {
+  white-space: nowrap;
+}
+
 .validation-cell {
   display: flex;
   align-items: center;
@@ -348,8 +510,18 @@ const rowValidationClass = (data) => {
   font-weight: 600;
 }
 
+.addtime-cell {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85em;
+}
+
 .row-has-issue {
   background: rgba(229, 57, 53, 0.04) !important;
+}
+
+.row-telat-naik {
+  background: rgba(229, 57, 53, 0.08) !important;
+  border-left: 3px solid #e53935 !important;
 }
 
 :deep(.text-right) { text-align: right !important; }

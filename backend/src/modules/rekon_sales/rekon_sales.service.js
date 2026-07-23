@@ -2077,7 +2077,44 @@ class RekonSalesService {
 
       try {
         const items = await StoreQueryHelper.getLiveCheckItems(storeConnection, shifts);
-        return { shifts, items };
+        const shiftInfoMap = await StoreQueryHelper.getLiveCheckShiftInfo(storeConnection, shifts);
+
+        const shiftsWithInfo = shifts.map(s => {
+          const key = `${s.TANGGAL}|${s.STATION}|${s.SHIFT}`;
+          return {
+            TANGGAL: s.TANGGAL,
+            STATION: s.STATION,
+            SHIFT: s.SHIFT,
+            ...shiftInfoMap[key],
+          };
+        });
+
+        const trnEndByShift = {};
+        for (const s of shiftsWithInfo) {
+          trnEndByShift[`${s.TANGGAL}|${s.STATION}|${s.SHIFT}`] = s.trnEndDate || null;
+        }
+
+        const enrichedItems = items.map(item => {
+          let isTelatNaik = false;
+          const keyItem = `${item.TANGGAL}|${item.STATION}|${item.SHIFT}`;
+          const trnEndDateTime = trnEndByShift[keyItem];
+          if (item.ADDTIME && trnEndDateTime) {
+            const itemAddtime = typeof item.ADDTIME === "string"
+              ? item.ADDTIME.replace("T", " ").replace(/\.\d+Z$/, "")
+              : new Date(item.ADDTIME).toISOString().slice(0, 19).replace("T", " ");
+            isTelatNaik = itemAddtime > trnEndDateTime;
+          }
+          return { ...item, isTelatNaik };
+        });
+
+        const totalItems = enrichedItems.length;
+        const lateItemCount = enrichedItems.filter(i => i.isTelatNaik).length;
+        const maxAddtime = enrichedItems.reduce((max, item) => {
+          if (!item.ADDTIME) return max;
+          return !max || item.ADDTIME > max ? item.ADDTIME : max;
+        }, null);
+
+        return { shifts: shiftsWithInfo, items: enrichedItems, summary: { totalItems, lateItemCount, maxAddtime } };
       } finally {
         await storeConnection.end();
       }

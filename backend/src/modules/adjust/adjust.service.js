@@ -367,6 +367,15 @@ class AdjustService {
       // Create database connection
       storeConnection = await dbStore.createDbStoreInterfence(storeInfo.dbHost, 2);
 
+      // Jika koneksi gagal (return null), beri pesan yang lebih user-friendly
+      if (!storeConnection) {
+        throw new Error(
+          `Gagal terhubung ke database toko ${store.storeCode} (${storeInfo.dbHost}). ` +
+          `Toko sedang offline atau tidak dapat dijangkau. ` +
+          `Silakan periksa koneksi toko dan coba lagi.`
+        );
+      }
+
       // Initialize result object
       const result = {
         processed: 0,

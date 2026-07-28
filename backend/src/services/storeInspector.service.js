@@ -3,6 +3,7 @@ import dbStore from "../config/db_store.js";
 import storeService from "../modules/store/storeService.js";
 import moment from "moment-timezone";
 import { formatNumber } from "../utils/numberUtils.js";
+import { analyzeAcostChange } from "../modules/penyesuaian/analyzer/index.js";
 
 const MSTRA_CATEGORIES = [
   { key: "trfin", label: "TRFIN", mapping: "trfin", match: r => r.RTYPE === "BPB" || r.RTYPE === "I" },
@@ -175,7 +176,7 @@ function categorizeRows(rows, categories, acost, mode = "mstran") {
 }
 
 class StoreInspectorService {
-  async inspect({ kdtk, prdcd, periode }) {
+  async inspect({ kdtk, prdcd, periode, begbal }) {
     if (!kdtk || !prdcd) {
       throw new Error("kdtk and prdcd are required");
     }
@@ -239,10 +240,24 @@ class StoreInspectorService {
         .filter(([, g]) => g.mapping && g.deviation > 0.5)
         .map(([key]) => key);
 
+      // ── Analisis penyebab perubahan ACOST ───────────────────────
+      // Gunakan data yang sudah di-fetch, TIDAK membuat query baru.
+      const isBkl = Boolean(prodmast?.SUPCO && String(prodmast.SUPCO).trim() !== "");
+      const acostAnalysis = analyzeAcostChange({
+        mstranRows: mstranAnalysis.categorized,
+        mtranRows: mtranAnalysis.categorized,
+        prodmast,
+        begbal,
+        acostSekarang: acost,
+        isBkl,
+        protectRow: protectRows.length > 0 ? protectRows[0] : null,
+      });
+
       logger.info(
         `[storeInspector] ${kdtk}/${prdcd} (${periode || "all"}): ` +
         `prodmast=${prodmast ? 1 : 0}, mstran=${mstranRows.length}, mtran=${mtranRows.length}, ` +
-        `protect=${protectRows.length}, warnings=${mstranAnalysis.totalWarningCount + mtranAnalysis.totalWarningCount + prodmastWarnings.length}`,
+        `protect=${protectRows.length}, warnings=${mstranAnalysis.totalWarningCount + mtranAnalysis.totalWarningCount + prodmastWarnings.length}, ` +
+        `acostCause=${acostAnalysis.cause}`,
       );
 
       return {
@@ -265,6 +280,7 @@ class StoreInspectorService {
           totalWarnings: mstranAnalysis.totalWarningCount + mtranAnalysis.totalWarningCount + prodmastWarnings.length,
           groupsWithIssues,
         },
+        acostAnalysis, // field baru — tidak mengubah field lama
       };
     } catch (err) {
       logger.error(`[storeInspector] Error inspecting ${kdtk}/${prdcd}: ${err.message}`);

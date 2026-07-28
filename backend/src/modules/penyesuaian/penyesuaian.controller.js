@@ -438,7 +438,26 @@ export const getStoreItem = async (req, res) => {
     if (!kdtk || !prdcd) {
       return apiResponse.badRequest(res, "kdtk and prdcd are required");
     }
-    const result = await storeInspectorService.inspect({ kdtk, prdcd, periode });
+
+    // Ambil BEGBAL dari sesuai_toko sebagai anchor price untuk analyzer
+    let begbal = null;
+    if (periode) {
+      try {
+        const SesuaiToko = (await import("./penyesuaian.model.js")).default;
+        const model = await SesuaiToko.getModel();
+        const record = await model.findOne({
+          where: { KDTK: kdtk, PRDCD: prdcd, PERIODE: periode },
+        });
+        if (record) {
+          begbal = Number(record.BEGBAL);
+        }
+      } catch (lookupError) {
+        logger.warn(`[penyesuaian.controller] Gagal lookup BEGBAL untuk ${kdtk}/${prdcd}/${periode}: ${lookupError.message}`);
+        // Lanjutkan tanpa begbal (akan dianggap 0 oleh analyzer)
+      }
+    }
+
+    const result = await storeInspectorService.inspect({ kdtk, prdcd, periode, begbal });
     return apiResponse.success(res, result);
   } catch (error) {
     logger.error(`[penyesuaian.controller] Error getStoreItem: ${error.message}`);

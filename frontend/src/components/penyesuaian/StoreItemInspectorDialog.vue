@@ -34,6 +34,95 @@
         <p>{{ error }}</p>
       </div>
       <div v-else class="inspector-content">
+        <!-- ── ACOST Analysis Banner ──────────────────────────── -->
+        <div v-if="acostAnalysis" class="acost-section">
+          <div class="acost-header">
+            <i class="pi pi-search"></i>
+            <h4>Analisis Perubahan ACOST</h4>
+          </div>
+
+          <!-- CABANG A: Ada bukti transaksi -->
+          <div v-if="acostAnalysis.cause === 'transaction_evidence'" class="acost-card acost-evidence">
+            <div class="acost-card-header">
+              <i class="pi pi-arrow-right-arrow-left"></i>
+              <span>Perubahan harga terdeteksi melalui transaksi berikut:</span>
+            </div>
+            <div class="acost-card-body">
+              <table class="acost-table">
+                <thead>
+                  <tr>
+                    <th class="th-date">Tanggal</th>
+                    <th class="th-num">Harga Sebelum</th>
+                    <th class="th-num">Harga Sesudah</th>
+                    <th class="th-num">Selisih</th>
+                    <th class="th-source">Sumber</th>
+                    <th class="th-ref">No. Bukti</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(ch, i) in acostPaginatedChanges" :key="i">
+                    <td>{{ formatDate(ch.tanggal) }}</td>
+                    <td class="cell-num">{{ fmt(ch.dari) }}</td>
+                    <td class="cell-num">{{ fmt(ch.ke) }}</td>
+                    <td class="cell-num" :class="diffClass(ch.ke - ch.dari)">{{ fmt(ch.ke - ch.dari) }}</td>
+                    <td><span class="source-badge" :class="'source-' + ch.source">{{ sourceLabel(ch.source) }}</span></td>
+                    <td class="cell-ref">{{ buktiNo(ch.ref) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <!-- Pagination ACOST -->
+              <div v-if="acostTotalPages > 1" class="pagination-bar">
+                <button class="page-btn" :disabled="acostPage <= 1" @click="acostPage--">
+                  <i class="pi pi-chevron-left"></i>
+                </button>
+                <template v-for="p in acostPageNumbers" :key="p">
+                  <span v-if="p === '...'" class="page-ellipsis">…</span>
+                  <button v-else class="page-btn" :class="{ 'page-active': p === acostPage }" @click="acostPage = p">
+                    {{ p }}
+                  </button>
+                </template>
+                <button class="page-btn" :disabled="acostPage >= acostTotalPages" @click="acostPage++">
+                  <i class="pi pi-chevron-right"></i>
+                </button>
+                <span class="page-info">{{ acostChanges.length }} perubahan</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- CABANG B: BKL cocok dengan protect -->
+          <div v-else-if="acostAnalysis.cause === 'protect_sync'" class="acost-card acost-protect-ok">
+            <div class="acost-card-header">
+              <i class="pi pi-check-circle"></i>
+              <span>Kenaikan sesuai harga supplier (protect)</span>
+            </div>
+            <div class="acost-card-body">
+              <p>ACOST saat ini <strong>{{ fmt(acostAnalysis.acostSekarang) }}</strong> sudah sesuai dengan HARGABL protect <strong>{{ fmt(acostAnalysis.hargablProtect) }}</strong>.</p>
+            </div>
+          </div>
+
+          <!-- CABANG B: BKL tidak cocok dengan protect -->
+          <div v-else-if="acostAnalysis.cause === 'protect_mismatch'" class="acost-card acost-protect-warn">
+            <div class="acost-card-header">
+              <i class="pi pi-exclamation-triangle"></i>
+              <span>ACOST tidak sesuai dengan harga supplier (protect)</span>
+            </div>
+            <div class="acost-card-body">
+              <p>ACOST toko <strong>{{ fmt(acostAnalysis.acostSekarang) }}</strong> tidak sesuai dengan HARGABL protect <strong>{{ fmt(acostAnalysis.hargablProtect) }}</strong> — tidak ada transaksi yang menjelaskan perubahan ini.</p>
+            </div>
+          </div>
+
+          <!-- CABANG C: Anomali tanpa penjelasan -->
+          <div v-else-if="acostAnalysis.cause === 'unexplained_acost_anomaly'" class="acost-card acost-anomaly">
+            <div class="acost-card-header">
+              <i class="pi pi-question-circle"></i>
+              <span>ACOST berubah tanpa transaksi tercatat</span>
+            </div>
+            <div class="acost-card-body">
+              <p>ACOST berubah dari BEGBAL <strong>{{ fmt(acostAnalysis.begbal) }}</strong> menjadi <strong>{{ fmt(acostAnalysis.acostSekarang) }}</strong> tanpa transaksi yang mencatat perubahan harga. Item non-BKL — perlu investigasi manual.</p>
+            </div>
+          </div>
+        </div>
+
         <!-- Summary Warnings -->
         <div v-if="summary.totalWarnings > 0" class="summary-bar">
           <i class="pi pi-exclamation-circle"></i>
@@ -106,7 +195,7 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="(row, i) in sortRows(group.rows, mstranSort)" :key="i" :class="{ 'row-suspicious': row._warnings?.length }">
+                  <tr v-for="(row, i) in getPaginatedRows(sortRows(group.rows, mstranSort), mstranPageMap[gkey] || 1)" :key="i" :class="{ 'row-suspicious': row._warnings?.length }">
                     <td v-for="col in mstranColumns" :key="col" :class="cellClass(row, col)">{{ cellVal(row, col) }}</td>
                     <td class="warn-col">
                       <span v-if="row._warnings?.length" class="warn-icon"
@@ -115,6 +204,16 @@
                   </tr>
                 </tbody>
               </table>
+              <!-- Pagination MSTRAN group -->
+              <div v-if="mstranGroupPages(gkey) > 1" class="pagination-bar">
+                <button class="page-btn" :disabled="(mstranPageMap[gkey] || 1) <= 1" @click="setMstranPage(gkey, (mstranPageMap[gkey] || 1) - 1)">
+                  <i class="pi pi-chevron-left"></i>
+                </button>
+                <span class="page-info">Hlm {{ mstranPageMap[gkey] || 1 }}/{{ mstranGroupPages(gkey) }}</span>
+                <button class="page-btn" :disabled="(mstranPageMap[gkey] || 1) >= mstranGroupPages(gkey)" @click="setMstranPage(gkey, (mstranPageMap[gkey] || 1) + 1)">
+                  <i class="pi pi-chevron-right"></i>
+                </button>
+              </div>
             </div>
             <div v-else class="empty-section">Tidak ada data grup ini</div>
           </div>
@@ -162,7 +261,7 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="(row, i) in sortRows(group.rows, mtranSort)" :key="i" :class="{ 'row-suspicious': row._warnings?.length }">
+                  <tr v-for="(row, i) in getPaginatedRows(sortRows(group.rows, mtranSort), mtranPageMap[gkey] || 1)" :key="i" :class="{ 'row-suspicious': row._warnings?.length }">
                     <td v-for="col in mtranColumns" :key="col" :class="cellClass(row, col)">{{ cellVal(row, col) }}</td>
                     <td class="warn-col">
                       <span v-if="row._warnings?.length" class="warn-icon"
@@ -171,6 +270,16 @@
                   </tr>
                 </tbody>
               </table>
+              <!-- Pagination MTRAN group -->
+              <div v-if="mtranGroupPages(gkey) > 1" class="pagination-bar">
+                <button class="page-btn" :disabled="(mtranPageMap[gkey] || 1) <= 1" @click="setMtranPage(gkey, (mtranPageMap[gkey] || 1) - 1)">
+                  <i class="pi pi-chevron-left"></i>
+                </button>
+                <span class="page-info">Hlm {{ mtranPageMap[gkey] || 1 }}/{{ mtranGroupPages(gkey) }}</span>
+                <button class="page-btn" :disabled="(mtranPageMap[gkey] || 1) >= mtranGroupPages(gkey)" @click="setMtranPage(gkey, (mtranPageMap[gkey] || 1) + 1)">
+                  <i class="pi pi-chevron-right"></i>
+                </button>
+              </div>
             </div>
             <div v-else class="empty-section">Tidak ada data grup ini</div>
           </div>
@@ -214,7 +323,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import BaseModalDetail from "@/components/common/BaseModalDetail.vue";
 import penyesuaianService from "@/services/penyesuaian.service.js";
 
@@ -229,7 +338,7 @@ const props = defineProps({
 
 defineEmits(["close"]);
 
-const data = ref({ prodmast: null, mstran: { rows: [], groups: {}, totalWarnings: 0 }, mtran: { rows: [], groups: {}, totalWarnings: 0 }, protect: [], prodmastWarnings: [], acost: 0, lcost: 0, summary: { totalWarnings: 0, groupsWithIssues: [] } });
+const data = ref({ prodmast: null, mstran: { rows: [], groups: {}, totalWarnings: 0 }, mtran: { rows: [], groups: {}, totalWarnings: 0 }, protect: [], prodmastWarnings: [], acost: 0, lcost: 0, summary: { totalWarnings: 0, groupsWithIssues: [] }, acostAnalysis: null });
 const loading = ref(true);
 const error = ref("");
 
@@ -261,6 +370,8 @@ const begbalDevClass = computed(() => {
 
 const prodmastWarnings = computed(() => data.value.prodmastWarnings || []);
 
+const acostAnalysis = computed(() => data.value.acostAnalysis || null);
+
 const summary = computed(() => data.value.summary || { totalWarnings: 0, groupsWithIssues: [] });
 const criticalGroups = computed(() => summary.value.groupsWithIssues?.map(k => {
   const g = mstranGroups.value[k];
@@ -291,6 +402,68 @@ const protectColumns = computed(() => getColumns(data.value.protect));
 
 const mstranSort = ref({ column: null, order: null });
 const mtranSort = ref({ column: null, order: null });
+
+// ── Client-side pagination state ────────────────────────────
+const pageSize = 10;
+const acostPage = ref(1);
+const mstranPageMap = ref({});
+const mtranPageMap = ref({});
+
+const acostChanges = computed(() => acostAnalysis.value?.changes || []);
+const acostTotalPages = computed(() => Math.max(1, Math.ceil(acostChanges.value.length / pageSize)));
+const acostPaginatedChanges = computed(() => {
+  const start = (acostPage.value - 1) * pageSize;
+  return acostChanges.value.slice(start, start + pageSize);
+});
+const acostPageNumbers = computed(() => {
+  const tp = acostTotalPages.value;
+  const cur = acostPage.value;
+  if (tp <= 7) {
+    return Array.from({ length: tp }, (_, i) => i + 1);
+  }
+  const pages = [];
+  if (cur <= 4) {
+    for (let i = 1; i <= 5; i++) pages.push(i);
+    pages.push('...', tp);
+  } else if (cur >= tp - 3) {
+    pages.push(1, '...');
+    for (let i = tp - 4; i <= tp; i++) pages.push(i);
+  } else {
+    pages.push(1, '...');
+    for (let i = cur - 1; i <= cur + 1; i++) pages.push(i);
+    pages.push('...', tp);
+  }
+  return pages;
+});
+
+function getPaginatedRows(rows, page, size = pageSize) {
+  if (!rows?.length) return rows || [];
+  const start = (page - 1) * size;
+  return rows.slice(start, start + size);
+}
+
+function mstranGroupPages(gkey) {
+  const g = mstranGroups.value[gkey];
+  return Math.max(1, Math.ceil((g?.rows?.length || 0) / pageSize));
+}
+
+function mtranGroupPages(gkey) {
+  const g = mtranGroups.value[gkey];
+  return Math.max(1, Math.ceil((g?.rows?.length || 0) / pageSize));
+}
+
+function setMstranPage(gkey, page) {
+  mstranPageMap.value = { ...mstranPageMap.value, [gkey]: page };
+}
+
+function setMtranPage(gkey, page) {
+  mtranPageMap.value = { ...mtranPageMap.value, [gkey]: page };
+}
+
+// Reset pagination when data changes
+watch(() => data.value.mstran?.rows, () => { mstranPageMap.value = {}; });
+watch(() => data.value.mtran?.rows, () => { mtranPageMap.value = {}; });
+watch(() => acostAnalysis.value, () => { acostPage.value = 1; });
 
 function toggleSort(table, column) {
   const s = table === "mstran" ? mstranSort : mtranSort;
@@ -360,6 +533,40 @@ function cellVal(row, col) {
   const v = row[col];
   if (v === null || v === undefined) return "-";
   return String(v);
+}
+
+/** ── ACOST Analysis Helpers ────────────────────────────── */
+function formatDate(val) {
+  if (!val) return "-";
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return String(val);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+
+function sourceLabel(source) {
+  const labels = {
+    bpb: 'BPB',
+    konversi_bm: 'Konversi Racikan',
+    k: 'Retur/K',
+    mtran_hpp: 'Penjualan (HPP)',
+  };
+  return labels[source] || source;
+}
+
+function diffClass(val) {
+  if (val > 0) return 'val-critical';
+  if (val < 0) return 'val-ok';
+  return '';
+}
+
+function buktiNo(refRow) {
+  if (!refRow) return '-';
+  // mstran: BUKTI_NO, mtran: DOCNO
+  return refRow.BUKTI_NO || refRow.bukti_no
+    || refRow.DOCNO || refRow.docno
+    || refRow.BUKTI || refRow.bukti
+    || '-';
 }
 
 onMounted(async () => {
@@ -452,14 +659,21 @@ onMounted(async () => {
 .inspector-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; white-space: nowrap; }
 .inspector-table thead { position: sticky; top: 0; z-index: 2; }
 .sortable-th { cursor: pointer; user-select: none; }
-.sortable-th:hover { background: #e5e7eb; }
+.sortable-th:hover { background: #d1d9e6 !important; }
 .sort-indicator { font-size: 0.7rem; color: #6b7280; }
 .inspector-table th {
   background: #e2e8f0; padding: 0.4rem 0.6rem; text-align: left;
   font-weight: 700; color: #1e293b; border-bottom: 2px solid #94a3b8;
+  border-right: 1px solid #cbd5e1;
   box-shadow: 0 1px 2px rgba(0,0,0,0.06);
 }
-.inspector-table td { padding: 0.3rem 0.6rem; border-bottom: 1px solid #e5e7eb; color: #1e293b; }
+.inspector-table th:last-child { border-right: none; }
+.inspector-table td {
+  padding: 0.3rem 0.6rem; border-bottom: 1px solid #e5e7eb;
+  border-right: 1px solid #f1f5f9;
+  color: #1e293b;
+}
+.inspector-table td:last-child { border-right: none; }
 .inspector-table tbody tr:hover { background: #e0f2fe; }
 
 /* Suspicious row highlighting — high contrast */
@@ -476,6 +690,119 @@ onMounted(async () => {
 
 .empty-section { text-align: center; padding: 1.5rem; color: #9ca3af; font-size: 0.85rem; }
 
+/* ── ACOST Analysis Section ──────────────────────────────── */
+.acost-section {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+.acost-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-bottom: 1px solid #bae6fd;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #0369a1;
+}
+.acost-header h4 { margin: 0; font-size: inherit; }
+
+.acost-card {
+  border-bottom: 1px solid #e5e7eb;
+}
+.acost-card:last-child { border-bottom: none; }
+.acost-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+.acost-card-body {
+  padding: 0.5rem 1rem 1rem;
+  font-size: 0.85rem;
+  color: #374151;
+}
+.acost-card-body p { margin: 0; line-height: 1.6; }
+.acost-card-body strong { font-weight: 700; color: #1e293b; font-family: monospace; }
+
+.acost-evidence { background: #f8fafc; }
+.acost-evidence .acost-card-header {
+  color: #1e40af;
+  background: #eff6ff;
+}
+
+.acost-protect-ok { background: #f0fdf4; }
+.acost-protect-ok .acost-card-header {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.acost-protect-warn { background: #fefce8; }
+.acost-protect-warn .acost-card-header {
+  color: #854d0e;
+  background: #fef9c3;
+}
+
+.acost-anomaly { background: #fef2f2; }
+.acost-anomaly .acost-card-header {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.acost-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+.acost-table th {
+  background: #f1f5f9;
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  font-weight: 700;
+  color: #475569;
+  border-bottom: 2px solid #cbd5e1;
+  border-right: 1px solid #e2e8f0;
+}
+.acost-table th:last-child { border-right: none; }
+.acost-table td {
+  padding: 0.35rem 0.6rem;
+  border-bottom: 1px solid #e2e8f0;
+  border-right: 1px solid #f1f5f9;
+  color: #1e293b;
+}
+.acost-table td:last-child { border-right: none; }
+.acost-table tbody tr:hover { background: #f1f5f9; }
+
+/* Column alignment for ACOST table */
+.acost-table .th-date { min-width: 100px; }
+.acost-table .th-num { text-align: right; min-width: 100px; }
+.acost-table .th-source { min-width: 90px; text-align: center; }
+.acost-table .th-ref { min-width: 110px; }
+.acost-table .cell-ref {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: #475569;
+}
+
+.source-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+.source-bpb { background: #dbeafe; color: #1e40af; }
+.source-konversi_bm { background: #fce7f3; color: #9d174d; }
+.source-k { background: #fef3c7; color: #92400e; }
+.source-mtran_hpp { background: #d1fae5; color: #065f46; }
+
 .val-ok { color: #15803d; }
 .val-warn { color: #d97706; }
 .val-critical { color: #b91c1c; font-weight: 700; }
@@ -483,6 +810,56 @@ onMounted(async () => {
 .dev-ok { color: #15803d; }
 .dev-warn { color: #d97706; }
 .dev-critical { color: #b91c1c; font-weight: 700; }
+
+/* ── Pagination Controls ────────────────────────────────── */
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.5rem 1rem 0.75rem;
+  background: #fafbfc;
+  border-top: 1px solid #e5e7eb;
+}
+.page-btn {
+  min-width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #374151;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0 0.4rem;
+}
+.page-btn:hover:not(:disabled) {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+}
+.page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.page-active {
+  background: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+  color: #ffffff !important;
+}
+.page-info {
+  font-size: 0.7rem;
+  color: #6b7280;
+  margin-left: 0.5rem;
+}
+.page-ellipsis {
+  padding: 0 0.15rem;
+  color: #9ca3af;
+  font-size: 0.8rem;
+}
 
 .footer-actions { display: flex; justify-content: flex-end; }
 .btn-cancel {

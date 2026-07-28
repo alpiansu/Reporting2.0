@@ -8,7 +8,7 @@
         <div class="info-panel">
           <div class="info-row">
             <span class="info-label">Item Konversi (PLU_KONV)</span>
-            <span class="info-value">{{ detail.pluKonv }}</span>
+            <span class="info-value">{{ detail.pluKonv }} — {{ detail.singkatanPluKonv || '-' }}</span>
           </div>
           <div class="info-row">
             <span class="info-label">Waktu Transaksi KO</span>
@@ -34,7 +34,7 @@
           <div class="section-card">
             <div class="section-card-header">
               <i class="pi pi-box"></i>
-              <span>PLU Asal: {{ detail.pluAsal }}</span>
+              <span>PLU Asal: {{ detail.pluAsal }} — {{ detail.singkatanPluAsal || '-' }}</span>
             </div>
             <div class="section-card-body">
               <div class="param-grid">
@@ -43,15 +43,15 @@
                   <span class="param-value">{{ detail.nilai }}</span>
                 </div>
                 <div class="param-item">
-                  <span class="param-label">ACOST Prodmast</span>
+                  <span class="param-label">ACOST PLU ASAL</span>
                   <span class="param-value">{{ fmt(detail.acostAsal) }}</span>
                 </div>
                 <div class="param-item">
-                  <span class="param-label">Harga Seharusnya</span>
+                  <span class="param-label">Acost PLU KONV Seharusnya</span>
                   <span class="param-value">{{ fmt(detail.expectedPrice) }}</span>
                 </div>
                 <div class="param-item">
-                  <span class="param-label">Harga Aktual</span>
+                  <span class="param-label">Acost PLU KONV Aktual</span>
                   <span class="param-value" :class="selisihClass(detail.selisih)">{{ fmt(detail.actualPrice) }}</span>
                 </div>
                 <div class="param-item">
@@ -75,7 +75,7 @@
                 <div class="chain-content">
                   <div class="chain-header">
                     <span class="chain-badge badge-bpb">BPB</span>
-                    <span class="chain-label">Pembelian Barang — PLU {{ detail.pluAsal }}</span>
+                     <span class="chain-label">Pembelian Barang — PLU {{ detail.pluAsal }} {{ detail.singkatanPluAsal ? '(' + detail.singkatanPluAsal + ')' : '' }}</span>
                   </div>
                   <div class="chain-detail">
                     <span>Harga: <strong>{{ fmt(detail.bpbAsal.PRICE || detail.bpbAsal.price) }}</strong></span>
@@ -98,7 +98,7 @@
                 <div class="chain-content">
                   <div class="chain-header">
                     <span class="chain-badge badge-ko">KO</span>
-                    <span class="chain-label">Konversi Racikan — PLU {{ detail.pluKonv }}</span>
+                     <span class="chain-label">Konversi Racikan — PLU {{ detail.pluKonv }} {{ detail.singkatanPluKonv ? '(' + detail.singkatanPluKonv + ')' : '' }}</span>
                   </div>
                   <div class="chain-detail">
                     <span>Harga: <strong>{{ fmt(detail.hargaSebelum) }}</strong> → <strong :class="selisihClass(detail.selisih)">{{ fmt(detail.actualPrice) }}</strong></span>
@@ -146,7 +146,7 @@ function fmt(val) {
   if (val === null || val === undefined) return '-'
   const n = Number(val)
   if (isNaN(n)) return String(val)
-  return n.toLocaleString('id-ID')
+  return n.toLocaleString('en-US')
 }
 
 function formatDate(val) {

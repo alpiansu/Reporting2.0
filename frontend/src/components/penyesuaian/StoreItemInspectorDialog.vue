@@ -3,10 +3,26 @@
     <template #header-info>
       <div class="inspector-header">
         <div class="info-grid">
-          <div class="info-item"><span class="info-label">Toko</span><span class="info-value">{{ kdtk }}</span></div>
-          <div class="info-item"><span class="info-label">Cabang</span><span class="info-value">{{ cab }}</span></div>
-          <div class="info-item"><span class="info-label">Periode</span><span class="info-value">{{ periode || 'Semua' }}</span></div>
-          <div class="info-item"><span class="info-label">PRDCD</span><span class="info-value prdcd-value">{{ prdcd }}</span></div>
+          <div class="info-item">
+            <span class="info-label">Toko</span>
+            <span class="info-value">{{ kdtk }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Cabang</span>
+            <span class="info-value">{{ cab }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Periode</span>
+            <span class="info-value">{{ periode || 'Semua' }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">PRDCD</span>
+            <span class="info-value prdcd-value">{{ prdcd }}</span>
+          </div>
+          <div v-if="data.prodmast?.SINGKATAN" class="info-item">
+            <span class="info-label">SINGKATAN</span>
+            <span class="info-value singkatan-value">{{ data.prodmast.SINGKATAN }}</span>
+          </div>
         </div>
         <div v-if="acostNum > 0" class="begbal-row">
           <div class="begbal-box">
@@ -627,6 +643,7 @@ onMounted(async () => {
 .info-label { font-size: 0.7rem; font-weight: 600; color: #6b7280; text-transform: uppercase; }
 .info-value { font-size: 0.9rem; font-weight: 700; color: #1e293b; }
 .prdcd-value { color: #2563eb; font-family: monospace; }
+.singkatan-value { color: #0f172a; font-family: sans-serif; }
 
 .begbal-row {
   display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem;

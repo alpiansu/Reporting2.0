@@ -437,7 +437,13 @@ async function traceKonversiChanges(connection, prdcd, koChanges) {
         [matchedPluAsal],
       );
 
+      const [prodmastKonvRows] = await connection.query(
+        "SELECT * FROM prodmast WHERE PRDCD = ? LIMIT 1",
+        [prdcd],
+      );
+
       const prodRow = prodmastAsalRows && prodmastAsalRows.length > 0 ? prodmastAsalRows[0] : null;
+      const prodKonvRow = prodmastKonvRows && prodmastKonvRows.length > 0 ? prodmastKonvRows[0] : null;
       const acostAsal = prodRow ? Number(prodRow.ACOST || prodRow.acost || 0) : 0;
 
       const analisis = analyzeKonversiDetail({
@@ -456,9 +462,12 @@ async function traceKonversiChanges(connection, prdcd, koChanges) {
         koAsal: mstranAsal,
         bpbAsal: bpbAsalRows && bpbAsalRows.length > 0 ? bpbAsalRows[0] : null,
         prodmastAsal: prodRow,
+        prodmastKonv: prodKonvRow,
         acostAsal,
         actualPrice: Number(change.ke),
         hargaSebelum: Number(change.dari),
+        singkatanPluAsal: prodRow ? (prodRow.SINGKATAN || prodRow.singkatan || "") : "",
+        singkatanPluKonv: prodKonvRow ? (prodKonvRow.SINGKATAN || prodKonvRow.singkatan || "") : "",
         ...analisis,
         found: true,
       });

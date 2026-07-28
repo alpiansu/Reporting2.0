@@ -65,7 +65,12 @@
                     <td class="cell-num">{{ fmt(ch.dari) }}</td>
                     <td class="cell-num">{{ fmt(ch.ke) }}</td>
                     <td class="cell-num" :class="diffClass(ch.ke - ch.dari)">{{ fmt(ch.ke - ch.dari) }}</td>
-                    <td><span class="source-badge" :class="'source-' + ch.source">{{ sourceLabel(ch.source) }}</span></td>
+                    <td>
+                      <span class="source-badge" :class="'source-' + ch.source">{{ sourceLabel(ch.source) }}</span>
+                      <button v-if="ch.koDetail" class="btn-detail-konversi" @click="openKonversiDetail(ch)" title="Lihat detail konversi">
+                        <i class="pi pi-external-link"></i>
+                      </button>
+                    </td>
                     <td class="cell-ref">{{ buktiNo(ch.ref) }}</td>
                   </tr>
                 </tbody>
@@ -209,10 +214,16 @@
                 <button class="page-btn" :disabled="(mstranPageMap[gkey] || 1) <= 1" @click="setMstranPage(gkey, (mstranPageMap[gkey] || 1) - 1)">
                   <i class="pi pi-chevron-left"></i>
                 </button>
-                <span class="page-info">Hlm {{ mstranPageMap[gkey] || 1 }}/{{ mstranGroupPages(gkey) }}</span>
+                <template v-for="p in getGroupPageNumbers(mstranPageMap[gkey] || 1, mstranGroupPages(gkey))" :key="p">
+                  <span v-if="p === '...'" class="page-ellipsis">…</span>
+                  <button v-else class="page-btn" :class="{ 'page-active': p === (mstranPageMap[gkey] || 1) }" @click="setMstranPage(gkey, p)">
+                    {{ p }}
+                  </button>
+                </template>
                 <button class="page-btn" :disabled="(mstranPageMap[gkey] || 1) >= mstranGroupPages(gkey)" @click="setMstranPage(gkey, (mstranPageMap[gkey] || 1) + 1)">
                   <i class="pi pi-chevron-right"></i>
                 </button>
+                <span class="page-info">{{ group.rows.length }} baris</span>
               </div>
             </div>
             <div v-else class="empty-section">Tidak ada data grup ini</div>
@@ -275,10 +286,16 @@
                 <button class="page-btn" :disabled="(mtranPageMap[gkey] || 1) <= 1" @click="setMtranPage(gkey, (mtranPageMap[gkey] || 1) - 1)">
                   <i class="pi pi-chevron-left"></i>
                 </button>
-                <span class="page-info">Hlm {{ mtranPageMap[gkey] || 1 }}/{{ mtranGroupPages(gkey) }}</span>
+                <template v-for="p in getGroupPageNumbers(mtranPageMap[gkey] || 1, mtranGroupPages(gkey))" :key="p">
+                  <span v-if="p === '...'" class="page-ellipsis">…</span>
+                  <button v-else class="page-btn" :class="{ 'page-active': p === (mtranPageMap[gkey] || 1) }" @click="setMtranPage(gkey, p)">
+                    {{ p }}
+                  </button>
+                </template>
                 <button class="page-btn" :disabled="(mtranPageMap[gkey] || 1) >= mtranGroupPages(gkey)" @click="setMtranPage(gkey, (mtranPageMap[gkey] || 1) + 1)">
                   <i class="pi pi-chevron-right"></i>
                 </button>
+                <span class="page-info">{{ group.rows.length }} baris</span>
               </div>
             </div>
             <div v-else class="empty-section">Tidak ada data grup ini</div>
@@ -320,11 +337,19 @@
       </div>
     </template>
   </BaseModalDetail>
+
+  <!-- Detail Dialog for Konversi Analysis -->
+  <KonversiDetailDialog
+    :show="showKonversiDetail"
+    :detail="selectedKonversiDetail"
+    @close="showKonversiDetail = false"
+  />
 </template>
 
 <script setup>
 import { ref, computed, watch, onMounted } from "vue";
 import BaseModalDetail from "@/components/common/BaseModalDetail.vue";
+import KonversiDetailDialog from "./KonversiDetailDialog.vue";
 import penyesuaianService from "@/services/penyesuaian.service.js";
 
 const props = defineProps({
@@ -341,6 +366,15 @@ defineEmits(["close"]);
 const data = ref({ prodmast: null, mstran: { rows: [], groups: {}, totalWarnings: 0 }, mtran: { rows: [], groups: {}, totalWarnings: 0 }, protect: [], prodmastWarnings: [], acost: 0, lcost: 0, summary: { totalWarnings: 0, groupsWithIssues: [] }, acostAnalysis: null });
 const loading = ref(true);
 const error = ref("");
+
+// ── Konversi Detail Dialog state ────────────────────────────
+const showKonversiDetail = ref(false);
+const selectedKonversiDetail = ref(null);
+
+function openKonversiDetail(ch) {
+  selectedKonversiDetail.value = ch.koDetail || null;
+  showKonversiDetail.value = true;
+}
 
 const acostNum = computed(() => Number(data.value.acost) || Number(data.value.lcost) || 0);
 const acostFormatted = computed(() => fmt(acostNum.value));
@@ -415,26 +449,7 @@ const acostPaginatedChanges = computed(() => {
   const start = (acostPage.value - 1) * pageSize;
   return acostChanges.value.slice(start, start + pageSize);
 });
-const acostPageNumbers = computed(() => {
-  const tp = acostTotalPages.value;
-  const cur = acostPage.value;
-  if (tp <= 7) {
-    return Array.from({ length: tp }, (_, i) => i + 1);
-  }
-  const pages = [];
-  if (cur <= 4) {
-    for (let i = 1; i <= 5; i++) pages.push(i);
-    pages.push('...', tp);
-  } else if (cur >= tp - 3) {
-    pages.push(1, '...');
-    for (let i = tp - 4; i <= tp; i++) pages.push(i);
-  } else {
-    pages.push(1, '...');
-    for (let i = cur - 1; i <= cur + 1; i++) pages.push(i);
-    pages.push('...', tp);
-  }
-  return pages;
-});
+const acostPageNumbers = computed(() => getGroupPageNumbers(acostPage.value, acostTotalPages.value));
 
 function getPaginatedRows(rows, page, size = pageSize) {
   if (!rows?.length) return rows || [];
@@ -458,6 +473,27 @@ function setMstranPage(gkey, page) {
 
 function setMtranPage(gkey, page) {
   mtranPageMap.value = { ...mtranPageMap.value, [gkey]: page };
+}
+
+function getGroupPageNumbers(currentPage, totalPages) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+  const cur = currentPage;
+  const tp = totalPages;
+  const pages = [];
+  if (cur <= 4) {
+    for (let i = 1; i <= 5; i++) pages.push(i);
+    pages.push('...', tp);
+  } else if (cur >= tp - 3) {
+    pages.push(1, '...');
+    for (let i = tp - 4; i <= tp; i++) pages.push(i);
+  } else {
+    pages.push(1, '...');
+    for (let i = cur - 1; i <= cur + 1; i++) pages.push(i);
+    pages.push('...', tp);
+  }
+  return pages;
 }
 
 // Reset pagination when data changes
@@ -504,7 +540,7 @@ function fmt(val) {
   if (val === null || val === undefined) return "-";
   const n = Number(val);
   if (isNaN(n)) return String(val);
-  return n.toLocaleString("id-ID");
+  return n.toLocaleString("en-US");
 }
 
 function priceClass(unitPrice) {
@@ -797,6 +833,26 @@ onMounted(async () => {
   padding: 0.15rem 0.5rem;
   border-radius: 4px;
   text-transform: uppercase;
+}
+
+.btn-detail-konversi {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 4px;
+  background: #8b5cf6;
+  color: #fff;
+  font-size: 0.65rem;
+  cursor: pointer;
+  margin-left: 0.35rem;
+  vertical-align: middle;
+  transition: background 0.15s ease;
+}
+.btn-detail-konversi:hover {
+  background: #7c3aed;
 }
 .source-bpb { background: #dbeafe; color: #1e40af; }
 .source-konversi_bm { background: #fce7f3; color: #9d174d; }

@@ -3,7 +3,7 @@ import dbStore from "../config/db_store.js";
 import storeService from "../modules/store/storeService.js";
 import moment from "moment-timezone";
 import { formatNumber } from "../utils/numberUtils.js";
-import { analyzeAcostChange } from "../modules/penyesuaian/analyzer/index.js";
+import { analyzeAcostChange, analyzeKonversiDetail } from "../modules/penyesuaian/analyzer/index.js";
 
 const MSTRA_CATEGORIES = [
   { key: "trfin", label: "TRFIN", mapping: "trfin", match: r => r.RTYPE === "BPB" || r.RTYPE === "I" },
@@ -233,7 +233,8 @@ class StoreInspectorService {
       if (prodmast) {
         if (!Number(prodmast.ACOST)) prodmastWarnings.push("ACOST = 0");
         if (!Number(prodmast.LCOST)) prodmastWarnings.push("LCOST = 0");
-        if (prodmast.SUPCO && String(prodmast.SUPCO).trim() !== "") prodmastWarnings.push("BKL item");
+        if ((prodmast.SUPCO && String(prodmast.SUPCO).trim() !== "") || prodmast.kons === "K")
+          prodmastWarnings.push("BKL item");
       }
 
       const groupsWithIssues = Object.entries(mstranAnalysis.groups)
@@ -242,7 +243,7 @@ class StoreInspectorService {
 
       // ── Analisis penyebab perubahan ACOST ───────────────────────
       // Gunakan data yang sudah di-fetch, TIDAK membuat query baru.
-      const isBkl = Boolean(prodmast?.SUPCO && String(prodmast.SUPCO).trim() !== "");
+      const isBkl = Boolean((prodmast?.SUPCO && String(prodmast.SUPCO).trim() !== "") || prodmast?.kons == "K");
       const acostAnalysis = analyzeAcostChange({
         mstranRows: mstranAnalysis.categorized,
         mtranRows: mtranAnalysis.categorized,
@@ -253,11 +254,45 @@ class StoreInspectorService {
         protectRow: protectRows.length > 0 ? protectRows[0] : null,
       });
 
+      // ── Deep analysis untuk konversi (KO) ────────────────────────
+      // Hanya jika ada perubahan dari sumber konversi_bm dengan ISTYPE='KO'
+      if (acostAnalysis.cause === "transaction_evidence" && acostAnalysis.detail?.konversiBm?.changes?.length > 0) {
+        const koChanges = acostAnalysis.detail.konversiBm.changes.filter(
+          ch => (ch.ref?.ISTYPE || ch.ref?.istype || "").toUpperCase() === "KO",
+        );
+        if (koChanges.length > 0) {
+          let konversiDetail = [];
+          try {
+            konversiDetail = await traceKonversiChanges(connection, prdcd, koChanges);
+          } catch (konvErr) {
+            logger.warn(`[storeInspector] Gagal trace konversi untuk ${kdtk}/${prdcd}: ${konvErr.message}`);
+          }
+          // Attach koDetail ke masing-masing change — selalu set, meskipun match gagal
+          for (const ch of acostAnalysis.changes) {
+            if (ch.source === "konversi_bm" && (ch.ref?.ISTYPE || ch.ref?.istype || "").toUpperCase() === "KO") {
+              // Normalisasi addtime ke string untuk matching konsisten
+              const rawAd = ch.ref?.ADDTIME || ch.ref?.addtime;
+              const addtimeKo =
+                rawAd instanceof Date ? rawAd.toISOString().replace("T", " ").split(".")[0] : String(rawAd || "");
+
+              const match = konversiDetail.find(d => d.addtimeKo === addtimeKo);
+              // Fallback: jika match tidak ketemu, set default agar button tetap muncul
+              ch.koDetail = match || {
+                pluKonv: prdcd,
+                addtimeKo,
+                found: false,
+                kesimpulan: "Gagal mencocokkan data counterpart konversi",
+              };
+            }
+          }
+        }
+      }
+
       logger.info(
         `[storeInspector] ${kdtk}/${prdcd} (${periode || "all"}): ` +
-        `prodmast=${prodmast ? 1 : 0}, mstran=${mstranRows.length}, mtran=${mtranRows.length}, ` +
-        `protect=${protectRows.length}, warnings=${mstranAnalysis.totalWarningCount + mtranAnalysis.totalWarningCount + prodmastWarnings.length}, ` +
-        `acostCause=${acostAnalysis.cause}`,
+          `prodmast=${prodmast ? 1 : 0}, mstran=${mstranRows.length}, mtran=${mtranRows.length}, ` +
+          `protect=${protectRows.length}, warnings=${mstranAnalysis.totalWarningCount + mtranAnalysis.totalWarningCount + prodmastWarnings.length}, ` +
+          `acostCause=${acostAnalysis.cause}`,
       );
 
       return {
@@ -293,6 +328,152 @@ class StoreInspectorService {
       }
     }
   }
+}
+
+/**
+ * Lacak counterpart konversi (KO) — query ke store DB untuk:
+ * 1. konversi_plu (cari PLU_ASAL)
+ * 2. mstran PLU_ASAL (cari KO yang mendahului + BPB)
+ * 3. prodmast PLU_ASAL (dapatkan ACOST)
+ *
+ * CATATAN: Fungsi ini TIDAK throw error. Jika konversi_plu tidak ada
+ * atau query gagal, tetap return hasil dengan found:false + addtimeKo
+ * agar tombol Detail tetap muncul di frontend.
+ */
+async function traceKonversiChanges(connection, prdcd, koChanges) {
+  const results = [];
+
+  // Query konversi_plu sekali — bungkus try/catch untuk handle table tidak ada
+  let konvRows = [];
+  try {
+    const [rows] = await connection.query("SELECT * FROM konversi_plu WHERE PLU_KONV = ?", [prdcd]);
+    konvRows = rows || [];
+  } catch (queryErr) {
+    logger.warn(
+      `[traceKonversi] Gagal query konversi_plu untuk ${prdcd}: ${queryErr.message}. Table mungkin tidak ada.`,
+    );
+    // Lanjutkan dengan konvRows = [], hasil per-change akan found:false
+  }
+
+  for (const change of koChanges) {
+    const rawAddtime = change.ref?.ADDTIME || change.ref?.addtime;
+    const addtimeKo =
+      rawAddtime instanceof Date ? rawAddtime.toISOString().replace("T", " ").split(".")[0] : String(rawAddtime || "");
+    if (!addtimeKo) continue;
+
+    if (konvRows.length === 0) {
+      results.push({
+        pluKonv: prdcd,
+        addtimeKo,
+        found: false,
+        kesimpulan: "PLU_ASAL tidak ditemukan di konversi_plu (table kosong atau tidak ada)",
+      });
+      continue;
+    }
+
+    const pluAsalList = konvRows
+      .map(r => r.PLU_ASAL || r.plu_asal)
+      .filter(v => v && String(v).trim() !== "");
+
+    if (pluAsalList.length === 0) {
+      results.push({
+        pluKonv: prdcd,
+        addtimeKo,
+        found: false,
+        kesimpulan: "Tidak ada PLU_ASAL yang valid di konversi_plu",
+      });
+      continue;
+    }
+
+    let mstranAsal = null;
+    let matchedPluAsal = null;
+    let matchedKonvRow = null;
+
+    try {
+      const [mstranAsalRows] = await connection.query(
+        `SELECT * FROM mstran
+         WHERE PRDCD IN (?) AND RTYPE = 'X' AND ISTYPE = 'KO'
+           AND ADDTIME < ?
+         ORDER BY ADDTIME DESC
+         LIMIT 1`,
+        [pluAsalList, addtimeKo],
+      );
+
+      mstranAsal = mstranAsalRows && mstranAsalRows.length > 0 ? mstranAsalRows[0] : null;
+      if (mstranAsal) {
+        matchedPluAsal = String(mstranAsal.PRDCD || mstranAsal.prdcd || "").trim();
+        matchedKonvRow = konvRows.find(
+          r => String(r.PLU_ASAL || r.plu_asal || "").trim() === matchedPluAsal,
+        );
+      }
+    } catch (mstranErr) {
+      logger.warn(`[traceKonversi] Gagal query mstran gabungan untuk ${prdcd} @ ${addtimeKo}: ${mstranErr.message}`);
+    }
+
+    if (!mstranAsal || !matchedKonvRow) {
+      results.push({
+        pluKonv: prdcd,
+        addtimeKo,
+        found: false,
+        kesimpulan: "Tidak ada PLU_ASAL yang cocok — tidak ditemukan transaksi KO asal yang sesuai",
+      });
+      continue;
+    }
+
+    const nilai = Number(matchedKonvRow.NILAI || matchedKonvRow.nilai) || 1;
+
+    try {
+      const [bpbAsalRows] = await connection.query(
+        `SELECT * FROM mstran
+         WHERE PRDCD = ? AND RTYPE = 'BPB'
+           AND ADDTIME < ?
+         ORDER BY ADDTIME DESC
+         LIMIT 1`,
+        [matchedPluAsal, addtimeKo],
+      );
+
+      const [prodmastAsalRows] = await connection.query(
+        "SELECT * FROM prodmast WHERE PRDCD = ? LIMIT 1",
+        [matchedPluAsal],
+      );
+
+      const prodRow = prodmastAsalRows && prodmastAsalRows.length > 0 ? prodmastAsalRows[0] : null;
+      const acostAsal = prodRow ? Number(prodRow.ACOST || prodRow.acost || 0) : 0;
+
+      const analisis = analyzeKonversiDetail({
+        pluAsal: matchedPluAsal,
+        nilai,
+        acostAsal,
+        bpbAsal: bpbAsalRows && bpbAsalRows.length > 0 ? bpbAsalRows[0] : null,
+        actualPrice: Number(change.ke),
+      });
+
+      results.push({
+        pluKonv: prdcd,
+        pluAsal: matchedPluAsal,
+        nilai,
+        addtimeKo,
+        koAsal: mstranAsal,
+        bpbAsal: bpbAsalRows && bpbAsalRows.length > 0 ? bpbAsalRows[0] : null,
+        prodmastAsal: prodRow,
+        acostAsal,
+        actualPrice: Number(change.ke),
+        hargaSebelum: Number(change.dari),
+        ...analisis,
+        found: true,
+      });
+    } catch (innerErr) {
+      logger.warn(`[traceKonversi] Gagal query detail untuk PLU_ASAL ${matchedPluAsal}: ${innerErr.message}`);
+      results.push({
+        pluKonv: prdcd,
+        addtimeKo,
+        found: false,
+        kesimpulan: `Gagal mengambil data detail PLU_ASAL ${matchedPluAsal}: ${innerErr.message}`,
+      });
+    }
+  }
+
+  return results;
 }
 
 export default new StoreInspectorService();

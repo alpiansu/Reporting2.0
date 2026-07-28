@@ -214,6 +214,19 @@ class PenyesuaianService {
     });
     return response.data;
   }
+
+  /**
+   * Delete note for a specific store and period
+   * @param {string} kdtk - Store code
+   * @param {string} periode - Period in YYMM format
+   * @returns {Promise<Object>} Response object
+   */
+  async deleteNote(kdtk, periode) {
+    const response = await api.delete(`/${this.fixedPattern}/note/`, {
+      params: { kdtk, periode },
+    });
+    return response.data;
+  }
 }
 
 export default new PenyesuaianService();

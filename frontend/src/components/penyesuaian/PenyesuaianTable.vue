@@ -116,6 +116,7 @@
             @keydown.enter.prevent="saveNote(item)"></textarea>
           <div class="note-actions">
             <Button severity="secondary" raised size="small" label="Cancel" @click="cancelEditing(item)" />
+            <Button severity="danger" raised size="small" icon="pi pi-trash" v-if="item.note" @click="confirmDeleteNote(item)" :disabled="isDeletingNote(item)" />
             <Button severity="success" raised size="small" label="Save" :loading="isSavingNote(item)" :disabled="isSavingNote(item)" @click="saveNote(item)" />
           </div>
         </div>
@@ -137,6 +138,21 @@
   <PenyesuaianDetailModal :show="detailModalVisible" :periode="periode" :cab="selectedItem?.CABANG"
     :kdtk="selectedItem?.KDTK || ''" :sesuai="formatCurrency(selectedItem?.SESUAI)"
     :noteSnapshotData="getSnapshotInfo(selectedItem)" @close="closeDetailModal" />
+
+  <!-- Delete Note Confirmation Dialog -->
+  <Dialog v-model:visible="deleteDialogVisible" header="Hapus Note" :modal="true" :closable="true"
+    class="delete-note-dialog" :style="{ width: '400px' }">
+    <div class="delete-confirm-content">
+      <i class="pi pi-exclamation-triangle delete-warning-icon"></i>
+      <p>Apakah Anda yakin ingin menghapus note untuk toko <strong>{{ itemToDelete?.KDTK }}</strong>?</p>
+      <p class="delete-warning-text">Tindakan ini tidak dapat dibatalkan.</p>
+    </div>
+    <template #footer>
+      <Button label="Batal" severity="secondary" @click="cancelDeleteNote" :disabled="deletingNote" />
+      <Button label="Ya, Hapus" severity="danger" icon="pi pi-trash" @click="executeDeleteNote"
+        :loading="deletingNote" :disabled="deletingNote" />
+    </template>
+  </Dialog>
 </template>
 
 <style src="./PenyesuaianTable.css" scoped></style>
@@ -147,6 +163,7 @@ import DataTable from '../common/DataTable.vue';
 import * as XLSX from 'xlsx';
 import { penyesuaianService } from '../../services/index.js';
 import Button from 'primevue/button';
+import Dialog from 'primevue/dialog';
 import { useAuthStore } from '../../stores';
 import PenyesuaianDetailModal from './PenyesuaianDetailModal.vue';
 
@@ -191,6 +208,9 @@ const toast = useToastService();
 const autoUpdatingItems = ref(new Set());
 const highlightedItems = ref(new Set());
 const savingNotes = ref(new Set());
+const deletingNote = ref(false);
+const deleteDialogVisible = ref(false);
+const itemToDelete = ref(null);
 const selectedItem = ref(null);
 
 // Search functionality
@@ -455,6 +475,53 @@ const saveNote = async (item) => {
 
 const cancelEditing = (item) => {
   item.editingNote = null;
+};
+
+// ─── Delete Note ─────────────────────────────────────────────────────
+
+const isDeletingNote = (item) => {
+  return deletingNote.value && itemToDelete.value === item;
+};
+
+const confirmDeleteNote = (item) => {
+  itemToDelete.value = item;
+  deleteDialogVisible.value = true;
+};
+
+const cancelDeleteNote = () => {
+  deleteDialogVisible.value = false;
+  itemToDelete.value = null;
+};
+
+const executeDeleteNote = async () => {
+  if (!itemToDelete.value) return;
+
+  const item = itemToDelete.value;
+  deletingNote.value = true;
+
+  try {
+    try {
+      await penyesuaianService.deleteNote(item.KDTK, props.periode);
+    } catch (deleteErr) {
+      // Jika 404 (note sudah dihapus user lain), anggap sukses — tetap bersihkan lokal
+      if (deleteErr.response?.status !== 404) {
+        throw deleteErr;
+      }
+    }
+
+    // Clear the note from the item
+    item.note = null;
+    item.editingNote = null;
+
+    toast.showSuccess('Sukses', 'Note berhasil dihapus');
+    deleteDialogVisible.value = false;
+    itemToDelete.value = null;
+  } catch (error) {
+    const errorMessage = error.response?.data?.message || error.message || 'Gagal menghapus note';
+    toast.showError('Error', errorMessage);
+  } finally {
+    deletingNote.value = false;
+  }
 };
 
 const showDetailModal = (item) => {

@@ -431,6 +431,32 @@ export const getBranchTopItems = async (req, res) => {
   }
 };
 
+export const deleteNote = async (req, res) => {
+  try {
+    const { kdtk, periode } = req.query;
+
+    if (!kdtk || !periode) {
+      return apiResponse.badRequest(res, "kdtk dan periode wajib diisi");
+    }
+
+    const tableName = "sesuai_toko";
+    const unixKey = `${kdtk}${periode}`;
+
+    const deleted = await notesService.removeByKey(tableName, unixKey);
+
+    if (!deleted) {
+      return apiResponse.notFound(res, "Note tidak ditemukan");
+    }
+
+    logger.info(`[penyesuaian.controller] Note deleted: tableName=${tableName}, unixKey=${unixKey}, by=${req.user?.username || "unknown"}`);
+
+    return apiResponse.success(res, { message: "Note berhasil dihapus" });
+  } catch (error) {
+    logger.error(`[penyesuaian.controller] Error deleting note: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
 export const getStoreItem = async (req, res) => {
   try {
     const { kdtk, prdcd } = req.params;

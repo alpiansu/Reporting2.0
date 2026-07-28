@@ -34,6 +34,9 @@ router.get("/:cabang/:kdtk/:periode/:prdcd", penyesuaianController.getRecord);
 // Update or create note for a specific store and periode
 router.put("/note/", penyesuaianController.updateNote);
 
+// Delete note for a specific store and periode
+router.delete("/note/", penyesuaianController.deleteNote);
+
 // Get branch extremes: max positive & max negative item per cabang
 router.get("/branch-extremes", penyesuaianController.getBranchExtremes);
 

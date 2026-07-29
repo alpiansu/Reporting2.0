@@ -156,7 +156,7 @@
     </div>
     <template #footer>
       <Button label="Batal" severity="secondary" @click="cancelAutoNote" />
-      <Button label="Ya, Timpa!" severity="success" icon="pi pi-check" @click="executeAutoNote" />
+      <Button label="Ya, Timpa!" severity="success" icon="pi pi-check" @click="executeAutoNote()" />
     </template>
   </Dialog>
 

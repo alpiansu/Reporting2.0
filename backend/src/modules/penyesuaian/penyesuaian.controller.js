@@ -457,6 +457,38 @@ export const deleteNote = async (req, res) => {
   }
 };
 
+/**
+ * Auto-generate note untuk suatu toko berdasarkan analisa item-item penyesuaian.
+ * POST /api/penyesuaian/auto-note/
+ * Body: { cabang, kdtk, periode }
+ */
+export const autoNote = async (req, res) => {
+  try {
+    const { cabang, kdtk, periode } = req.body;
+    const pic = req.user?.username || "system";
+
+    if (!cabang || !kdtk || !periode) {
+      return apiResponse.badRequest(res, "cabang, kdtk, dan periode wajib diisi");
+    }
+
+    if (!/^\d{4}$/.test(periode)) {
+      return apiResponse.badRequest(res, "Format periode tidak valid. Gunakan format YYMM (contoh: 2511)");
+    }
+
+    logger.info(`[penyesuaian.controller] Auto note: kdtk=${kdtk}, periode=${periode}, by=${pic}`);
+
+    const result = await penyesuaianService.generateAutoNote({ cabang, kdtk, periode, pic });
+
+    return apiResponse.success(res, {
+      message: `Auto note processed successfully for ${kdtk}`,
+      data: result,
+    });
+  } catch (error) {
+    logger.error(`[penyesuaian.controller] Error auto note: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
 export const getStoreItem = async (req, res) => {
   try {
     const { kdtk, prdcd } = req.params;

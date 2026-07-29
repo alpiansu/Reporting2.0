@@ -129,6 +129,14 @@
           <Button :icon="isItemAutoUpdating(item) ? `pi pi-spin pi-refresh` : `pi pi-refresh`" size="small"
             @click="refreshStoreData(item)" :disabled="isItemAutoUpdating(item)"
             :label="isItemAutoUpdating(item) ? ` ...` : `Refresh`" />
+          <Button
+            :label="isItemAutoNoting(item) ? 'Processing...' : 'Auto Note'"
+            @click="hitAutoNote(item)"
+            :disabled="isItemAutoNoting(item)"
+            :icon="isItemAutoNoting(item) ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'"
+            :class="{ 'btn-processing': isItemAutoNoting(item) }"
+            severity="secondary" outlined size="small"
+          />
         </div>
       </td>
     </template>
@@ -138,6 +146,19 @@
   <PenyesuaianDetailModal :show="detailModalVisible" :periode="periode" :cab="selectedItem?.CABANG"
     :kdtk="selectedItem?.KDTK || ''" :sesuai="formatCurrency(selectedItem?.SESUAI)"
     :noteSnapshotData="getSnapshotInfo(selectedItem)" @close="closeDetailModal" />
+
+  <!-- Auto Note Confirmation Dialog -->
+  <Dialog v-model:visible="autoNoteDialogVisible" header="Konfirmasi Auto Note" :modal="true" :closable="true"
+    class="auto-note-dialog" :style="{ width: '450px' }">
+    <div class="confirm-content">
+      <i class="pi pi-refresh confirm-icon"></i>
+      <p>Catatan sudah ada sebelumnya. Apakah Anda ingin menimpa catatan lama dengan auto note baru?</p>
+    </div>
+    <template #footer>
+      <Button label="Batal" severity="secondary" @click="cancelAutoNote" />
+      <Button label="Ya, Timpa!" severity="success" icon="pi pi-check" @click="executeAutoNote" />
+    </template>
+  </Dialog>
 
   <!-- Delete Note Confirmation Dialog -->
   <Dialog v-model:visible="deleteDialogVisible" header="Hapus Note" :modal="true" :closable="true"
@@ -156,6 +177,31 @@
 </template>
 
 <style src="./PenyesuaianTable.css" scoped></style>
+
+<style scoped>
+.confirm-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  text-align: center;
+}
+.confirm-content p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #374151;
+  line-height: 1.5;
+}
+.confirm-icon {
+  font-size: 2rem;
+  color: #3b82f6;
+}
+.btn-processing {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+</style>
 <script setup>
 import { ref, computed } from 'vue';
 import { useToastService } from '../../utils/toast';
@@ -212,6 +258,11 @@ const deletingNote = ref(false);
 const deleteDialogVisible = ref(false);
 const itemToDelete = ref(null);
 const selectedItem = ref(null);
+
+// Auto Note state
+const autoNoteDialogVisible = ref(false);
+const selectedAutoNoteItem = ref(null);
+const autoNotingItems = ref(new Set());
 
 // Search functionality
 const searchQuery = ref('');
@@ -532,6 +583,60 @@ const showDetailModal = (item) => {
 const closeDetailModal = () => {
   detailModalVisible.value = false;
   selectedItem.value = null;
+};
+
+// ─── Auto Note Methods ──────────────────────────────────────────────
+const isItemAutoNoting = (item) => {
+  const key = `${item.CABANG}_${item.KDTK}`;
+  return autoNotingItems.value.has(key);
+};
+
+const hitAutoNote = (item) => {
+  // Jika belum ada note, langsung auto-generate
+  if (!item.note || !item.note.noteText || item.note.noteText.trim() === '') {
+    executeAutoNote(item);
+    return;
+  }
+  // Jika sudah ada note, tampilkan dialog konfirmasi
+  selectedAutoNoteItem.value = item;
+  autoNoteDialogVisible.value = true;
+};
+
+const cancelAutoNote = () => {
+  autoNoteDialogVisible.value = false;
+  selectedAutoNoteItem.value = null;
+};
+
+const executeAutoNote = async (item) => {
+  const target = item || selectedAutoNoteItem.value;
+  if (!target) return;
+
+  autoNoteDialogVisible.value = false;
+  selectedAutoNoteItem.value = null;
+
+  const key = `${target.CABANG}_${target.KDTK}`;
+  autoNotingItems.value.add(key);
+
+  try {
+    const res = await penyesuaianService.autoUpdateNote(
+      target.CABANG,
+      target.KDTK,
+      props.periode
+    );
+
+    target.note = res.data.data;
+
+    // Highlight row
+    highlightedItems.value.add(key);
+    setTimeout(() => { highlightedItems.value.delete(key); }, 3000);
+
+    toast.showSuccess('Sukses', `Auto note untuk ${target.KDTK} berhasil dibuat`);
+  } catch (error) {
+    const msg = error.response?.data?.message || error.message || 'Gagal auto note';
+    toast.showError('Error', msg);
+  } finally {
+    autoNotingItems.value.delete(key);
+  }
 };
 
 const refreshStoreData = async (item) => {

@@ -14,6 +14,8 @@ import moment from "moment-timezone";
 import RekapRemoteService from "../rekap_remote/rekap_remote.service.js";
 import notesService from "../notes/notes.service.js";
 import progressService from "../progress/progress.service.js";
+import storeInspectorService from "../../services/storeInspector.service.js";
+import UserService from "../user/user.service.js";
 import { isNumericString, toNumber, formatNumber } from "../../utils/numberUtils.js";
 import { fileUtils } from "../../utils/index.js";
 import screeningGuard from "../../utils/screeningGuard.js";
@@ -1529,6 +1531,220 @@ class PenyesuaianService {
       return data;
     }
   }
+  /**
+   * Generate auto-note untuk suatu toko berdasarkan analisa item-item penyesuaian.
+   *
+   * Algoritma:
+   *   1. Ambil semua item toko dari sesuai_toko (RECID='*')
+   *   2. Jika semua item < |50.000| tapi total > |500.000| → minor accumulation
+   *   3. Pilih 1-3 item dominan (jika item#1 > 50% total → 1 item saja)
+   *   4. Deep dive ke storeInspector untuk item dominan
+   *   5. Generate teks ringkas & simpan via notesService
+   *
+   * @param {Object} params
+   * @param {string} params.cabang
+   * @param {string} params.kdtk
+   * @param {string} params.periode
+   * @param {string} params.pic - Username pembuat note
+   * @returns {Promise<Object>} Note yang sudah disimpan
+   */
+  async generateAutoNote({ cabang, kdtk, periode, pic }) {
+    logger.info(`[penyesuaian.service] generateAutoNote: kdtk=${kdtk}, periode=${periode}`);
+    const tableName = "sesuai_toko";
+    const unixKey = `${kdtk}${periode}`;
+
+    // 1. Ambil semua item toko dari sesuai_toko
+    const model = await SesuaiToko.getModel();
+    const items = await model.findAll({
+      where: {
+        KDTK: kdtk,
+        PERIODE: periode,
+        RECID: "*",
+      },
+    });
+
+    if (!items || items.length === 0) {
+      throw new Error(`Tidak ada item penyesuaian untuk toko ${kdtk} periode ${periode}`);
+    }
+
+    const rawItems = items.map(r => r.toJSON());
+    const totalSesuai = rawItems.reduce((s, i) => s + (Number(i.SESUAI) || 0), 0);
+    const absTotal = rawItems.reduce((s, i) => s + Math.abs(Number(i.SESUAI) || 0), 0);
+    const maxAbsItem = Math.max(...rawItems.map(i => Math.abs(Number(i.SESUAI) || 0)));
+
+    let noteText = "";
+
+    // 2. CEK MINOR ACCUMULATION
+    const MINOR_THRESHOLD = 50000;
+    const TOTAL_THRESHOLD = 500000;
+    const isMinorAccumulation = maxAbsItem < MINOR_THRESHOLD && absTotal > TOTAL_THRESHOLD;
+
+    if (isMinorAccumulation) {
+      const arah = totalSesuai >= 0 ? "kenaikan" : "penurunan";
+      noteText =
+        `Tidak ada penyesuaian nilai HPP yang signifikan pada item tertentu, ` +
+        `karena angka penyesuaian yang muncul merupakan akumulasi ${arah} ` +
+        `nilai barang dari selisih harga yang minor di berbagai item, ` +
+        `bukan karena adanya perbedaan yang signifikan pada satu produk tertentu.`;
+
+      logger.info(`[penyesuaian.service] generateAutoNote ${kdtk}/${periode}: minor accumulation (${absTotal})`);
+    } else {
+      // 3. PILIH ITEM DOMINAN
+      const sorted = [...rawItems]
+        .map(i => ({ ...i, absSesuai: Math.abs(Number(i.SESUAI) || 0) }))
+        .sort((a, b) => b.absSesuai - a.absSesuai);
+
+      const candidates = [];
+      for (const item of sorted) {
+        if (candidates.length === 0) {
+          candidates.push(item);
+          if (item.absSesuai / absTotal > 0.5) break; // 1 item > 50%, cukup
+        } else if (candidates.length < 3) {
+          candidates.push(item);
+        } else {
+          break;
+        }
+      }
+
+      // 4. DEEP DIVE via storeInspector
+      const storeInfo = await storeService.getStoreByCode(kdtk);
+      const storeName = storeInfo?.storeName || kdtk;
+
+      const lines = [`Analisa item penyesuaian - ${storeName} (${kdtk}) - Periode ${periode}`];
+
+      for (const item of candidates) {
+        const prdcd = item.PRDCD;
+        const nama = item.SINGKATAN || prdcd;
+        const sesuiVal = Number(item.SESUAI) || 0;
+        const begbal = Number(item.BEGBAL) || 0;
+
+        let detailInfo = `Rp ${Math.abs(sesuiVal).toLocaleString("en-US")}`;
+
+        try {
+          const analysis = await storeInspectorService.inspect({
+            kdtk,
+            prdcd,
+            periode,
+            begbal,
+          });
+
+          const acostAnalysis = analysis.acostAnalysis;
+          const changes = acostAnalysis.changes || [];
+
+          if (acostAnalysis.cause === "transaction_evidence" && changes.length > 0) {
+            // Ambil perubahan pertama yang signifikan untuk diringkas
+            const firstChange = changes[0];
+            const tgl = firstChange.tanggal
+              ? moment(firstChange.tanggal).format("DD MMMM YYYY")
+              : "";
+            const hargaDari = Number(firstChange.dari).toLocaleString("en-US");
+            const hargaKe = Number(firstChange.ke).toLocaleString("en-US");
+            const sourceLabel = {
+              bpb_i: "BPB/Transfer Masuk",
+              retur_k: "Retur",
+              trfout_o: "Transfer Keluar",
+              konversi_bm: "Konversi Racikan",
+              ba: "Barang Afkir",
+              bs: "Barang Rusak",
+              stock_opname: "Stock Opname",
+              mtran_hpp: "Penjualan (HPP)",
+            }[firstChange.source] || firstChange.source;
+
+            detailInfo = `${sourceLabel} — harga berubah ${tgl ? `per ${tgl} ` : ""}dari Rp ${hargaDari} menjadi Rp ${hargaKe}`;
+
+            // Cek apakah retur K dengan LCOST match
+            if (
+              firstChange.source === "retur_k" &&
+              firstChange.lcostMatch === true
+            ) {
+              detailInfo += " (LCOST sesuai rule)";
+            }
+          } else if (acostAnalysis.cause === "protect_sync") {
+            detailInfo = "Item BKL — harga sync dengan protect";
+          } else if (acostAnalysis.cause === "protect_mismatch") {
+            detailInfo =
+              `Item BKL — harga mismatch dengan protect (ACOST: Rp ${Number(acostAnalysis.acostSekarang).toLocaleString("en-US")}, ` +
+              `Protect: Rp ${Number(acostAnalysis.hargablProtect).toLocaleString("en-US")})`;
+          } else if (acostAnalysis.cause === "unexplained_acost_anomaly") {
+            detailInfo = `Perubahan harga tanpa transaksi tercatat (BEGBAL: Rp ${Number(acostAnalysis.begbal).toLocaleString("en-US")}, ACOST: Rp ${Number(acostAnalysis.acostSekarang).toLocaleString("en-US")})`;
+          }
+        } catch (inspectErr) {
+          logger.warn(
+            `[penyesuaian.service] Gagal deep dive ${kdtk}/${prdcd}: ${inspectErr.message}`,
+          );
+          // Fallback: berdasarkan data sesuai_toko
+          detailInfo += ` (data dari sesuai_toko — BEGBAL: Rp ${begbal.toLocaleString("en-US")})`;
+        }
+
+        const arah = sesuiVal >= 0 ? "kenaikan" : "penurunan";
+        lines.push(
+          `• ${nama} - ${prdcd}: ${arah} Rp ${Math.abs(sesuiVal).toLocaleString("en-US")} — ${detailInfo}`,
+        );
+      }
+
+      noteText = lines.join("\n");
+      logger.info(`[penyesuaian.service] generateAutoNote ${kdtk}/${periode}: ${candidates.length} item(s) dianalisa`);
+    }
+
+    // 5. SIMPAN NOTE (dengan snapshot)
+    const snapshot = await this.getSnapshotSesuai(cabang, kdtk, periode);
+    let fullNoteText = noteText;
+    if (snapshot) {
+      fullNoteText = `${noteText}|${snapshot.snapshotSesuai}|${snapshot.snapshotUpdtime}`;
+    }
+
+    const noteData = {
+      Cabang: cabang,
+      unixKey,
+      noteText: fullNoteText,
+      pic: pic || "system",
+      categoryId: null,
+      tableName,
+    };
+
+    const note = await notesService.upsert(noteData);
+    const parsed = this.parseNoteSnapshot(noteText, snapshot);
+
+    const us = new UserService();
+    const user = await us.findByCredentials(pic);
+
+    const result = {
+      ...note.toJSON(),
+      noteText: parsed.noteText,
+      snapshot: parsed.snapshot,
+      fullName: user?.fullName || null,
+    };
+
+    return result;
+  }
+
+  /**
+   * Ambil snapshot SESUAI dari sesuai_toko_summary untuk disimpan bersama note.
+   */
+  async getSnapshotSesuai(cabang, kdtk, periode) {
+    try {
+      const summary = await SesuaiTokoSummary.findOne({
+        where: { CABANG: cabang, KDTK: kdtk, PERIODE: periode },
+      });
+      if (!summary) return null;
+
+      const snapshotSesuai = Math.round(Number(summary.SESUAI) || 0);
+      const formatLocal = (d) => {
+        const date = d instanceof Date ? d : new Date(d);
+        const pad = n => String(n).padStart(2, "0");
+        return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+      };
+      const snapshotUpdtime = summary.UPDTIME
+        ? formatLocal(summary.UPDTIME)
+        : formatLocal(new Date());
+
+      return { snapshotSesuai, snapshotUpdtime };
+    } catch (err) {
+      logger.warn(`[penyesuaian.service] Gagal mengambil snapshot SESUAI: ${err.message}`);
+      return null;
+    }
+  }
+
   /**
    * Get the single max positive and single max negative item per cabang.
    * Query langsung sesuai_toko untuk nilai SESUAI ekstrem per cabang.

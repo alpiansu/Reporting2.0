@@ -49,4 +49,7 @@ router.get("/insight/:kdtk/:periode", penyesuaianController.getStoreInsight);
 // Get store item details (prodmast, mstran, mtran, protect) from store DB
 router.get("/store-item/:kdtk/:prdcd", penyesuaianController.getStoreItem);
 
+// Auto-generate note for a specific store based on item analysis
+router.post("/auto-note/", penyesuaianController.autoNote);
+
 export default router;

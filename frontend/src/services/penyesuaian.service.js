@@ -227,6 +227,22 @@ class PenyesuaianService {
     });
     return response.data;
   }
+
+  /**
+   * Auto-generate note untuk suatu toko berdasarkan analisa item-item penyesuaian
+   * @param {string} cabang - Branch code
+   * @param {string} kdtk - Store code
+   * @param {string} periode - Period in YYMM format
+   * @returns {Promise<Object>} Response with note data
+   */
+  async autoUpdateNote(cabang, kdtk, periode) {
+    const response = await api.post(`/${this.fixedPattern}/auto-note/`, {
+      cabang,
+      kdtk,
+      periode,
+    });
+    return response.data;
+  }
 }
 
 export default new PenyesuaianService();

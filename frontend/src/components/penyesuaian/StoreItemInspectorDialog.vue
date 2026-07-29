@@ -83,6 +83,8 @@
                     <td class="cell-num" :class="diffClass(ch.ke - ch.dari)">{{ fmt(ch.ke - ch.dari) }}</td>
                     <td>
                       <span class="source-badge" :class="'source-' + ch.source">{{ sourceLabel(ch.source) }}</span>
+                      <span v-if="ch.lcostMatch === true" class="lcost-badge lcost-ok" title="Harga retur sesuai LCOST (case closed)">LCOST ✓</span>
+                      <span v-else-if="ch.lcostMatch === false" class="lcost-badge lcost-ko" title="Harga retur TIDAK sesuai LCOST — perlu investigasi">LCOST ✗</span>
                       <button v-if="ch.koDetail" class="btn-detail-konversi" @click="openKonversiDetail(ch)" title="Lihat detail konversi">
                         <i class="pi pi-external-link"></i>
                       </button>
@@ -601,8 +603,10 @@ function sourceLabel(source) {
     bpb_i: 'BPB / Trf Masuk',
     bpb: 'BPB / Trf Masuk',
     konversi_bm: 'Konversi Racikan',
-    k_o: 'Retur / Trf Keluar',
-    k: 'Retur / Trf Keluar',
+    retur_k: 'Retur',
+    k_o: 'Retur',
+    k: 'Retur',
+    trfout_o: 'Trf Keluar',
     ba: 'Barang Afkir',
     bs: 'Barang Rusak',
     stock_opname: 'Stock Opname',
@@ -880,12 +884,26 @@ onMounted(async () => {
 .source-bpb_i,
 .source-bpb { background: #dbeafe; color: #1e40af; }
 .source-konversi_bm { background: #fce7f3; color: #9d174d; }
+.source-retur_k,
 .source-k_o,
 .source-k { background: #fef3c7; color: #92400e; }
+.source-trfout_o { background: #ede9fe; color: #5b21b6; }
 .source-ba { background: #fff7ed; color: #9a3412; }
 .source-bs { background: #fef2f2; color: #991b1b; }
 .source-stock_opname { background: #eef2ff; color: #3730a3; }
 .source-mtran_hpp { background: #d1fae5; color: #065f46; }
+
+.lcost-badge {
+  display: inline-block;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  margin-left: 0.25rem;
+  vertical-align: middle;
+}
+.lcost-ok { background: #d1fae5; color: #065f46; }
+.lcost-ko { background: #fee2e2; color: #991b1b; }
 
 .val-ok { color: #15803d; }
 .val-warn { color: #d97706; }

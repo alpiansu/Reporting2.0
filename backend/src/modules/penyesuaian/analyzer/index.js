@@ -47,6 +47,7 @@ function comparePriceSequence(rows, anchorPrice, { dateField, priceField, source
  * @param {number} params.acostSekarang - ACOST saat ini dari prodmast
  * @param {boolean} params.isBkl - Apakah item ini BKL (punya SUPCO)
  * @param {Object|null} params.protectRow - Record protect (jika BKL)
+ * @param {number} params.lcost - LCOST dari prodmast (untuk validasi Retur K)
  * @returns {Object} { cause, changes?, detail?, acostSekarang?, ... }
  */
 export function analyzeAcostChange({
@@ -57,6 +58,7 @@ export function analyzeAcostChange({
   acostSekarang = 0,
   isBkl = false,
   protectRow = null,
+  lcost = 0,
 } = {}) {
   const anchorPrice = Number(begbal) || 0;
 
@@ -103,17 +105,37 @@ export function analyzeAcostChange({
     source: "konversi_bm",
   });
 
-  // ── Cek #3: Retur/K + Transfer Keluar (RTYPE='K' / 'O') ──
-  const kORows = mstranRows
+  // ── Cek #3a: Retur (RTYPE='K') — pakai LCOST ──────────────
+  const returKRows = mstranRows
     .filter(r => {
       const rt = (r.RTYPE || r.rtype || "").toUpperCase();
-      return rt === "K" || rt === "O";
+      return rt === "K";
     })
     .sort(sortByDate);
-  const kO = comparePriceSequence(kORows, anchorPrice, {
+  const returK = comparePriceSequence(returKRows, anchorPrice, {
     dateField: "BUKTI_TGL",
     priceField: "PRICE",
-    source: "k_o",
+    source: "retur_k",
+  });
+  // Validasi: PRICE retur harusnya == LCOST (sesuai rule bisnis)
+  if (lcost > 0) {
+    returK.changes.forEach(ch => {
+      const price = Number(ch.ref.PRICE || ch.ref.price);
+      ch.lcostMatch = Math.abs(price - lcost) < FLOAT_EPSILON;
+    });
+  }
+
+  // ── Cek #3b: Transfer Keluar (RTYPE='O') — pakai ACOST ────
+  const trfoutORows = mstranRows
+    .filter(r => {
+      const rt = (r.RTYPE || r.rtype || "").toUpperCase();
+      return rt === "O";
+    })
+    .sort(sortByDate);
+  const trfoutO = comparePriceSequence(trfoutORows, anchorPrice, {
+    dateField: "BUKTI_TGL",
+    priceField: "PRICE",
+    source: "trfout_o",
   });
 
   // ── Cek #4: MTRAN HPP ────────────────────────────────────
@@ -170,7 +192,8 @@ export function analyzeAcostChange({
   const allChanges = [
     ...bpbI.changes,
     ...konversiBm.changes,
-    ...kO.changes,
+    ...returK.changes,
+    ...trfoutO.changes,
     ...ba.changes,
     ...bs.changes,
     ...so.changes,
@@ -182,7 +205,7 @@ export function analyzeAcostChange({
     return {
       cause: "transaction_evidence",
       changes: allChanges,
-      detail: { bpb_i: bpbI, konversiBm, k_o: kO, ba, bs, stock_opname: so, mtranHpp },
+      detail: { bpb_i: bpbI, konversiBm, retur_k: returK, trfout_o: trfoutO, ba, bs, stock_opname: so, mtranHpp },
     };
   }
 

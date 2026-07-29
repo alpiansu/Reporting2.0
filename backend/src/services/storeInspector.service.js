@@ -252,6 +252,7 @@ class StoreInspectorService {
         acostSekarang: acost,
         isBkl,
         protectRow: protectRows.length > 0 ? protectRows[0] : null,
+        lcost: Number(prodmast?.LCOST) || 0,
       });
 
       // ── Deep analysis untuk konversi (KO) ────────────────────────

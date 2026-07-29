@@ -120,7 +120,7 @@ onMounted(() => {
     color: var(--text-color) !important;
   }
 
-  .username, .dropdown-item span, .dropdown-header span {
+  .username, .dropdown-item span, .dropdown-header-left span {
     color: var(--text-color) !important;
   }
 
@@ -134,6 +134,64 @@ onMounted(() => {
 
   .dropdown-divider {
     background-color: var(--border-color) !important;
+  }
+
+  .notification-title {
+    color: var(--text-color) !important;
+  }
+
+  .notification-message {
+    color: var(--text-color-secondary) !important;
+  }
+
+  .notification-time {
+    color: var(--text-color-secondary) !important;
+    opacity: 0.7;
+  }
+
+  .notification-item:hover {
+    background: rgba(255, 255, 255, 0.04) !important;
+  }
+
+  .notification-item:not(:last-child)::after {
+    background: var(--border-color) !important;
+  }
+
+  .notification-icon {
+    background: rgba(255, 255, 255, 0.06) !important;
+  }
+
+  .notification-unread .notification-icon {
+    background: rgba(59, 130, 246, 0.15) !important;
+  }
+
+  .notification-badge {
+    box-shadow: 0 0 0 2px var(--surface-color) !important;
+  }
+
+  .notification-dot {
+    box-shadow: 0 0 0 2px var(--surface-color) !important;
+  }
+
+  .close-btn {
+    color: var(--text-color-secondary) !important;
+  }
+
+  .close-btn:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: var(--text-color) !important;
+  }
+
+  .clear-all:hover {
+    background: rgba(var(--primary-color-rgb), 0.15) !important;
+  }
+
+  .notification-list::-webkit-scrollbar-thumb {
+    background: var(--border-color) !important;
+  }
+
+  .notification-list::-webkit-scrollbar-thumb:hover {
+    background: var(--text-color-secondary) !important;
   }
 
   /* Force sidebar to match dark theme if needed */

@@ -14,7 +14,7 @@
         </div>
       </div>
       <div class="app-bar-right">
-        <button class="notification-button" @click="toggleNotifications">
+        <button class="notification-button" :class="{ 'has-unread': unreadCount > 0 }" @click="toggleNotifications">
           <i class="pi pi-bell"></i>
           <span v-if="unreadCount > 0" class="notification-badge">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
         </button>
@@ -43,36 +43,52 @@
           </div>
         </div>
         <!-- Notifications Dropdown -->
-        <div v-if="notificationsOpen" class="dropdown notifications-dropdown">
-          <div class="dropdown-header">
-            <span>Notifications</span>
-            <button v-if="unreadCount > 0" class="clear-all" @click="markAllRead">Mark All Read</button>
-          </div>
-          <div class="dropdown-divider"></div>
-          <div v-if="notifications.length === 0" class="empty-notifications">
-            <i class="pi pi-bell-slash"></i>
-            <span>No notifications</span>
-          </div>
-          <div v-else class="notification-list">
-            <div
-              v-for="n in notifications"
-              :key="n.id"
-              class="notification-item"
-              :class="{ 'notification-unread': !n.read }"
-              @click="handleNotificationClick(n)"
-            >
-              <div class="notification-icon">
-                <i class="pi pi-exclamation-triangle" style="color: #dc2626;"></i>
+        <transition name="notif-slide">
+          <div v-if="notificationsOpen" class="dropdown notifications-dropdown">
+            <div class="dropdown-header">
+              <div class="dropdown-header-left">
+                <i class="pi pi-bell"></i>
+                <span>Notifications</span>
               </div>
-              <div class="notification-content">
-                <div class="notification-title">{{ n.title }}</div>
-                <div class="notification-message">{{ n.message }}</div>
-                <div class="notification-time">{{ formatNotifTime(n.created_at) }}</div>
+              <div class="dropdown-header-right">
+                <button v-if="unreadCount > 0" class="clear-all" @click="markAllRead">
+                  <i class="pi pi-check-circle"></i> Mark All Read
+                </button>
+                <button class="close-btn" @click="notificationsOpen = false">
+                  <i class="pi pi-times"></i>
+                </button>
               </div>
-              <div v-if="!n.read" class="notification-dot"></div>
+            </div>
+            <div class="dropdown-divider"></div>
+            <div v-if="notifications.length === 0" class="empty-notifications">
+              <i class="pi pi-bell-slash"></i>
+              <span>No notifications</span>
+            </div>
+            <div v-else class="notification-list">
+              <div
+                v-for="n in notifications"
+                :key="n.id"
+                class="notification-item"
+                :class="[
+                  'notif-type-' + getNotifType(n),
+                  { 'notification-unread': !n.read }
+                ]"
+                @click="handleNotificationClick(n)"
+              >
+                <div class="notif-color-strip"></div>
+                <div class="notification-icon" :style="{ color: getNotifColor(n) }">
+                  <i :class="getNotifIcon(n)"></i>
+                </div>
+                <div class="notification-content">
+                  <div class="notification-title">{{ n.title }}</div>
+                  <div class="notification-message">{{ n.message }}</div>
+                  <div class="notification-time">{{ formatNotifTime(n.created_at) }}</div>
+                </div>
+                <div v-if="!n.read" class="notification-dot"></div>
+              </div>
             </div>
           </div>
-        </div>
+        </transition>
       </div>
     </header>
 
@@ -273,6 +289,34 @@ const formatNotifTime = (isoStr) => {
   const diffDay = Math.floor(diffHour / 24);
   if (diffDay < 7) return `${diffDay} hari lalu`;
   return d.toLocaleDateString('id-ID');
+};
+
+const getNotifType = (n) => {
+  const t = (n.type || '').toLowerCase();
+  if (/error|gagal|fail|worsened/.test(t)) return 'error';
+  if (/success|berhasil|improved/.test(t)) return 'success';
+  if (/warning|peringatan/.test(t)) return 'warning';
+  return 'info';
+};
+
+const getNotifIcon = (n) => {
+  const map = {
+    warning: 'pi pi-exclamation-triangle',
+    error: 'pi pi-times-circle',
+    success: 'pi pi-check-circle',
+    info: 'pi pi-info-circle'
+  };
+  return map[getNotifType(n)] || 'pi pi-bell';
+};
+
+const getNotifColor = (n) => {
+  const map = {
+    warning: '#f59e0b',
+    error: '#dc2626',
+    success: '#16a34a',
+    info: '#3b82f6'
+  };
+  return map[getNotifType(n)] || '#6b7280';
 };
 
 const markAllRead = async () => {

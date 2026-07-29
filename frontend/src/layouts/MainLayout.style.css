@@ -14,7 +14,7 @@
   background-color: #fff;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   position: relative;
-  z-index: 10;
+  z-index: 100;
 }
 .app-bar-left, .app-bar-right {
   display: flex;
@@ -145,7 +145,7 @@
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   min-width: 200px;
-  z-index: 100;
+  z-index: 200;
 }
 
 /* Position notifications dropdown to align with bell icon */

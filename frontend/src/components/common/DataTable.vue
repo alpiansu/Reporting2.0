@@ -596,7 +596,7 @@ watch(
 .group-header-row {
   position: sticky;
   top: 0;
-  z-index: 15;
+  z-index: 3;
 }
 
 .group-header-row th {
@@ -620,7 +620,7 @@ watch(
 .sortable-header-row th {
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 2;
 }
 
 /* perhalus efek hover baris tabel */
@@ -813,7 +813,7 @@ watch(
 .results-table thead {
   position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: 5;
   background-color: #fff;
 }
 
@@ -876,7 +876,7 @@ watch(
   letter-spacing: 0.5px;
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 2;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   box-sizing: border-box;
   overflow: visible;

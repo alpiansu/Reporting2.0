@@ -2110,7 +2110,8 @@ class PenyesuaianService {
         const snapSesuai = Math.abs(parsed.snapshot.sesuaSaatNote);
         if (snapSesuai === 0) continue; // Snapshot 0, tidak bisa dihitung persen
 
-        const kdtk = note.unixKey.replace(periode, "");
+        // unixKey = kdtk + periode → gunakan slice agar aman walau kdtk mengandung string periode
+        const kdtk = note.unixKey.slice(0, -periode.length);
         const sesuaSekarang = Math.abs(summaryMap.get(note.unixKey) || 0);
         if (sesuaSekarang === 0) continue; // Sekarang 0 atau resolved, skip
 
@@ -2132,24 +2133,66 @@ class PenyesuaianService {
           }
         } catch {}
 
-        // Kirim notifikasi
-        notificationsService.create({
+        // Cek apakah sudah ada notifikasi sebelumnya untuk kasus yang sama
+        const existingNotif = notificationsService.findByMetadata({
           username: note.pic,
           type: "penyesuaian-worsened",
-          title: "Penyesuaian Memburuk",
-          message: `${storeName} (${kdtk}) — penyesuaian bergerak ${persen}% lebih besar sejak note dibuat`,
-          link: `/penyesuaian?kdtk=${kdtk}&periode=${periode}`,
-          metadata: {
-            kdtk,
-            periode,
-            cabang,
-            sesuaSaatNote: snapSesuai,
-            sesuaSekarang,
-            persen,
-          },
+          metadataFilters: { kdtk, periode },
         });
 
-        notifiedCount++;
+        const buildMessage = (pct) =>
+          `${storeName} (${kdtk}) — penyesuaian bergerak ${pct}% lebih besar sejak note dibuat`;
+
+        if (existingNotif) {
+          if (existingNotif.read) {
+            // SUDAH DIBACA → buat notifikasi baru (push lagi)
+            notificationsService.create({
+              username: note.pic,
+              type: "penyesuaian-worsened",
+              title: "Penyesuaian Memburuk",
+              message: buildMessage(persen),
+              link: `/penyesuaian?kdtk=${kdtk}&periode=${periode}`,
+              metadata: {
+                kdtk,
+                periode,
+                cabang,
+                sesuaSaatNote: snapSesuai,
+                sesuaSekarang,
+                persen,
+              },
+            });
+            notifiedCount++;
+          } else {
+            // BELUM DIBACA → tiban (update) dengan info pergerakan terbaru
+            notificationsService.update(existingNotif.id, {
+              title: "Penyesuaian Memburuk",
+              message: buildMessage(persen),
+              metadata: {
+                sesuaSekarang,
+                persen,
+              },
+            });
+            logger.debug(`[penyesuaian.service] Updated existing notification for ${kdtk}/${periode} (now ${persen}%)`);
+          }
+        } else {
+          // BELUM ADA → buat notifikasi baru
+          notificationsService.create({
+            username: note.pic,
+            type: "penyesuaian-worsened",
+            title: "Penyesuaian Memburuk",
+            message: buildMessage(persen),
+            link: `/penyesuaian?kdtk=${kdtk}&periode=${periode}`,
+            metadata: {
+              kdtk,
+              periode,
+              cabang,
+              sesuaSaatNote: snapSesuai,
+              sesuaSekarang,
+              persen,
+            },
+          });
+          notifiedCount++;
+        }
       }
 
       if (notifiedCount > 0) {

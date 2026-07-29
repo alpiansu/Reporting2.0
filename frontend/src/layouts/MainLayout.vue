@@ -135,7 +135,7 @@ import ChangePasswordForm from '../components/auth/ChangePasswordForm.vue';
 import AppSidebar from '../components/sidebar/AppSidebar.vue';
 import LoadingOverlay from '../components/common/LoadingOverlay.vue';
 import FloatingProgressWidget from '../components/common/FloatingProgressWidget.vue';
-import { notificationsService } from '../services';
+import { notificationsService as notifSvc } from '../services';
 import api from '../services/api';
 
 const toast = useToastService();
@@ -278,7 +278,7 @@ const formatNotifTime = (isoStr) => {
 const markAllRead = async () => {
   if (!user.value?.username) return;
   try {
-    await notificationsService.markAllRead(user.value.username);
+    await notifSvc.markAllRead(user.value.username);
     notifications.value.forEach(n => { n.read = true; });
     unreadCount.value = 0;
   } catch (err) {
@@ -290,7 +290,7 @@ const handleNotificationClick = async (n) => {
   // Mark as read
   if (!n.read) {
     try {
-      await notificationsService.markRead(n.id);
+      await notifSvc.markRead(n.id);
       n.read = true;
       unreadCount.value = Math.max(0, unreadCount.value - 1);
     } catch (err) {
@@ -313,7 +313,7 @@ const connectNotificationSSE = () => {
   }
 
   try {
-    sseConnection = notificationsService.connectSSE(user.value.username);
+    sseConnection = notifSvc.connectSSE(user.value.username);
 
     sseConnection.addEventListener('init', (event) => {
       try {
@@ -326,12 +326,22 @@ const connectNotificationSSE = () => {
     sseConnection.addEventListener('new', (event) => {
       try {
         const notif = JSON.parse(event.data);
-        // Add to top of list
-        notifications.value.unshift(notif);
-        unreadCount.value++;
 
-        // Show toast for warning
-        toast.showWarning(notif.title || 'Notifikasi', notif.message || 'Ada perubahan penyesuaian');
+        if (notif._update) {
+          // UPDATE (tiban): cari notifikasi existing by ID, update in-place
+          const idx = notifications.value.findIndex(n => n.id === notif.id);
+          if (idx !== -1) {
+            const { _update, ...cleanNotif } = notif;
+            notifications.value[idx] = { ...notifications.value[idx], ...cleanNotif };
+          }
+          // Tidak nambah unreadCount karena status read sudah di-reset (tetap unread)
+          toast.showWarning(notif.title || 'Notifikasi', notif.message || 'Ada perubahan penyesuaian');
+        } else {
+          // NOTIFIKASI BARU
+          notifications.value.unshift(notif);
+          unreadCount.value++;
+          toast.showWarning(notif.title || 'Notifikasi', notif.message || 'Ada perubahan penyesuaian');
+        }
       } catch {}
     });
 

@@ -113,6 +113,57 @@ class NotificationsService {
     return changed;
   }
 
+  /**
+   * Cari notifikasi yang cocok dengan username + type + metadata tertentu.
+   * Menerima multiple metadataFilters (AND), bukan single key-value.
+   * @param {Object} params
+   * @param {string} params.username
+   * @param {string} params.type
+   * @param {Object} params.metadataFilters - Object berisi key-value yang harus cocok semua
+   *   Contoh: findByMetadata({ username: "admin", type: "penyesuaian-worsened", metadataFilters: { kdtk: "TW75001", periode: "2607" } })
+   * @returns {Object|null} Notifikasi yang cocok, atau null jika tidak ada
+   */
+  findByMetadata({ username, type, metadataFilters = {} }) {
+    const all = this.readJson();
+    return all.find(n =>
+      n.username === username &&
+      n.type === type &&
+      Object.entries(metadataFilters).every(([key, value]) =>
+        n.metadata && n.metadata[key] === value
+      )
+    ) || null;
+  }
+
+  /**
+   * Update notifikasi yang sudah ada: timpa message, title, metadata, reset read=false.
+   * Broadcast via SSE agar frontend mendapat update real-time.
+   * @param {string} notifId
+   * @param {Object} updates - { title, message, metadata }
+   * @returns {Object|null} Notifikasi yang sudah di-update, atau null jika tidak ditemukan
+   */
+  update(notifId, { title, message, metadata = {} }) {
+    const notifications = this.readJson();
+    const idx = notifications.findIndex(n => n.id === notifId);
+    if (idx === -1) return null;
+
+    const notif = notifications[idx];
+    notif.title = title || notif.title;
+    notif.message = message || notif.message;
+    notif.metadata = { ...notif.metadata, ...metadata };
+    notif.read = false; // Reset read karena ada info terbaru
+    notif.updated_at = new Date().toISOString();
+
+    this.writeJson(notifications);
+    logger.info(`[Notifications] Updated for ${notif.username}: ${notif.title}`);
+
+    // Broadcast update via SSE
+    if (this.eventEmitter) {
+      this.eventEmitter.emit(`notif:${notif.username}`, { ...notif, _update: true });
+    }
+
+    return notif;
+  }
+
   /** Hapus notifikasi > 30 hari */
   cleanup() {
     const thirtyDays = 30 * 24 * 60 * 60 * 1000;

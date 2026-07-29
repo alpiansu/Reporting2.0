@@ -598,9 +598,11 @@ function formatDate(val) {
 
 function sourceLabel(source) {
   const labels = {
-    bpb: 'BPB',
+    bpb_i: 'BPB / Trf Masuk',
+    bpb: 'BPB / Trf Masuk',
     konversi_bm: 'Konversi Racikan',
-    k: 'Retur/K',
+    k_o: 'Retur / Trf Keluar',
+    k: 'Retur / Trf Keluar',
     mtran_hpp: 'Penjualan (HPP)',
   };
   return labels[source] || source;
@@ -871,8 +873,10 @@ onMounted(async () => {
 .btn-detail-konversi:hover {
   background: #7c3aed;
 }
+.source-bpb_i,
 .source-bpb { background: #dbeafe; color: #1e40af; }
 .source-konversi_bm { background: #fce7f3; color: #9d174d; }
+.source-k_o,
 .source-k { background: #fef3c7; color: #92400e; }
 .source-mtran_hpp { background: #d1fae5; color: #065f46; }
 

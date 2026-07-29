@@ -76,12 +76,17 @@ export function analyzeAcostChange({
     return (a.ADDTIME || "").localeCompare(b.ADDTIME || "");
   };
 
-  // ── Cek #1: BPB (RTYPE='BPB') ────────────────────────────
-  const bpbRows = mstranRows.filter(r => (r.RTYPE || r.rtype || "").toUpperCase() === "BPB").sort(sortByDate);
-  const bpb = comparePriceSequence(bpbRows, anchorPrice, {
+  // ── Cek #1: BPB + Transfer Masuk (RTYPE='BPB' / 'I') ────
+  const bpbIRows = mstranRows
+    .filter(r => {
+      const rt = (r.RTYPE || r.rtype || "").toUpperCase();
+      return rt === "BPB" || rt === "I";
+    })
+    .sort(sortByDate);
+  const bpbI = comparePriceSequence(bpbIRows, anchorPrice, {
     dateField: "BUKTI_TGL",
     priceField: "PRICE",
-    source: "bpb",
+    source: "bpb_i",
   });
 
   // ── Cek #2: Konversi BM (RTYPE='X' AND ISTYPE BM/KO) ────
@@ -98,12 +103,17 @@ export function analyzeAcostChange({
     source: "konversi_bm",
   });
 
-  // ── Cek #3: Retur/K (RTYPE='K') ──────────────────────────
-  const kRows = mstranRows.filter(r => (r.RTYPE || r.rtype || "").toUpperCase() === "K").sort(sortByDate);
-  const k = comparePriceSequence(kRows, anchorPrice, {
+  // ── Cek #3: Retur/K + Transfer Keluar (RTYPE='K' / 'O') ──
+  const kORows = mstranRows
+    .filter(r => {
+      const rt = (r.RTYPE || r.rtype || "").toUpperCase();
+      return rt === "K" || rt === "O";
+    })
+    .sort(sortByDate);
+  const kO = comparePriceSequence(kORows, anchorPrice, {
     dateField: "BUKTI_TGL",
     priceField: "PRICE",
-    source: "k",
+    source: "k_o",
   });
 
   // ── Cek #4: MTRAN HPP ────────────────────────────────────
@@ -115,7 +125,7 @@ export function analyzeAcostChange({
   });
 
   // Gabung semua perubahan, urutkan berdasarkan tanggal
-  const allChanges = [...bpb.changes, ...konversiBm.changes, ...k.changes, ...mtranHpp.changes].sort(
+  const allChanges = [...bpbI.changes, ...konversiBm.changes, ...kO.changes, ...mtranHpp.changes].sort(
     (a, b) => new Date(a.tanggal) - new Date(b.tanggal),
   );
 
@@ -124,7 +134,7 @@ export function analyzeAcostChange({
     return {
       cause: "transaction_evidence",
       changes: allChanges,
-      detail: { bpb, konversiBm, k, mtranHpp },
+      detail: { bpb_i: bpbI, konversiBm, k_o: kO, mtranHpp },
     };
   }
 

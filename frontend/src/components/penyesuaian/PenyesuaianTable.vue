@@ -299,8 +299,16 @@ const getCategoryClass = (categoryName) => {
 };
 
 //  TAMBAHKAN: Method untuk get row class
+const isWorsened = (item) => {
+  const info = getSnapshotInfo(item);
+  if (!info) return false;
+  return !info.membaik && info.persen >= 40;
+};
+
 const getRowClass = (item) => {
-  return isItemHighlighted(item) ? 'row-updated' : '';
+  if (isWorsened(item)) return 'row-worsened';
+  if (isItemHighlighted(item)) return 'row-updated';
+  return '';
 };
 
 // Formatting methods

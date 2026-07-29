@@ -19,6 +19,7 @@ import UserService from "../user/user.service.js";
 import { isNumericString, toNumber, formatNumber } from "../../utils/numberUtils.js";
 import { fileUtils } from "../../utils/index.js";
 import screeningGuard from "../../utils/screeningGuard.js";
+import notificationsService from "../notifications/notifications.service.js";
 
 // Path untuk folder JSON penyesuaian (akan di-split per periode)
 const PENYESUAIAN_DATA_DIR = path.join(process.cwd(), "data/penyesuaian");
@@ -414,7 +415,17 @@ class PenyesuaianService {
 
       // 🔄 Force refresh legacy notes cache setelah sync selesai
       // Ini memastikan data legacy notes selalu up-to-date pasca screening
+      // 🔄 Force refresh legacy notes cache setelah sync selesai
+      // Ini memastikan data legacy notes selalu up-to-date pasca screening
       await this.refreshLegacyNotesCache(this.penyesuaianData, periode);
+
+      // 🔔 Deteksi dan kirim notifikasi untuk item yang worsened >= 40%
+      try {
+        await this.checkAndNotifyWorsened(periode);
+      } catch (notifErr) {
+        // Jangan sampai gagal notifikasi menggagalkan sync
+        logger.warn(`[penyesuaian.service] checkAndNotifyWorsened error: ${notifErr.message}`);
+      }
 
       return this.penyesuaianData.length;
     } catch (error) {
@@ -2061,6 +2072,92 @@ class PenyesuaianService {
         totalItems: signFiltered.length,
       },
     };
+  }
+
+  /**
+   * 🔔 Deteksi penyesuaian yang memburuk >= 40% untuk toko yang sudah di-note.
+   * Kirim notifikasi ke PIC user yang membuat note.
+   * Dipanggil otomatis dari syncToJsonFile() setelah sync selesai.
+   *
+   * @param {string} periode - Period in YYMM format
+   */
+  async checkAndNotifyWorsened(periode) {
+    try {
+      // Ambil semua notes untuk sesuai_toko yang punya snapshot
+      const allNotes = await notesService.getAll();
+      const penyesuaianNotes = allNotes.filter(n => n.tableName === "sesuai_toko");
+
+      if (penyesuaianNotes.length === 0) {
+        logger.debug(`[penyesuaian.service] checkAndNotifyWorsened: no notes found for periode ${periode}`);
+        return;
+      }
+
+      // Ambil semua summary untuk periode ini
+      const summaries = await SesuaiTokoSummary.findAll({
+        where: { PERIODE: periode },
+      });
+      const summaryMap = new Map(
+        summaries.map(s => [`${s.KDTK}${s.PERIODE}`, Number(s.SESUAI) || 0])
+      );
+
+      let notifiedCount = 0;
+
+      for (const note of penyesuaianNotes) {
+        // Parse snapshot dari noteText
+        const parsed = this.parseNoteSnapshot(note.noteText);
+        if (!parsed.snapshot) continue; // Note tanpa snapshot, skip
+
+        const snapSesuai = Math.abs(parsed.snapshot.sesuaSaatNote);
+        if (snapSesuai === 0) continue; // Snapshot 0, tidak bisa dihitung persen
+
+        const kdtk = note.unixKey.replace(periode, "");
+        const sesuaSekarang = Math.abs(summaryMap.get(note.unixKey) || 0);
+        if (sesuaSekarang === 0) continue; // Sekarang 0 atau resolved, skip
+
+        // Hitung persen perubahan
+        const selisih = sesuaSekarang - snapSesuai;
+        const persen = Math.round((selisih / snapSesuai) * 100);
+
+        // Hanya jika memburuk (nilai sekarang lebih besar) dan >= 40%
+        if (selisih <= 0 || persen < 40) continue;
+
+        // Dapatkan info toko
+        let storeName = kdtk;
+        let cabang = "";
+        try {
+          const storeInfo = await storeService.getStoreByCode(kdtk);
+          if (storeInfo) {
+            storeName = storeInfo.storeName || kdtk;
+            cabang = storeInfo.branch || storeInfo.cab || "";
+          }
+        } catch {}
+
+        // Kirim notifikasi
+        notificationsService.create({
+          username: note.pic,
+          type: "penyesuaian-worsened",
+          title: "Penyesuaian Memburuk",
+          message: `${storeName} (${kdtk}) — penyesuaian bergerak ${persen}% lebih besar sejak note dibuat`,
+          link: `/penyesuaian?kdtk=${kdtk}&periode=${periode}`,
+          metadata: {
+            kdtk,
+            periode,
+            cabang,
+            sesuaSaatNote: snapSesuai,
+            sesuaSekarang,
+            persen,
+          },
+        });
+
+        notifiedCount++;
+      }
+
+      if (notifiedCount > 0) {
+        logger.info(`[penyesuaian.service] checkAndNotifyWorsened: ${notifiedCount} notifications created for periode ${periode}`);
+      }
+    } catch (err) {
+      logger.error(`[penyesuaian.service] checkAndNotifyWorsened error: ${err.message}`);
+    }
   }
 }
 

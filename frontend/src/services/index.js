@@ -13,6 +13,7 @@ import penyesuaianService from "./penyesuaian.service";
 import userService from "./user.service";
 import rekapBackupService from "./rekapBackup.service";
 import ntbVsGlslpService from "./ntbVsGlslp.service";
+import notificationsService from "./notifications.service";
 
 export {
   authService,
@@ -30,4 +31,5 @@ export {
   userService,
   rekapBackupService,
   ntbVsGlslpService,
+  notificationsService,
 };

@@ -16,6 +16,7 @@
       <div class="app-bar-right">
         <button class="notification-button" @click="toggleNotifications">
           <i class="pi pi-bell"></i>
+          <span v-if="unreadCount > 0" class="notification-badge">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
         </button>
         <div class="user-menu" @click="toggleUserMenu">
           <div class="avatar" v-if="user">
@@ -45,12 +46,31 @@
         <div v-if="notificationsOpen" class="dropdown notifications-dropdown">
           <div class="dropdown-header">
             <span>Notifications</span>
-            <button class="clear-all">Clear All</button>
+            <button v-if="unreadCount > 0" class="clear-all" @click="markAllRead">Mark All Read</button>
           </div>
           <div class="dropdown-divider"></div>
-          <div class="empty-notifications">
+          <div v-if="notifications.length === 0" class="empty-notifications">
             <i class="pi pi-bell-slash"></i>
             <span>No notifications</span>
+          </div>
+          <div v-else class="notification-list">
+            <div
+              v-for="n in notifications"
+              :key="n.id"
+              class="notification-item"
+              :class="{ 'notification-unread': !n.read }"
+              @click="handleNotificationClick(n)"
+            >
+              <div class="notification-icon">
+                <i class="pi pi-exclamation-triangle" style="color: #dc2626;"></i>
+              </div>
+              <div class="notification-content">
+                <div class="notification-title">{{ n.title }}</div>
+                <div class="notification-message">{{ n.message }}</div>
+                <div class="notification-time">{{ formatNotifTime(n.created_at) }}</div>
+              </div>
+              <div v-if="!n.read" class="notification-dot"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -115,6 +135,7 @@ import ChangePasswordForm from '../components/auth/ChangePasswordForm.vue';
 import AppSidebar from '../components/sidebar/AppSidebar.vue';
 import LoadingOverlay from '../components/common/LoadingOverlay.vue';
 import FloatingProgressWidget from '../components/common/FloatingProgressWidget.vue';
+import { notificationsService } from '../services';
 import api from '../services/api';
 
 const toast = useToastService();
@@ -234,7 +255,95 @@ const toggleNotifications = (event) => {
   }
 };
 
-// Close dropdowns when clicking outside
+// ─── Notification State ──────────────────────────────────────────
+const notifications = ref([]);
+const unreadCount = ref(0);
+let sseConnection = null;
+
+const formatNotifTime = (isoStr) => {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  const now = new Date();
+  const diffMs = now - d;
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return 'Baru saja';
+  if (diffMin < 60) return `${diffMin} menit lalu`;
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `${diffHour} jam lalu`;
+  const diffDay = Math.floor(diffHour / 24);
+  if (diffDay < 7) return `${diffDay} hari lalu`;
+  return d.toLocaleDateString('id-ID');
+};
+
+const markAllRead = async () => {
+  if (!user.value?.username) return;
+  try {
+    await notificationsService.markAllRead(user.value.username);
+    notifications.value.forEach(n => { n.read = true; });
+    unreadCount.value = 0;
+  } catch (err) {
+    console.error('Failed to mark all read:', err);
+  }
+};
+
+const handleNotificationClick = async (n) => {
+  // Mark as read
+  if (!n.read) {
+    try {
+      await notificationsService.markRead(n.id);
+      n.read = true;
+      unreadCount.value = Math.max(0, unreadCount.value - 1);
+    } catch (err) {
+      console.error('Failed to mark notification read:', err);
+    }
+  }
+  // Navigate to link if any
+  if (n.link) {
+    router.push(n.link);
+    notificationsOpen.value = false;
+  }
+};
+
+const connectNotificationSSE = () => {
+  if (!user.value?.username) return;
+  
+  // Cleanup previous connection
+  if (sseConnection) {
+    sseConnection.close();
+  }
+
+  try {
+    sseConnection = notificationsService.connectSSE(user.value.username);
+
+    sseConnection.addEventListener('init', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        notifications.value = data.notifications || [];
+        unreadCount.value = data.unread || 0;
+      } catch {}
+    });
+
+    sseConnection.addEventListener('new', (event) => {
+      try {
+        const notif = JSON.parse(event.data);
+        // Add to top of list
+        notifications.value.unshift(notif);
+        unreadCount.value++;
+
+        // Show toast for warning
+        toast.showWarning(notif.title || 'Notifikasi', notif.message || 'Ada perubahan penyesuaian');
+      } catch {}
+    });
+
+    sseConnection.onerror = () => {
+      // Will auto-reconnect
+    };
+  } catch (err) {
+    console.error('Failed to connect notification SSE:', err);
+  }
+};
+
+// ─── Close dropdowns when clicking outside ───────────────────────
 const handleClickOutside = (event) => {
   // Check if click is outside user menu and its dropdown
   const userMenuEl = document.querySelector('.user-menu');
@@ -264,10 +373,15 @@ const handleClickOutside = (event) => {
 // Add and remove click event listener
 onMounted(() => {
   document.addEventListener('click', handleClickOutside);
+  connectNotificationSSE();
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside);
+  if (sseConnection) {
+    sseConnection.close();
+    sseConnection = null;
+  }
 });
 
 // Show logout confirmation dialog

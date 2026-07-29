@@ -369,6 +369,38 @@ Button:disabled {
     }
 }
 
+/* ─── Worsened Row Warning ───────────────────────────────────── */
+.row-worsened {
+  background: #fef2f2 !important;
+  border-left: 4px solid #dc2626 !important;
+  position: relative;
+}
+
+.row-worsened td {
+  color: #1e293b !important;
+}
+
+.row-worsened td.text-right {
+  color: #dc2626 !important;
+  font-weight: 700 !important;
+}
+
+.row-worsened:hover {
+  background: #fee2e2 !important;
+  transform: translateX(2px);
+}
+
+@keyframes pulse-warning {
+  0%, 100% { background: #fef2f2; }
+  50% { background: #fee2e2; }
+}
+
+.row-worsened .note-meta-icons .snapshot-badge-worsened {
+  background: #fecaca !important;
+  border-color: #f87171 !important;
+  animation: pulse-warning 2s ease-in-out 3;
+}
+
 @media print {
 
     .search-container,
@@ -409,6 +441,7 @@ Button:disabled {
         text-decoration: underline !important;
     }
 }
+
 
 /* Adjust checkbox styling */
 .adjust-checkbox {

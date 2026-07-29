@@ -124,17 +124,65 @@ export function analyzeAcostChange({
     source: "mtran_hpp",
   });
 
+  // ── Cek #5: BA (Barang Afkir) (RTYPE='X' AND ISTYPE='BA') ─
+  const baRows = mstranRows
+    .filter(r => {
+      const rt = (r.RTYPE || r.rtype || "").toUpperCase();
+      const it = (r.ISTYPE || r.istype || "").toUpperCase();
+      return rt === "X" && it === "BA";
+    })
+    .sort(sortByDate);
+  const ba = comparePriceSequence(baRows, anchorPrice, {
+    dateField: "BUKTI_TGL",
+    priceField: "PRICE",
+    source: "ba",
+  });
+
+  // ── Cek #6: BS (Barang Rusak) (RTYPE='X' AND ISTYPE='BS') ─
+  const bsRows = mstranRows
+    .filter(r => {
+      const rt = (r.RTYPE || r.rtype || "").toUpperCase();
+      const it = (r.ISTYPE || r.istype || "").toUpperCase();
+      return rt === "X" && it === "BS";
+    })
+    .sort(sortByDate);
+  const bs = comparePriceSequence(bsRows, anchorPrice, {
+    dateField: "BUKTI_TGL",
+    priceField: "PRICE",
+    source: "bs",
+  });
+
+  // ── Cek #7: Stock Opname / SO (RTYPE='X' AND ISTYPE='SO') ─
+  const soRows = mstranRows
+    .filter(r => {
+      const rt = (r.RTYPE || r.rtype || "").toUpperCase();
+      const it = (r.ISTYPE || r.istype || "").toUpperCase();
+      return rt === "X" && it === "SO";
+    })
+    .sort(sortByDate);
+  const so = comparePriceSequence(soRows, anchorPrice, {
+    dateField: "BUKTI_TGL",
+    priceField: "PRICE",
+    source: "stock_opname",
+  });
+
   // Gabung semua perubahan, urutkan berdasarkan tanggal
-  const allChanges = [...bpbI.changes, ...konversiBm.changes, ...kO.changes, ...mtranHpp.changes].sort(
-    (a, b) => new Date(a.tanggal) - new Date(b.tanggal),
-  );
+  const allChanges = [
+    ...bpbI.changes,
+    ...konversiBm.changes,
+    ...kO.changes,
+    ...ba.changes,
+    ...bs.changes,
+    ...so.changes,
+    ...mtranHpp.changes,
+  ].sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
 
   // ── CABANG A: Ada bukti transaksi yang mengubah harga ─────
   if (allChanges.length > 0) {
     return {
       cause: "transaction_evidence",
       changes: allChanges,
-      detail: { bpb_i: bpbI, konversiBm, k_o: kO, mtranHpp },
+      detail: { bpb_i: bpbI, konversiBm, k_o: kO, ba, bs, stock_opname: so, mtranHpp },
     };
   }
 

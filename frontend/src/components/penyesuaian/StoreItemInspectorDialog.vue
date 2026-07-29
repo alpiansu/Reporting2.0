@@ -603,6 +603,10 @@ function sourceLabel(source) {
     konversi_bm: 'Konversi Racikan',
     k_o: 'Retur / Trf Keluar',
     k: 'Retur / Trf Keluar',
+    ba: 'Barang Afkir',
+    bs: 'Barang Rusak',
+    stock_opname: 'Stock Opname',
+    so: 'Stock Opname',
     mtran_hpp: 'Penjualan (HPP)',
   };
   return labels[source] || source;
@@ -878,6 +882,9 @@ onMounted(async () => {
 .source-konversi_bm { background: #fce7f3; color: #9d174d; }
 .source-k_o,
 .source-k { background: #fef3c7; color: #92400e; }
+.source-ba { background: #fff7ed; color: #9a3412; }
+.source-bs { background: #fef2f2; color: #991b1b; }
+.source-stock_opname { background: #eef2ff; color: #3730a3; }
 .source-mtran_hpp { background: #d1fae5; color: #065f46; }
 
 .val-ok { color: #15803d; }

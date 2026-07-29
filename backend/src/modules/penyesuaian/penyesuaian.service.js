@@ -1554,8 +1554,9 @@ class PenyesuaianService {
     const unixKey = `${kdtk}${periode}`;
 
     // 1. Ambil semua item toko dari sesuai_toko
-    const model = await SesuaiToko.getModel();
-    const items = await model.findAll({
+    // Jika belum ada data detail (misal user belum klik Detail), tarik dulu dari store
+    let model = await SesuaiToko.getModel();
+    let items = await model.findAll({
       where: {
         KDTK: kdtk,
         PERIODE: periode,
@@ -1564,7 +1565,21 @@ class PenyesuaianService {
     });
 
     if (!items || items.length === 0) {
-      throw new Error(`Tidak ada item penyesuaian untuk toko ${kdtk} periode ${periode}`);
+      logger.info(`[penyesuaian.service] generateAutoNote: data detail ${kdtk}/${periode} kosong, menarik dari store...`);
+      await this.getDetailFromStore(kdtk, periode);
+      // Re-query setelah data ditarik
+      model = await SesuaiToko.getModel();
+      items = await model.findAll({
+        where: {
+          KDTK: kdtk,
+          PERIODE: periode,
+          RECID: "*",
+        },
+      });
+    }
+
+    if (!items || items.length === 0) {
+      throw new Error(`Data detail untuk toko ${kdtk} periode ${periode} tetap kosong setelah ditarik dari store`);
     }
 
     const rawItems = items.map(r => r.toJSON());
@@ -1575,9 +1590,10 @@ class PenyesuaianService {
     let noteText = "";
 
     // 2. CEK MINOR ACCUMULATION
+    // Jika semua item < |50.000| → minor accumulation (tidak ada item dominan)
+    // Tidak perlu cek absTotal > 500rb karena toko pasti > toleransi (muncul di resume)
     const MINOR_THRESHOLD = 50000;
-    const TOTAL_THRESHOLD = 500000;
-    const isMinorAccumulation = maxAbsItem < MINOR_THRESHOLD && absTotal > TOTAL_THRESHOLD;
+    const isMinorAccumulation = maxAbsItem < MINOR_THRESHOLD;
 
     if (isMinorAccumulation) {
       const arah = totalSesuai >= 0 ? "kenaikan" : "penurunan";
@@ -1589,16 +1605,35 @@ class PenyesuaianService {
 
       logger.info(`[penyesuaian.service] generateAutoNote ${kdtk}/${periode}: minor accumulation (${absTotal})`);
     } else {
-      // 3. PILIH ITEM DOMINAN
-      const sorted = [...rawItems]
+      // 3. PILIH ITEM DOMINAN (sesuai arah total penyesuaian)
+      // Jika total plus → cari item dengan SESUAI positif (penyebab kenaikan)
+      // Jika total minus → cari item dengan SESUAI negatif (penyebab penurunan)
+      const isTotalPlus = totalSesuai >= 0;
+      const sameDirItems = rawItems.filter(i => isTotalPlus
+        ? Number(i.SESUAI) > 0
+        : Number(i.SESUAI) < 0
+      );
+      let sameDirAbsTotal = sameDirItems.reduce(
+        (s, i) => s + Math.abs(Number(i.SESUAI) || 0), 0
+      );
+
+      let sorted = [...sameDirItems]
         .map(i => ({ ...i, absSesuai: Math.abs(Number(i.SESUAI) || 0) }))
         .sort((a, b) => b.absSesuai - a.absSesuai);
+
+      if (sorted.length === 0) {
+        // Fallback: jika tidak ada item searah (aneh), ambil item terbesar secara abs
+        sorted = [...rawItems]
+          .map(i => ({ ...i, absSesuai: Math.abs(Number(i.SESUAI) || 0) }))
+          .sort((a, b) => b.absSesuai - a.absSesuai);
+        sameDirAbsTotal = absTotal;
+      }
 
       const candidates = [];
       for (const item of sorted) {
         if (candidates.length === 0) {
           candidates.push(item);
-          if (item.absSesuai / absTotal > 0.5) break; // 1 item > 50%, cukup
+          if (item.absSesuai / sameDirAbsTotal > 0.5) break; // 1 item > 50%, cukup
         } else if (candidates.length < 3) {
           candidates.push(item);
         } else {

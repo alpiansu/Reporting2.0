@@ -125,14 +125,15 @@
       <!-- ACTIONS -->
       <td v-if="user.role == 'admin' || user.role == 'superadmin'">
         <div class="action-buttons">
-          <Button icon="pi pi-eye" size="small" severity="info" @click="showDetailModal(item)" label="Detail" />
+          <Button icon="pi pi-eye" size="small" severity="info" @click="showDetailModal(item)" label="Detail"
+            :disabled="isItemBusy(item)" />
           <Button :icon="isItemAutoUpdating(item) ? `pi pi-spin pi-refresh` : `pi pi-refresh`" size="small"
-            @click="refreshStoreData(item)" :disabled="isItemAutoUpdating(item)"
+            @click="refreshStoreData(item)" :disabled="isItemBusy(item)"
             :label="isItemAutoUpdating(item) ? ` ...` : `Refresh`" />
           <Button
             :label="isItemAutoNoting(item) ? 'Processing...' : 'Auto Note'"
             @click="hitAutoNote(item)"
-            :disabled="isItemAutoNoting(item)"
+            :disabled="isItemBusy(item)"
             :icon="isItemAutoNoting(item) ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'"
             :class="{ 'btn-processing': isItemAutoNoting(item) }"
             severity="secondary" outlined size="small"
@@ -583,6 +584,12 @@ const showDetailModal = (item) => {
 const closeDetailModal = () => {
   detailModalVisible.value = false;
   selectedItem.value = null;
+};
+
+// Helper: cek apakah item sedang sibuk (auto-note atau refresh)
+const isItemBusy = (item) => {
+  const key = `${item.CABANG}_${item.KDTK}`;
+  return autoUpdatingItems.value.has(key) || autoNotingItems.value.has(key);
 };
 
 // ─── Auto Note Methods ──────────────────────────────────────────────

@@ -812,3 +812,19 @@ Button:disabled {
         font-size: 0.7rem;
     }
 }
+
+/* ─── Sparkle Wiggle Animation for Auto Note Icon ─────────────────────── */
+@keyframes sparkle-wiggle {
+    0%, 100% { transform: rotate(0deg) scale(1); }
+    25% { transform: rotate(-12deg) scale(1.1); }
+    75% { transform: rotate(12deg) scale(1.1); }
+}
+
+.sparkle-icon :deep(.pi-sparkles) {
+    display: inline-block;
+    animation: sparkle-wiggle 1.2s infinite ease-in-out;
+}
+
+.sparkle-icon:disabled :deep(.pi-sparkles) {
+    animation: none;
+}

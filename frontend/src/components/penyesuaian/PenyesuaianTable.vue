@@ -134,8 +134,8 @@
             :label="isItemAutoNoting(item) ? 'Processing...' : 'Auto Note'"
             @click="hitAutoNote(item)"
             :disabled="isItemBusy(item)"
-            :icon="isItemAutoNoting(item) ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'"
-            :class="{ 'btn-processing': isItemAutoNoting(item) }"
+            :icon="isItemAutoNoting(item) ? 'pi pi-spin pi-spinner' : 'pi pi-sparkles'"
+            :class="{ 'btn-processing': isItemAutoNoting(item), 'sparkle-icon': !isItemAutoNoting(item) }"
             severity="secondary" outlined size="small"
           />
         </div>

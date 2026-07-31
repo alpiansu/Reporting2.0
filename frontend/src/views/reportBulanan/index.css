@@ -1,4 +1,4 @@
-.monthly-reports-view {
+.reports-view {
   padding: 1.5rem;
 }
 
@@ -9,17 +9,35 @@
   margin-top: 0.5rem;
 }
 
-.delete-confirm-body {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 0.5rem;
-  padding: 1rem 0;
-}
-
 @media (max-width: 768px) {
-  .monthly-reports-view {
+  .reports-view {
     padding: 1rem;
   }
+}
+
+/* ── Tab (PrimeVue v4 Tabs API) ─────────────────────────────────────────────── */
+
+/* Spasi antara baris tab dan konten panel */
+:deep(.p-tablist) {
+  margin-bottom: 1rem;
+}
+
+/*
+  Perbaikan indikator tab aktif:
+  Ink bar PrimeVue (`.p-tablist-active-bar`) diukur via JS saat mount sehingga
+  tidak andal pada render pertama (garis melebar memenuhi seluruh baris tab).
+  Disembunyikan dan diganti underline statis CSS pada tab aktif agar indikator
+  selalu benar sejak awal, tanpa bergantung timing pengukuran.
+*/
+:deep(.p-tablist-active-bar) {
+  display: none !important;
+}
+
+/* Indikator aktif statis: garis bawah primary + warna teks primary */
+:deep(.p-tab.p-tab-active) {
+  border-top-width: 0 !important;
+  border-bottom-width: 2px !important;
+  border-bottom-style: solid !important;
+  border-bottom-color: var(--p-primary-color, #3b82f6) !important;
+  color: var(--p-primary-color, #3b82f6) !important;
 }

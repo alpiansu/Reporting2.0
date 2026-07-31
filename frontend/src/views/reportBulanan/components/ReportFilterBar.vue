@@ -9,6 +9,7 @@
         <p class="filter-bar__subtitle">Pilih cabang dan periode sebelum mengekspor laporan</p>
       </div>
       <Button
+        v-if="showManagerButton"
         label="Kelola Laporan"
         icon="pi pi-cog"
         class="p-button-outlined p-button-secondary"
@@ -18,25 +19,13 @@
 
     <div class="filter-bar__fields">
       <!-- Pilihan Cabang -->
-      <div class="field">
-        <label for="mr-cabang" class="field-label">
-          Cabang <span class="text-red-500">*</span>
-        </label>
-        <Dropdown
-          id="mr-cabang"
-          :model-value="cabang"
-          :options="cabangOptions"
-          option-label="namacab"
-          option-value="kdcab"
-          placeholder="Pilih Cabang"
-          class="w-full"
-          :disabled="isExporting"
-          filter
-          filter-placeholder="Cari cabang..."
-          @change="$emit('update:cabang', $event.value)"
-        />
-        <small v-if="!cabang" class="p-error">Cabang wajib dipilih</small>
-      </div>
+      <CabangSelect
+        :model-value="cabang"
+        :options="cabangOptions"
+        :disabled="isExporting"
+        show-error
+        @update:model-value="$emit('update:cabang', $event)"
+      />
 
       <!-- Picker Periode (Month only) -->
       <div class="field">
@@ -81,6 +70,7 @@ import { ref, computed } from 'vue';
 import Dropdown from 'primevue/dropdown';
 import Calendar from 'primevue/calendar';
 import Button from 'primevue/button';
+import CabangSelect from './CabangSelect.vue';
 import { useCabangStore } from '@/stores';
 
 const props = defineProps({
@@ -89,6 +79,7 @@ const props = defineProps({
   selectedDate:  { type: Date,    default: null },
   selectedCount: { type: Number,  default: 0 },
   isExporting:   { type: Boolean, default: false },
+  showManagerButton: { type: Boolean, default: true },
 });
 
 const emit = defineEmits([

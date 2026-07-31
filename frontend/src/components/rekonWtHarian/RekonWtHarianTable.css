@@ -117,33 +117,77 @@
   font-size: 0.78rem;
 }
 
+/* Status (kolom 11) - badge status, tidak perlu lebar */
 .results-table th:nth-child(11),
 .results-table td:nth-child(11) {
   min-width: 90px;
   width: 100px;
-  max-width: 100px;
+  max-width: 110px;
+  text-align: center;
+}
+
+/* Catatan (kolom 12) - lebar mengikuti Virtual Margin (250-300px) */
+.results-table th:nth-child(12),
+.results-table td:nth-child(12) {
+  min-width: 250px;
+  width: 270px;
+  max-width: 300px;
   word-wrap: break-word;
   word-break: break-word;
   white-space: normal;
-  overflow: hidden;
-  text-overflow: ellipsis;
   vertical-align: top;
 }
 
-.results-table th:nth-child(12),
-.results-table td:nth-child(12) {
-  min-width: 90px;
-  width: 100px;
-  max-width: 100px;
-}
-
+/* Aksi (kolom 13) - sesuai th:last-child (180px) */
 .results-table th:nth-child(13),
 .results-table td:nth-child(13) {
-  min-width: 160px;
-  width: auto;
-  max-width: none;
-  padding-right: 0.5rem;
+  min-width: 180px;
+  width: 180px;
+  max-width: 180px;
   text-align: center;
+}
+
+/* Sticky Freeze Column Styles (Virtual Margin Style) */
+.sticky-col {
+  position: sticky !important;
+  z-index: 10 !important;
+  background-color: #ffffff !important;
+}
+
+.results-table th.sticky-col,
+th.group-note.sticky-col,
+th.group-action.sticky-col {
+  z-index: 30 !important;
+  background-color: #f8fafc !important;
+}
+
+.sticky-notes {
+  right: 180px; /* Offset width of Actions column */
+  border-left: 2px solid #e2e8f0 !important;
+  box-shadow: -4px 0 8px -4px rgba(0, 0, 0, 0.12);
+}
+
+.sticky-actions {
+  right: 0;
+  border-left: 1px solid #e2e8f0 !important;
+  background-color: #ffffff !important;
+}
+
+/* Row states background overrides for sticky columns */
+.results-table tbody tr:nth-child(even) td.sticky-col {
+  background-color: #fafbfc !important;
+}
+
+.results-table tbody tr:nth-child(odd) td.sticky-col {
+  background-color: #ffffff !important;
+}
+
+.results-table tbody tr:hover td.sticky-col {
+  background-color: #f0f9ff !important;
+}
+
+.results-table tbody tr.row-updated td.sticky-col {
+  background-color: #f0f9ff !important;
 }
 
 /* Clean and Professional Search Container */
@@ -732,19 +776,19 @@
 }
 
 /* Clean Status Column Styling */
-.results-table td:nth-child(10) .badge {
+.results-table td:nth-child(11) .badge {
   position: relative;
   cursor: help;
   transition: all 0.2s ease;
 }
 
-.results-table td:nth-child(10) .badge:hover {
+.results-table td:nth-child(11) .badge:hover {
   z-index: 10;
   transform: translateY(-1px) scale(1.02);
 }
 
 /* Clean Tooltip for Long Status Text */
-.results-table td:nth-child(10) .badge[title]:hover::after {
+.results-table td:nth-child(11) .badge[title]:hover::after {
   content: attr(title);
   position: absolute;
   bottom: calc(100% + 5px);
@@ -763,7 +807,7 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.results-table td:nth-child(10) .badge[title]:hover::before {
+.results-table td:nth-child(11) .badge[title]:hover::before {
   content: '';
   position: absolute;
   bottom: calc(100% - 1px);
@@ -826,17 +870,22 @@
   
   .results-table th:nth-child(12),
   .results-table td:nth-child(12) {
-    width: 70px;
-    min-width: 70px;
-    max-width: 70px;
+    min-width: 150px;
+    width: auto;
+    max-width: 200px;
   }
   
   .results-table th:nth-child(13),
-  .results-table td:nth-child(13) {
+  .results-table td:nth-child(13),
+  .results-table th:last-child {
     min-width: 160px;
-    width: auto;
-    max-width: none;
+    width: 160px;
+    max-width: 160px;
     padding-right: 0.5rem;
+  }
+  
+  .sticky-notes {
+    right: 160px;
   }
   
   .table-responsive {
@@ -888,17 +937,22 @@
   
   .results-table th:nth-child(12),
   .results-table td:nth-child(12) {
-    width: 60px;
-    min-width: 60px;
-    max-width: 60px;
+    min-width: 120px;
+    width: auto;
+    max-width: 150px;
   }
   
   .results-table th:nth-child(13),
-  .results-table td:nth-child(13) {
+  .results-table td:nth-child(13),
+  .results-table th:last-child {
     min-width: 160px;
-    width: auto;
-    max-width: none;
+    width: 160px;
+    max-width: 160px;
     padding-right: 0.5rem;
+  }
+  
+  .sticky-notes {
+    right: 160px;
   }
   
   .table-responsive {
@@ -937,186 +991,109 @@
   color: #2563eb;
 }
 
-/* Empty state - gray ghost style */
-.btn-note-empty {
-  color: #9ca3af;
-  border: 1px dashed #d1d5db;
-  background: #fafbfc;
-  opacity: 0.7;
+/* Note Cell - Clean Inline Display */
+.note-cell {
+  cursor: pointer;
+  padding: 0.5rem 0.75rem !important;
+  text-align: left;
+  vertical-align: top;
+  transition: background-color 0.15s ease;
+  min-width: 250px;
+  max-width: 300px;
 }
 
-.btn-note-empty:hover {
-  opacity: 1;
-  border-color: #93c5fd;
-  color: #3b82f6;
-  background: #f0f9ff;
-  border-style: solid;
+.note-cell:hover {
+  background-color: #f1f5f9 !important;
 }
 
-/* Active state - bold colored style */
-.btn-note-active {
-  color: #1d4ed8;
-  border-color: #93c5fd;
-  background: #eff6ff;
-  font-weight: 500;
-  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.15);
+.note-inline-display {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  width: 100%;
 }
 
-.btn-note-active:hover {
-  background: #dbeafe;
-  border-color: #3b82f6;
-  box-shadow: 0 1px 4px rgba(59, 130, 246, 0.2);
-}
-
-.note-indicator-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  flex-shrink: 0;
-}
-
-/* Green dot indicator for rows with notes */
-.note-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #10b981;
-  flex-shrink: 0;
-  display: inline-block;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
-  animation: noteDotPulse 2s ease-in-out infinite;
-}
-
-.note-dot-empty {
-  background: transparent;
-  box-shadow: none;
-  animation: none;
-  border: 1.5px solid #d1d5db;
-}
-
-@keyframes noteDotPulse {
-  0%, 100% { box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2); }
-  50% { box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1); }
-}
-
-/* Icon colors */
-.btn-note-active i.pi-comment-fill {
-  color: #2563eb;
-}
-
-.btn-note-empty i.pi-comment {
-  color: #d1d5db;
-}
-
-.note-text {
+.note-inline-text {
+  font-size: 0.825rem;
+  color: #1e293b;
+  line-height: 1.4;
+  max-height: 80px;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  display: inline-block;
-  max-width: 110px;
-  font-size: 0.78rem;
+  word-break: break-word;
+  white-space: normal;
 }
 
-.note-empty {
-  color: #b0b7c3;
-  font-style: italic;
-  font-size: 0.72rem;
-}
-
-/* Note Preview Tooltip on Hover */
-.note-cell {
-  position: relative;
-}
-
-.note-preview {
-  visibility: hidden;
-  position: absolute;
-  z-index: 9999;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 0.875rem 1rem;
-  min-width: 260px;
-  max-width: 360px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 4px 10px -5px rgba(0, 0, 0, 0.06);
-  top: 4px;
-  left: calc(100% - 4px);
-  opacity: 0;
-  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
-  pointer-events: none;
-}
-
-/* Show preview when hovering the note button in a row that has a note */
-.btn-note-active:hover + .note-preview {
-  visibility: visible;
-  opacity: 1;
-  transform: translateX(2px);
-}
-
-.note-preview-header {
+.note-inline-meta {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-  color: #1e40af;
-  font-weight: 600;
-  font-size: 0.8rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid #f1f5f9;
-}
-
-.note-preview-header i {
-  font-size: 0.85rem;
-}
-
-.note-preview-text {
-  margin: 0 0 0.5rem 0;
-  color: #1e293b;
-  font-size: 0.85rem;
-  line-height: 1.5;
-  word-wrap: break-word;
-  white-space: pre-wrap;
-  max-height: 120px;
-  overflow-y: auto;
-}
-
-.note-preview-meta {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
   flex-wrap: wrap;
-  padding-top: 0.5rem;
-  border-top: 1px solid #f1f5f9;
+  gap: 0.25rem 0.75rem;
+}
+
+.note-inline-pic,
+.note-inline-time {
   font-size: 0.72rem;
   color: #64748b;
-}
-
-.note-preview-pic,
-.note-preview-date {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
+  font-weight: 500;
 }
 
-.note-preview-pic i,
-.note-preview-date i {
-  font-size: 0.65rem;
+.note-inline-pic i,
+.note-inline-time i {
+  font-size: 0.7rem;
+  color: #2563eb;
 }
 
-/* Row with note - subtle left border and background */
-.has-note td:nth-child(12) {
+.note-inline-time {
+  font-variant-numeric: tabular-nums;
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+.note-inline-time i {
+  color: #64748b;
+}
+
+.note-inline-placeholder {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-style: italic;
+  padding: 0.2rem 0;
+}
+
+.note-inline-placeholder i {
+  font-size: 0.825rem;
+  color: #cbd5e1;
+}
+
+.note-cell:hover .note-inline-placeholder {
+  color: #2563eb;
+}
+
+.note-cell:hover .note-inline-placeholder i {
+  color: #2563eb;
+}
+
+/* Row with note - subtle left border */
+.has-note td.note-cell {
   background: #f8fafc;
   position: relative;
 }
 
-.has-note td:nth-child(12)::before {
+.has-note td.note-cell::before {
   content: '';
   position: absolute;
   left: 0;
   top: 2px;
   bottom: 2px;
   width: 3px;
-  background: #10b981;
+  background: #2563eb;
   border-radius: 0 2px 2px 0;
 }
 

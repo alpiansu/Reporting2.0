@@ -34,8 +34,8 @@
       <th class="group-label group-rec">Jumlah</th>
       <th class="group-label group-time">Waktu</th>
       <th class="group-label group-status">Status</th>
-      <th class="group-label group-note">Catatan</th>
-      <th class="group-label group-action">Aksi</th>
+      <th class="group-label group-note sticky-col sticky-notes">Catatan</th>
+      <th class="group-label group-action sticky-col sticky-actions">Aksi</th>
     </template>
 
     <!-- Table Header with Sorting -->
@@ -80,8 +80,8 @@
         Status
         <i v-if="sortColumn === 'status'" class="pi sort-icon" :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'"></i>
       </th>
-      <th class="text-center">Catatan</th>
-      <th class="text-center">Aksi</th>
+      <th class="text-center sticky-col sticky-notes">Catatan</th>
+      <th class="text-center sticky-col sticky-actions">Aksi</th>
     </template>
 
     <!-- Table Row -->
@@ -114,40 +114,25 @@
           {{ getStatusText(item.status) }}
         </span>
       </td>
-      <td class="note-cell">
-        <button
-          class="btn-note"
-          :class="{ 'btn-note-active': item.note, 'btn-note-empty': !item.note }"
-          @click="openNoteDialog(item)"
-        >
-          <span class="note-indicator-group">
-            <span v-if="item.note" class="note-dot"></span>
-            <span v-else class="note-dot note-dot-empty"></span>
-            <i class="pi" :class="item.note ? 'pi-comment-fill' : 'pi-comment'"></i>
-          </span>
-          <span v-if="item.note" class="note-text">{{ truncateNote(item.note.noteText, 22) }}</span>
-          <span v-else class="note-text note-empty">Tambah</span>
-        </button>
-        <!-- Note preview tooltip on hover (only for rows with notes) -->
-        <div v-if="item.note" class="note-preview">
-          <div class="note-preview-header">
-            <i class="pi pi-comment-fill"></i>
-            <span>Catatan</span>
+      <td class="note-cell sticky-col sticky-notes" @click="openNoteDialog(item)">
+        <div v-if="item.note" class="note-inline-display" title="Klik untuk edit/lihat detail catatan">
+          <div class="note-inline-text">
+            {{ truncateNote(item.note.noteText, 100) }}
           </div>
-          <p class="note-preview-text">{{ item.note.noteText }}</p>
-          <div class="note-preview-meta">
-            <span v-if="item.note.fullName || item.note.pic" class="note-preview-pic">
-              <i class="pi pi-user"></i>
-              {{ item.note.fullName || item.note.pic }}
-            </span>
-            <span v-if="item.note.updatedAt" class="note-preview-date">
-              <i class="pi pi-clock"></i>
-              {{ formatDateTime(item.note.updatedAt) }}
-            </span>
+          <div class="note-inline-meta">
+            <div v-if="item.note.fullName || item.note.pic" class="note-inline-pic">
+              <i class="pi pi-user"></i> {{ item.note.fullName || item.note.pic }}
+            </div>
+            <div v-if="item.note.updatedAt" class="note-inline-time" :title="formatDateTime(item.note.updatedAt)">
+              <i class="pi pi-clock"></i> {{ formatNoteTime(item.note.updatedAt) }}
+            </div>
           </div>
         </div>
+        <div v-else class="note-inline-placeholder" title="Klik me-tambah catatan">
+          <i class="pi pi-plus-circle"></i> Tambah Catatan...
+        </div>
       </td>
-      <td class="text-center">
+      <td class="text-center sticky-col sticky-actions">
         <div class="action-buttons">
           <button 
             @click="showDetailModal(item)" 
@@ -547,11 +532,30 @@ const truncateNote = (text, maxLength = 30) => {
   return text.substring(0, maxLength) + '...';
 };
 
+// Format note update time (compact: tgl bulan jam:menit)
+const formatNoteTime = (dateTimeString) => {
+  if (!dateTimeString) return '-';
+  try {
+    const date = new Date(dateTimeString);
+    if (isNaN(date.getTime())) return dateTimeString;
+    return date.toLocaleString('id-ID', {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch (error) {
+    return dateTimeString;
+  }
+};
+
 // Get class for amount display
 const getAmountClass = (value) => {
   if (!value || value === 0) return 'same-amount';
   return 'different-amount';
 };
+
+
 
 // Get status badge class
 const getStatusBadgeClass = (status) => {
@@ -657,7 +661,7 @@ const openNoteDialog = (item) => {
   noteDialogVisible.value = true;
 };
 
-  const handleSaveNote = async ({ text }) => {
+const handleSaveNote = async ({ text }) => {
   noteSaving.value = true;
   try {
     await rekonWtHarianService.updateNote({
@@ -707,4 +711,3 @@ const handleDeleteNote = async () => {
 <style scoped>
 @import './RekonWtHarianTable.css';
 </style>
-

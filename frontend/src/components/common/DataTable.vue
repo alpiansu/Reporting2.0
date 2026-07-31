@@ -596,7 +596,7 @@ watch(
 .group-header-row {
   position: sticky;
   top: 0;
-  z-index: 3;
+  z-index: 25;
 }
 
 .group-header-row th {
@@ -620,7 +620,7 @@ watch(
 .sortable-header-row th {
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: 20;
 }
 
 /* perhalus efek hover baris tabel */
@@ -813,7 +813,8 @@ watch(
 .results-table thead {
   position: sticky;
   top: 0;
-  z-index: 5;
+  /* Harus di atas sel body yang di-freeze (sticky-col z-index 10) agar header tidak tertutup data saat scroll */
+  z-index: 30;
   background-color: #fff;
 }
 

@@ -36,6 +36,7 @@ import ntbVsGlslpModule from "./ntb_vs_glslp/index.js";
 import dthrFtpModule from "./dthr_ftp/index.js";
 import jenisReturModule from "./jenis-retur/index.js";
 import notificationsModule from "./notifications/index.js";
+import salesCustabModule from "./sales_custab/index.js";
 
 export default {
   // Export all modules
@@ -72,6 +73,7 @@ export default {
   dthrFtpModule,
   jenisReturModule,
   notificationsModule,
+  salesCustabModule,
 
   // Initialize all modules
   initialize: app => {
@@ -108,6 +110,7 @@ export default {
     const dthrFtp = dthrFtpModule.initialize(app);
     const jenisRetur = jenisReturModule.initialize(app);
     const notifications = notificationsModule.initialize(app);
+    const salesCustab = salesCustabModule.initialize(app);
 
     // Initialize menu manager module
     app.use("/api/menu-manager", menuManagerModule.routes);
@@ -145,6 +148,7 @@ export default {
       dthrFtp,
       jenisRetur,
       notifications,
+      salesCustab,
       menuManager: true,
     };
   },

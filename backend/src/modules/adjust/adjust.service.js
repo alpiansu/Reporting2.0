@@ -135,37 +135,55 @@ class AdjustService {
             logger.info(`Processing store: ${store.storeCode}`);
             const storeRecords = records.filter(record => record.KDTK === store.storeCode);
 
-            let processAborted = false;
-            const processingTask = this.processStoreWithHistory(store, storeRecords, username).catch(err => {
-              if (!processAborted) {
-                logger.error(`[adjust][${store.storeCode}] background processing failed after timeout decision: ${err.message}`);
+            // Budget timeout per store: base + allowance per record, dibatasi cap.
+            // Record dalam satu store diproses sekuensial, jadi budget statis 40s
+            // terlalu ketat untuk store dengan banyak record dan memicu timeout palsu
+            // padahal prosesnya sehat. Cap (maxStoreTimeoutMs) mencegah budget membengkak
+            // tak terkendali untuk store yang benar-benar hang.
+            const perRecordMs = config.parallelProcessing.perRecordTimeoutMs;
+            const rawBudgetMs = config.parallelProcessing.storeTimeoutMs + storeRecords.length * perRecordMs;
+            const storeBudgetMs = Math.min(rawBudgetMs, config.parallelProcessing.maxStoreTimeoutMs);
+
+            // AbortController: saat timeout, proses store benar-benar dihentikan
+            // (tidak ada query lanjutan yang menulis data setelah status timeout
+            // dilaporkan) — mencegah status tidak konsisten: FAILED tapi data masuk.
+            const controller = new AbortController();
+
+            const processingTask = this.processStoreWithHistory(store, storeRecords, username, controller.signal).catch(err => {
+              if (!controller.signal.aborted) {
+                logger.error(`[adjust][${store.storeCode}] background processing failed: ${err.message}`);
               }
             });
 
+            let storeTimer = null;
             const storeResult = await Promise.race([
               processingTask,
-              new Promise((resolve, reject) => {
-                const t = setTimeout(() => {
-                  processAborted = true;
-                  logger.error(`[adjust][${store.storeCode}] Store timeout after ${config.parallelProcessing.storeTimeoutMs}ms`);
+              new Promise((resolve) => {
+                storeTimer = setTimeout(() => {
+                  controller.abort();
+                  logger.error(`[adjust][${store.storeCode}] Store timeout after ${storeBudgetMs}ms`);
                   resolve({
                     success: false,
                     processed: 0,
-                    error: `Store timeout after ${config.parallelProcessing.storeTimeoutMs}ms`,
+                    error: `Store timeout after ${storeBudgetMs}ms`,
                     historyRecords: storeRecords.map(record => ({
                       kdtk: record.KDTK,
                       prdcd: record.PRDCD,
                       qty_adj: parseInt(record.QTY_ADJ) || 0,
                       keter: record.KETER || "",
-                      note: `Store timeout after ${config.parallelProcessing.storeTimeoutMs}ms`,
+                      note: `Store timeout after ${storeBudgetMs}ms`,
                       pic: username,
                       updtime: new Date(),
                       status: "FAILED",
                     })),
                   });
-                }, config.parallelProcessing.storeTimeoutMs);
+                }, storeBudgetMs);
               }),
-            ]);
+            ]).finally(() => {
+              // Selalu bersihkan timer agar tidak ada log timeout palsu untuk
+              // store yang selesai tepat waktu (bug: timer tidak pernah di-clear).
+              if (storeTimer) clearTimeout(storeTimer);
+            });
 
             return {
               type: storeResult.success ? "success" : "error",
@@ -352,10 +370,19 @@ class AdjustService {
    * @param {string} username - Username performing the adjustment
    * @returns {Promise<Object>} Processing result with history records
    */
-  async processStoreWithHistory(store, records, username) {
+  async processStoreWithHistory(store, records, username, signal) {
     let storeConnection;
     const executedAt = new Date();
     const historyRecords = [];
+
+    // Cek abort (timeout) di sela-sela query: jika timeout sudah diputuskan,
+    // berhenti segera agar tidak ada data tambahan yang ditulis ke toko setelah
+    // status timeout dilaporkan.
+    const throwIfAborted = () => {
+      if (signal && signal.aborted) {
+        throw new Error("Store processing aborted (timeout)");
+      }
+    };
 
     try {
       // Get store info first
@@ -388,6 +415,7 @@ class AdjustService {
       // Execute init queries
       await (async () => {
         for (const query of config.queries.store.init) {
+          throwIfAborted();
           await this.executeQuery(storeConnection, query, [], "init", config.parallelProcessing.queryTimeoutMs);
         }
       })();
@@ -404,6 +432,9 @@ class AdjustService {
       // Process all records sequentially and wait for completion
       await (async () => {
         for (const record of records) {
+          // Abort dicek di top loop dengan break agar tidak ada spam log
+          // "Error processing record" untuk setiap record yang tersisa.
+          if (signal && signal.aborted) break;
           try {
             // Build parameter array: jika tidak ada field ini, otomatis null
             const tglSelisih = record.TGL_SELISIH || record.tgl_selisih || null;
@@ -435,6 +466,8 @@ class AdjustService {
         }
       })();
 
+      throwIfAborted();
+
       // Execute safety check
       await this.executeQuery(
         storeConnection,
@@ -447,6 +480,7 @@ class AdjustService {
       // Execute finalize queries
       await (async () => {
         for (const query of config.queries.store.finalize) {
+          throwIfAborted();
           await this.executeQuery(storeConnection, query, [], "finalize", config.parallelProcessing.queryTimeoutMs);
         }
       })();
@@ -454,6 +488,9 @@ class AdjustService {
       // Execute insert to mstran
       await (async () => {
         for (const record of records) {
+          // Abort dicek di top loop dengan break agar tidak ada spam log
+          // "Error processing record" untuk setiap record yang tersisa.
+          if (signal && signal.aborted) break;
           try {
             // Prepare parameters for insert query
             const params = [
@@ -542,6 +579,10 @@ class AdjustService {
           }
         }
       })();
+
+      // Abort setelah loop terakhir: jika timeout terjadi di sela-sela loop
+      // insertTran, jangan pernah mengembalikan success untuk proses yang dibatalkan.
+      throwIfAborted();
 
       result.success = true;
       result.historyRecords = historyRecords;

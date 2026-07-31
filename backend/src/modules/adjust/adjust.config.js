@@ -118,7 +118,16 @@ export default {
     // Maximum number of branches to process concurrently (for reconcileAllBranches)
     branchConcurrencyLimit: 3,
     // Timeout for individual store processing (milliseconds)
+    // Budget total = min(storeTimeoutMs + (jumlah record toko * perRecordTimeoutMs), maxStoreTimeoutMs)
+    // Record diproses sekuensial, jadi budget statis terlalu ketat untuk
+    // toko dengan banyak record dan memicu timeout palsu (data masuk tapi
+    // dilaporkan FAILED).
     storeTimeoutMs: 40000,
+    // Additional timeout allowance per record within a store (milliseconds)
+    perRecordTimeoutMs: 5000,
+    // Hard cap untuk total budget per store (milliseconds) — mencegah budget
+    // membengkak tak terkendali jika toko benar-benar hang / DB terkunci
+    maxStoreTimeoutMs: 180000,
     // Timeout for individual query execution (milliseconds)
     queryTimeoutMs: 30000,
   },

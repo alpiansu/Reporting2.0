@@ -69,19 +69,11 @@
               <small>Maksimal 5.000 PLU, ukuran file maksimal 1 MB.</small>
             </div>
             <small v-if="csvError" class="error">{{ csvError }}</small>
-            <div v-if="csvPreview.length > 0" class="csv-preview">
-              <small class="success">{{ csvPreview.length }} baris PLU siap diproses</small>
-              <div class="preview-table">
-                <table>
-                  <thead><tr><th>No</th><th>PRDCD</th></tr></thead>
-                  <tbody>
-                    <tr v-for="(row, idx) in csvPreview.slice(0, 5)" :key="idx">
-                      <td>{{ idx + 1 }}</td>
-                      <td>{{ row.PRDCD || row.prdcd || row[0] }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+            <div v-if="csvSummary" class="csv-summary">
+              <small class="success">{{ csvSummary.valid }} PLU valid dari {{ csvSummary.total }} baris</small>
+              <small v-if="csvSummary.duplicates > 0" class="warn">{{ csvSummary.duplicates }} duplikat diabaikan</small>
+              <small v-if="csvSummary.invalid > 0" class="error">{{ csvSummary.invalid }} baris tidak valid</small>
+              <small v-if="csvSummary.truncated" class="warn">Maksimal 5.000 PLU diproses, sisanya diabaikan</small>
             </div>
           </div>
         </div>
@@ -110,16 +102,20 @@
 
             <MultiSelect
               v-if="shopMode === 'custom'"
+              ref="storeSelect"
               v-model="selectedShops"
               :options="shopOptions"
               optionLabel="label"
               optionValue="kdtk"
-              placeholder="Pilih Toko"
+              placeholder="Ketik untuk mencari toko..."
               filter
+              :autoFilter="false"
               :maxSelectedLabels="3"
               :disabled="!cabang || isDownloading || loadingShops"
+              :loading="loadingShops"
               class="w-full"
-              @change="onShopChange"
+              @filter="onStoreFilter"
+              @show="focusStoreFilter"
             />
             <small v-if="shopMode === 'custom' && selectedShops.length > 0">
               {{ selectedShops.length }} toko dipilih
@@ -167,11 +163,12 @@ const prdLap2 = ref(null);
 const shopMode = ref('all');
 const selectedShops = ref([]);
 const csvFile = ref(null);
-const csvPreview = ref([]);
+const csvSummary = ref(null);
 const csvError = ref('');
 const isDownloading = ref(false);
 const shopOptions = ref([]);
 const loadingShops = ref(false);
+const storeSelect = ref(null);
 
 const cabangOptions = computed(() => cabangStore.allCabang || []);
 
@@ -223,28 +220,52 @@ const prdLap2Hint = computed(() => {
   }
 });
 
-const onCabangChange = async () => {
+const onCabangChange = () => {
   selectedShops.value = [];
   shopOptions.value = [];
 
-  if (!cabang.value) return;
-
-  await fetchShops(cabang.value);
+  // Tidak load semua toko sekaligus — akan di-fetch via live search saat user mengetik
 };
 
-const fetchShops = async (branchCode) => {
+// ─── Live search toko (pola halaman Virtual Margin Based) ────────────────────
+const focusStoreFilter = () => {
+  setTimeout(() => {
+    if (storeSelect.value && storeSelect.value.$el) {
+      const filterInput = storeSelect.value.$el.querySelector('.p-multiselect-filter');
+      if (filterInput) {
+        filterInput.focus();
+      }
+    }
+  }, 100);
+};
+
+const fetchStores = async (search = '') => {
+  if (!cabang.value) return;
+
   try {
     loadingShops.value = true;
-    const response = await StoreService.getStoresByBranch(branchCode, {
-      limit: 1000,
-      onlyInduk: false,
+    const response = await StoreService.getStoresByBranch(cabang.value, {
+      limit: 20,
+      onlyInduk: true,
+      search: search.trim(),
     });
 
     const stores = response.data?.stores || [];
-    shopOptions.value = stores.map(s => ({
+    const newOptions = stores.map(s => ({
       kdtk: s.storeCode,
       label: `${s.storeCode} - ${s.storeName}`,
     }));
+
+    // Gabungkan dengan toko yang sedang terpilih agar label tidak hilang
+    const currentSelected = shopOptions.value.filter(opt => (selectedShops.value || []).includes(opt.kdtk));
+
+    // Gunakan Map untuk unikisasi berdasarkan kdtk
+    const uniqueOptionsMap = new Map();
+    [...currentSelected, ...newOptions].forEach(opt => {
+      uniqueOptionsMap.set(opt.kdtk, opt);
+    });
+
+    shopOptions.value = Array.from(uniqueOptionsMap.values());
   } catch (error) {
     console.error('Error fetching shops:', error);
     toast.showError('Gagal', 'Gagal memuat daftar toko');
@@ -253,8 +274,17 @@ const fetchShops = async (branchCode) => {
   }
 };
 
-const onShopChange = () => {
-  // handled by v-model
+let filterTimeout = null;
+const onStoreFilter = (event) => {
+  const query = event.value;
+
+  if (filterTimeout) clearTimeout(filterTimeout);
+
+  if (query && query.length >= 2) {
+    filterTimeout = setTimeout(() => {
+      fetchStores(query);
+    }, 500);
+  }
 };
 
 const onFileSelect = (event) => {
@@ -262,7 +292,7 @@ const onFileSelect = (event) => {
   if (!file) return;
 
   csvError.value = '';
-  csvPreview.value = [];
+  csvSummary.value = null;
 
   if (!file.name.endsWith('.csv')) {
     csvError.value = 'File harus berformat .csv';
@@ -280,15 +310,63 @@ const onFileSelect = (event) => {
 
   const reader = new FileReader();
   reader.onload = (e) => {
-    const text = e.target.result;
-    const lines = text.split('\n').filter(line => line.trim());
-    const dataLines = lines.slice(1, 6);
-    csvPreview.value = dataLines.map(line => {
-      const cols = line.split(',');
-      return { PRDCD: cols[0]?.trim() };
-    });
+    csvSummary.value = analyzeCsv(e.target.result);
+
+    if (csvSummary.value.valid === 0) {
+      csvError.value = 'Tidak ada PLU valid ditemukan di file CSV';
+      csvFile.value = null;
+    }
   };
   reader.readAsText(file);
+};
+
+// Analisis isi CSV tanpa render ke DOM — cukup statistik ringkas + validasi format
+const analyzeCsv = (text) => {
+  const MAX_PLU = 5000; // Harus sinkron dengan config.maxPluCount di backend
+  const lines = text.split(/\r?\n/).filter(line => line.trim());
+
+  // Deteksi header: baris pertama mengandung kata "PRDCD" / "plu" / "kode" di kolom pertama
+  const hasHeader = lines.length > 0 && /PRDCD|plu|kode/i.test((lines[0].split(',')[0] || '').trim());
+
+  const pluSet = new Set();
+  let duplicates = 0;
+  let invalid = 0;
+  let truncated = false;
+
+  // Mulai dari baris ke-1 jika ada header — total baris data tidak termasuk header
+  for (let i = hasHeader ? 1 : 0; i < lines.length; i++) {
+    const line = lines[i];
+    const cols = line.split(',');
+    const raw = (cols[0] || '').trim();
+    if (!raw) continue;
+
+    // Hanya terima numerik (sama dengan validasi backend)
+    if (!/^\d+$/.test(raw)) {
+      invalid++;
+      continue;
+    }
+
+    if (pluSet.has(raw)) {
+      duplicates++;
+      continue;
+    }
+
+    // Cap 5.000 PLU — sama dengan config.maxPluCount di backend (sales_custab.config.js)
+    if (pluSet.size >= MAX_PLU) {
+      truncated = true;
+      break;
+    }
+
+    pluSet.add(raw);
+  }
+
+  return {
+    total: lines.length - (hasHeader ? 1 : 0),
+    valid: pluSet.size,
+    duplicates,
+    invalid,
+    truncated,
+  };
 };
 
 const canDownload = computed(() => {
@@ -296,7 +374,7 @@ const canDownload = computed(() => {
          prdLap.value &&
          prdLap2.value &&
          csvFile.value &&
-         csvPreview.value.length > 0 &&
+         csvSummary.value && csvSummary.value.valid > 0 &&
          !csvError.value &&
          (shopMode.value === 'all' || selectedShops.value.length > 0);
 });
@@ -476,37 +554,24 @@ const formatDate = (date) => {
   line-height: 1.4;
 }
 
-.csv-preview {
+.csv-summary {
   margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
 }
 
-.preview-table {
-  margin-top: 0.5rem;
-  border: 1px solid var(--surface-border, #e9ecef);
-  border-radius: 6px;
-  overflow: hidden;
+.csv-summary small {
+  display: block;
+  font-size: 0.78rem;
 }
 
-.preview-table table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.85rem;
+.csv-summary .warn {
+  color: #d97706;
 }
 
-.preview-table th,
-.preview-table td {
-  padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid var(--surface-border, #e9ecef);
-  text-align: left;
-}
-
-.preview-table th {
-  background: var(--surface-section, #f8f9fa);
+.csv-summary .success {
   font-weight: 600;
-}
-
-.preview-table tbody tr:last-child td {
-  border-bottom: none;
 }
 
 :deep(.p-fileupload-basic) {

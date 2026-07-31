@@ -125,11 +125,13 @@
       <!-- ACTIONS -->
       <td v-if="user.role == 'admin' || user.role == 'superadmin'">
         <div class="action-buttons">
-          <Button icon="pi pi-eye" size="small" severity="info" @click="showDetailModal(item)" label="Detail"
-            :disabled="isItemBusy(item)" />
-          <Button :icon="isItemAutoUpdating(item) ? `pi pi-spin pi-refresh` : `pi pi-refresh`" size="small"
-            @click="refreshStoreData(item)" :disabled="isItemBusy(item)"
-            :label="isItemAutoUpdating(item) ? ` ...` : `Refresh`" />
+          <div class="action-buttons-row">
+            <Button icon="pi pi-eye" size="small" severity="info" @click="showDetailModal(item)" label="Detail"
+              :disabled="isItemBusy(item)" />
+            <Button :icon="isItemAutoUpdating(item) ? `pi pi-spin pi-refresh` : `pi pi-refresh`" size="small"
+              @click="refreshStoreData(item)" :disabled="isItemBusy(item)"
+              :label="isItemAutoUpdating(item) ? ` ...` : `Refresh`" />
+          </div>
           <Button
             :label="isItemAutoNoting(item) ? 'Processing...' : 'Auto Note'"
             @click="hitAutoNote(item)"

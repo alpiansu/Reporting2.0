@@ -773,11 +773,19 @@ Button:disabled {
 
 .action-buttons {
     display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    align-items: center;
+    justify-content: center;
+    min-width: 80px;
+}
+
+.action-buttons-row {
+    display: flex;
     gap: 0.5rem;
     align-items: center;
     justify-content: center;
     flex-wrap: nowrap;
-    min-width: 80px;
 }
 
 /* Responsive adjustments for notes column */

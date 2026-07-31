@@ -133,7 +133,7 @@
           <Button
             label="Download Laporan CSV"
             icon="pi pi-download"
-            :disabled="!canDownload"
+            :disabled="!canDownload || isDownloading"
             :loading="isDownloading"
             class="p-button-success"
             @click="handleDownload"
@@ -247,12 +247,7 @@ const fetchShops = async (branchCode) => {
     }));
   } catch (error) {
     console.error('Error fetching shops:', error);
-    toast.add({
-      severity: 'error',
-      summary: 'Gagal',
-      detail: 'Gagal memuat daftar toko',
-      life: 3000,
-    });
+    toast.showError('Gagal', 'Gagal memuat daftar toko');
   } finally {
     loadingShops.value = false;
   }
@@ -320,7 +315,8 @@ const downloadTemplate = () => {
 };
 
 const handleDownload = async () => {
-  if (!canDownload.value) return;
+  // Guard re-entry: cegah multiple request saat proses download berlangsung
+  if (!canDownload.value || isDownloading.value) return;
 
   isDownloading.value = true;
   try {
@@ -349,19 +345,9 @@ const handleDownload = async () => {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
-    toast.add({
-      severity: 'success',
-      summary: 'Sukses',
-      detail: 'Laporan berhasil diunduh',
-      life: 3000,
-    });
+    toast.showSuccess('Sukses', 'Laporan berhasil diunduh');
   } catch (error) {
-    toast.add({
-      severity: 'error',
-      summary: 'Gagal',
-      detail: error.response?.data?.message || 'Gagal mengunduh laporan',
-      life: 5000,
-    });
+    toast.showError('Gagal', error.response?.data?.message || 'Gagal mengunduh laporan');
   } finally {
     isDownloading.value = false;
   }

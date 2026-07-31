@@ -2,7 +2,7 @@ import SourceRegistry from './services/sources/registry.js';
 import config from './sales_custab.config.js';
 import logger from '../../config/logger.js';
 
-export default class SalesCustabService {
+class SalesCustabService {
   constructor() {
     this.registry = new SourceRegistry();
     this.defaultSource = config.wrc.sourceName;
@@ -75,3 +75,5 @@ export default class SalesCustabService {
     return Array.from(pluSet);
   }
 }
+
+export default new SalesCustabService();

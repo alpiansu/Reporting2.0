@@ -3,6 +3,11 @@
     <div class="table-header">
       <h3 class="table-title">Resume per Toko</h3>
       <div class="header-actions">
+        <div class="shop-filter-toggle" v-tooltip.bottom="'Tampilkan hanya toko yang baris mtran-nya tercatat atas kode toko lain / kosong'">
+          <Checkbox v-model="localShopIssueOnly" inputId="shopIssueOnlyToggle" :binary="true"
+            @change="onShopIssueToggle" />
+          <label for="shopIssueOnlyToggle" class="shop-filter-label">Hanya SHOP beda</label>
+        </div>
         <div class="search-box">
           <i class="pi pi-search search-icon"></i>
           <InputText v-model="localSearch" placeholder="Cari KDTK/Nama/Note..." @input="onSearchInput"
@@ -90,6 +95,33 @@
           </template>
         </Column>
 
+        <Column header="Cek SHOP" :style="{ minWidth: '160px', textAlign: 'center' }">
+          <template #header>
+            <span v-tooltip.top="'Memastikan field SHOP di tabel mtran sesuai dengan kode toko (KDTK)'">
+              Cek SHOP
+            </span>
+          </template>
+          <template #body="slotProps">
+            <div class="shop-check-cell">
+              <template v-if="slotProps.data.SHOP_CHECK && slotProps.data.SHOP_CHECK.STATUS === 'B'">
+                <Button
+                  icon="pi pi-exclamation-triangle"
+                  :label="`${formatNumber(slotProps.data.SHOP_CHECK.JUMLAH_TRX_BEDA)} SHOP Beda`"
+                  size="small" severity="warning" outlined
+                  class="shop-check-btn shop-check-btn--beda"
+                  v-tooltip.top="'Klik untuk lihat detail SHOP asing'"
+                  @click="$emit('shop-check', slotProps.data)" />
+              </template>
+              <template v-else-if="slotProps.data.SHOP_CHECK && slotProps.data.SHOP_CHECK.STATUS === 'OK'">
+                <Tag value="SHOP OK" icon="pi pi-check" severity="success" rounded class="shop-check-tag" />
+              </template>
+              <template v-else>
+                <span class="shop-check-empty" v-tooltip.top="'Tidak ada baris mtran yang tercatat atas kode toko lain / kosong'">Tidak ada selisih</span>
+              </template>
+            </div>
+          </template>
+        </Column>
+
         <Column header="Actions" frozen alignFrozen="right" :style="{ width: '130px' }">
           <template #body="slotProps">
             <div class="action-buttons">
@@ -147,6 +179,7 @@ import Button from 'primevue/button';
 import Tag from 'primevue/tag';
 import Skeleton from 'primevue/skeleton';
 import Popover from 'primevue/popover';
+import Checkbox from 'primevue/checkbox';
 import { formatNumber, formatDateTime, formatRelativeTime, getSelisihClass } from '../utils/formatters';
 
 const props = defineProps({
@@ -158,7 +191,8 @@ const props = defineProps({
   searchQuery: { type: String, default: '' },
   loadingStores: { type: Object, default: () => new Set() },
   highlightedItems: { type: Object, default: () => new Set() },
-  detailLoadingStores: { type: Object, default: () => new Set() }
+  detailLoadingStores: { type: Object, default: () => new Set() },
+  shopIssueOnly: { type: Boolean, default: false }
 });
 
 const emit = defineEmits([
@@ -169,15 +203,26 @@ const emit = defineEmits([
   're-screen',
   'edit-note',
   'export',
-  'search-change'
+  'search-change',
+  'shop-check',
+  'update:shopIssueOnly'
 ]);
 
 const localSearch = ref(props.searchQuery);
+const localShopIssueOnly = ref(props.shopIssueOnly);
 let searchTimer = null;
 
 watch(() => props.searchQuery, (newVal) => {
   localSearch.value = newVal;
 });
+
+watch(() => props.shopIssueOnly, (newVal) => {
+  localShopIssueOnly.value = newVal;
+});
+
+const onShopIssueToggle = () => {
+  emit('update:shopIssueOnly', localShopIssueOnly.value);
+};
 
 const onSearchInput = () => {
   if (searchTimer) clearTimeout(searchTimer);
@@ -228,7 +273,9 @@ const hidePopover = () => {
 
 const getRowClass = (row) => {
   const key = `${row.CABANG || row.CAB || 'Unknown'}_${row.KDTK || 'Unknown'}`;
-  return props.highlightedItems.has(key) ? 'row-highlighted' : '';
+  if (props.highlightedItems.has(key)) return 'row-highlighted';
+  if (row.SHOP_CHECK && row.SHOP_CHECK.STATUS === 'B') return 'row-shop-beda';
+  return '';
 };
 </script>
 
@@ -273,6 +320,31 @@ const getRowClass = (row) => {
     flex-wrap: wrap;
     width: 100%;
   }
+}
+
+.shop-filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.shop-filter-toggle:hover {
+  background: #fef3c7;
+}
+
+.shop-filter-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #92400e;
+  cursor: pointer;
+  user-select: none;
 }
 
 .search-box {
@@ -343,6 +415,15 @@ const getRowClass = (row) => {
   animation: highlight-fade 2s ease-in-out;
 }
 
+:deep(.p-datatable-tbody > tr.row-shop-beda) {
+  background: color-mix(in srgb, #f59e0b 4%, var(--surface-color)) !important;
+  border-left: 3px solid #f59e0b;
+}
+
+:deep(.p-datatable-tbody > tr.row-shop-beda:hover) {
+  background: color-mix(in srgb, #f59e0b 9%, var(--surface-color)) !important;
+}
+
 @keyframes highlight-fade {
   0% {
     background: #fde047 !important;
@@ -398,6 +479,34 @@ const getRowClass = (row) => {
 .last-screened {
   color: var(--text-color-secondary);
   font-size: 0.813rem;
+}
+
+.shop-check-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shop-check-btn {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.shop-check-btn--beda:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(217, 119, 6, 0.25);
+}
+
+.shop-check-tag {
+  font-size: 0.72rem;
+}
+
+.shop-check-empty {
+  font-size: 0.78rem;
+  color: var(--text-color-secondary);
+  font-style: italic;
 }
 
 .action-buttons {

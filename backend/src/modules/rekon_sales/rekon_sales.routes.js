@@ -37,6 +37,9 @@ router.get("/differences", validatePeriod, validateCabangKdtk, rekonSalesControl
 // Get kode pesanan issues
 router.get("/kodePesananIssues", validatePeriod, validateCabangKdtk, rekonSalesController.getKodePesananIssues);
 
+// Get SHOP check detail (mtran.SHOP vs KDTK) — with optional live item drill-down
+router.get("/shop-check", rekonSalesController.getShopCheck);
+
 // Export data for Excel
 router.get("/export-data", validatePeriod, validateCabangKdtk, rekonSalesController.getExportData);
 

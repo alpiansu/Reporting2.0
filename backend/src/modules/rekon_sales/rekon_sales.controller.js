@@ -111,6 +111,7 @@ export const getResumeByKdtk = async (req, res) => {
       sortColumn = "KDTK",
       sortOrder = "ASC",
       searchQuery,
+      shopIssueOnly,
     } = req.query;
 
     if (!month || !year) {
@@ -132,11 +133,35 @@ export const getResumeByKdtk = async (req, res) => {
       searchQuery,
       sortColumn,
       sortOrder,
+      shopIssueOnly,
     });
 
     return apiResponse.success(res, result);
   } catch (error) {
     logger.error(`[rekon_sales.controller] Error getting resume by KDTK: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+/**
+ * Get SHOP check detail for a specific store (with optional live item drill-down)
+ * GET /api/rekon-sales/shop-check?kdtk=xxx&month=07&year=2026&detail=1
+ */
+export const getShopCheck = async (req, res) => {
+  try {
+    const { kdtk, month, year, detail } = req.query;
+
+    if (!kdtk || !month || !year) {
+      return apiResponse.badRequest(res, "kdtk, month, dan year wajib diisi");
+    }
+
+    logger.info(`[rekon_sales.controller] Get shop check: kdtk=${kdtk}, month=${month}, year=${year}, detail=${detail}`);
+
+    const result = await rekonSalesService.getShopCheckDetail({ kdtk, month, year, detail });
+
+    return apiResponse.success(res, result);
+  } catch (error) {
+    logger.error(`[rekon_sales.controller] Error getShopCheck: ${error.message}`);
     return apiResponse.error(res, error.message);
   }
 };

@@ -288,6 +288,94 @@ class StoreQueryHelper {
   }
 
   /**
+   * Check SHOP field integrity in mtran table.
+   * Flags rows where SHOP != store code (or NULL/empty), WITHOUT catcode/plu filters
+   * because this is a pure data-integrity check (baris milik toko lain tetap terdeteksi).
+   *
+   * @param {Object} connection - Store database connection
+   * @param {string} strMonth - Month in MM format
+   * @param {string} strYear - Year in YYYY format
+   * @param {string} storeCode - Expected SHOP value (store's own code)
+   * @returns {Promise<Array>} Aggregated foreign shop codes with counts
+   */
+  async getMtranShopCheck(connection, strMonth, strYear, storeCode) {
+    try {
+      const query = `
+        SELECT
+          CASE WHEN SHOP IS NULL OR TRIM(SHOP) = '' THEN '(KOSONG)' ELSE UPPER(TRIM(SHOP)) END AS SHOP_MTRAN,
+          COUNT(*) AS JUMLAH_TRX,
+          COUNT(DISTINCT TANGGAL) AS JUMLAH_TGL,
+          MIN(TANGGAL) AS TGL_AWAL,
+          MAX(TANGGAL) AS TGL_AKHIR
+        FROM mtran
+        WHERE MONTH(TANGGAL) = ?
+          AND YEAR(TANGGAL) = ?
+          AND TANGGAL < CURDATE()
+          AND (SHOP IS NULL OR TRIM(SHOP) = '' OR UPPER(TRIM(SHOP)) <> UPPER(?))
+        GROUP BY SHOP_MTRAN
+        ORDER BY JUMLAH_TRX DESC
+      `;
+
+      const [rows] = await connection.query(query, [strMonth, strYear, storeCode]);
+
+      const mapped = rows.map(r => ({
+        SHOP: r.SHOP_MTRAN,
+        JUMLAH_TRX: Number(r.JUMLAH_TRX) || 0,
+        JUMLAH_TGL: Number(r.JUMLAH_TGL) || 0,
+        TGL_AWAL: r.TGL_AWAL,
+        TGL_AKHIR: r.TGL_AKHIR,
+      }));
+
+      logger.info(`[StoreQueryHelper] getMtranShopCheck: ${mapped.length} foreign shop code(s) found for ${storeCode}`);
+      return mapped;
+    } catch (error) {
+      logger.error(`[StoreQueryHelper] Error in getMtranShopCheck: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch item-level sample rows from mtran where SHOP != store code.
+   * Used by the "Lihat Item Transaksi" drill-down in the UI.
+   *
+   * @param {Object} connection - Store database connection
+   * @param {string} strMonth - Month in MM format
+   * @param {string} strYear - Year in YYYY format
+   * @param {string} storeCode - Store's own code
+   * @param {number} limit - Max rows returned (capped at 500)
+   * @returns {Promise<Array>} Item-level sample rows
+   */
+  async getMtranShopCheckItems(connection, strMonth, strYear, storeCode, limit = 50) {
+    try {
+      const query = `
+        SELECT
+          TANGGAL, DOCNO, STATION, SHIFT, PLU, QTY, PRICE, GROSS, PPN, BKP, SUB_BKP,
+          CASE WHEN SHOP IS NULL OR TRIM(SHOP) = '' THEN '(KOSONG)' ELSE UPPER(TRIM(SHOP)) END AS SHOP_MTRAN
+        FROM mtran
+        WHERE MONTH(TANGGAL) = ?
+          AND YEAR(TANGGAL) = ?
+          AND TANGGAL < CURDATE()
+          AND (SHOP IS NULL OR TRIM(SHOP) = '' OR UPPER(TRIM(SHOP)) <> UPPER(?))
+        ORDER BY TANGGAL DESC, DOCNO, SEQNO
+        LIMIT ?
+      `;
+
+      const [rows] = await connection.query(query, [
+        strMonth,
+        strYear,
+        storeCode,
+        Math.min(Number(limit) || 50, 500),
+      ]);
+
+      logger.info(`[StoreQueryHelper] getMtranShopCheckItems: ${rows.length} item rows fetched for ${storeCode}`);
+      return rows;
+    } catch (error) {
+      logger.error(`[StoreQueryHelper] Error in getMtranShopCheckItems: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * Get initial/opening info per shift from table `initial`
    * Used for live check to detect late sales upload ("sales telat naik")
    *

@@ -6,6 +6,7 @@ import logger from "../../config/logger.js";
 import RekonSales from "./models/rekon_sales.model.js";
 import DetailRekonSales from "./models/detail_rekon_sales.model.js";
 import MtranVsCd from "./models/mtran_vs_cd.model.js";
+import RekonSalesShopCheck from "./models/rekon_sales_shop_check.model.js";
 import dbStore from "../../config/db_store.js";
 import config from "./rekon_sales.config.js";
 import CacheManager from "./cache.manager.js";
@@ -341,6 +342,29 @@ class RekonSalesService {
       try {
         await RekapRemoteService.addToTemp(cab, storeCode, "rekon_sales", `[${storeCode}] fetching mtran data...`);
 
+        // STEP 0: Cek integritas SHOP — pastikan semua baris mtran tercatat atas kode toko ini sendiri.
+        // Hanya flag/informasi, TIDAK mengubah perhitungan rekon.
+        try {
+          const shopMismatch = await StoreQueryHelper.getMtranShopCheck(storeConnection, strMonth, strYear, storeCode);
+          const totalBeda = shopMismatch.reduce((sum, r) => sum + (r.JUMLAH_TRX || 0), 0);
+          results.shopCheck = {
+            status: shopMismatch.length > 0 ? "B" : "OK",
+            jumlahTrxBeda: totalBeda,
+            jumlahShopAsing: shopMismatch.length,
+            listShop: shopMismatch,
+          };
+          if (shopMismatch.length > 0) {
+            await RekapRemoteService.addToTemp(
+              cab,
+              storeCode,
+              "rekon_sales",
+              `[${storeCode}] SHOP CHECK: ${totalBeda} transaksi atas ${shopMismatch.length} kode toko lain`,
+            );
+          }
+        } catch (shopErr) {
+          logger.warn(`[rekon_sales.service] [${storeCode}] Shop check skipped: ${shopErr.message}`);
+        }
+
         // STEP 1: Fetch mtran vs closing detail using helper
         const mtranData = await StoreQueryHelper.fetchMtranVsCD(storeConnection, strMonth, strYear, storeCode, cab);
 
@@ -465,6 +489,15 @@ class RekonSalesService {
     } catch (err) {
       await RekapRemoteService.addToTemp(cab, storeCode, "rekon_sales", `[${storeCode}] ERROR: ${err.message}`);
       logger.error(`[rekon_sales.service] Error processing store ${storeCode}: ${err.message}`);
+    }
+
+    // Persist hasil cek SHOP (single-store mode) untuk outcome sukses apa pun
+    if (!deferSave && results.success && results.shopCheck) {
+      try {
+        await this.saveShopCheck(cab, storeCode, strMonth, strYear, results.shopCheck);
+      } catch (saveErr) {
+        logger.error(`[rekon_sales.service] Error saving shop check for ${storeCode}: ${saveErr.message}`);
+      }
     }
 
     return results;
@@ -947,6 +980,7 @@ class RekonSalesService {
       const allRekonResults = [];
       const allDiffData = [];
       const allDetailData = [];
+      const allShopChecks = [];
       await Promise.all(
         storesToProcess.map(store =>
           limitStores(async () => {
@@ -1011,6 +1045,21 @@ class RekonSalesService {
               }
 
               if (result.success) {
+                // Kumpulkan hasil cek SHOP (HANYA toko yang SHOP-nya beda) untuk disimpan
+                // di tahap finalisasi — toko OK tidak disimpan agar data tetap ramping.
+                if (result.shopCheck && result.shopCheck.status === "B") {
+                  allShopChecks.push({
+                    CAB: cab,
+                    KDTK: storeCode,
+                    MONTH: strMonth,
+                    YEAR: strYear,
+                    STATUS: result.shopCheck.status || "B",
+                    JUMLAH_TRX_BEDA: result.shopCheck.jumlahTrxBeda || 0,
+                    JUMLAH_SHOP_ASING: result.shopCheck.jumlahShopAsing || 0,
+                    LIST_SHOP: JSON.stringify(result.shopCheck.listShop || []),
+                    UPDTIME: new Date(),
+                  });
+                }
                 if (result.hasIssue) {
                   activeStores.add(storeCode);
                   if (Array.isArray(result.records) && result.records.length > 0) {
@@ -1098,6 +1147,7 @@ class RekonSalesService {
   const modelRekon = await RekonSales.getModel();
   const modelMtranVsCd = await MtranVsCd.getModel();
   const detailModel = await DetailRekonSales.getModel();
+  const shopCheckModel = await RekonSalesShopCheck.getModel();
   const monthInt = parseInt(strMonth);
   const yearInt = parseInt(strYear);
 
@@ -1118,6 +1168,22 @@ class RekonSalesService {
       ...(cabang !== "All" && cabang !== "ALL" ? { CAB: cabang } : {}),
     },
   });
+
+  // Hapus hasil cek SHOP hanya untuk toko yang benar-benar di-screen pada run ini,
+  // agar toko yang di-skip oleh daily guard tetap mempertahankan badge hasil cek sebelumnya.
+  // Toko yang ERROR dikeluarkan dari scope destroy supaya hasil cek terakhirnya tidak hilang
+  // (tampilan "Tidak ada selisih" tidak boleh muncul untuk toko yang justru gagal di-screen).
+  const shopCheckCleanupKdtks = Array.from(screenedStores).filter(k => !erroredStores.has(k));
+  if (shopCheckCleanupKdtks.length > 0) {
+    await shopCheckModel.destroy({
+      where: {
+        MONTH: strMonth,
+        YEAR: strYear,
+        KDTK: { [Op.in]: shopCheckCleanupKdtks },
+        ...(cabang !== "All" && cabang !== "ALL" ? { CAB: cabang } : {}),
+      },
+    });
+  }
 
   const startOfMonth = moment({ year: yearInt, month: monthInt - 1, day: 1 }).startOf("month").format("YYYY-MM-DD");
   const endOfMonth = moment({ year: yearInt, month: monthInt - 1, day: 1 }).endOf("month").format("YYYY-MM-DD");
@@ -1167,6 +1233,12 @@ class RekonSalesService {
 
   if (allDetailData.length > 0) {
     await this.saveDetailRekonSales(allDetailData);
+  }
+
+  if (allShopChecks.length > 0) {
+    await RekonSalesShopCheck.bulkCreate(allShopChecks, {
+      updateOnDuplicate: ["STATUS", "JUMLAH_TRX_BEDA", "JUMLAH_SHOP_ASING", "LIST_SHOP", "UPDTIME"],
+    });
   }
 
   // === STEP 8: Update resolved records ===
@@ -1487,6 +1559,37 @@ class RekonSalesService {
   }
 
   /**
+   * Save shop check summary for a store & period.
+   * Hanya menyimpan toko yang SHOP-nya beda (STATUS='B'); jika OK,
+   * baris lama dihapus agar badge yang sudah tidak berlaku tidak tertinggal.
+   */
+  async saveShopCheck(cab, kdtk, strMonth, strYear, shopCheck) {
+    try {
+      if (!shopCheck) return;
+      const model = await RekonSalesShopCheck.getModel();
+      if (shopCheck.status === "B") {
+        await model.upsert({
+          CAB: cab,
+          KDTK: kdtk,
+          MONTH: strMonth,
+          YEAR: strYear,
+          STATUS: "B",
+          JUMLAH_TRX_BEDA: shopCheck.jumlahTrxBeda || 0,
+          JUMLAH_SHOP_ASING: shopCheck.jumlahShopAsing || 0,
+          LIST_SHOP: JSON.stringify(shopCheck.listShop || []),
+          UPDTIME: new Date(),
+        });
+      } else {
+        await model.destroy({
+          where: { KDTK: kdtk, MONTH: strMonth, YEAR: strYear },
+        });
+      }
+    } catch (error) {
+      logger.error(`[rekon_sales.service] Error saving shop check for ${kdtk}: ${error.message}`);
+    }
+  }
+
+  /**
    * Build filter function for data filtering
    */
   buildFilterFunction(params = {}) {
@@ -1547,6 +1650,22 @@ class RekonSalesService {
       const totalSelPpnGL = filteredData.reduce((sum, item) => sum + Math.abs(item.SEL_PPN_GL || 0), 0);
       const totalSelPpnCD = filteredData.reduce((sum, item) => sum + Math.abs(item.SEL_PPN_CD || 0), 0);
 
+      // Jumlah toko dengan status SHOP beda (dari tabel rekon_sales_shop_check)
+      let totalStoresShopBeda = 0;
+      try {
+        const shopCheckModel = await RekonSalesShopCheck.getModel();
+        totalStoresShopBeda = await shopCheckModel.count({
+          where: {
+            MONTH: String(month).padStart(2, "0"),
+            YEAR: String(year),
+            STATUS: "B",
+            ...(cabang && cabang !== "All" && cabang !== "ALL" ? { CAB: cabang } : {}),
+          },
+        });
+      } catch (err) {
+        logger.warn(`[rekon_sales.service] Failed to count shop check: ${err.message}`);
+      }
+
       return {
         data: {
           total_stores: uniqueStores.size,
@@ -1555,6 +1674,7 @@ class RekonSalesService {
           total_sel_net_cd: totalSelNetCD,
           total_sel_ppn_gl: totalSelPpnGL,
           total_sel_ppn_cd: totalSelPpnCD,
+          total_stores_shop_beda: totalStoresShopBeda,
         },
       };
     } catch (error) {
@@ -1576,6 +1696,7 @@ class RekonSalesService {
       sortColumn = "KDTK",
       sortOrder = "ASC",
       searchQuery,
+      shopIssueOnly,
     } = options;
 
     if (!month || !year) throw new Error("Month and year are required");
@@ -1670,6 +1791,82 @@ class RekonSalesService {
         }
       } catch (err) {
         logger.warn(`[rekon_sales.service] Failed to enrich with notes: ${err.message}`);
+      }
+
+      // === Enrich dengan hasil Cek SHOP (mtran.SHOP harus = KDTK) ===
+      let shopChecks = [];
+      try {
+        const shopCheckModel = await RekonSalesShopCheck.getModel();
+        shopChecks = await shopCheckModel.findAll({
+          where: {
+            MONTH: month,
+            YEAR: year,
+            ...(cabang !== "All" && cabang !== "ALL" ? { CAB: cabang } : {}),
+          },
+          raw: true,
+        });
+      } catch (err) {
+        logger.warn(`[rekon_sales.service] Failed to load shop check data: ${err.message}`);
+      }
+
+      const shopCheckMap = new Map();
+      for (const c of shopChecks) {
+        let listShop = [];
+        try {
+          listShop = JSON.parse(c.LIST_SHOP || "[]");
+        } catch {
+          listShop = [];
+        }
+        shopCheckMap.set(c.KDTK, {
+          CAB: c.CAB,
+          STATUS: c.STATUS,
+          JUMLAH_TRX_BEDA: Number(c.JUMLAH_TRX_BEDA) || 0,
+          JUMLAH_SHOP_ASING: Number(c.JUMLAH_SHOP_ASING) || 0,
+          LIST_SHOP: listShop,
+          UPDTIME: c.UPDTIME || null,
+        });
+      }
+
+      // Tambahkan toko yang SHOP-nya beda tapi tidak punya issue rekon (RECID='1'),
+      // agar statusnya tetap terlihat di tabel resume per toko.
+      const existingKdtk = new Set(results.map(r => r.KDTK));
+      for (const [kdtk, check] of shopCheckMap.entries()) {
+        if (existingKdtk.has(kdtk) || check.STATUS !== "B") continue;
+        let storeName = "-";
+        try {
+          const storeInfo = await storeService.getStoreByCode(kdtk);
+          if (storeInfo?.storeName) storeName = storeInfo.storeName;
+        } catch {
+          logger.warn(`[rekon_sales.service] Store name not found for ${kdtk}`);
+        }
+        results.push({
+          CAB: check.CAB || "",
+          KDTK: kdtk,
+          NAMA: storeName,
+          TOTAL_ISSUES: 0,
+          TOTAL_SEL_NET_GL: 0,
+          TOTAL_SEL_NET_CD: 0,
+          TOTAL_SEL_PPN_GL: 0,
+          TOTAL_SEL_PPN_CD: 0,
+          TOTAL_SEL_NET: 0,
+          TOTAL_SEL_PPN: 0,
+          TOTAL_DATES: 0,
+          DATES: [],
+          UPDTIME_LATEST: null,
+          note: null,
+        });
+        existingKdtk.add(kdtk);
+      }
+
+      // Attach SHOP_CHECK ke setiap baris
+      results = results.map(item => ({
+        ...item,
+        SHOP_CHECK: shopCheckMap.get(item.KDTK) || null,
+      }));
+
+      // Filter khusus: hanya tampilkan toko yang SHOP-nya beda
+      if (shopIssueOnly === "true" || shopIssueOnly === true) {
+        results = results.filter(item => item.SHOP_CHECK && item.SHOP_CHECK.STATUS === "B");
       }
 
       // Search
@@ -2241,6 +2438,78 @@ class RekonSalesService {
       }
     } catch (error) {
       logger.error(`[rekon_sales.service] Error getLiveCheck: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get SHOP check detail for a specific store.
+   * Ringkasan dibaca dari tabel rekon_sales_shop_check;
+   * jika detail=1, sample item mtran dengan SHOP beda diambil LIVE dari DB toko.
+   */
+  async getShopCheckDetail(options = {}) {
+    const { kdtk, month, year, detail } = options;
+
+    if (!kdtk || !month || !year) throw new Error("kdtk, month, and year are required");
+
+    try {
+      const model = await RekonSalesShopCheck.getModel();
+      const record = await model.findOne({
+        where: { KDTK: kdtk.trim().toUpperCase(), MONTH: month, YEAR: year },
+        raw: true,
+      });
+
+      let listShop = [];
+      try {
+        listShop = JSON.parse(record?.LIST_SHOP || "[]");
+      } catch {
+        listShop = [];
+      }
+
+      let storeName = "-";
+      try {
+        const storeInfo = await storeService.getStoreByCode(kdtk);
+        if (storeInfo?.storeName) storeName = storeInfo.storeName;
+      } catch {
+        logger.warn(`[rekon_sales.service] Store name not found for ${kdtk}`);
+      }
+
+      const result = {
+        KDTK: kdtk.trim().toUpperCase(),
+        NAMA: storeName,
+        MONTH: month,
+        YEAR: year,
+        STATUS: record?.STATUS || null,
+        JUMLAH_TRX_BEDA: Number(record?.JUMLAH_TRX_BEDA) || 0,
+        JUMLAH_SHOP_ASING: Number(record?.JUMLAH_SHOP_ASING) || 0,
+        LIST_SHOP: listShop,
+        UPDTIME: record?.UPDTIME || null,
+        items: null,
+      };
+
+      // Live drill-down: sample item mtran dengan SHOP beda dari DB toko
+      if (detail === "1" || detail === true) {
+        const storeInfo = await storeService.getStoreIPHost(kdtk);
+        if (!storeInfo) {
+          result.error = "Store info not found";
+          return result;
+        }
+        const storeConnection = await dbStore.createDbStore(storeInfo.dbHost, config.connectionRetry.maxRetries);
+        if (!storeConnection) {
+          result.error = "Failed to connect to store";
+          return result;
+        }
+        try {
+          const items = await StoreQueryHelper.getMtranShopCheckItems(storeConnection, month, year, kdtk, 50);
+          result.items = items;
+        } finally {
+          await storeConnection.end();
+        }
+      }
+
+      return result;
+    } catch (error) {
+      logger.error(`[rekon_sales.service] Error getShopCheckDetail: ${error.message}`);
       throw error;
     }
   }

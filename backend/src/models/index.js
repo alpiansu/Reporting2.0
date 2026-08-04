@@ -17,6 +17,7 @@ import PrepClosing from "../modules/prep-closing/prep_closing.model.js";
 import DetailRekonSales from "../modules/rekon_sales/models/detail_rekon_sales.model.js";
 import MtranVsCd from "../modules/rekon_sales/models/mtran_vs_cd.model.js";
 import RekonSales from "../modules/rekon_sales/models/rekon_sales.model.js";
+import RekonSalesShopCheck from "../modules/rekon_sales/models/rekon_sales_shop_check.model.js";
 import SaldoRekonPersediaan from "./saldorekonpersediaan.model.js";
 import { CeklistSpaceHddWrapper, CeklistSpaceTampungWrapper, CeklistImportIdtWrapper } from "../modules/ceklist-prep-closing/ceklist_prep_closing.model.js";
 import DthrFtpLogWrapper from "../modules/dthr_ftp/dthr_ftp.model.js";
@@ -39,6 +40,7 @@ modelRegistry.register("HistBuatRmb", () => HistBuatRmb.getModel(), { priority: 
 modelRegistry.register("DetailRekonSales", () => DetailRekonSales.getModel(), { priority: 5 });
 modelRegistry.register("MtranVsCd", () => MtranVsCd.getModel(), { priority: 4 });
 modelRegistry.register("RekonSales", () => RekonSales.getModel(), { priority: 3 });
+modelRegistry.register("RekonSalesShopCheck", () => RekonSalesShopCheck.getModel(), { priority: 2.5 });
 modelRegistry.register("SaldoRekonPersediaan", () => SaldoRekonPersediaan.getModel(), { priority: 2 });
 modelRegistry.register("CeklistSpaceHdd", () => CeklistSpaceHddWrapper.getModel(), { priority: 1.5 });
 modelRegistry.register("CeklistSpaceTampung", () => CeklistSpaceTampungWrapper.getModel(), { priority: 1.4 });
@@ -81,6 +83,7 @@ export default {
   DetailRekonSales,
   MtranVsCd,
   RekonSales,
+  RekonSalesShopCheck,
   DthrFtpLog: DthrFtpLogWrapper,
 };
 
@@ -104,6 +107,7 @@ export {
   DetailRekonSales,
   MtranVsCd,
   RekonSales,
+  RekonSalesShopCheck,
   DthrFtpLogWrapper as DthrFtpLog,
 };
 

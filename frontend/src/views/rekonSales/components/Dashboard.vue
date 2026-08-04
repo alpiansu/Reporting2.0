@@ -7,14 +7,14 @@
       </div>
     </template>
     <template v-else>
-      <div class="summary-card" v-for="card in cards" :key="card.key">
+      <div class="summary-card" :class="{ 'summary-card--warning': card.warning }" v-for="card in cards" :key="card.key">
         <div class="card-header">
           <div class="card-icon">
             <i :class="card.icon"></i>
           </div>
           <div class="card-title">{{ card.title }}</div>
         </div>
-        <div class="card-value">{{ card.format ? card.format(card.value) : card.value }}</div>
+        <div class="card-value" :class="{ 'card-value--warning': card.warning }">{{ card.format ? card.format(card.value) : card.value }}</div>
         <div class="card-subtitle">{{ card.subtitle }}</div>
       </div>
     </template>
@@ -41,7 +41,8 @@ const cards = computed(() => [
   { key: 'total_sel_net_gl', title: 'Total SEL NET GL', value: getSummaryValue('total_sel_net_gl'), icon: 'pi pi-chart-line', subtitle: 'Agregat', format: formatNumber },
   { key: 'total_sel_net_cd', title: 'Total SEL NET CD', value: getSummaryValue('total_sel_net_cd'), icon: 'pi pi-chart-line', subtitle: 'Agregat', format: formatNumber },
   { key: 'total_sel_ppn_gl', title: 'Total SEL PPN GL', value: getSummaryValue('total_sel_ppn_gl'), icon: 'pi pi-percentage', subtitle: 'Agregat', format: formatNumber },
-  { key: 'total_sel_ppn_cd', title: 'Total SEL PPN CD', value: getSummaryValue('total_sel_ppn_cd'), icon: 'pi pi-percentage', subtitle: 'Agregat', format: formatNumber }
+  { key: 'total_sel_ppn_cd', title: 'Total SEL PPN CD', value: getSummaryValue('total_sel_ppn_cd'), icon: 'pi pi-percentage', subtitle: 'Agregat', format: formatNumber },
+  { key: 'total_stores_shop_beda', title: 'Toko SHOP Beda', value: getSummaryValue('total_stores_shop_beda'), icon: 'pi pi-exclamation-circle', subtitle: 'mtran.SHOP ≠ KDTK', format: formatNumber, warning: true }
 ]);
 </script>
 
@@ -67,6 +68,19 @@ const cards = computed(() => [
 .summary-card:nth-child(4) { animation-delay: 0.20s; }
 .summary-card:nth-child(5) { animation-delay: 0.25s; }
 .summary-card:nth-child(6) { animation-delay: 0.30s; }
+.summary-card:nth-child(7) { animation-delay: 0.35s; }
+
+.summary-card--warning .card-icon {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+}
+
+.summary-card--warning {
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.card-value--warning {
+  color: #d97706;
+}
 
 @keyframes cardFadeIn {
   from { opacity: 0; transform: translateY(12px); }

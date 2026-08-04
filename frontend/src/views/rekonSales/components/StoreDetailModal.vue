@@ -95,6 +95,47 @@
             </DataTable>
           </div>
         </TabPanel>
+
+        <TabPanel header="Cek SHOP">
+          <div v-if="!shopCheckData" class="empty-tab">
+            <i class="pi pi-check-circle mr-2"></i>Tidak ada selisih SHOP tercatat untuk toko ini.
+          </div>
+          <template v-else>
+            <div class="detail-grid">
+              <div>
+                <strong>Status</strong>
+                <div class="shop-status">
+                  <Tag v-if="shopCheckData.STATUS === 'B'" value="Ada SHOP Beda" severity="warning" icon="pi pi-exclamation-triangle" rounded />
+                  <Tag v-else-if="shopCheckData.STATUS === 'OK'" value="SHOP OK" severity="success" icon="pi pi-check" rounded />
+                  <Tag v-else value="Belum dicek" severity="secondary" rounded />
+                </div>
+              </div>
+              <div><strong>Transaksi Beda</strong><div>{{ formatNumber(shopCheckData.JUMLAH_TRX_BEDA || 0) }}</div></div>
+              <div><strong>Kode SHOP Asing</strong><div>{{ formatNumber(shopCheckData.JUMLAH_SHOP_ASING || 0) }}</div></div>
+              <div><strong>Terakhir Dicek</strong><div>{{ formatDateTime(shopCheckData.UPDTIME) }}</div></div>
+            </div>
+            <h4>Kode SHOP Asing per Kode</h4>
+            <DataTable :value="shopListData" size="small" stripedRows>
+              <template #empty>
+                <div class="empty-tab"><i class="pi pi-check-circle mr-2"></i>Tidak ada SHOP asing</div>
+              </template>
+              <Column field="SHOP" header="SHOP Asing" />
+              <Column field="JUMLAH_TRX" header="Jumlah Transaksi" class="text-right">
+                <template #body="{ data }">{{ formatNumber(data.JUMLAH_TRX) }}</template>
+              </Column>
+              <Column field="JUMLAH_TGL" header="Jumlah Tanggal" class="text-right">
+                <template #body="{ data }">{{ formatNumber(data.JUMLAH_TGL) }}</template>
+              </Column>
+              <Column field="TGL_AWAL" header="Dari Tanggal" />
+              <Column field="TGL_AKHIR" header="Sampai Tanggal" />
+            </DataTable>
+            <div class="shop-items-hint">
+              <i class="pi pi-search"></i>
+              <span>Lihat contoh item transaksi dengan SHOP beda langsung dari DB toko.</span>
+              <Button label="Lihat Item" icon="pi pi-search" size="small" @click="emitViewShopCheck" />
+            </div>
+          </template>
+        </TabPanel>
       </TabView>
       <div class="dialog-actions">
         <Button label="Catatan" icon="pi pi-pencil" class="p-button-text" @click="emitOpenNote" />
@@ -112,7 +153,8 @@ import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import TabView from 'primevue/tabview';
 import TabPanel from 'primevue/tabpanel';
-import { formatNumber, formatDecimal, getSelisihClass } from '../utils/formatters';
+import { formatNumber, formatDecimal, formatDateTime, getSelisihClass } from '../utils/formatters';
+import Tag from 'primevue/tag';
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -122,9 +164,10 @@ const props = defineProps({
   diffLoading: { type: Boolean, default: false },
   kodePesananIssues: { type: [Array, Object], default: () => [] },
   kodeLoading: { type: Boolean, default: false },
+  shopCheck: { type: Object, default: null },
 });
 
-const emit = defineEmits(['open-note', 'update:visible', 'view-live-check']);
+const emit = defineEmits(['open-note', 'update:visible', 'view-live-check', 'view-shop-check']);
 
 const localVisible = ref(props.visible);
 watch(() => props.visible, (v) => { localVisible.value = v; });
@@ -171,6 +214,13 @@ const dailyIssues = computed(() => {
   return Array.isArray(issues) ? [{ tanggal: summary.value?.TANGGAL || '', issues: issues }] : (issues?.daily || []);
 });
 
+const shopCheckData = computed(() => props.shopCheck || null);
+const shopListData = computed(() => (props.shopCheck?.LIST_SHOP || []));
+
+const emitViewShopCheck = () => {
+  emit('view-shop-check', { kdtk: summary.value.KDTK });
+};
+
 const emitOpenNote = () => {
   emit('open-note', {
     KDTK: summary.value.KDTK,
@@ -184,6 +234,20 @@ const emitOpenNote = () => {
 
 <style scoped>
 .detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin-bottom: 1rem; color: var(--text-color); }
+.shop-status { margin-top: 0.35rem; }
+.shop-items-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  margin-top: 0.75rem;
+  background: var(--surface-section);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--text-color-secondary);
+}
+.shop-items-hint i { font-size: 1rem; color: var(--primary-color); }
+.shop-items-hint .p-button { margin-left: auto; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .75rem; }
 .empty-tab { display: flex; align-items: center; justify-content: center; padding: 2rem; color: var(--text-color-secondary); font-size: 0.9rem; }
 .selisih-ok { color: #6B7280; }

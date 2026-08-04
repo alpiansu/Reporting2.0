@@ -20,6 +20,7 @@ export function useRekonSales() {
   const sortColumn = ref("KDTK");
   const sortOrder = ref("ASC");
   const searchQuery = ref("");
+  const shopIssueOnly = ref(false);
   const loading = ref(false);
 
   const fetchSummary = async () => {
@@ -51,6 +52,7 @@ export function useRekonSales() {
         searchQuery: searchQuery.value || undefined,
         sortColumn: sortColumn.value,
         sortOrder: sortOrder.value,
+        shopIssueOnly: shopIssueOnly.value || undefined,
       });
       const rawStores = Array.isArray(res?.data?.data) ? res.data.data : [];
       stores.value = normalizeStoreData(rawStores);
@@ -80,6 +82,12 @@ export function useRekonSales() {
     return await rekonSalesApi.updateNote({ cabang, kdtk, tanggal, noteText });
   };
 
+  const toggleShopIssueOnly = async (val) => {
+    shopIssueOnly.value = !!val;
+    pagination.page = 1;
+    await fetchStores();
+  };
+
   const refreshAll = async () => {
     const results = await Promise.allSettled([fetchSummary(), fetchStores()]);
     results.forEach((r, i) => {
@@ -95,6 +103,8 @@ export function useRekonSales() {
     sortColumn,
     sortOrder,
     searchQuery,
+    shopIssueOnly,
+    toggleShopIssueOnly,
     loading,
     fetchSummary,
     fetchStores,

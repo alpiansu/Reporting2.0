@@ -42,6 +42,10 @@ export default {
     return (await api.get(`${BASE_URL}/kodePesananIssues`, { params })).data;
   },
 
+  async getShopCheckDetail(params) {
+    return (await api.get(`${BASE_URL}/shop-check`, { params })).data;
+  },
+
   async getExportData(params) {
     return (await api.get(`${BASE_URL}/export-data`, { params })).data;
   },

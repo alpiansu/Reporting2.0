@@ -31,16 +31,22 @@
       <StoreListTable :data="stores" :loading="loading" :pagination="pagination" :sortColumn="sortColumn"
         :sortOrder="sortOrder" :searchQuery="searchQuery" :loadingStores="loadingStores"
         :detailLoadingStores="detailLoadingStores" :highlightedItems="highlightedItems"
+        :shopIssueOnly="shopIssueOnly" @update:shopIssueOnly="toggleShopIssueOnly"
         @page-change="handlePageChange" @sort-change="handleSortChange"
         @view-details="openDetail" @re-screen="handleReScreen" @edit-note="openNote" @export="exportExcel"
-        @search-change="handleSearchChange" />
+        @search-change="handleSearchChange" @shop-check="openShopMismatch" />
 
       <StoreDetailModal v-model:visible="detailVisible" :detail="selectedDetail" :detailLoading="detailLoading"
         :differences="differences" :diffLoading="diffLoading" :kodePesananIssues="kodePesananIssues"
-        :kodeLoading="kodeLoading" @open-note="openNote" @view-live-check="handleViewLiveCheck" />
+        :kodeLoading="kodeLoading" :shopCheck="shopCheck" @open-note="openNote" @view-live-check="handleViewLiveCheck"
+        @view-shop-check="openShopMismatchFromDetail" />
 
       <MtranVsCdLiveCheckDialog v-model:visible="liveCheckVisible" :items="liveCheckItems"
         :loading="liveCheckLoading" :error="liveCheckError" :shiftInfo="liveCheckShiftInfo" />
+
+      <ShopMismatchDialog v-model:visible="shopMismatchVisible" :data="shopMismatchData"
+        :items="shopMismatchItems" :loading="shopMismatchLoading" :error="shopMismatchError"
+        @view-items="handleViewShopItems" />
 
       <NoteDialog v-model:visible="noteVisible" :store="noteStore"
         :defaultText="noteStore?.note?.noteText || noteStore?.note || ''"
@@ -66,6 +72,7 @@ import StoreListTable from './components/StoreListTable.vue';
 import StoreDetailModal from './components/StoreDetailModal.vue';
 import NoteDialog from './components/NoteDialog.vue';
 import MtranVsCdLiveCheckDialog from './components/MtranVsCdLiveCheckDialog.vue';
+import ShopMismatchDialog from './components/ShopMismatchDialog.vue';
 import ProgressBar from '@/components/common/ProgressBar.vue';
 import LastScanInfo from '@/components/common/LastScanInfo.vue';
 import rekonSalesApi from '@/services/rekonSales.service.js';
@@ -86,6 +93,8 @@ const {
   fetchDifferences,
   fetchKodePesananIssues,
   updateNote,
+  shopIssueOnly,
+  toggleShopIssueOnly,
   refreshAll
 } = useRekonSales();
 
@@ -124,6 +133,12 @@ const liveCheckVisible = ref(false);
 const liveCheckShiftInfo = ref(null);
 const loadingStores = ref(new Set());
 const highlightedItems = ref(new Set());
+const shopMismatchVisible = ref(false);
+const shopMismatchData = ref(null);
+const shopMismatchItems = ref([]);
+const shopMismatchLoading = ref(false);
+const shopMismatchError = ref('');
+const shopCheck = ref(null);
 
 onMounted(async () => {
   try {
@@ -265,6 +280,7 @@ const openDetail = async (row) => {
   selectedDetail.value = null;
   differences.value = [];
   kodePesananIssues.value = [];
+  shopCheck.value = row.SHOP_CHECK || null;
 
   try {
     const det = await fetchStoreDetails({ kdtk });
@@ -341,6 +357,52 @@ const exportExcel = async () => {
     toast.showSuccess('Sukses', 'Export Excel selesai');
   } catch (err) {
     toast.showError('Error', err.message || 'Gagal export data');
+  }
+};
+
+const openShopMismatch = (row) => {
+  shopMismatchData.value = {
+    KDTK: row.KDTK,
+    NAMA: row.NAMA || row.CABANG || '',
+    SHOP_CHECK: row.SHOP_CHECK || null,
+  };
+  shopMismatchItems.value = [];
+  shopMismatchError.value = '';
+  shopMismatchVisible.value = true;
+};
+
+const openShopMismatchFromDetail = ({ kdtk }) => {
+  shopMismatchData.value = {
+    KDTK: kdtk,
+    NAMA: selectedDetail.value?.summary?.NAMA || '',
+    SHOP_CHECK: shopCheck.value || null,
+  };
+  shopMismatchItems.value = [];
+  shopMismatchError.value = '';
+  shopMismatchVisible.value = true;
+};
+
+const handleViewShopItems = async ({ kdtk }) => {
+  if (!kdtk) return;
+  shopMismatchLoading.value = true;
+  shopMismatchError.value = '';
+  shopMismatchItems.value = [];
+  try {
+    const res = await rekonSalesApi.getShopCheckDetail({
+      kdtk,
+      month: filters.month,
+      year: filters.year,
+      detail: 1,
+    });
+    const data = res?.data || res || {};
+    shopMismatchItems.value = data.items || [];
+    if (data.error) {
+      shopMismatchError.value = data.error;
+    }
+  } catch (err) {
+    shopMismatchError.value = err.message || 'Gagal mengambil item transaksi';
+  } finally {
+    shopMismatchLoading.value = false;
   }
 };
 

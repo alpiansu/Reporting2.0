@@ -15,6 +15,7 @@ const salesCustabService = {
 
     return api.post('/sales-custab/download', fd, {
       responseType: 'blob',
+      timeout: 600000, // 10 menit — query harian (UNION hingga 31 tabel) bisa lama
       headers: {
         'Content-Type': 'multipart/form-data',
       },

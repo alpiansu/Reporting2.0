@@ -25,6 +25,7 @@
 import mysql from "mysql2/promise";
 import WrcService from "../../../services/wrc.service.js";
 import logger from "../../../config/logger.js";
+import moduleConfig from "../monthly_reports.config.js";
 
 // Instansiasi wrcService (wrc.service.js mengeksport class, bukan singleton)
 const wrcService = new WrcService();
@@ -65,7 +66,7 @@ function injectParams(sql, params = {}) {
  * @param {string} options.prdMonth      - Bulan 2 digit (contoh: "01")
  * @returns {Promise<Object>}            - { [sheetKey]: rows[] }
  */
-export async function executeReport({ reportConfig, cab, userId, prd = "", prdYear = "", prdMonth = "" }) {
+export async function executeReport({ reportConfig, cab, userId, prd = "", prdYear = "", prdMonth = "", onProgress = null }) {
   const reportName = reportConfig["name-reports"];
   const reportId   = reportConfig["id-reports"];
   const queriesWrc    = reportConfig["queries-wrc"]    || [];
@@ -96,7 +97,10 @@ export async function executeReport({ reportConfig, cab, userId, prd = "", prdYe
   // {prdYear}  → tahun 4 digit  (contoh: 2026)
   // {prdMonth} → bulan 2 digit  (contoh: 04)
   const params = { userId, cab, prd, prdPrev, prdYear, prdMonth };
+  // Timeout per statement WRC — mencegah query hang menahan koneksi pool selamanya
+  const queryTimeout = moduleConfig.wrc.queryTimeoutMs;
 
+  const overallStart = Date.now();
   logger.info(`[wrc_executor][${reportId}] ═══ Mulai eksekusi laporan: "${reportName}" | cab=${cab} | user=${userId} ═══`);
 
   // ─── Step 1: Baca config koneksi WRC dari DB EDP ──────────────────────────
@@ -146,6 +150,7 @@ export async function executeReport({ reportConfig, cab, userId, prd = "", prdYe
 
     // ─── Step 3: Eksekusi queries-wrc SEQUENTIAL ──────────────────────────
     const totalWrc = queriesWrc.length;
+    const wrcPhaseStart = Date.now();
     if (totalWrc === 0) {
       logger.warn(`[wrc_executor][${cab}] Tidak ada queries-wrc untuk dieksekusi`);
     } else {
@@ -161,18 +166,23 @@ export async function executeReport({ reportConfig, cab, userId, prd = "", prdYe
       logger.debug(`[wrc_executor][${cab}] Query preview: ${preview}${finalSql.length > 120 ? "..." : ""}`);
 
       const startTime = Date.now();
-      await conn.query(finalSql); // TIDAK ADA timeout — proses WRC memang lama
+      await conn.query({ sql: finalSql, timeout: queryTimeout });
       const duration = Date.now() - startTime;
 
       logger.info(`[wrc_executor][${cab}] Query ke-${queryNum} SELESAI (${duration}ms)`);
+      onProgress?.({
+        message: `Query WRC ${queryNum}/${totalWrc} selesai (${(duration / 1000).toFixed(0)}s)`,
+      });
     }
 
     if (totalWrc > 0) {
       logger.info(`[wrc_executor][${cab}] Semua ${totalWrc} queries-wrc berhasil dieksekusi`);
     }
+    logger.info(`[wrc_executor][${cab}] Fase WRC selesai dalam ${Date.now() - wrcPhaseStart}ms (${totalWrc} query)`);
 
     // ─── Step 4: Eksekusi queries-export, kumpulkan rows per sheet ────────
     const totalExport = queriesExport.length;
+    const exportPhaseStart = Date.now();
     logger.info(`[wrc_executor][${cab}] Mulai eksekusi ${totalExport} query export...`);
 
     results = {};
@@ -185,15 +195,21 @@ export async function executeReport({ reportConfig, cab, userId, prd = "", prdYe
       logger.debug(`[wrc_executor][${cab}] Export query preview: ${finalSql.replace(/\s+/g, " ").trim().substring(0, 120)}`);
 
       const startTime = Date.now();
-      const [rows]    = await conn.query(finalSql);
+      const [rows]    = await conn.query({ sql: finalSql, timeout: queryTimeout });
       const duration  = Date.now() - startTime;
 
       results[sheetKey] = rows;
       logger.info(`[wrc_executor][${cab}] Sheet "${sheetKey}": ${rows.length} baris (${duration}ms)`);
+      onProgress?.({
+        message: `Sheet "${sheetKey}" selesai (${rows.length} baris, ${(duration / 1000).toFixed(0)}s)`,
+      });
     }
+
+    logger.info(`[wrc_executor][${cab}] Fase export selesai dalam ${Date.now() - exportPhaseStart}ms (${totalExport} query)`);
 
     // ─── Step 5: Eksekusi queries-cleanup PARALEL ─────────────────────────
     const totalCleanup = queriesCleanup.length;
+    const cleanupPhaseStart = Date.now();
     if (totalCleanup > 0) {
       logger.info(`[wrc_executor][${cab}] Mulai eksekusi ${totalCleanup} query CLEANUP secara paralel...`);
       
@@ -209,16 +225,25 @@ export async function executeReport({ reportConfig, cab, userId, prd = "", prdYe
         // Gunakan pool.query (jika conn dari pool dikembalikan setelah ini)
         // Atau buat koneksi baru dari pool khusus untuk tiap query agar paralel optimal di db level
         // Karena kita punya pool dengan limit 3, mari kita pinjam koneksi baru / pakai langsung pool.query
-        await pool.query(finalSql); 
+        await pool.query({ sql: finalSql, timeout: queryTimeout });
         const duration = Date.now() - startTime;
         
         logger.info(`[wrc_executor][${cab}] Cleanup query ke-${queryNum} SELESAI (${duration}ms)`);
+        onProgress?.({
+          message: `Cleanup ${queryNum}/${totalCleanup} selesai (${(duration / 1000).toFixed(0)}s)`,
+        });
       });
 
       await Promise.all(cleanupPromises);
       logger.info(`[wrc_executor][${cab}] Semua ${totalCleanup} queries-cleanup selesai dieksekusi`);
     }
+    logger.info(`[wrc_executor][${cab}] Fase cleanup selesai dalam ${Date.now() - cleanupPhaseStart}ms (${totalCleanup} query)`);
 
+    const overallMs = Date.now() - overallStart;
+    const wrcMs = Date.now() - wrcPhaseStart;
+    const exportMs = Date.now() - exportPhaseStart;
+    const cleanupMs = Date.now() - cleanupPhaseStart;
+    logger.info(`[wrc_executor][${reportId}] Total eksekusi laporan dalam ${overallMs}ms (WRC: ${wrcMs}ms, Export: ${exportMs}ms, Cleanup: ${cleanupMs}ms)`);
     logger.info(`[wrc_executor][${reportId}] ═══ Eksekusi laporan "${reportName}" selesai ═══`);
     return results;
 

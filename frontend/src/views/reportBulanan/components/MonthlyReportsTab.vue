@@ -66,7 +66,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { useToastService } from '@/utils/toast';
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
@@ -76,6 +76,7 @@ import ReportList from './ReportList.vue';
 import ReportManagerDialog from './ReportManagerDialog.vue';
 import ReportFormDialog from './ReportFormDialog.vue';
 import monthlyReportsService from '@/services/monthlyReports.service.js';
+import api from '@/services/api.js';
 
 const toast = useToastService();
 
@@ -108,65 +109,184 @@ const loadReports = async () => {
   }
 };
 
+// Job async: export dijalankan sebagai background job di backend, bukan lagi
+// synchronous request. Halaman hanya perlu: (1) memulai job, (2) memantau status
+// via progress module, (3) mengunduh file saat selesai.
+const MAX_WAIT_MS = 120 * 60 * 1000;   // batas tunggu job (2 jam)
+const POLL_INTERVAL_MS = 1500;
+
+// Jika komponen di-unmount saat job masih berjalan, polling tetap lanjut (biar
+// download tetap terjadi) tapi toast tidak ditampilkan lagi.
+let disposed = false;
+onUnmounted(() => { disposed = true; });
+
+const notify = (type, title, message) => {
+  if (disposed) return;
+  if (type === 'success') toast.showSuccess(title, message);
+  else if (type === 'error') toast.showError(title, message);
+  else toast.showInfo(title, message);
+};
+
 const handleExport = async () => {
   if (!cabang.value || !periode.value || selectedIds.value.length === 0) return;
 
   isExporting.value = true;
-  let successCount = 0;
-  let failCount    = 0;
+  const jobs = [];
+  let startFailCount = 0;
 
+  // 1. Mulai semua job export terpilih
   for (const id of selectedIds.value) {
     const report = reportList.value.find(r => r['id-reports'] === id);
     const reportName = report?.['name-reports'] || id;
 
     try {
-      toast.showInfo('Memproses', `Mengunduh: ${reportName}...`, 2500);
-      const res = await monthlyReportsService.exportReport(id, {
+      const res = await monthlyReportsService.startExport(id, {
         cab: cabang.value,
         prd: periode.value,
       });
+      const taskId = res.data?.taskId;
+      if (!taskId) throw new Error('Backend tidak mengembalikan taskId');
 
-      const contentType = res.headers?.['content-type'] || '';
-      const contentDisp = res.headers?.['content-disposition'] || '';
-
-      let fileExt = '.xlsx';
-      let mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-
-      if (contentType.includes('application/pdf')) {
-        fileExt = '.pdf';
-        mimeType = 'application/pdf';
-      }
-
-      let fileName = `${reportName}_${periode.value}${fileExt}`;
-      const filenameMatch = contentDisp.match(/filename="?([^";\n]+)"?/);
-      if (filenameMatch) {
-        fileName = decodeURIComponent(filenameMatch[1]);
-      }
-
-      const blob = new Blob([res.data], { type: mimeType });
-      const url  = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href  = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      successCount++;
+      jobs.push({ taskId, reportName, id });
+      notify('info', 'Diproses', `Export "${reportName}" dijalankan. Progress tampil di panel kiri.`);
     } catch (err) {
-      failCount++;
+      startFailCount++;
       const errMsg = err.response?.data?.message || err.message || 'Terjadi kesalahan';
-      toast.showError('Gagal', `${reportName}: ${errMsg}`);
-      console.error(`Export error [${id}]:`, err);
+      notify('error', 'Gagal Memulai', `${reportName}: ${errMsg}`);
+      console.error(`Start export error [${id}]:`, err);
+    }
+  }
+
+  // 2. Pantau semua job hingga selesai/gagal, lalu unduh file yang berhasil
+  let successCount = 0;
+  let failCount = 0;
+  if (jobs.length > 0) {
+    const results = await Promise.all(jobs.map(job => pollExportJob(job)));
+    successCount = results.filter(r => r === true).length;
+    failCount = results.length - successCount;
+
+    if (successCount > 0) {
+      notify('success', 'Selesai', `${successCount} laporan berhasil diunduh${failCount > 0 ? `, ${failCount} gagal` : ''}`);
+    } else if (failCount > 0) {
+      notify('error', 'Selesai dengan kesalahan', 'Tidak ada laporan yang berhasil diunduh');
     }
   }
 
   isExporting.value = false;
+};
 
-  if (successCount > 0) {
-    toast.showSuccess('Selesai', `${successCount} laporan berhasil diunduh${failCount > 0 ? `, ${failCount} gagal` : ''}`);
+/**
+ * Pantau status satu job export sampai terminal state, lalu unduh filenya.
+ * @returns {Promise<boolean>} true = berhasil diunduh
+ */
+const pollExportJob = async ({ taskId, reportName, id }) => {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < MAX_WAIT_MS) {
+    await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+
+    let task = null;
+    let networkError = false;
+    try {
+      const res = await api.get(`/progress/${taskId}`);
+      task = res.data?.data || null;
+    } catch (err) {
+      if (err.response?.status === 404) {
+        task = null; // task hilang dari progressMap (selesai auto-remove / dibatalkan)
+      } else {
+        networkError = true; // jaringan/backend bermasalah → retry di iterasi berikutnya
+      }
+    }
+
+    // Jangan langsung menyerah saat jaringan bermasalah — job backend masih jalan
+    if (networkError) continue;
+
+    const status = task?.status;
+
+    if (status === 'completed') {
+      return downloadExport(taskId, reportName, id);
+    }
+    if (status === 'failed' || status === 'cancelled' || status === 'timed_out') {
+      const reason = task?.error || task?.info?.description || status;
+      notify('error', 'Gagal', `${reportName}: ${reason}`);
+      return false;
+    }
+    if (status === 'in-progress' || status === 'pending' || status === 'running') {
+      continue; // masih berjalan
+    }
+    if (!task) {
+      // Task hilang dari progressMap: bisa karena selesai (auto-remove 2 detik)
+      // atau dibatalkan. Coba unduh langsung — backend menyimpan file 24 jam.
+      const dl = await tryDownloadExport(taskId, reportName, id);
+      if (dl === true) return true;
+      if (dl === null) continue; // 409 = masih diproses
+      return false;
+    }
   }
+
+  notify('error', 'Timeout', `${reportName}: melebihi batas waktu tunggu (2 jam). Cek kembali file di server.`);
+  return false;
+};
+
+/** Unduh file saat status job sudah 'completed'. */
+const downloadExport = async (taskId, reportName, id) => {
+  try {
+    const res = await monthlyReportsService.downloadExportFile(taskId);
+    triggerBlobDownload(res, reportName);
+    return true;
+  } catch (err) {
+    const errMsg = err.response?.data?.message || err.message || 'Terjadi kesalahan';
+    notify('error', 'Gagal', `${reportName}: ${errMsg}`);
+    console.error(`Download error [${id}]:`, err);
+    return false;
+  }
+};
+
+/**
+ * Coba unduh file saat status task tidak diketahui.
+ * @returns {true|null|false} true=berhasil, null=masih diproses (409), false=gagal
+ */
+const tryDownloadExport = async (taskId, reportName, id) => {
+  try {
+    const res = await monthlyReportsService.downloadExportFile(taskId);
+    triggerBlobDownload(res, reportName);
+    return true;
+  } catch (err) {
+    if (err.response?.status === 409) return null; // masih diproses
+    const errMsg = err.response?.data?.message || err.message || 'Terjadi kesalahan';
+    notify('error', 'Gagal', `${reportName}: ${errMsg}`);
+    console.error(`Download error [${id}]:`, err);
+    return false;
+  }
+};
+
+/** Trigger download Blob ke browser (nama file dari Content-Disposition). */
+const triggerBlobDownload = (res, reportName) => {
+  const contentType = res.headers?.['content-type'] || '';
+  const contentDisp = res.headers?.['content-disposition'] || '';
+
+  let fileExt = '.xlsx';
+  let mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  if (contentType.includes('application/pdf')) {
+    fileExt = '.pdf';
+    mimeType = 'application/pdf';
+  }
+
+  let fileName = `${reportName}_${periode.value}${fileExt}`;
+  const filenameMatch = contentDisp.match(/filename="?([^";\n]+)"?/);
+  if (filenameMatch) {
+    fileName = decodeURIComponent(filenameMatch[1]);
+  }
+
+  const blob = new Blob([res.data], { type: mimeType });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href  = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 };
 
 const openForm = (reportData = null) => {

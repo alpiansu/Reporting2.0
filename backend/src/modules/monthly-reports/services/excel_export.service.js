@@ -188,6 +188,7 @@ export async function exportToResponse({ reportConfig, results, res, prd = "" })
   workbook.modified = new Date();
 
   // ─── Build setiap sheet ──────────────────────────────────────────────────
+  const buildStart = Date.now();
   for (const item of queriesExport) {
     const sheetKey = item.key;
     const rows     = results[sheetKey] || [];
@@ -198,6 +199,7 @@ export async function exportToResponse({ reportConfig, results, res, prd = "" })
     const sheet = workbook.addWorksheet(sheetKey);
     buildSheet(sheet, rows, sheetKey, style, item.caption);
   }
+  logger.info(`[excel_export] Build workbook selesai dalam ${Date.now() - buildStart}ms (${queriesExport.length} sheet)`);
 
   // ─── Nama file output ──────────────────────────────────────────────
   const now = new Date();
@@ -213,8 +215,9 @@ export async function exportToResponse({ reportConfig, results, res, prd = "" })
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(filename)}"`);
 
+  const streamStart = Date.now();
   await workbook.xlsx.write(res);
   res.end();
 
-  logger.info(`[excel_export] Stream selesai: "${filename}"`);
+  logger.info(`[excel_export] Stream selesai: "${filename}" (${Date.now() - streamStart}ms)`);
 }

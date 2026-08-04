@@ -2,6 +2,7 @@ import BaseDataSource from './base.source.js';
 import wrcService from '../../../../services/wrc.service.js';
 import mysql from 'mysql2/promise';
 import logger from '../../../../config/logger.js';
+import config from '../../sales_custab.config.js';
 
 export default class WrcDtSource extends BaseDataSource {
   getSourceName() {
@@ -51,8 +52,9 @@ export default class WrcDtSource extends BaseDataSource {
 
     try {
       logger.info(`[sales_custab][wrc_dt] executing query for cab=${cab}, dates=${dates.length}, plu=${pluList.length}`);
-      const [rows] = await connection.query(query);
-      logger.info(`[sales_custab][wrc_dt] query done, rows=${rows.length}`);
+      const queryStart = Date.now();
+      const [rows] = await connection.query({ sql: query, timeout: config.queryTimeoutMs });
+      logger.info(`[sales_custab][wrc_dt] query done, rows=${rows.length}, duration=${Date.now() - queryStart}ms`);
       return rows;
     } finally {
       await connection.end();

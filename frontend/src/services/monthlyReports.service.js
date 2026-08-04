@@ -36,19 +36,26 @@ const monthlyReportsService = {
   deleteReport: (id) => api.delete(`/${BASE}/${id}`),
 
   /**
-   * Export laporan ke Excel
-   * POST /api/monthly-reports/:id/export
-   * Response diterima sebagai Blob untuk auto-download
+   * Mulai export laporan sebagai ASYNC JOB (tidak lagi synchronous).
+   * POST /api/monthly-reports/:id/export → 202 { taskId }
+   * Proses berjalan di background; progress tampil di FloatingProgressWidget
+   * (modul progress) dan dapat dibatalkan via progressStore.cancelTask(taskId).
    * @param {string} id   - id-reports
    * @param {string} cab  - Kode cabang
    * @param {string} prd  - Periode format YYMM (contoh: "2501")
    */
-  exportReport: (id, { cab, prd }) =>
-    api.post(
-      `/${BASE}/${id}/export`,
-      { cab, prd },
-      { responseType: "blob", timeout: 600000 } // 10 menit — export bisa butuh waktu lama
-    ),
+  startExport: (id, { cab, prd }) => api.post(`/${BASE}/${id}/export`, { cab, prd }),
+
+  /**
+   * Unduh file hasil export setelah job selesai.
+   * GET /api/monthly-reports/export/:taskId/file → Blob
+   * @param {string} taskId - taskId dari startExport
+   */
+  downloadExportFile: (taskId) =>
+    api.get(`/${BASE}/export/${taskId}/file`, {
+      responseType: "blob",
+      timeout: 600000, // download file besar: beri waktu hingga 10 menit
+    }),
 };
 
 export default monthlyReportsService;

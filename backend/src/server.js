@@ -87,7 +87,8 @@ async function startServer() {
     // ── Socket timeouts ──
     // requestTimeout: waktu max dari request diterima sampai response selesai dikirim
     // (default Node.js = 300s / 5 menit — naikkan untuk report export yang bisa >5 menit)
-    server.requestTimeout = 10 * 60 * 1000; // 10 menit
+    // Dapat disesuaikan via env SERVER_REQUEST_TIMEOUT_MS (ms).
+    server.requestTimeout = parseInt(process.env.SERVER_REQUEST_TIMEOUT_MS, 10) || 10 * 60 * 1000; // 10 menit
 
     // keepAliveTimeout: waktu idle sebelum socket ditutup untuk reuse
     // (default Node.js = 5s — naikkan supaya tidak terlalu agresif)

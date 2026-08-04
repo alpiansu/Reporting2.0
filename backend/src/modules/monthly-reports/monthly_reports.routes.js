@@ -6,7 +6,8 @@ import {
   createReport,
   updateReport,
   deleteReport,
-  exportReport,
+  startExport,
+  downloadExport,
 } from "./monthly_reports.controller.js";
 
 const router = express.Router();
@@ -25,9 +26,12 @@ router.put("/:id", updateReport); // Update query/nama/sheet laporan tertentu
 
 router.delete("/:id", deleteReport); // Hapus laporan dari JSON
 
-// ─── Eksekusi Laporan ─────────────────────────────────────────────────────────
-// POST body: { cab: "G001", prd: "2501" }  (prd format YYMM)
+// ─── Eksekusi Laporan (Async Job) ────────────────────────────────────────────
+// POST /:id/export  → 202 { taskId } (proses berjalan di background, progress via /api/progress)
+// GET  /export/:taskId/file → stream file hasil export (harus setelah POST selesai)
+// Cancel: DELETE /api/progress/:taskId (endpoint progress module)
 
-router.post("/:id/export", exportReport);
+router.post("/:id/export", startExport);
+router.get("/export/:taskId/file", downloadExport);
 
 export default router;

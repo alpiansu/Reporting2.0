@@ -425,7 +425,13 @@ const handleDownload = async () => {
 
     toast.showSuccess('Sukses', 'Laporan berhasil diunduh');
   } catch (error) {
-    toast.showError('Gagal', error.response?.data?.message || 'Gagal mengunduh laporan');
+    const isTimeout = error.code === 'ECONNABORTED' || /timeout/i.test(error.message || '');
+    toast.showError(
+      'Gagal',
+      isTimeout
+        ? 'Laporan memakan waktu lebih dari 10 menit. Coba persempit rentang tanggal, kurangi jumlah PLU/toko, atau coba lagi nanti.'
+        : (error.response?.data?.message || 'Gagal mengunduh laporan')
+    );
   } finally {
     isDownloading.value = false;
   }

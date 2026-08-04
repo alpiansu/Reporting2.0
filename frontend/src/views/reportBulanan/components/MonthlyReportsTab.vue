@@ -24,9 +24,79 @@
         :reports="reportList"
         :loading="loadingReports"
         :disabled="isExporting"
+        :job-states="jobStates"
         v-model:selected-ids="selectedIds"
         @refresh="loadReports"
       />
+
+      <!-- Proses & Antrian Export (live via SSE) -->
+      <div v-if="exportStore.hasActiveJobs" class="export-status-card card">
+        <div class="export-panel__header">
+          <h4 class="export-panel__title">
+            <i class="pi pi-spin pi-spinner mr-2 text-warn" />
+            Proses & Antrian Export
+          </h4>
+          <Badge :value="`${exportStore.activeJobs.length} aktif`" severity="warn" />
+        </div>
+        <div class="export-panel__hint">
+          2 proses berjalan sekaligus, sisanya menunggu giliran secara adil (FIFO).
+          File diunduh otomatis saat selesai — boleh pindah halaman.
+        </div>
+        <div class="export-job-row" v-for="job in exportStore.activeJobs" :key="job.taskId">
+          <div class="export-job__info">
+            <span class="export-job__name">{{ job.reportName }}</span>
+            <span class="export-job__meta">
+              <template v-if="job.status === 'queued'">
+                <i class="pi pi-clock mr-1" /> Antrian #{{ job.queuePosition || '...' }}
+              </template>
+              <template v-else>{{ job.message || 'Memproses...' }}</template>
+              &bull; {{ job.cab }} &bull; {{ job.prd }}
+            </span>
+          </div>
+          <div class="export-job__progress">
+            <div class="export-progress-track">
+              <div
+                class="export-progress-fill"
+                :class="{ 'fill-queued': job.status === 'queued' }"
+                :style="{ width: (job.percentage || 0) + '%' }"
+              ></div>
+            </div>
+            <span class="export-job__pct">{{ job.percentage || 0 }}%</span>
+          </div>
+          <Button
+            icon="pi pi-times"
+            class="p-button-rounded p-button-text p-button-danger export-job__cancel"
+            v-tooltip.top="'Batalkan export ini'"
+            @click="cancelExport(job)"
+          />
+        </div>
+      </div>
+
+      <!-- File Siap Diunduh (panel cadangan — otomatis & manual) -->
+      <div v-if="exportStore.hasReadyJobs" class="export-status-card card">
+        <div class="export-panel__header">
+          <h4 class="export-panel__title">
+            <i class="pi pi-download mr-2 text-success" />
+            File Siap Diunduh
+          </h4>
+          <Badge :value="`${exportStore.readyJobs.length} file`" severity="success" />
+        </div>
+        <div class="export-panel__hint">
+          File tersimpan di server 24 jam. Jika unduhan otomatis terlewat (mis. browser memblokir), unduh manual di sini.
+        </div>
+        <div class="export-job-row" v-for="job in exportStore.readyJobs" :key="job.taskId">
+          <div class="export-job__info">
+            <span class="export-job__name">{{ job.reportName }}</span>
+            <span class="export-job__meta">{{ job.cab }} &bull; {{ job.prd }}</span>
+          </div>
+          <Button
+            label="Unduh"
+            icon="pi pi-download"
+            class="p-button-sm p-button-outlined p-button-success"
+            @click="downloadReady(job)"
+          />
+        </div>
+      </div>
     </div>
 
     <ReportManagerDialog
@@ -66,8 +136,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useToastService } from '@/utils/toast';
+import { useExportsStore } from '@/stores';
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import PageHeader from '@/components/PageHeader.vue';
@@ -76,9 +147,9 @@ import ReportList from './ReportList.vue';
 import ReportManagerDialog from './ReportManagerDialog.vue';
 import ReportFormDialog from './ReportFormDialog.vue';
 import monthlyReportsService from '@/services/monthlyReports.service.js';
-import api from '@/services/api.js';
 
 const toast = useToastService();
+const exportStore = useExportsStore();
 
 const cabang       = ref('');
 const periode      = ref('');
@@ -86,7 +157,6 @@ const selectedDate = ref(null);
 const selectedIds  = ref([]);
 const reportList   = ref([]);
 const loadingReports = ref(false);
-const isExporting  = ref(false);
 const showManager  = ref(false);
 const showForm     = ref(false);
 const saving       = ref(false);
@@ -95,6 +165,22 @@ const editingReport = ref(null);
 const showDeleteConfirm = ref(false);
 const deletingReport    = ref(null);
 const deleting          = ref(false);
+
+// Status export aktif (queued/processing) → nonaktifkan kontrol sementara
+const isExporting = computed(() => exportStore.hasActiveJobs);
+
+// Map reportId → job terbaru (untuk badge status per baris di ReportList)
+const STATUS_PRIORITY = { processing: 0, queued: 1, failed: 2, cancelled: 3, completed: 4 };
+const jobStates = computed(() => {
+  const map = {};
+  for (const job of Object.values(exportStore.jobs)) {
+    const current = map[job.reportId];
+    if (!current || (STATUS_PRIORITY[job.status] ?? 9) < (STATUS_PRIORITY[current.status] ?? 9)) {
+      map[job.reportId] = job;
+    }
+  }
+  return map;
+});
 
 const loadReports = async () => {
   loadingReports.value = true;
@@ -109,184 +195,59 @@ const loadReports = async () => {
   }
 };
 
-// Job async: export dijalankan sebagai background job di backend, bukan lagi
-// synchronous request. Halaman hanya perlu: (1) memulai job, (2) memantau status
-// via progress module, (3) mengunduh file saat selesai.
-const MAX_WAIT_MS = 120 * 60 * 1000;   // batas tunggu job (2 jam)
-const POLL_INTERVAL_MS = 1500;
-
-// Jika komponen di-unmount saat job masih berjalan, polling tetap lanjut (biar
-// download tetap terjadi) tapi toast tidak ditampilkan lagi.
-let disposed = false;
-onUnmounted(() => { disposed = true; });
-
-const notify = (type, title, message) => {
-  if (disposed) return;
-  if (type === 'success') toast.showSuccess(title, message);
-  else if (type === 'error') toast.showError(title, message);
-  else toast.showInfo(title, message);
-};
-
+/**
+ * Mulai export untuk semua laporan terpilih.
+ * Job masuk antrian FIFO di backend (max 2 paralel). Progress, auto-download,
+ * dan notifikasi ditangani exportStore + FloatingProgressWidget secara global —
+ * halaman ini bebas dipindah.
+ */
 const handleExport = async () => {
   if (!cabang.value || !periode.value || selectedIds.value.length === 0) return;
 
-  isExporting.value = true;
   const jobs = [];
   let startFailCount = 0;
 
-  // 1. Mulai semua job export terpilih
   for (const id of selectedIds.value) {
     const report = reportList.value.find(r => r['id-reports'] === id);
     const reportName = report?.['name-reports'] || id;
 
     try {
-      const res = await monthlyReportsService.startExport(id, {
+      const taskId = await exportStore.startExport(id, {
         cab: cabang.value,
         prd: periode.value,
+        reportName,
       });
-      const taskId = res.data?.taskId;
-      if (!taskId) throw new Error('Backend tidak mengembalikan taskId');
-
-      jobs.push({ taskId, reportName, id });
-      notify('info', 'Diproses', `Export "${reportName}" dijalankan. Progress tampil di panel kiri.`);
+      jobs.push({ taskId, reportName });
+      toast.showInfo('Diantrikan', `Export "${reportName}" masuk antrian.`);
     } catch (err) {
       startFailCount++;
       const errMsg = err.response?.data?.message || err.message || 'Terjadi kesalahan';
-      notify('error', 'Gagal Memulai', `${reportName}: ${errMsg}`);
+      toast.showError('Gagal Memulai', `${reportName}: ${errMsg}`);
       console.error(`Start export error [${id}]:`, err);
     }
   }
 
-  // 2. Pantau semua job hingga selesai/gagal, lalu unduh file yang berhasil
-  let successCount = 0;
-  let failCount = 0;
-  if (jobs.length > 0) {
-    const results = await Promise.all(jobs.map(job => pollExportJob(job)));
-    successCount = results.filter(r => r === true).length;
-    failCount = results.length - successCount;
-
-    if (successCount > 0) {
-      notify('success', 'Selesai', `${successCount} laporan berhasil diunduh${failCount > 0 ? `, ${failCount} gagal` : ''}`);
-    } else if (failCount > 0) {
-      notify('error', 'Selesai dengan kesalahan', 'Tidak ada laporan yang berhasil diunduh');
-    }
+  if (startFailCount > 0 && jobs.length === 0) {
+    toast.showError('Gagal', 'Tidak ada laporan yang berhasil dijalankan');
   }
-
-  isExporting.value = false;
 };
 
-/**
- * Pantau status satu job export sampai terminal state, lalu unduh filenya.
- * @returns {Promise<boolean>} true = berhasil diunduh
- */
-const pollExportJob = async ({ taskId, reportName, id }) => {
-  const startedAt = Date.now();
-
-  while (Date.now() - startedAt < MAX_WAIT_MS) {
-    await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
-
-    let task = null;
-    let networkError = false;
-    try {
-      const res = await api.get(`/progress/${taskId}`);
-      task = res.data?.data || null;
-    } catch (err) {
-      if (err.response?.status === 404) {
-        task = null; // task hilang dari progressMap (selesai auto-remove / dibatalkan)
-      } else {
-        networkError = true; // jaringan/backend bermasalah → retry di iterasi berikutnya
-      }
-    }
-
-    // Jangan langsung menyerah saat jaringan bermasalah — job backend masih jalan
-    if (networkError) continue;
-
-    const status = task?.status;
-
-    if (status === 'completed') {
-      return downloadExport(taskId, reportName, id);
-    }
-    if (status === 'failed' || status === 'cancelled' || status === 'timed_out') {
-      const reason = task?.error || task?.info?.description || status;
-      notify('error', 'Gagal', `${reportName}: ${reason}`);
-      return false;
-    }
-    if (status === 'in-progress' || status === 'pending' || status === 'running') {
-      continue; // masih berjalan
-    }
-    if (!task) {
-      // Task hilang dari progressMap: bisa karena selesai (auto-remove 2 detik)
-      // atau dibatalkan. Coba unduh langsung — backend menyimpan file 24 jam.
-      const dl = await tryDownloadExport(taskId, reportName, id);
-      if (dl === true) return true;
-      if (dl === null) continue; // 409 = masih diproses
-      return false;
-    }
-  }
-
-  notify('error', 'Timeout', `${reportName}: melebihi batas waktu tunggu (2 jam). Cek kembali file di server.`);
-  return false;
-};
-
-/** Unduh file saat status job sudah 'completed'. */
-const downloadExport = async (taskId, reportName, id) => {
+const cancelExport = async (job) => {
   try {
-    const res = await monthlyReportsService.downloadExportFile(taskId);
-    triggerBlobDownload(res, reportName);
-    return true;
+    await exportStore.cancelTask(job.taskId);
+    toast.showInfo('Dibatalkan', `Export "${job.reportName}" dibatalkan.`);
   } catch (err) {
-    const errMsg = err.response?.data?.message || err.message || 'Terjadi kesalahan';
-    notify('error', 'Gagal', `${reportName}: ${errMsg}`);
-    console.error(`Download error [${id}]:`, err);
-    return false;
+    toast.showError('Gagal', err.response?.data?.message || err.message || 'Gagal membatalkan');
   }
 };
 
-/**
- * Coba unduh file saat status task tidak diketahui.
- * @returns {true|null|false} true=berhasil, null=masih diproses (409), false=gagal
- */
-const tryDownloadExport = async (taskId, reportName, id) => {
+const downloadReady = async (job) => {
   try {
-    const res = await monthlyReportsService.downloadExportFile(taskId);
-    triggerBlobDownload(res, reportName);
-    return true;
+    const res = await monthlyReportsService.downloadExportFile(job.taskId);
+    exportStore.triggerDownload(res, job.reportName);
   } catch (err) {
-    if (err.response?.status === 409) return null; // masih diproses
-    const errMsg = err.response?.data?.message || err.message || 'Terjadi kesalahan';
-    notify('error', 'Gagal', `${reportName}: ${errMsg}`);
-    console.error(`Download error [${id}]:`, err);
-    return false;
+    toast.showError('Gagal', `${job.reportName}: ${err.response?.data?.message || err.message}`);
   }
-};
-
-/** Trigger download Blob ke browser (nama file dari Content-Disposition). */
-const triggerBlobDownload = (res, reportName) => {
-  const contentType = res.headers?.['content-type'] || '';
-  const contentDisp = res.headers?.['content-disposition'] || '';
-
-  let fileExt = '.xlsx';
-  let mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-  if (contentType.includes('application/pdf')) {
-    fileExt = '.pdf';
-    mimeType = 'application/pdf';
-  }
-
-  let fileName = `${reportName}_${periode.value}${fileExt}`;
-  const filenameMatch = contentDisp.match(/filename="?([^";\n]+)"?/);
-  if (filenameMatch) {
-    fileName = decodeURIComponent(filenameMatch[1]);
-  }
-
-  const blob = new Blob([res.data], { type: mimeType });
-  const url  = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href  = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
 };
 
 const openForm = (reportData = null) => {
@@ -343,6 +304,10 @@ const doDelete = async () => {
 
 onMounted(() => {
   loadReports();
+  // Monitoring SSE export + sinkronisasi panel "File Siap Diunduh"
+  exportStore.initMonitoring();
+  exportStore.refreshReadyJobs();
+
   const lastMonth = new Date();
   lastMonth.setMonth(lastMonth.getMonth() - 1);
 
@@ -365,5 +330,123 @@ onMounted(() => {
   text-align: center;
   gap: 0.5rem;
   padding: 1rem 0;
+}
+
+/* ── Panel status export ──────────────────────────────────────────────── */
+.export-status-card {
+  margin-top: 1rem;
+  background: var(--surface-card, #fff);
+  border-radius: 10px;
+  padding: 1.1rem 1.4rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--surface-border, #e9ecef);
+}
+
+.export-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.35rem;
+}
+
+.export-panel__title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  color: var(--text-color, #212529);
+}
+
+.export-panel__hint {
+  font-size: 0.75rem;
+  color: var(--text-color-secondary, #6c757d);
+  margin-bottom: 0.6rem;
+}
+
+.export-job-row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.6rem 0.4rem;
+  border-top: 1px solid var(--surface-border, #e9ecef);
+}
+
+.export-job-row:first-of-type {
+  border-top: none;
+}
+
+.export-job__info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.export-job__name {
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--text-color, #212529);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.export-job__meta {
+  font-size: 0.72rem;
+  color: var(--text-color-secondary, #6c757d);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.export-job__progress {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 220px;
+  flex-shrink: 0;
+}
+
+.export-progress-track {
+  flex: 1;
+  height: 6px;
+  background: #f3f4f6;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.export-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4f46e5, #818cf8);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.export-progress-fill.fill-queued {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.export-job__pct {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #4f46e5;
+  min-width: 34px;
+  text-align: right;
+}
+
+.export-job__cancel {
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .export-job-row {
+    flex-wrap: wrap;
+  }
+  .export-job__progress {
+    width: 100%;
+    order: 3;
+  }
 }
 </style>

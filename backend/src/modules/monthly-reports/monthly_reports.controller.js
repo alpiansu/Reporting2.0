@@ -5,25 +5,29 @@
  *   - config_loader  : CRUD konfigurasi laporan (JSON file)
  *   - wrc_executor   : Eksekusi query ke WRC
  *   - exporter       : Build file hasil laporan (Excel / PDF / custom)
- *   - export_job     : Registry + staging file hasil export async
- *   - progress       : Tracking progress real-time (SSE) + cancel
+ *   - export_job     : Queue + job state + staging file + SSE (SELF-CONTAINED,
+ *                      TIDAK lagi bergantung pada modul progress/screening)
  *
- * Alur EXPORT (async job, tidak lagi synchronous):
- *   1. POST /:id/export  → validasi, guard duplikasi, buat task progress, lalu
- *      jalankan pipeline di BACKGROUND. Response langsung 202 + taskId.
- *   2. Pipeline background: executeReport → exporter (tulis ke file staging)
- *      → update progress → complete/fail.
- *   3. GET /export/:taskId/file → stream file hasil dari staging.
+ * Alur EXPORT (async job, queue dengan concurrency sendiri):
+ *   1. POST /:id/export → validasi, guard duplikasi, buat job 'queued',
+ *      enqueue ke antrian FIFO (max 2 paralel). Response 202 + taskId.
+ *   2. Pipeline background (runner): executeReport → exporter (tulis ke file
+ *      staging) → completeJob (file terdaftar, siap diunduh 24 jam).
+ *   3. SSE global per-user (GET /export/stream) + per-task + REST fallback
+ *      (status/list/cancel) + download file (GET /export/:taskId/file).
  *
- * Keuntungan: proses >10 menit tidak lagi diputus oleh timeout HTTP; user
- * mendapat progress real-time via widget (modul progress) dan bisa membatalkan.
+ * Keuntungan vs desain sebelumnya:
+ *   - Export TIDAK memakai pool screening (maxConcurrentTasks:1) lagi →
+ *     export & screening bisa jalan BERSAMAAN.
+ *   - Cancel via DELETE /export/:taskId (bukan /api/progress).
+ *   - Progress tampil di FloatingProgressWidget melalui store exports
+ *     (satu widget, dua sumber data).
  */
 import fs from "fs";
 import fsPromises from "fs/promises";
 import path from "path";
 import logger from "../../config/logger.js";
 import { apiResponse } from "../../utils/index.js";
-import progressService from "../progress/progress.service.js";
 import * as configLoader from "./services/config_loader.service.js";
 import { executeReport } from "./services/wrc_executor.service.js";
 import { resolveExporter } from "./services/exporter_resolver.service.js";
@@ -34,7 +38,11 @@ function getUserId(req) {
   return req.user?.pic || req.user?.username || req.user?.id || "unknown";
 }
 
-/** Error marker: job dibatalkan oleh user (dideteksi via progressService.isAborted) */
+function isAdmin(req) {
+  return ["admin", "superadmin"].includes(req.user?.role);
+}
+
+/** Error marker: job dibatalkan oleh user (dideteksi via exportJob.isAborted) */
 class ExportCancelledError extends Error {
   constructor() {
     super("Export dibatalkan oleh pengguna");
@@ -140,7 +148,7 @@ export const deleteReport = async (req, res) => {
   }
 };
 
-// ─── Run Report (Async Job) ──────────────────────────────────────────────────
+// ─── Run Report (Async Job + Queue) ──────────────────────────────────────────
 
 /**
  * Substitusi placeholder pada string template.
@@ -177,13 +185,12 @@ function prepareReportConfig(reportConfig, templateParams) {
 
 /**
  * POST /api/monthly-reports/:id/export
- * Mulai export laporan sebagai ASYNC JOB.
+ * Mulai export laporan sebagai ASYNC JOB dalam antrian FIFO.
  * Body: { cab: "G001", prd: "2501" }
- * Response: 202 { success, message, taskId }
+ * Response: 202 { success, message, taskId, queue }
  *
- * Pipeline dieksekusi di background (tidak memblokir response), progress
- * ditracking via modul progress → tampil di widget frontend + bisa dibatalkan
- * via DELETE /api/progress/:taskId.
+ * Export memakai queue MILIK SENDIRI (maxConcurrentExports) — tidak menyentuh
+ * pool screening/progress, jadi keduanya bisa berjalan bersamaan.
  */
 export const startExport = async (req, res) => {
   try {
@@ -211,57 +218,41 @@ export const startExport = async (req, res) => {
       return apiResponse.badRequest(res, "Laporan tidak memiliki query yang dikonfigurasi");
     }
 
-    // Guard duplikasi: jangan jalankan export untuk laporan+cab+prd yang sama secara paralel
-    const activeDup = progressService.getActiveTasks().find(
-      t => t.module === "monthly_report" &&
-           t.info?.reportId === id &&
-           t.info?.cab === cab &&
-           t.info?.prd === prd
-    );
+    // Guard duplikasi: laporan+cab+prd yang sama tidak boleh antri/berjalan dua kali
+    const activeDup = exportJob.findActiveJobByKey({ reportId: id, cab, prd });
     if (activeDup) {
       return apiResponse.error(
         res,
-        `Laporan ini (cab ${cab}, prd ${prd}) sedang diproses. Tunggu hingga selesai sebelum mencoba lagi.`,
+        `Laporan ini (cab ${cab}, prd ${prd}) sedang ${activeDup.status === "queued" ? "menunggu di antrian" : "diproses"}. Tunggu hingga selesai sebelum mencoba lagi.`,
         409
       );
     }
 
-    const totalWrc = reportConfig["queries-wrc"]?.length || 0;
-    const totalExport = reportConfig["queries-export"]?.length || 0;
-    const totalCleanup = reportConfig["queries-cleanup"]?.length || 0;
-    const totalSteps = totalWrc + totalExport + totalCleanup + 1; // +1 = build file
-
     const taskId = `monthly_report_${cab}_${prd}_${id}_${Date.now()}`;
 
-    try {
-      await progressService.startProgress(taskId, totalSteps, {
-        module: "monthly_report",
-        title: reportConfig["name-reports"],
-        description: "Menyiapkan export laporan...",
-        startedBy: username,
-        cab,
-        prd,
-        reportId: id,
-        createdAt: new Date().toISOString(),
-      });
-    } catch (err) {
-      // TASK_BUSY (maxConcurrentTasks tercapai) → beri tahu user apa yang sedang berjalan
-      const activeTasks = err.activeTasks?.length
-        ? ` Proses aktif: ${err.activeTasks.map(t => t.title || t.id).join(", ")}.`
-        : "";
-      return apiResponse.error(res, `${err.message}${activeTasks}`, 409);
-    }
+    // Buat job (status 'queued') lalu masukkan ke antrian FIFO.
+    // Runner dipisahkan dari state — service tidak tahu detail pipeline.
+    exportJob.createJob({
+      taskId,
+      userId,
+      startedBy: username,
+      reportName: reportConfig["name-reports"] || id,
+      reportId: id,
+      cab,
+      prd,
+    });
 
-    // Fire-and-forget: pipeline berjalan di background
-    runExportJob({ taskId, id, cab, prd, reportConfig, userId, username, totalSteps })
-      .catch(err => {
-        logger.error(`[monthly_reports.controller] Background job ${taskId} crash: ${err.message}`);
-      });
+    exportJob.enqueueJob(taskId, runExportJob);
+
+    logger.info(
+      `[monthly_reports.controller] Export diantrikan: ${taskId} | queue=${JSON.stringify(exportJob.getQueueStats())}`
+    );
 
     return res.status(202).json({
       success: true,
-      message: "Export laporan dimulai. Progress tampil di panel kiri.",
+      message: "Export laporan diantrikan. Progress tampil di panel kiri.",
       taskId,
+      queue: exportJob.getQueueStats(),
     });
   } catch (err) {
     logger.error(`[monthly_reports.controller] startExport error: ${err.message}`);
@@ -270,19 +261,23 @@ export const startExport = async (req, res) => {
 };
 
 /**
- * Pipeline export di background.
- * Tidak boleh throw tanpa di-catch — error ditulis ke progress + staging dibersihkan.
+ * Pipeline export di background (runner antrian).
+ * Tidak boleh throw tanpa di-catch — error ditulis ke job state + staging dibersihkan.
+ * Slot antrian dilepas otomatis oleh service setelah promise ini settle.
  */
-async function runExportJob({ taskId, id, cab, prd, reportConfig, userId, username, totalSteps }) {
+async function runExportJob(job) {
+  const { taskId, reportId, cab, prd, userId } = job;
   const jobStart = Date.now();
   let wrcResults = null;
   let fileResponse = null;
 
-  // Ekstrak tahun/bulan dari prd (YYMM)
+  // Load konfigurasi fresh (bisa saja berubah sejak diantrikan)
+  const reportConfig = await configLoader.getReportById(reportId);
+  if (!reportConfig) throw new Error(`Report id="${reportId}" tidak ditemukan`);
+
+  // Ekstrak tahun/bulan dari prd (YYMM) + hitung prdPrev (bulan sebelumnya)
   const prdYear  = `20${prd.substring(0, 2)}`;
   const prdMonth = prd.substring(2, 4);
-
-  // Hitung prdPrev (bulan sebelumnya)
   let prdPrev = "";
   if (prd && /^\d{4}$/.test(prd)) {
     const yy  = parseInt(prd.substring(0, 2), 10);
@@ -301,41 +296,35 @@ async function runExportJob({ taskId, id, cab, prd, reportConfig, userId, userna
 
   const stagingDir = exportJob.stagingDirFor(taskId);
   const filePath   = path.join(stagingDir, "output.tmp");
+
+  const totalWrc    = preparedConfig["queries-wrc"]?.length    || 0;
+  const totalExport = preparedConfig["queries-export"]?.length || 0;
+  const totalCleanup = preparedConfig["queries-cleanup"]?.length || 0;
+  const totalSteps = totalWrc + totalExport + totalCleanup + 1; // +1 = build file
   let step = 0;
 
-  const baseInfo = {
-    module: "monthly_report",
-    title: preparedConfig["name-reports"],
-    startedBy: username,
-    cab,
-    prd,
-    reportId: id,
-  };
-
-  const updateProgress = (message, extra = {}) => {
-    progressService
-      .updateProgress(taskId, Math.min(step, totalSteps), {
-        ...baseInfo,
-        ...extra,
-        description: message,
-        status: "running",
-      })
-      .catch(() => { /* task mungkin sudah dibatalkan/dihapus */ });
+  const updateJob = (message, extra = {}) => {
+    exportJob.updateJob(taskId, {
+      percentage: Math.min(100, Math.round((step / totalSteps) * 100)),
+      message,
+      ...extra,
+    });
   };
 
   // Callback progress dari executor: cek pembatalan + update step
   const onProgress = ({ message }) => {
-    if (progressService.isAborted(taskId)) {
+    if (exportJob.isAborted(taskId)) {
       throw new ExportCancelledError();
     }
     step++;
-    updateProgress(message);
+    updateJob(message);
   };
 
   try {
     await fsPromises.mkdir(stagingDir, { recursive: true });
 
     // ── 1. Eksekusi WRC (sequential) + query export ────────────────────────
+    updateJob("Menjalankan query WRC...");
     const wrcStart = Date.now();
     wrcResults = await executeReport({
       reportConfig: preparedConfig,
@@ -346,13 +335,13 @@ async function runExportJob({ taskId, id, cab, prd, reportConfig, userId, userna
       prdMonth,
       onProgress,
     });
-    logger.info(`[monthly_reports.controller] Fase WRC+export selesai dalam ${Date.now() - wrcStart}ms (id=${id} | cab=${cab} | prd=${prd})`);
+    logger.info(`[monthly_reports.controller] Fase WRC+export selesai dalam ${Date.now() - wrcStart}ms (id=${reportId} | cab=${cab} | prd=${prd})`);
 
-    if (progressService.isAborted(taskId)) throw new ExportCancelledError();
+    if (exportJob.isAborted(taskId)) throw new ExportCancelledError();
 
     // ── 2. Build file ke staging (bukan ke HTTP res) ───────────────────────
     step++;
-    updateProgress("Membangun file laporan...");
+    updateJob("Membangun file laporan...");
     const exporter = await resolveExporter(preparedConfig["id-reports"], preparedConfig["format"]);
     fileResponse = new exportJob.ExportFileResponse(filePath);
     await exporter.exportToResponse({
@@ -374,47 +363,76 @@ async function runExportJob({ taskId, id, cab, prd, reportConfig, userId, userna
 
     // Cek pembatalan sebelum file didaftarkan — user bisa cancel saat build Excel
     // berlangsung (fase ini tidak memeriksa abort per-tahap)
-    if (progressService.isAborted(taskId)) throw new ExportCancelledError();
+    if (exportJob.isAborted(taskId)) throw new ExportCancelledError();
 
-    // ── 3. Catat file di registry (untuk endpoint download) ────────────────
+    // ── 3. Tandai selesai + daftarkan file di registry (download 24 jam) ──
     const contentDisp = fileResponse.headers["content-disposition"] || "";
     const filenameMatch = contentDisp.match(/filename="?([^";\n]+)"?/);
     const fileName = filenameMatch
       ? decodeURIComponent(filenameMatch[1])
       : `${preparedConfig["name-reports"] || "laporan"}_${prd}.xlsx`;
 
-    exportJob.registerJob(taskId, { filePath, fileName, status: "completed" });
-
-    step = totalSteps;
-    updateProgress("Export selesai", { fileName });
-
-    await progressService.completeProgress(taskId);
+    exportJob.completeJob(taskId, { fileName, filePath });
     logger.info(
-      `[monthly_reports.controller] exportReport selesai: id=${id} | cab=${cab} | prd=${prd} | user=${userId} (total ${Date.now() - jobStart}ms) → ${fileName}`
+      `[monthly_reports.controller] exportReport selesai: id=${reportId} | cab=${cab} | prd=${prd} | user=${userId} (total ${Date.now() - jobStart}ms) → ${fileName}`
     );
   } catch (err) {
     const isCancelled = err?.code === "EXPORT_CANCELLED";
     logger.error(`[monthly_reports.controller] Job ${taskId} ${isCancelled ? "dibatalkan" : "gagal"}: ${err.message}`);
 
-    await progressService.failProgress(taskId, isCancelled ? "Export dibatalkan oleh pengguna" : err.message)
-      .catch(() => { /* task mungkin sudah dihapus oleh cancelTask */ });
+    // State terminal (cancelled jika user cancel, failed jika error) + broadcast
+    exportJob.failJob(taskId, isCancelled ? "Export dibatalkan oleh pengguna" : err.message);
 
     // Tutup file handle yang mungkin masih terbuka (jalur error/cancel),
     // agar folder staging bisa dihapus — terutama di Windows.
     if (fileResponse && !fileResponse.destroyed) fileResponse.destroy();
 
-    // Bersihkan file staging + registry
+    // Bersihkan file staging + registry (emit 'remove' ke SSE)
     await exportJob.removeJobAndDir(taskId);
   } finally {
     wrcResults = null; // lepas referensi data besar
   }
 }
 
+// ─── Export: REST + SSE endpoints ────────────────────────────────────────────
+
+/**
+ * GET /api/monthly-reports/export
+ * Daftar semua job export milik user + statistik antrian.
+ * Dipakai panel "File Siap Diunduh" & sinkronisasi awal frontend.
+ */
+export const listExportJobs = async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const jobs = exportJob.listJobsByUser(userId);
+    return apiResponse.success(res, { jobs, queue: exportJob.getQueueStats() });
+  } catch (err) {
+    logger.error(`[monthly_reports.controller] listExportJobs error: ${err.message}`);
+    return apiResponse.error(res, err.message);
+  }
+};
+
+/**
+ * GET /api/monthly-reports/export/:taskId/status
+ * Status satu job (fallback polling bila SSE terputus).
+ */
+export const getExportStatus = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const job = exportJob.getJob(taskId);
+    if (!job) return apiResponse.notFound(res, "Job tidak ditemukan atau sudah kedaluwarsa");
+    return apiResponse.success(res, { job, queue: exportJob.getQueueStats() });
+  } catch (err) {
+    logger.error(`[monthly_reports.controller] getExportStatus error: ${err.message}`);
+    return apiResponse.error(res, err.message);
+  }
+};
+
 /**
  * GET /api/monthly-reports/export/:taskId/file
  * Stream file hasil export dari staging.
  * - 200 : file siap & di-stream
- * - 409 : job masih diproses
+ * - 409 : job masih diproses/diantri
  * - 404 : job/file tidak ditemukan (gagal, dibatalkan, atau sudah kedaluwarsa)
  */
 export const downloadExport = async (req, res) => {
@@ -422,13 +440,17 @@ export const downloadExport = async (req, res) => {
     const { taskId } = req.params;
     const job = exportJob.getJob(taskId);
 
-    if (!job || job.status !== "completed") {
-      // Cek status progress untuk pesan yang lebih jelas
-      const task = progressService.getProgress(taskId);
-      if (task && ["in-progress", "pending"].includes(task.status)) {
-        return apiResponse.error(res, "Export masih diproses. Tunggu hingga selesai.", 409);
-      }
+    if (!job) {
       return apiResponse.notFound(res, "File export tidak ditemukan atau sudah kedaluwarsa");
+    }
+    if (job.status !== "completed") {
+      const hint =
+        job.status === "queued"
+          ? `Export masih menunggu di antrian (posisi #${job.queuePosition}).`
+          : job.status === "processing"
+            ? "Export masih diproses. Tunggu hingga selesai."
+            : `Export berstatus "${job.status}".`;
+      return apiResponse.error(res, hint, 409);
     }
 
     if (!fs.existsSync(job.filePath)) {
@@ -461,4 +483,49 @@ export const downloadExport = async (req, res) => {
     logger.error(`[monthly_reports.controller] downloadExport error: ${err.message}`);
     if (!res.headersSent) return apiResponse.error(res, err.message);
   }
+};
+
+/**
+ * DELETE /api/monthly-reports/export/:taskId
+ * Batalkan job (otorisasi initiator/admin dicek di exportJob.cancelJob).
+ * - queued     → langsung dibatalkan & dilepas dari antrian
+ * - processing → request abort; berhenti di checkpoint pipeline berikutnya
+ */
+export const cancelExport = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const job = exportJob.cancelJob(taskId, req.user);
+    return apiResponse.success(res, {
+      job,
+      message: `Export '${taskId}' ${job.status === "cancelled" ? "dibatalkan" : "sedang dibatalkan"}`,
+    });
+  } catch (err) {
+    logger.error(`[monthly_reports.controller] cancelExport error: ${err.message}`);
+    return apiResponse.error(res, err.message, err.status || 500);
+  }
+};
+
+/**
+ * GET /api/monthly-reports/export/stream
+ * SSE global per-user — dipakai FloatingProgressWidget (store exports).
+ */
+export const streamExports = async (req, res) => {
+  const userId = getUserId(req);
+  exportJob.setupSSEHeaders(res);
+  exportJob.subscribeUser(userId, res);
+};
+
+/**
+ * GET /api/monthly-reports/export/:taskId/stream
+ * SSE per-task (opsional — fallback halaman laporan).
+ */
+export const streamTaskExports = async (req, res) => {
+  const { taskId } = req.params;
+  const job = exportJob.getJob(taskId);
+  if (!job) return apiResponse.notFound(res, "Job tidak ditemukan");
+  if (job.userId !== getUserId(req) && !isAdmin(req)) {
+    return apiResponse.error(res, "Tidak memiliki izin melihat job ini", 403);
+  }
+  exportJob.setupSSEHeaders(res);
+  exportJob.subscribeTask(taskId, res);
 };

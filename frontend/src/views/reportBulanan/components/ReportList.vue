@@ -85,7 +85,15 @@
             class="report-item__checkbox"
           />
           <div class="report-item__info">
-            <span class="report-item__name">{{ report['name-reports'] }}</span>
+            <span class="report-item__name">
+              {{ report['name-reports'] }}
+              <Badge
+                v-if="jobStates[report['id-reports']]"
+                :value="statusLabel(jobStates[report['id-reports']].status)"
+                :severity="statusSeverity(jobStates[report['id-reports']].status)"
+                class="ml-2"
+              />
+            </span>
             <span class="report-item__meta">
               {{ report['queries-export']?.length || 0 }} sheet
               &bull;
@@ -135,6 +143,8 @@ const props = defineProps({
   loading:     { type: Boolean, default: false },
   disabled:    { type: Boolean, default: false },
   selectedIds: { type: Array,   default: () => [] },
+  // reportId → job export terbaru { status } (badge per baris)
+  jobStates:   { type: Object,  default: () => ({}) },
 });
 
 const emit = defineEmits(['update:selectedIds', 'refresh']);
@@ -158,6 +168,24 @@ const allSelected = computed(() =>
 );
 
 const isSelected = (id) => props.selectedIds.includes(id);
+
+// Badge status export per laporan
+const STATUS_LABEL = {
+  processing: 'Proses',
+  queued:     'Antri',
+  completed:  'Siap',
+  failed:     'Gagal',
+  cancelled:  'Batal',
+};
+const STATUS_SEVERITY = {
+  processing: 'warn',
+  queued:     'info',
+  completed:  'success',
+  failed:     'danger',
+  cancelled:  'secondary',
+};
+const statusLabel = (status) => STATUS_LABEL[status] || status;
+const statusSeverity = (status) => STATUS_SEVERITY[status] || 'secondary';
 
 const toggleSelect = (id) => {
   const current = [...props.selectedIds];

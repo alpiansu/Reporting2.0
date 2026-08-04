@@ -3,8 +3,22 @@
  * Endpoint base: /api/monthly-reports
  */
 import api from "./api";
+import { EventSourcePolyfill } from "event-source-polyfill";
 
 const BASE = "monthly-reports";
+
+/** Helper membangun URL SSE dengan auth header (pola sama progress.service). */
+function sseUrl(path) {
+  const apiUrl =
+    import.meta.env.VITE_API_URL ||
+    api.defaults.baseURL ||
+    "http://localhost:3001/api";
+  const token = localStorage.getItem("token");
+  return {
+    url: `${apiUrl}${path}`,
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  };
+}
 
 const monthlyReportsService = {
   /**
@@ -56,6 +70,70 @@ const monthlyReportsService = {
       responseType: "blob",
       timeout: 600000, // download file besar: beri waktu hingga 10 menit
     }),
+
+  /**
+   * Daftar semua job export milik user + statistik antrian.
+   * GET /api/monthly-reports/export
+   */
+  listExports: () => api.get(`/${BASE}/export`),
+
+  /**
+   * Status satu job export (fallback polling bila SSE terputus).
+   * GET /api/monthly-reports/export/:taskId/status
+   */
+  getExportStatus: (taskId) => api.get(`/${BASE}/export/${taskId}/status`),
+
+  /**
+   * Batalkan job export (initiator/admin).
+   * DELETE /api/monthly-reports/export/:taskId
+   */
+  cancelExport: (taskId) => api.delete(`/${BASE}/export/${taskId}`),
+
+  /**
+   * Pantau semua job export milik user via SSE (dipakai FloatingProgressWidget).
+   * GET /api/monthly-reports/export/stream
+   * Events: init ({ jobs }), update ({ job }), remove ({ taskId })
+   * @param {Object} handlers - { onInit, onUpdate, onRemove }
+   * @returns {EventSourcePolyfill}
+   */
+  monitorExports({ onInit, onUpdate, onRemove }) {
+    const { url, headers } = sseUrl(`/${BASE}/export/stream`);
+    const eventSource = new EventSourcePolyfill(url, { headers });
+
+    eventSource.addEventListener("init", (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (onInit) onInit(data.jobs || []);
+      } catch (err) {
+        console.error("❌ Error parsing export SSE init:", err);
+      }
+    });
+
+    eventSource.addEventListener("update", (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (onUpdate) onUpdate(data.job);
+      } catch (err) {
+        console.error("❌ Error parsing export SSE update:", err);
+      }
+    });
+
+    eventSource.addEventListener("remove", (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (onRemove) onRemove(data);
+      } catch (err) {
+        console.error("❌ Error parsing export SSE remove:", err);
+      }
+    });
+
+    eventSource.onerror = (err) => {
+      console.error("❌ Export SSE Connection error:", err);
+      eventSource.close();
+    };
+
+    return eventSource;
+  },
 };
 
 export default monthlyReportsService;

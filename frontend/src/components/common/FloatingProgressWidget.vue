@@ -10,8 +10,8 @@
           </div>
           <div class="title-container" v-if="!isMinimal">
             <span class="widget-title">{{ mainTask?.title || 'Processing...' }}</span>
-            <span class="widget-count" v-if="progressStore.activeTasks.length > 1">
-              +{{ progressStore.activeTasks.length - 1 }} more
+            <span class="widget-count" v-if="taskCount > 1">
+              +{{ taskCount - 1 }} more
             </span>
           </div>
         </div>
@@ -48,7 +48,7 @@
           <span class="info-text" :title="mainTask?.info">
             {{ isCancelling ? 'Membatalkan proses...' : (mainTask?.info || 'Syncing data...') }}
           </span>
-          <span class="percentage-text">{{ progressStore.totalPercentage }}%</span>
+          <span class="percentage-text">{{ totalPercentage }}%</span>
         </div>
 
         <!-- Progress bar -->
@@ -57,7 +57,7 @@
             <div
               class="progress-bar-fill"
               :class="{ 'fill-cancelling': isCancelling }"
-              :style="{ width: progressStore.totalPercentage + '%' }"
+              :style="{ width: totalPercentage + '%' }"
             >
               <div class="fill-shine" v-if="!isCancelling"></div>
             </div>
@@ -94,10 +94,10 @@
       <div
         class="minimal-progress"
         v-if="isMinimal"
-        :title="`${progressStore.totalPercentage}% complete`"
+        :title="`${totalPercentage}% complete`"
         @click="toggleMode"
       >
-        <div class="minimal-fill" :style="{ width: progressStore.totalPercentage + '%' }"></div>
+        <div class="minimal-fill" :style="{ width: totalPercentage + '%' }"></div>
       </div>
 
     </div>
@@ -126,11 +126,14 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
-import { useProgressStore } from '../../stores';
+import { useProgressStore, useExportsStore } from '../../stores';
 import { useAuthStore } from '../../stores';
+import { useToastService } from '../../utils/toast';
 
 const progressStore = useProgressStore();
+const exportStore = useExportsStore();
 const authStore = useAuthStore();
+const toast = useToastService();
 
 const isMinimal = ref(true);
 const isCancelling = ref(false);
@@ -141,12 +144,42 @@ const maxVisibleStores = 8;
 
 // ── Computed ──────────────────────────────────────────────────────────────────
 
-const mainTask = computed(() => progressStore.mainTask);
-const isVisible = computed(() => progressStore.hasActiveTasks);
-const hasError = computed(() => mainTask.value?.status?.toLowerCase() === 'failed');
+// Satu widget, dua sumber: task screening (progressStore) + job export (exportStore).
+// Prioritas tampil: screening dulu, kalau tidak ada baru export.
+const mainTask = computed(() => {
+  if (progressStore.hasActiveTasks && progressStore.mainTask) {
+    return { ...progressStore.mainTask, source: 'progress' };
+  }
+  const job = exportStore.mainJob;
+  if (job) {
+    const isQueued = job.status === 'queued';
+    return {
+      taskId: job.taskId,
+      title: job.reportName || 'Export Laporan',
+      info: isQueued
+        ? `Antrian #${job.queuePosition || '...'} — ${job.message || 'Menunggu giliran'}`
+        : (job.message || 'Memproses export...'),
+      percentage: job.percentage || 0,
+      startedBy: job.startedBy,
+      status: job.status,
+      source: 'export',
+    };
+  }
+  return null;
+});
 
-// Stores currently being processed for the main task
+const isVisible = computed(() => progressStore.hasActiveTasks || exportStore.hasActiveJobs);
+const hasError = computed(() => mainTask.value?.status?.toLowerCase() === 'failed');
+const taskCount = computed(() => progressStore.activeTasks.length + exportStore.activeJobs.length);
+
+const totalPercentage = computed(() => {
+  if (mainTask.value?.source === 'export') return exportStore.totalPercentage;
+  return progressStore.totalPercentage;
+});
+
+// Stores currently being processed for the main task (hanya untuk task screening)
 const currentProcessingStores = computed(() => {
+  if (mainTask.value?.source !== 'progress') return [];
   const taskId = mainTask.value?.taskId;
   if (!taskId) return [];
   return progressStore.processingStores[taskId] || [];
@@ -200,21 +233,35 @@ const confirmCancel = () => {
 
 const executeCancel = async () => {
   showConfirmDialog.value = false;
-  if (!mainTask.value?.taskId) return;
+  const task = mainTask.value;
+  if (!task?.taskId) return;
 
   isCancelling.value = true;
   try {
-    await progressStore.cancelTask(mainTask.value.taskId);
-    // Widget will auto-hide once SSE sends the 'fail' event for this task
+    // Routing otomatis: job export → store exports, task screening → store progress
+    if (task.source === 'export') {
+      await exportStore.cancelTask(task.taskId);
+    } else {
+      await progressStore.cancelTask(task.taskId);
+    }
   } catch (err) {
     console.error('Cancel failed:', err);
     const status = err.response?.status;
     let msg = 'Gagal membatalkan proses';
     if (status === 403) msg = err.response.data?.message || 'Tidak memiliki izin untuk membatalkan';
     if (status === 404) msg = 'Task tidak ditemukan atau sudah selesai';
-    alert(msg);
+    toast.showError('Gagal', msg);
     isCancelling.value = false;
   }
+};
+
+/** Notifikasi global dari exportStore (auto-download sukses/gagal, job selesai). */
+const onExportNotify = (event) => {
+  const { type, title, message } = event.detail || {};
+  if (!title && !message) return;
+  if (type === 'success') toast.showSuccess(title, message);
+  else if (type === 'error') toast.showError(title, message);
+  else toast.showInfo(title, message);
 };
 
 const handleExpand = () => {
@@ -225,11 +272,15 @@ const handleExpand = () => {
 
 onMounted(() => {
   progressStore.initProgressMonitoring();
+  exportStore.initMonitoring();
   window.addEventListener('progress-widget-expand', handleExpand);
+  window.addEventListener('export-notify', onExportNotify);
 });
 
 onBeforeUnmount(() => {
+  exportStore.stopMonitoring();
   window.removeEventListener('progress-widget-expand', handleExpand);
+  window.removeEventListener('export-notify', onExportNotify);
 });
 
 // Reset cancelling state when task is gone (SSE confirmed)

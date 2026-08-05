@@ -86,10 +86,6 @@ class CronScheduler {
   }
 
   /**
-   * Schedule combined screening jobs
-   * Morning at 06:00 and Afternoon at 12:15
-   */
-  /**
    * Schedule combined screening jobs based on schedules config.
    * Each schedule = 1 cron job → screening({ modules: schedule.modules }).
    * Modules run sequentially per store using 1 shared connection.

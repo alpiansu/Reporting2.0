@@ -52,7 +52,8 @@
 
         <Column field="KDTK" header="KDTK" sortable :style="{ minWidth: '120px' }">
           <template #body="slotProps">
-            <a href="#" class="link-kdtk" @click.prevent="$emit('view-details', slotProps.data)">
+            <a href="#" class="link-kdtk" :class="{ 'link-kdtk--busy': isRowBusy(slotProps.data) }"
+              @click.prevent="onKdtkClick(slotProps.data)">
               {{ slotProps.data.KDTK }}
             </a>
           </template>
@@ -109,7 +110,8 @@
                   :label="`${formatNumber(slotProps.data.SHOP_CHECK.JUMLAH_TRX_BEDA)} SHOP Beda`"
                   size="small" severity="warning" outlined
                   class="shop-check-btn shop-check-btn--beda"
-                  v-tooltip.top="'Klik untuk lihat detail SHOP asing'"
+                  v-tooltip.top="isRowBusy(slotProps.data) ? 'Memuat...' : 'Klik untuk lihat detail SHOP asing'"
+                  :disabled="isRowBusy(slotProps.data)"
                   @click="$emit('shop-check', slotProps.data)" />
               </template>
               <template v-else-if="slotProps.data.SHOP_CHECK && slotProps.data.SHOP_CHECK.STATUS === 'OK'">
@@ -127,18 +129,20 @@
             <div class="action-buttons">
               <Button icon="pi pi-pencil" size="small" text
                 :class="['action-btn', slotProps.data.note ? 'note-active' : 'note-empty']"
+                v-tooltip.top="isRowBusy(slotProps.data) ? 'Memuat...' : 'Edit Note'"
+                :disabled="isRowBusy(slotProps.data)"
                 @mouseenter="showNotePopover($event, slotProps.data)"
                 @mouseleave="startHideTimer"
                 @click="$emit('edit-note', slotProps.data)" />
               <Button icon="pi pi-eye" size="small" outlined
-                v-tooltip.top="isDetailLoading(slotProps.data) ? 'Memuat...' : 'Detail'"
+                v-tooltip.top="isRowBusy(slotProps.data) ? 'Memuat...' : 'Detail'"
                 :loading="isDetailLoading(slotProps.data)"
-                :disabled="isDetailLoading(slotProps.data)"
+                :disabled="isRowBusy(slotProps.data)"
                 @click="$emit('view-details', slotProps.data)" />
               <Button icon="pi pi-refresh" size="small" severity="secondary" outlined
-                v-tooltip.top="isLoading(slotProps.data) ? 'Processing...' : 'Re-screen'"
+                v-tooltip.top="isRowBusy(slotProps.data) ? 'Memuat...' : 'Re-screen'"
                 :loading="isLoading(slotProps.data)"
-                :disabled="isLoading(slotProps.data)"
+                :disabled="isRowBusy(slotProps.data)"
                 @click="$emit('re-screen', slotProps.data)" />
             </div>
           </template>
@@ -243,9 +247,17 @@ const onSort = (ev) => emit('sort-change', {
   sortOrder: ev.sortOrder === 1 ? 'ASC' : 'DESC'
 });
 
-const isLoading = (row) => props.loadingStores.has(`${row.CABANG || row.CAB}_${row.KDTK}`);
+const isLoading = (row) => props.loadingStores.has(`${row.CABANG || row.CAB || 'Unknown'}_${row.KDTK || 'Unknown'}`);
 
-const isDetailLoading = (row) => props.detailLoadingStores.has(`${row.CABANG || row.CAB}_${row.KDTK}`);
+const isDetailLoading = (row) => props.detailLoadingStores.has(`${row.CABANG || row.CAB || 'Unknown'}_${row.KDTK || 'Unknown'}`);
+
+// Baris dianggap busy jika ada operasi async yang sedang berjalan (re-screen / load detail)
+const isRowBusy = (row) => isLoading(row) || isDetailLoading(row);
+
+const onKdtkClick = (row) => {
+  if (isRowBusy(row)) return;
+  emit('view-details', row);
+};
 
 const amountClass = getSelisihClass;
 
@@ -254,6 +266,7 @@ const popoverNoteData = ref(null);
 let hideTimer = null;
 
 const showNotePopover = (event, row) => {
+  if (isRowBusy(row)) return;
   if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
   popoverNoteData.value = row;
   notePopover.value?.show(event);

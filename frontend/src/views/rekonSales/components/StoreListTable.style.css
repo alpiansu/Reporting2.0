@@ -171,6 +171,11 @@
   text-decoration: underline;
 }
 
+.link-kdtk--busy {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .store-name {
   color: var(--text-color);
   font-weight: 500;

@@ -174,6 +174,38 @@
   background-color: rgba(59, 130, 246, 0.05) !important;
 }
 
+/* Kolom frozen (sticky) wajib punya background opaque agar konten kolom lain
+   yang lewat di belakangnya saat scroll horizontal tidak tembus/tumpang tindih.
+   Class striped PrimeVue v4 = .p-datatable-striped. Aturan state pakai !important
+   agar menang atas zebra. */
+:deep(.p-datatable-tbody > tr > td.p-datatable-frozen-column) {
+  background: var(--surface-color);
+}
+
+:deep(.p-datatable-striped .p-datatable-tbody > tr:nth-child(even) > td.p-datatable-frozen-column) {
+  background: inherit;
+}
+
+:deep(.p-datatable-tbody > tr:hover > td.p-datatable-frozen-column) {
+  background: inherit !important;
+}
+
+:deep(.p-datatable-tbody > tr.row-ready > td.p-datatable-frozen-column) {
+  background: color-mix(in srgb, #10b981 5%, var(--surface-color)) !important;
+}
+
+:deep(.p-datatable-tbody > tr.row-not-ready > td.p-datatable-frozen-column) {
+  background: color-mix(in srgb, #f59e0b 5%, var(--surface-color)) !important;
+}
+
+:deep(.p-datatable-tbody > tr.row-error > td.p-datatable-frozen-column) {
+  background: color-mix(in srgb, #ef4444 5%, var(--surface-color)) !important;
+}
+
+:deep(.p-datatable-tbody > tr.row-checking > td.p-datatable-frozen-column) {
+  background: color-mix(in srgb, #3b82f6 5%, var(--surface-color)) !important;
+}
+
 /* Store Detail Dialog */
 .store-detail-content {
   max-height: 60vh;

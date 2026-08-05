@@ -124,13 +124,41 @@
   border-bottom: 1px solid var(--border-color);
 }
 
+/* Kolom frozen (sticky) wajib punya background opaque agar konten kolom lain
+   yang lewat di belakangnya saat scroll horizontal tidak tembus/tumpang tindih.
+   Catatan: class striped PrimeVue v4 = .p-datatable-striped. Aturan state memakai
+   !important agar mengalahkan zebra (yang spesifisitasnya lebih tinggi). */
+:deep(.p-datatable-tbody > tr > td.p-datatable-frozen-column) {
+  background: var(--surface-color);
+}
+
+:deep(.p-datatable-striped .p-datatable-tbody > tr:nth-child(even) > td.p-datatable-frozen-column) {
+  background: inherit;
+}
+
+:deep(.p-datatable-tbody > tr:hover > td.p-datatable-frozen-column) {
+  background: inherit !important;
+}
+
+:deep(.p-datatable-tbody > tr.row-shop-beda > td.p-datatable-frozen-column) {
+  background: color-mix(in srgb, var(--warning-color) 6%, var(--surface-color)) !important;
+}
+
+:deep(.p-datatable-tbody > tr.row-shop-beda:hover > td.p-datatable-frozen-column) {
+  background: color-mix(in srgb, var(--warning-color) 12%, var(--surface-color)) !important;
+}
+
+:deep(.p-datatable-tbody > tr.row-highlighted > td.p-datatable-frozen-column) {
+  background: color-mix(in srgb, var(--warning-color) 15%, var(--surface-color)) !important;
+}
+
 :deep(.p-datatable-tbody > tr:hover) {
   background: color-mix(in srgb, var(--primary-color) 8%, var(--surface-color)) !important;
   transition: background-color 0.2s ease;
 }
 
 :deep(.p-datatable-tbody > tr.row-highlighted) {
-  background: rgba(245, 158, 11, 0.15) !important;
+  background: color-mix(in srgb, var(--warning-color) 15%, var(--surface-color)) !important;
   animation: highlight-fade 2s ease-in-out;
 }
 
@@ -149,7 +177,7 @@
   }
 
   100% {
-    background: rgba(245, 158, 11, 0.15) !important;
+    background: color-mix(in srgb, var(--warning-color) 15%, var(--surface-color)) !important;
   }
 }
 

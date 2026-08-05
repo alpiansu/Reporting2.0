@@ -146,6 +146,30 @@
     background: rgba(251, 191, 36, .08) !important;
 }
 
+/* Kolom frozen (sticky) wajib punya background opaque agar konten kolom lain
+   yang lewat di belakangnya saat scroll horizontal tidak tembus/tumpang tindih.
+   Class striped PrimeVue v4 = .p-datatable-striped. Aturan state pakai !important
+   agar menang atas zebra. */
+:deep(.ceklist-table .p-datatable-tbody > tr > td.p-datatable-frozen-column) {
+    background: var(--surface-color);
+}
+
+:deep(.ceklist-table.p-datatable-striped .p-datatable-tbody > tr:nth-child(even) > td.p-datatable-frozen-column) {
+    background: inherit;
+}
+
+:deep(.ceklist-table .p-datatable-tbody > tr:hover > td.p-datatable-frozen-column) {
+    background: inherit !important;
+}
+
+:deep(.ceklist-table .p-datatable-tbody > tr.row-critical > td.p-datatable-frozen-column) {
+    background: color-mix(in srgb, #ef4444 8%, var(--surface-color)) !important;
+}
+
+:deep(.ceklist-table .p-datatable-tbody > tr.row-warning > td.p-datatable-frozen-column) {
+    background: color-mix(in srgb, #fbbf24 8%, var(--surface-color)) !important;
+}
+
 .table-empty {
     display: flex;
     flex-direction: column;

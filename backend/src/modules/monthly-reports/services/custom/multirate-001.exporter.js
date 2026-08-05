@@ -5,8 +5,18 @@ import MCabang from "../../../../models/m_cabang.model.js";
 function getMonthNameFull(prd) {
   if (!prd || prd.length !== 4) return prd;
   const monthNames = [
-    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-    "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+    "Januari",
+    "Februari",
+    "Maret",
+    "April",
+    "Mei",
+    "Juni",
+    "Juli",
+    "Agustus",
+    "September",
+    "Oktober",
+    "November",
+    "Desember",
   ];
   const year = `20${prd.substring(0, 2)}`;
   const monthIdx = parseInt(prd.substring(2, 4), 10) - 1;
@@ -152,7 +162,7 @@ export async function exportToResponse({ reportConfig, results, res, prd, cab })
   // Row 6: Sub-headers
   const subHeaders = ["SALES", "HPP", "MARGIN"];
   const groupColors = [ORANGE_FILL, GREEN_FILL, BLUE_FILL, LIGHT_GREEN_FILL];
-  let colStart = 5; // F
+  let colStart = 6;
   for (let g = 0; g < 4; g++) {
     for (let c = 0; c < 3; c++) {
       const cell = sheet.getCell(baris, colStart + c);
@@ -170,11 +180,28 @@ export async function exportToResponse({ reportConfig, results, res, prd, cab })
   // Data rows
   if (valueToExport && valueToExport.length > 0) {
     let rowsNumber = 1;
-    const dataKeys = Object.keys(valueToExport[0]);
 
     for (const rowObj of valueToExport) {
-      const values = Object.values(rowObj);
-      const rowData = [rowsNumber++, ...values];
+      const rowData = [
+        rowsNumber++,
+        rowObj.CAB,
+        rowObj.KODE_TOKO,
+        rowObj.NAMA_TOKO,
+        rowObj.HR_JUAL,
+        rowObj.SALES_DRY,
+        rowObj.HPP_DRY,
+        rowObj.MARGIN_DRY,
+        rowObj.SALES_BKL,
+        rowObj.HPP_BKL,
+        rowObj.MARGIN_BKL,
+        rowObj.SALES_VIRTUAL,
+        rowObj.HPP_VIRTUAL,
+        rowObj.MARGIN_VIRTUAL,
+        rowObj.SALES,
+        rowObj.HPP,
+        rowObj.MARGIN,
+      ];
+
       const dataRow = sheet.addRow(rowData);
 
       dataRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {

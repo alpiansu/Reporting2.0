@@ -188,14 +188,14 @@
     </div>
 
     <!-- Modern Add Store Dialog -->
-    <div v-if="showAddStoreDialog" class="dialog-overlay-modern" @click="closeAddStoreDialog">
+    <div v-if="showAddStoreDialog" class="dialog-overlay-modern" @click="closeStoreDialog">
       <div class="dialog-content-modern" @click.stop>
         <div class="dialog-header-modern">
           <div class="dialog-title-section">
             <i class="pi dialog-icon" :class="isEditing ? 'pi-pencil' : 'pi-plus'"></i>
             <h2 class="dialog-title">{{ isEditing ? 'Edit Store' : 'Add New Store' }}</h2>
           </div>
-          <button class="dialog-close-btn" @click="closeAddStoreDialog">
+          <button class="dialog-close-btn" @click="closeStoreDialog">
             <i class="pi pi-times"></i>
           </button>
         </div>

@@ -11,7 +11,7 @@
     <div class="img-wrapper">
       <img v-if="src" :src="src" alt="Preview" class="preview-img" />
       <div v-else class="no-image">
-        <i class="pi pi-image" style="font-size:3rem; color:#666" />
+        <i class="pi pi-image" style="font-size:3rem; color:#94a3b8" />
         <span>Gambar tidak tersedia</span>
       </div>
     </div>

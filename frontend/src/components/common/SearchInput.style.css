@@ -15,7 +15,7 @@
   left: 0.75rem;
   top: 50%;
   transform: translateY(-50%);
-  color: #666;
+  color: var(--text-color-secondary);
 }
 
 .search-control {
@@ -45,7 +45,7 @@
   transform: translateY(-50%);
   background: none;
   border: none;
-  color: #666;
+  color: var(--text-color-secondary);
   cursor: pointer;
   padding: 0;
   display: flex;
@@ -57,8 +57,8 @@
 }
 
 .search-clear-btn:hover {
-  background-color: #f0f0f0;
-  color: #333;
+  background-color: var(--surface-hover);
+  color: var(--text-color);
 }
 
 .search-button {

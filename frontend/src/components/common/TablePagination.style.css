@@ -9,7 +9,7 @@
 }
 
 .pagination-info {
-  color: #666;
+  color: var(--text-color-secondary);
 }
 
 .pagination-controls {
@@ -36,12 +36,12 @@
   border: none;
   gap: 0.5rem;
   font-size: 0.875rem;
-  background-color: #eceff1;
-  color: #455a64;
+  background-color: var(--surface-section);
+  color: var(--text-color);
 }
 
 .btn:hover {
-  background-color: #cfd8dc;
+  background-color: var(--surface-hover);
 }
 
 .btn:active {
@@ -64,7 +64,8 @@
 }
 
 .btn:disabled {
-  background-color: #b0bec5;
+  background-color: var(--surface-border);
+  color: var(--text-color-secondary);
   cursor: not-allowed;
 }
 
@@ -94,7 +95,7 @@
 }
 
 .items-select:hover {
-  border-color: #bbb;
+  border-color: var(--text-color-secondary);
   background-color: var(--surface-card);
 }
 

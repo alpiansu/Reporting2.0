@@ -110,6 +110,11 @@ onMounted(() => {
     /* Overrides for common classes */
     --card-bg: #1e293b;
     --input-bg: #0f172a;
+
+    /* Primary palette untuk dark mode (dibalik: tint terang → gelap) */
+    --primary-50: #1e1b4b;
+    --primary-100: #312e81;
+    --primary-200: #3730a3;
   }
 }
 

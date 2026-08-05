@@ -95,13 +95,13 @@
 
 .report-item:hover {
   border-color: var(--primary-color, #4472c4);
-  background-color: var(--primary-50, #f0f4ff);
+  background-color: var(--surface-highlight);
 }
 
 .report-item--selected {
   border-color: var(--primary-color, #4472c4);
-  background-color: var(--primary-50, #f0f4ff);
-  box-shadow: 0 0 0 3px rgba(68, 114, 196, 0.12);
+  background-color: var(--surface-highlight);
+  box-shadow: 0 0 0 3px rgba(var(--primary-color-rgb), 0.12);
 }
 
 .report-item__info {

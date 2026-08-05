@@ -102,7 +102,7 @@
 .wrc-loading-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(255, 255, 255, 0.88);
+  background: color-mix(in srgb, var(--surface-overlay) 88%, transparent);
   z-index: 10;
   display: flex;
   align-items: center;
@@ -262,7 +262,7 @@
   font-size: 0.85rem !important;
   background: var(--text-color) !important;
   color: var(--surface-border) !important;
-  border-color: #334155 !important;
+  border-color: var(--surface-border) !important;
 }
 
 .sql-textarea::placeholder {

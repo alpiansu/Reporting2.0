@@ -96,7 +96,7 @@
 .clear-button:hover {
     color: #dc2626;
     background: rgba(239, 68, 68, 0.1);
-    border-color: #fca5a5;
+    border-color: rgba(239, 68, 68, 0.4);
 }
 
 .action-buttons {

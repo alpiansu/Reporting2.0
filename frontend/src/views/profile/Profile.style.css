@@ -727,15 +727,15 @@ input:checked+.slider:before {
 }
 
 .success-toast {
-  background-color: #d4edda;
-  color: #155724;
-  border-left: 4px solid #28a745;
+  background-color: rgba(16, 185, 129, 0.15);
+  color: var(--success-color);
+  border-left: 4px solid var(--success-color);
 }
 
 .error-toast {
-  background-color: #f8d7da;
-  color: #721c24;
-  border-left: 4px solid #dc3545;
+  background-color: rgba(239, 68, 68, 0.15);
+  color: var(--error-color);
+  border-left: 4px solid var(--error-color);
 }
 
 .close-toast {

@@ -71,7 +71,7 @@
 
 :deep(.p-dropdown .p-dropdown-label) {
   font-size: 0.875rem;
-  color: #334155;
+  color: var(--text-color);
 }
 
 :deep(.p-dropdown.p-disabled) {

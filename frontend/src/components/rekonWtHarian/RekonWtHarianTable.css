@@ -6,8 +6,8 @@
 }
 
 .group-selisih {
-  background: #e8f0fe !important;
-  color: #1a56db !important;
+  background: rgba(59, 130, 246, 0.15) !important;
+  color: var(--info-color) !important;
 }
 
 .group-rec,
@@ -18,7 +18,7 @@
 
 .group-status {
   background: rgba(245, 158, 11, 0.15) !important;
-  color: #92400e !important;
+  color: var(--warning-color) !important;
 }
 
 .group-note {
@@ -183,11 +183,11 @@ th.group-action.sticky-col {
 }
 
 .results-table tbody tr:hover td.sticky-col {
-  background-color: rgba(59, 130, 246, 0.08) !important;
+  background-color: color-mix(in srgb, #3b82f6 8%, var(--surface-card)) !important;
 }
 
 .results-table tbody tr.row-updated td.sticky-col {
-  background-color: rgba(59, 130, 246, 0.08) !important;
+  background-color: color-mix(in srgb, #3b82f6 8%, var(--surface-card)) !important;
 }
 
 /* Clean and Professional Search Container */
@@ -282,7 +282,7 @@ th.group-action.sticky-col {
 .clear-button:hover {
   color: #dc2626;
   background: rgba(239, 68, 68, 0.1);
-  border-color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.4);
 }
 
 /* Clean and Professional Table Container */
@@ -380,13 +380,13 @@ th.group-action.sticky-col {
 .results-table th.sort-asc,
 .results-table th.sort-desc {
   background: rgba(59, 130, 246, 0.15);
-  color: #1e40af;
+  color: var(--info-color);
 }
 
 .results-table th.sort-asc .sort-icon,
 .results-table th.sort-desc .sort-icon {
   opacity: 1;
-  color: #2563eb;
+  color: var(--info-color);
 }
 
 /* Ensure all sortable columns have consistent width handling */
@@ -668,7 +668,7 @@ th.group-action.sticky-col {
 }
 
 .different-amount {
-  color: #dc2626;
+  color: var(--error-color);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -688,21 +688,21 @@ th.group-action.sticky-col {
 
 .badge-info {
   background: rgba(59, 130, 246, 0.15);
-  color: #1e40af;
-  border-color: #93c5fd;
+  color: var(--info-color);
+  border-color: rgba(59, 130, 246, 0.4);
 }
 
 .badge-info:hover {
-  background: #bfdbfe;
+  background: rgba(59, 130, 246, 0.25);
   transform: translateY(-1px);
   box-shadow: 0 2px 4px rgba(30, 64, 175, 0.2);
 }
 
 /* Clean Status Badge Styling */
 .badge-success {
-  background: #dcfce7;
-  color: #166534;
-  border-color: #86efac;
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--success-color);
+  border-color: rgba(16, 185, 129, 0.4);
   padding: 0.25rem 0.5rem;
   font-size: 0.7rem;
   max-width: 100%;
@@ -714,15 +714,15 @@ th.group-action.sticky-col {
 }
 
 .badge-success:hover {
-  background: #bbf7d0;
+  background: rgba(16, 185, 129, 0.25);
   transform: translateY(-1px);
   box-shadow: 0 2px 4px rgba(22, 101, 52, 0.2);
 }
 
 .badge-danger {
   background: rgba(239, 68, 68, 0.15);
-  color: #991b1b;
-  border-color: #fca5a5;
+  color: var(--error-color);
+  border-color: rgba(239, 68, 68, 0.4);
   padding: 0.25rem 0.5rem;
   font-size: 0.7rem;
   max-width: 100%;
@@ -734,26 +734,26 @@ th.group-action.sticky-col {
 }
 
 .badge-danger:hover {
-  background: #fecaca;
+  background: rgba(239, 68, 68, 0.25);
   transform: translateY(-1px);
   box-shadow: 0 2px 4px rgba(153, 27, 27, 0.2);
 }
 
 .badge-warning {
   background: rgba(245, 158, 11, 0.15);
-  color: #92400e;
-  border-color: #fcd34d;
+  color: var(--warning-color);
+  border-color: rgba(245, 158, 11, 0.4);
 }
 
 .badge-warning:hover {
-  background: #fde68a;
+  background: rgba(245, 158, 11, 0.25);
   transform: translateY(-1px);
   box-shadow: 0 2px 4px rgba(146, 64, 14, 0.2);
 }
 
 .badge-secondary {
   background: var(--surface-section);
-  color: #475569;
+  color: var(--text-color-secondary);
   border-color: var(--surface-border);
 }
 
@@ -987,8 +987,8 @@ th.group-action.sticky-col {
 
 .btn-note:hover {
   background: rgba(59, 130, 246, 0.08);
-  border-color: #3b82f6;
-  color: #2563eb;
+  border-color: var(--info-color);
+  color: var(--info-color);
 }
 
 /* Note Cell - Clean Inline Display */
@@ -1044,7 +1044,7 @@ th.group-action.sticky-col {
 .note-inline-pic i,
 .note-inline-time i {
   font-size: 0.7rem;
-  color: #2563eb;
+  color: var(--info-color);
 }
 
 .note-inline-time {
@@ -1073,11 +1073,11 @@ th.group-action.sticky-col {
 }
 
 .note-cell:hover .note-inline-placeholder {
-  color: #2563eb;
+  color: var(--info-color);
 }
 
 .note-cell:hover .note-inline-placeholder i {
-  color: #2563eb;
+  color: var(--info-color);
 }
 
 /* Row with note - subtle left border */
@@ -1093,7 +1093,7 @@ th.group-action.sticky-col {
   top: 2px;
   bottom: 2px;
   width: 3px;
-  background: #2563eb;
+  background: var(--info-color);
   border-radius: 0 2px 2px 0;
 }
 

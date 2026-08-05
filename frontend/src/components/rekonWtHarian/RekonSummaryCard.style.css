@@ -20,7 +20,7 @@
 
 /* Modern Minimalist Summary Card */
 .summary-card-modern {
-  background: linear-gradient(135deg, #fefffe 0%, var(--surface-ground) 100%);
+  background: linear-gradient(135deg, var(--surface-card) 0%, var(--surface-ground) 100%);
   border: 1px solid var(--surface-border);
   border-radius: 12px;
   overflow: hidden;
@@ -150,33 +150,33 @@
 }
 
 .summary-item-modern.stores .summary-item-icon {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), #bfdbfe);
-  color: #1e40af;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(59, 130, 246, 0.35));
+  color: var(--info-color);
 }
 
 .summary-item-modern.gross .summary-item-icon {
-  background: linear-gradient(135deg, #dcfce7, #bbf7d0);
-  color: #166534;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.35));
+  color: var(--success-color);
 }
 
 .summary-item-modern.ppn .summary-item-icon {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), #fde68a);
-  color: #d97706;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(245, 158, 11, 0.35));
+  color: var(--warning-color);
 }
 
 .summary-item-modern.idm-gross .summary-item-icon {
-  background: linear-gradient(135deg, #ede9fe, #ddd6fe);
-  color: #7c3aed;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(139, 92, 246, 0.35));
+  color: #a78bfa;
 }
 
 .summary-item-modern.idm-ppn .summary-item-icon {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), #fecaca);
-  color: #dc2626;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.35));
+  color: var(--error-color);
 }
 
 .summary-item-modern.issues .summary-item-icon {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), #fecaca);
-  color: #dc2626;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.35));
+  color: var(--error-color);
 }
 
 .summary-item-content {
@@ -221,11 +221,11 @@
 }
 
 .range-min {
-  color: #059669;
+  color: var(--success-color);
 }
 
 .range-max {
-  color: #dc2626;
+  color: var(--error-color);
 }
 
 .range-separator {
@@ -234,11 +234,11 @@
 }
 
 .positive-amount {
-  color: #059669;
+  color: var(--success-color);
 }
 
 .negative-amount {
-  color: #dc2626;
+  color: var(--error-color);
 }
 
 /* Responsive Design */

@@ -115,7 +115,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #ccc;
+  background-color: var(--surface-border);
   transition: 0.3s;
   border-radius: 24px;
 }
@@ -174,12 +174,12 @@
 }
 
 .btn-secondary {
-  background-color: #6B7280;
+  background-color: var(--text-color-secondary);
   color: var(--primary-contrast-color);
 }
 
 .btn-secondary:hover {
-  background-color: #4B5563;
+  background-color: var(--text-color);
 }
 
 .btn-outline {

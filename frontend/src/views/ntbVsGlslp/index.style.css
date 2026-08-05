@@ -32,7 +32,7 @@
   font-size: 0.85rem;
   font-weight: 600;
   margin-bottom: 0.35rem;
-  color: #495057;
+  color: var(--text-color);
 }
 
 .recid-toggle {
@@ -114,7 +114,7 @@
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
-  color: #495057;
+  color: var(--text-color);
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -128,7 +128,7 @@
 
 .result-summary {
   font-size: 0.85rem;
-  color: #6c757d;
+  color: var(--text-color-secondary);
   padding: 0.25rem 0.5rem;
   background: var(--surface-card);
   border-radius: 4px;
@@ -143,7 +143,7 @@
 }
 
 :deep(.row-sent) {
-  background-color: #e8f5e9 !important;
+  background-color: rgba(16, 185, 129, 0.1) !important;
 }
 
 :deep(.row-cannot-send) {
@@ -151,15 +151,15 @@
 }
 
 .text-success {
-  color: #4caf50;
+  color: var(--success-color);
 }
 
 .text-warning {
-  color: #ff9800;
+  color: var(--warning-color);
 }
 
 .text-danger {
-  color: #f44336;
+  color: var(--error-color);
 }
 
 .font-bold {
@@ -167,7 +167,7 @@
 }
 
 .text-muted {
-  color: #adb5bd;
+  color: var(--text-color-secondary);
   font-style: italic;
 }
 
@@ -193,7 +193,7 @@
   min-width: 110px;
   font-weight: 600;
   font-size: 0.9rem;
-  color: #495057;
+  color: var(--text-color);
 }
 
 .field-row span {
@@ -209,7 +209,7 @@
 .field-full label {
   font-weight: 600;
   font-size: 0.9rem;
-  color: #495057;
+  color: var(--text-color);
 }
 
 .bulk-toolbar {
@@ -259,7 +259,7 @@
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
-  color: #495057;
+  color: var(--text-color);
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -277,9 +277,9 @@
   background: var(--surface-card);
 }
 
-.total-badge { color: #2196f3; }
-.sent-badge { color: #4caf50; }
-.unsent-badge { color: #ff9800; }
+.total-badge { color: var(--info-color); }
+.sent-badge { color: var(--success-color); }
+.unsent-badge { color: var(--warning-color); }
 
 .ftp-cabang-cards {
   display: grid;
@@ -314,8 +314,8 @@
 .cabang-code {
   font-weight: 700;
   font-size: 1rem;
-  color: #343a40;
-  background: #e8f4f8;
+  color: var(--text-color);
+  background: var(--surface-section);
   padding: 0.15rem 0.75rem;
   border-radius: 4px;
 }
@@ -339,9 +339,9 @@
   font-size: 1.1rem;
 }
 
-.stat-value.sent { color: #4caf50; }
-.stat-value.unsent { color: #ff9800; }
-.stat-label { color: #868e96; font-size: 0.7rem; }
+.stat-value.sent { color: var(--success-color); }
+.stat-value.unsent { color: var(--warning-color); }
+.stat-label { color: var(--text-color-secondary); font-size: 0.7rem; }
 
 .send-all-btn {
   width: 100%;
@@ -369,7 +369,7 @@
   align-items: center;
   padding: 0.35rem 0.5rem;
   font-size: 0.85rem;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--surface-border);
 }
 
 .result-row:last-child {

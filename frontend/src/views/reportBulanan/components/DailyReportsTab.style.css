@@ -96,7 +96,7 @@
 
 /* Hover effect on header */
 :deep(.p-accordion-header:not(.p-accordion-header-active):hover .p-accordion-header-link) {
-  background: var(--primary-50, #f0f4ff);
+  background: var(--surface-highlight);
 }
 
 @media (max-width: 768px) {

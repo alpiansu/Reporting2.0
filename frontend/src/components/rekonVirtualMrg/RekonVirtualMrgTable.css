@@ -89,7 +89,7 @@
 .clear-button:hover {
     color: #dc2626;
     background: rgba(239, 68, 68, 0.1);
-    border-color: #fca5a5;
+    border-color: rgba(239, 68, 68, 0.4);
 }
 
 /* Clean and Professional Table Container */
@@ -179,23 +179,18 @@
 }
 
 .results-table tbody tr:hover td.sticky-col {
-    background-color: rgba(59, 130, 246, 0.08) !important;
+    background-color: color-mix(in srgb, #3b82f6 12%, var(--surface-card)) !important;
     /* Match row hover color */
 }
 
 .results-table tbody tr.row-updated td.sticky-col {
-    background-color: rgba(59, 130, 246, 0.08) !important;
+    background-color: color-mix(in srgb, #3b82f6 8%, var(--surface-card)) !important;
     /* Match highlighted row color */
 }
 
 /* Adjust sticky notes when there's no Actions column (non-admin) */
 .no-actions .sticky-notes {
     right: 0;
-}
-
-.results-table tbody tr:hover td.sticky-col {
-    background-color: rgba(59, 130, 246, 0.12) !important;
-    /* Slightly darker than row hover to distinguish */
 }
 
 /* Sortable Header Styling */
@@ -228,13 +223,13 @@
 .results-table th.sort-asc,
 .results-table th.sort-desc {
     background: rgba(59, 130, 246, 0.15);
-    color: #1e40af;
+    color: var(--info-color);
 }
 
 .results-table th.sort-asc .sort-icon,
 .results-table th.sort-desc .sort-icon {
     opacity: 1;
-    color: #2563eb;
+    color: var(--info-color);
 }
 
 /* Clean Table Body with Good Readability */
@@ -282,12 +277,12 @@
 
 /* Clean Amount Styling */
 .positive-amount {
-    color: #059669;
+    color: var(--success-color);
     font-weight: 600;
 }
 
 .negative-amount {
-    color: #dc2626;
+    color: var(--error-color);
     font-weight: 600;
 }
 
@@ -510,7 +505,7 @@
 .note-category {
     font-weight: 600;
     font-size: 0.8rem;
-    color: #2563eb;
+    color: var(--info-color);
     margin-bottom: 0.25rem;
 }
 
@@ -591,12 +586,12 @@
 }
 
 .btn-success {
-    background-color: #10b981;
+    background-color: var(--success-color);
     color: var(--primary-contrast-color);
 }
 
 .btn-success:hover {
-    background-color: #059669;
+    background-color: var(--secondary-dark);
 }
 
 .btn-secondary {
@@ -798,23 +793,23 @@
 }
 
 .results-table tbody tr.row-adjusted:nth-child(odd) {
-    background: #f7fef9 !important;
+    background: rgba(16, 185, 129, 0.08) !important;
 }
 
 .results-table tbody tr.row-adjusted:nth-child(even) td.sticky-col {
-    background-color: rgba(16, 185, 129, 0.1) !important;
+    background-color: color-mix(in srgb, #10b981 10%, var(--surface-ground)) !important;
 }
 
 .results-table tbody tr.row-adjusted:nth-child(odd) td.sticky-col {
-    background-color: #f7fef9 !important;
+    background-color: color-mix(in srgb, #10b981 8%, var(--surface-card)) !important;
 }
 
 .results-table tbody tr.row-adjusted:hover {
-    background: #dcfce7 !important;
+    background: rgba(16, 185, 129, 0.15) !important;
 }
 
 .results-table tbody tr.row-adjusted:hover td.sticky-col {
-    background-color: #dcfce7 !important;
+    background-color: color-mix(in srgb, #10b981 15%, var(--surface-card)) !important;
 }
 
 /* Has Note but not adjusted - Blue left border */
@@ -832,15 +827,15 @@
 }
 
 .results-table tbody tr.row-has-note:nth-child(odd) {
-    background: #f8faff !important;
+    background: rgba(59, 130, 246, 0.08) !important;
 }
 
 .results-table tbody tr.row-has-note:nth-child(even) td.sticky-col {
-    background-color: rgba(59, 130, 246, 0.1) !important;
+    background-color: color-mix(in srgb, #3b82f6 10%, var(--surface-ground)) !important;
 }
 
 .results-table tbody tr.row-has-note:nth-child(odd) td.sticky-col {
-    background-color: #f8faff !important;
+    background-color: color-mix(in srgb, #3b82f6 8%, var(--surface-card)) !important;
 }
 
 .results-table tbody tr.row-has-note:hover {
@@ -848,7 +843,7 @@
 }
 
 .results-table tbody tr.row-has-note:hover td.sticky-col {
-    background-color: rgba(59, 130, 246, 0.15) !important;
+    background-color: color-mix(in srgb, #3b82f6 15%, var(--surface-card)) !important;
 }
 
 /* Unchecked - Gray left border */

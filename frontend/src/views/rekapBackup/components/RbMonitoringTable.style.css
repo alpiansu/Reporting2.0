@@ -72,13 +72,13 @@
   font-size: 0.65rem;
   font-weight: 800;
   background: rgba(59, 130, 246, 0.15);
-  color: #1d4ed8;
+  color: var(--info-color);
   flex-shrink: 0;
 }
 
 .group-badge--warning {
   background: rgba(245, 158, 11, 0.15);
-  color: #b45309;
+  color: var(--warning-color);
 }
 
 /* ── Cabang cell ───────────────────────────── */
@@ -128,8 +128,8 @@
   line-height: 1.2;
 }
 
-.num-cell--harian .num-value  { color: #1d4ed8; }
-.num-cell--bulanan .num-value { color: #b45309; }
+.num-cell--harian .num-value  { color: var(--info-color); }
+.num-cell--bulanan .num-value { color: var(--warning-color); }
 
 .num-cell small {
   font-size: 0.68rem;
@@ -171,12 +171,12 @@
 
 /* Terbaru — lebih tegas, hijau tua jika ada data */
 .period-cell--newest {
-  color: #0f766e;
+  color: var(--success-color);
   font-weight: 600;
 }
 
 .period-cell--newest .period-icon {
-  color: #14b8a6;
+  color: var(--success-color);
 }
 
 /* Kosong / tidak ada data */
@@ -200,7 +200,7 @@
 :deep(.datatable-monitoring .p-datatable-thead > tr:first-child > th:nth-child(4)),
 :deep(.datatable-monitoring .p-datatable-thead > tr:first-child > th:nth-child(5)) {
   background: rgba(59, 130, 246, 0.1);
-  border-left: 2px solid #bfdbfe;
+  border-left: 2px solid rgba(59, 130, 246, 0.4);
 }
 
 /* Row 1 — Bulanan group: beri accent kuning sangat terang */
@@ -208,7 +208,7 @@
 :deep(.datatable-monitoring .p-datatable-thead > tr:first-child > th:nth-child(7)),
 :deep(.datatable-monitoring .p-datatable-thead > tr:first-child > th:nth-child(8)) {
   background: rgba(245, 158, 11, 0.1);
-  border-left: 2px solid #fde68a;
+  border-left: 2px solid rgba(245, 158, 11, 0.4);
 }
 
 /* Row 2 sub-column headers */
@@ -227,14 +227,14 @@
 :deep(.datatable-monitoring .p-datatable-thead > tr:last-child > th:nth-child(1)),
 :deep(.datatable-monitoring .p-datatable-thead > tr:last-child > th:nth-child(2)),
 :deep(.datatable-monitoring .p-datatable-thead > tr:last-child > th:nth-child(3)) {
-  border-left: 2px solid #bfdbfe;
+  border-left: 2px solid rgba(59, 130, 246, 0.4);
 }
 
 /* Sub-cols Bulanan accent */
 :deep(.datatable-monitoring .p-datatable-thead > tr:last-child > th:nth-child(4)),
 :deep(.datatable-monitoring .p-datatable-thead > tr:last-child > th:nth-child(5)),
 :deep(.datatable-monitoring .p-datatable-thead > tr:last-child > th:nth-child(6)) {
-  border-left: 2px solid #fde68a;
+  border-left: 2px solid rgba(245, 158, 11, 0.4);
 }
 
 :deep(.datatable-monitoring .p-datatable-tbody > tr > td) {

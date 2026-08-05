@@ -6,18 +6,18 @@
   padding: 0.65rem 0.85rem;
   margin-bottom: 0.9rem;
   background: rgba(245, 158, 11, 0.1);
-  border: 1px solid #fde68a;
+  border: 1px solid rgba(245, 158, 11, 0.4);
   border-left: 4px solid #f59e0b;
   border-radius: 6px;
   font-size: 0.85rem;
   line-height: 1.5;
-  color: #78350f;
+  color: var(--warning-color);
 }
 
 .info-banner i {
   font-size: 1rem;
   margin-top: 0.1rem;
-  color: #d97706;
+  color: #f59e0b;
 }
 
 .info-banner code {

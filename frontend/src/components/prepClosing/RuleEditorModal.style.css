@@ -182,7 +182,7 @@
   font-size: 0.85rem !important;
   background: var(--text-color) !important;
   color: var(--surface-border) !important;
-  border-color: #334155 !important;
+  border-color: var(--surface-border) !important;
 }
 
 .sql-textarea::placeholder {

@@ -68,7 +68,7 @@
     background: var(--surface-section);
     border: 1px solid var(--surface-border);
     border-radius: 8px;
-    color: #475569;
+    color: var(--text-color);
     font-size: 0.875rem;
     font-weight: 500;
     cursor: pointer;
@@ -185,7 +185,7 @@
     flex-direction: column;
     align-items: center;
     padding: 0.5rem 1rem;
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), #bfdbfe);
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.3));
     border-radius: 10px;
     gap: 0.125rem;
 }
@@ -193,13 +193,13 @@
 .summary-count {
     font-size: 1.5rem;
     font-weight: 800;
-    color: #1e40af;
+    color: var(--info-color);
     line-height: 1;
 }
 
 .summary-label {
     font-size: 0.7rem;
-    color: #1e40af;
+    color: var(--info-color);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -261,7 +261,7 @@
     align-items: center;
     gap: 0.5rem;
     font-size: 0.875rem;
-    color: #475569;
+    color: var(--text-color-secondary);
     font-weight: 600;
 }
 
@@ -289,10 +289,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), #bfdbfe);
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.3));
     border-radius: 10px;
     font-size: 1.125rem;
-    color: #1e40af;
+    color: var(--info-color);
     flex-shrink: 0;
 }
 
@@ -331,21 +331,21 @@
 }
 
 .scan-ago-badge.time-fresh {
-    background: #dcfce7;
-    color: #166534;
-    border: 1px solid #bbf7d0;
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--success-color);
+    border: 1px solid rgba(16, 185, 129, 0.4);
 }
 
 .scan-ago-badge.time-recent {
     background: rgba(245, 158, 11, 0.15);
-    color: #d97706;
-    border: 1px solid #fde68a;
+    color: var(--warning-color);
+    border: 1px solid rgba(245, 158, 11, 0.4);
 }
 
 .scan-ago-badge.time-old {
     background: rgba(239, 68, 68, 0.15);
-    color: #dc2626;
-    border: 1px solid #fecaca;
+    color: var(--error-color);
+    border: 1px solid rgba(239, 68, 68, 0.4);
 }
 
 /* Empty state for branches */
@@ -381,7 +381,7 @@
     background: var(--surface-card);
     border: 1px solid var(--surface-border);
     border-radius: 8px;
-    color: #475569;
+    color: var(--text-color);
     font-size: 0.875rem;
     font-weight: 600;
     cursor: pointer;
@@ -486,7 +486,7 @@
 
 .last-info-value .time {
   font-size: 0.8125rem;
-  color: #475569;
+  color: var(--text-color-secondary);
 }
 
 .last-info-empty {
@@ -504,7 +504,7 @@
 
 .ago-badge {
   background: var(--surface-border);
-  color: #475569;
+  color: var(--text-color);
   padding: 0.15rem 0.5rem;
   font-size: 0.7rem;
   font-weight: 600;

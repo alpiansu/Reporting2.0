@@ -110,12 +110,12 @@
 }
 
 .btn-secondary {
-  background-color: #6B7280;
+  background-color: var(--text-color-secondary);
   color: var(--primary-contrast-color);
 }
 
 .btn-secondary:hover {
-  background-color: #4B5563;
+  background-color: var(--text-color);
 }
 
 .btn-outline {
@@ -145,7 +145,7 @@
 .error-state i {
   font-size: 2rem;
   margin-bottom: 1rem;
-  color: #EF4444;
+  color: var(--error-color);
 }
 
 .summary-cards {
@@ -238,15 +238,15 @@
 
 .status-success {
   background-color: rgba(16, 185, 129, 0.15);
-  color: #065F46;
+  color: var(--success-color);
 }
 
 .status-warning {
   background-color: rgba(245, 158, 11, 0.15);
-  color: #92400E;
+  color: var(--warning-color);
 }
 
 .status-danger {
   background-color: rgba(239, 68, 68, 0.15);
-  color: #991B1B;
+  color: var(--error-color);
 }

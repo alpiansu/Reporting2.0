@@ -17,7 +17,7 @@
 
 .section-subtitle {
   font-size: 0.875rem;
-  color: #666;
+  color: var(--text-color-secondary);
   margin-bottom: 1.5rem;
 }
 

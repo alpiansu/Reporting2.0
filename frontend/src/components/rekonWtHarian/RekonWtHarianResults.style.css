@@ -10,7 +10,7 @@
 
 .pagination-info {
   text-align: center;
-  color: #666;
+  color: var(--text-color-secondary);
   font-size: 0.9rem;
   margin-top: 1rem;
 }

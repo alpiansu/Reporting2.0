@@ -13,7 +13,7 @@
   gap: 15px;
   margin-bottom: 20px;
   padding-bottom: 15px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--surface-border);
 }
 
 .filter-group {
@@ -25,7 +25,7 @@
 .filter-group label {
   font-size: 0.8rem;
   margin-bottom: 5px;
-  color: #666;
+  color: var(--text-color-secondary);
 }
 
 .filter-group select,
@@ -42,7 +42,7 @@
   border: 1px solid var(--surface-border);
   border-radius: 4px;
   padding: 8px 12px;
-  color: #666;
+  color: var(--text-color-secondary);
   cursor: pointer;
   margin-top: 20px;
 }
@@ -63,9 +63,9 @@
 .spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid rgba(0, 0, 0, 0.1);
+  border: 3px solid var(--surface-border);
   border-radius: 50%;
-  border-top-color: #3498db;
+  border-top-color: var(--info-color);
   animation: spin 1s ease-in-out infinite;
   margin-bottom: 10px;
 }
@@ -78,11 +78,11 @@
 .error-message {
   text-align: center;
   padding: 20px;
-  color: #e74c3c;
+  color: var(--error-color);
 }
 
 .error-message button {
-  background-color: #e74c3c;
+  background-color: var(--error-color);
   color: var(--primary-contrast-color);
   border: none;
   border-radius: 4px;
@@ -95,7 +95,7 @@
 .empty-state {
   text-align: center;
   padding: 40px 0;
-  color: #7f8c8d;
+  color: var(--text-color-secondary);
 }
 
 /* Activity list */
@@ -109,7 +109,7 @@
   display: flex;
   padding: 15px;
   border-radius: 6px;
-  background-color: #f9f9f9;
+  background-color: var(--surface-ground);
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
@@ -120,19 +120,19 @@
 
 /* Activity types */
 .activity-type-login {
-  border-left: 4px solid #2ecc71;
+  border-left: 4px solid var(--success-color);
 }
 
 .activity-type-register {
-  border-left: 4px solid #3498db;
+  border-left: 4px solid var(--info-color);
 }
 
 .activity-type-password {
-  border-left: 4px solid #f39c12;
+  border-left: 4px solid var(--warning-color);
 }
 
 .activity-type-logout {
-  border-left: 4px solid #95a5a6;
+  border-left: 4px solid var(--text-color-secondary);
 }
 
 /* Activity content */
@@ -142,14 +142,14 @@
   justify-content: center;
   width: 40px;
   height: 40px;
-  background-color: #f1f1f1;
+  background-color: var(--surface-section);
   border-radius: 50%;
   margin-right: 15px;
 }
 
 .activity-icon i {
   font-size: 1.2rem;
-  color: #555;
+  color: var(--text-color-secondary);
 }
 
 .activity-content {
@@ -164,22 +164,22 @@
 
 .activity-type {
   font-weight: 600;
-  color: #333;
+  color: var(--text-color);
 }
 
 .activity-time {
   font-size: 0.8rem;
-  color: #7f8c8d;
+  color: var(--text-color-secondary);
 }
 
 .activity-description {
   margin-bottom: 10px;
-  color: #555;
+  color: var(--text-color-secondary);
 }
 
 .activity-location {
   font-size: 0.85rem;
-  color: #7f8c8d;
+  color: var(--text-color-secondary);
   margin-bottom: 5px;
 }
 
@@ -187,7 +187,7 @@
   display: flex;
   gap: 15px;
   font-size: 0.8rem;
-  color: #95a5a6;
+  color: var(--text-color-secondary);
 }
 
 .activity-ip i,
@@ -202,7 +202,7 @@
   justify-content: center;
   margin-top: 20px;
   padding-top: 15px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--surface-border);
 }
 
 .pagination-btn {
@@ -220,7 +220,7 @@
 
 .pagination-info {
   margin: 0 15px;
-  color: #666;
+  color: var(--text-color-secondary);
 }
 
 .items-per-page {
@@ -232,7 +232,7 @@
 
 .items-per-page label {
   font-size: 0.8rem;
-  color: #666;
+  color: var(--text-color-secondary);
 }
 
 .items-per-page select {

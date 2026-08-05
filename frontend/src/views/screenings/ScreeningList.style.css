@@ -301,18 +301,18 @@
 }
 
 .status-completed {
-  background-color: rgba(40, 167, 69, 0.1);
-  color: #28a745;
+  background-color: rgba(16, 185, 129, 0.15);
+  color: var(--success-color);
 }
 
 .status-in-progress {
-  background-color: rgba(255, 193, 7, 0.1);
-  color: #ffc107;
+  background-color: rgba(245, 158, 11, 0.15);
+  color: var(--warning-color);
 }
 
 .status-pending {
-  background-color: rgba(108, 117, 125, 0.1);
-  color: #6c757d;
+  background-color: rgba(148, 163, 184, 0.15);
+  color: var(--text-color-secondary);
 }
 
 .card-body {

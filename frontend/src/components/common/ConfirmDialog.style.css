@@ -35,32 +35,32 @@
   flex: 1;
   font-size: 1.1rem;
   font-weight: 600;
-  color: #333;
+  color: var(--text-color);
   margin-left: 0.5rem;
 }
 
 .dialog-icon {
   font-size: 1.6rem;
-  color: #2196f3;
+  color: var(--info-color);
 }
 
 .close-button {
   border: none;
   background: transparent;
   cursor: pointer;
-  color: #777;
+  color: var(--text-color-secondary);
   font-size: 1.1rem;
   transition: color 0.2s ease;
 }
 
 .close-button:hover {
-  color: #000;
+  color: var(--text-color);
 }
 
 /* === Body === */
 .dialog-body {
   margin: 0.5rem 0 1rem;
-  color: #555;
+  color: var(--text-color-secondary);
   line-height: 1.5;
   text-align: center;
 }

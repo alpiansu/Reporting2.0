@@ -107,12 +107,12 @@
 }
 
 .btn-secondary {
-  background-color: #6B7280;
+  background-color: var(--text-color-secondary);
   color: var(--primary-contrast-color);
 }
 
 .btn-secondary:hover {
-  background-color: #4B5563;
+  background-color: var(--text-color);
 }
 
 .loading-state,
@@ -131,7 +131,7 @@
 .error-state i {
   font-size: 2rem;
   margin-bottom: 1rem;
-  color: #EF4444;
+  color: var(--error-color);
 }
 
 .summary-cards {

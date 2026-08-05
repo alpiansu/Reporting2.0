@@ -18,7 +18,7 @@
   width: 40px;
   height: 40px;
   border-radius: 10px;
-  background: #0ea5e9;
+  background: var(--primary-color);
   color: var(--primary-contrast-color);
   display: flex;
   align-items: center;
@@ -52,12 +52,12 @@
   gap: 0.75rem;
   padding: 0.875rem 1rem;
   background: rgba(59, 130, 246, 0.08);
-  border-left: 3px solid #0ea5e9;
+  border-left: 3px solid var(--info-color);
   border-radius: 0 8px 8px 0;
 }
 
 .info-banner > .pi {
-  color: #0ea5e9;
+  color: var(--info-color);
   font-size: 1rem;
   margin-top: 0.1rem;
   flex-shrink: 0;
@@ -67,14 +67,14 @@
   margin: 0 0 0.4rem;
   font-size: 0.825rem;
   font-weight: 700;
-  color: #0c4a6e;
+  color: var(--info-color);
 }
 
 .info-list {
   margin: 0;
   padding-left: 1.1rem;
   font-size: 0.8rem;
-  color: #075985;
+  color: var(--text-color-secondary);
   line-height: 1.7;
 }
 
@@ -99,7 +99,7 @@
 .warning-banner p {
   margin: 0;
   font-size: 0.8rem;
-  color: #78350f;
+  color: var(--warning-color);
   line-height: 1.6;
 }
 

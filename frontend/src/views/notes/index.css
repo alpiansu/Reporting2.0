@@ -1,6 +1,6 @@
 .notes-view {
   padding: 1.25rem;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4e7eb 100%);
+  background: linear-gradient(135deg, var(--surface-ground) 0%, var(--surface-border) 100%);
   min-height: 100vh;
 }
 
@@ -106,7 +106,7 @@
 .clear-button:hover {
   color: #dc2626;
   background: rgba(239, 68, 68, 0.1);
-  border-color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.4);
 }
 
 /* Action Buttons */
@@ -157,14 +157,14 @@
 
 .btn-secondary {
   background: linear-gradient(135deg, var(--surface-ground), var(--surface-border));
-  color: #4a5568;
+  color: var(--text-color);
   border: 1px solid var(--surface-border);
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--surface-section), #cbd5e0);
-  border-color: #cbd5e0;
+  background: linear-gradient(135deg, var(--surface-section), var(--surface-border));
+  border-color: var(--surface-border);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   transform: translateY(-1px);
 }
@@ -251,7 +251,7 @@
   margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
-  color: #2d3748;
+  color: var(--text-color);
 }
 
 .modal-close {
@@ -259,7 +259,7 @@
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #a0aec0;
+  color: var(--text-color-secondary);
   padding: 0;
   width: 1.5rem;
   height: 1.5rem;
@@ -269,7 +269,7 @@
 }
 
 .modal-close:hover {
-  color: #718096;
+  color: var(--text-color);
 }
 
 .modal-body {
@@ -285,7 +285,7 @@
   display: block;
   margin-bottom: 0.5rem;
   font-weight: 500;
-  color: #4a5568;
+  color: var(--text-color);
   font-size: 0.875rem;
 }
 
@@ -404,7 +404,7 @@
 
 .data-table-container .results-table th {
   background: linear-gradient(to bottom, var(--surface-ground), var(--surface-section));
-  color: #4a5568;
+  color: var(--text-color);
   font-weight: 600;
   text-align: left;
   border-bottom: 2px solid var(--surface-border);

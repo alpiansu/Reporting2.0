@@ -15,15 +15,5 @@
 </script>
 
 <style scoped>
-.auth-layout {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: #FFF;
-  overflow: auto;
-  margin: 0;
-  padding: 0;
-  min-height: 100vh;
-  width: 100vw;
-}
+@import './AuthLayout.style.css';
 </style>

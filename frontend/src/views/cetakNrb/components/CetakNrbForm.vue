@@ -168,14 +168,4 @@ const resetForm = () => {
 };
 </script>
 
-<style scoped>
-.cetak-nrb-form-card { padding: 2rem; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05); }
-.form-header { margin-bottom: 2rem; border-bottom: 1px solid #f1f5f9; padding-bottom: 1.5rem; }
-.title-section { display: flex; align-items: center; gap: 1rem; }
-.header-icon { font-size: 2.5rem; color: #ef4444; background: #fef2f2; padding: 0.75rem; border-radius: 12px; }
-.form-title { font-size: 1.5rem; font-weight: 700; color: #1e293b; margin: 0; }
-.form-subtitle { color: #64748b; margin: 0.25rem 0 0 0; }
-.field label { color: #334155; }
-.form-actions { display: flex; flex-wrap: wrap; gap: 1rem; border-top: 1px solid #f1f5f9; padding-top: 1.5rem; }
-@media (max-width: 768px) { .form-actions { flex-direction: column; } }
-</style>
+<style scoped src="./CetakNrbForm.style.css"></style>

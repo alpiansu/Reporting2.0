@@ -1,0 +1,227 @@
+
+.form-body {
+  padding: 0.5rem 0;
+}
+
+.field-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  display: block;
+  margin-bottom: 0.4rem;
+  color: var(--text-color, #212529);
+}
+
+/* ─── Section ─── */
+.section {
+  border: 1px solid var(--surface-border, #dee2e6);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.section__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.875rem;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.section__title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-color, #212529);
+}
+
+.section__empty {
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  color: var(--text-color-secondary, #6c757d);
+  background: var(--surface-50, #f8f9fa);
+  border: 1px dashed var(--surface-border, #dee2e6);
+  text-align: center;
+}
+
+.section__empty--error {
+  border-color: var(--red-300, #f28b82);
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--red-700, #b91c1c);
+}
+
+/* ─── WRC Query Row ─── */
+.query-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.query-row__num {
+  width: 1.5rem;
+  height: 1.5rem;
+  min-width: 1.5rem;
+  border-radius: 50%;
+  background: var(--primary-color, #4472c4);
+  color: var(--primary-contrast-color);
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.4rem;
+}
+
+.query-row__textarea {
+  flex: 1;
+  resize: vertical;
+}
+
+/* ─── Export Row ─── */
+.export-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.875rem;
+  padding-bottom: 0.875rem;
+  border-bottom: 1px dashed var(--surface-border, #e9ecef);
+}
+
+.export-row:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.export-row__inputs {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.export-row__key {
+  font-weight: 600;
+}
+
+.export-row__query {
+  resize: vertical;
+}
+
+.font-mono {
+  font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+  font-size: 0.82rem;
+}
+
+:deep(.p-inputtext),
+:deep(.p-inputtextarea) {
+  width: 100%;
+}
+
+/* ─── Placeholder Guide ─── */
+.placeholder-guide {
+  border: 1px solid var(--blue-200, #bfdbfe);
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.placeholder-guide__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s;
+}
+
+.placeholder-guide__header:hover {
+  background-color: var(--blue-100, #dbeafe);
+}
+
+.placeholder-guide__body {
+  border-top: 1px solid var(--blue-200, #bfdbfe);
+  padding: 0.875rem 1rem;
+}
+
+.placeholder-guide__note {
+  margin-top: 0.75rem;
+  font-size: 0.78rem;
+  color: var(--text-color-secondary, #6c757d);
+  background: var(--surface-50, #f8f9fa);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--surface-border, #dee2e6);
+}
+
+/* Placeholder Table */
+.placeholder-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.placeholder-table th {
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  font-weight: 700;
+  color: var(--primary-color, #4472c4);
+  border-bottom: 2px solid var(--blue-200, #bfdbfe);
+  background: transparent;
+}
+
+.placeholder-table td {
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--blue-100, #dbeafe);
+  vertical-align: middle;
+}
+
+.placeholder-table tr:last-child td {
+  border-bottom: none;
+}
+
+.ph-code {
+  background: var(--primary-color, #4472c4);
+  color: var(--primary-contrast-color);
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-family: monospace;
+  white-space: nowrap;
+}
+
+.ph-example {
+  background: var(--green-100, #dcfce7);
+  color: var(--green-700, #15803d);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  font-family: monospace;
+}
+
+.ph-usage {
+  background: var(--surface-ground);
+  color: var(--text-color, #374151);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.76rem;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+}
+
+/* Slide-down Transition */
+.slide-down-enter-active,
+.slide-down-leave-active {
+  transition: max-height 0.25s ease, opacity 0.2s ease;
+  overflow: hidden;
+  max-height: 400px;
+}
+
+.slide-down-enter-from,
+.slide-down-leave-to {
+  max-height: 0;
+  opacity: 0;
+}
+

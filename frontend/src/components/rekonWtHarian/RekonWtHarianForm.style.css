@@ -1,0 +1,95 @@
+
+.rekon-form-container {
+  margin-bottom: 0;
+}
+
+.card {
+  background-color: var(--surface-card);
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.form-actions {
+  margin-top: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.force-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.force-toggle label {
+  cursor: pointer;
+  user-select: none;
+}
+
+.form-title {
+  font-size: 1.5rem;
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  color: var(--primary-color);
+}
+
+.form-description {
+  color: #666;
+  margin-bottom: 1.5rem;
+}
+
+.rekon-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 1rem;
+}
+
+label {
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+/* PrimeVue components styling */
+:deep(.p-dropdown) {
+  width: 100%;
+}
+
+:deep(.p-calendar) {
+  width: 100%;
+}
+
+:deep(.p-button) {
+  width: auto;
+}
+
+.error-text {
+  color: #e74c3c;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+@media (min-width: 768px) {
+  .rekon-form {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  
+  .form-group {
+    flex: 1;
+    min-width: 200px;
+    margin-right: 1rem;
+  }
+  
+  .form-actions {
+    width: 100%;
+  }
+}

@@ -185,11 +185,4 @@ defineExpose({
 });
 </script>
 
-<style scoped>
-.results-container {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  width: 100%;
-}
-</style>
+<style scoped src="./PrepClosingResults.style.css"></style>

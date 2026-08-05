@@ -41,7 +41,7 @@
   height: 100px;
   border-radius: 50%;
   background-color: var(--primary-color);
-  color: white;
+  color: var(--primary-contrast-color);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -110,7 +110,7 @@
   align-items: center;
   gap: 8px;
   background-color: var(--primary-color);
-  color: white;
+  color: var(--primary-contrast-color);
   border: none;
   border-radius: 8px;
   padding: 10px 16px;
@@ -273,7 +273,7 @@
 
 .submit-button {
   background-color: var(--primary-color);
-  color: white;
+  color: var(--primary-contrast-color);
   border: none;
   border-radius: 8px;
   padding: 10px 16px;
@@ -344,7 +344,7 @@
   width: 16px;
   left: 4px;
   bottom: 4px;
-  background-color: white;
+  background-color: var(--surface-card);
   transition: 0.4s;
   border-radius: 50%;
 }
@@ -381,8 +381,8 @@ input:checked+.slider:before {
   display: flex;
   align-items: center;
   gap: 8px;
-  background-color: white;
-  border: 1px solid #ddd;
+  background-color: var(--surface-card);
+  border: 1px solid var(--surface-border);
   border-radius: 8px;
   padding: 8px 16px;
   font-size: 0.875rem;
@@ -442,7 +442,7 @@ input:checked+.slider:before {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--primary-contrast-color);
   font-size: 1rem;
 }
 
@@ -542,7 +542,7 @@ input:checked+.slider:before {
 }
 
 .close-button:hover {
-  background-color: rgba(0, 0, 0, 0.04);
+  background-color: var(--surface-hover);
 }
 
 .dialog-body {
@@ -567,7 +567,7 @@ input:checked+.slider:before {
   height: 100px;
   border-radius: 50%;
   background-color: var(--primary-color);
-  color: white;
+  color: var(--primary-contrast-color);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -593,8 +593,8 @@ input:checked+.slider:before {
   display: flex;
   align-items: center;
   gap: 8px;
-  background-color: white;
-  border: 1px solid #ddd;
+  background-color: var(--surface-card);
+  border: 1px solid var(--surface-border);
   border-radius: 8px;
   padding: 8px 16px;
   font-size: 0.875rem;
@@ -621,8 +621,8 @@ input:checked+.slider:before {
 }
 
 .cancel-button {
-  background-color: white;
-  border: 1px solid #ddd;
+  background-color: var(--surface-card);
+  border: 1px solid var(--surface-border);
   border-radius: 8px;
   padding: 10px 16px;
   font-size: 0.875rem;
@@ -664,8 +664,8 @@ input:checked+.slider:before {
   font-family: monospace;
   font-size: 0.875rem;
   padding: 8px;
-  background-color: white;
-  border: 1px solid #ddd;
+  background-color: var(--surface-card);
+  border: 1px solid var(--surface-border);
   border-radius: 4px;
   text-align: center;
 }
@@ -674,8 +674,8 @@ input:checked+.slider:before {
   display: flex;
   align-items: center;
   gap: 8px;
-  background-color: white;
-  border: 1px solid #ddd;
+  background-color: var(--surface-card);
+  border: 1px solid var(--surface-border);
   border-radius: 8px;
   padding: 8px 16px;
   font-size: 0.875rem;

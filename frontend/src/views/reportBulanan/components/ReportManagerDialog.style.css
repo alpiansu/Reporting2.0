@@ -1,0 +1,87 @@
+
+.manager-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  gap: 1rem;
+}
+
+/* ── Badge center alignment ── */
+.badge-center {
+  display: flex;
+  justify-content: center;
+}
+
+/* ── Audit card (Dibuat & Diperbarui) ── */
+.audit-card {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.15) 100%);
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.78rem;
+  min-width: 140px;
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.audit-card:hover {
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.18);
+  transform: translateY(-1px);
+}
+
+/* Diperbarui pakai palet hijau agar mudah dibedakan */
+.audit-card--update {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, #dcfce7 100%);
+  border-color: #bbf7d0;
+}
+
+.audit-card--update:hover {
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.18);
+}
+
+.audit-date,
+.audit-user {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--text-color);
+  line-height: 1.3;
+}
+
+.audit-icon {
+  font-size: 0.72rem;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+.audit-date span {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.audit-user-label {
+  font-size: 0.72rem;
+  color: var(--text-color-secondary);
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 110px;
+}
+
+/* ── Aksi ── */
+.action-btns {
+  display: flex;
+  gap: 0.25rem;
+  justify-content: flex-end;
+}
+
+/* ── Table header ── */
+:deep(.manager-table .p-datatable-thead th) {
+  font-size: 0.82rem;
+  font-weight: 700;
+  background: var(--surface-50, #f8f9fa);
+}

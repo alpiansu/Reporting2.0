@@ -48,7 +48,7 @@
 /* PRIMARY */
 .btn-primary {
     background-color: #3b82f6;
-    color: #fff;
+    color: var(--primary-contrast-color);
 }
 
 .btn-primary:hover {
@@ -58,7 +58,7 @@
 /* SUCCESS */
 .btn-success {
     background-color: #10b981;
-    color: #fff;
+    color: var(--primary-contrast-color);
 }
 
 .btn-success:hover {
@@ -68,7 +68,7 @@
 /* DANGER */
 .btn-danger {
     background-color: #ef4444;
-    color: #fff;
+    color: var(--primary-contrast-color);
 }
 
 .btn-danger:hover {
@@ -78,7 +78,7 @@
 /* WARNING */
 .btn-warning {
     background-color: #f59e0b;
-    color: #fff;
+    color: var(--primary-contrast-color);
 }
 
 .btn-warning:hover {
@@ -88,7 +88,7 @@
 /* INFO */
 .btn-info {
     background-color: #06b6d4;
-    color: #fff;
+    color: var(--primary-contrast-color);
 }
 
 .btn-info:hover {
@@ -98,7 +98,7 @@
 /* SECONDARY */
 .btn-secondary {
     background-color: #6b7280;
-    color: #fff;
+    color: var(--primary-contrast-color);
 }
 
 .btn-secondary:hover {
@@ -107,18 +107,18 @@
 
 /* LIGHT */
 .btn-light {
-    background-color: #f3f4f6;
-    color: #111827;
+    background-color: var(--surface-section);
+    color: var(--text-color);
 }
 
 .btn-light:hover {
-    background-color: #e5e7eb;
+    background-color: var(--surface-border);
 }
 
 /* DARK */
 .btn-dark {
     background-color: #111827;
-    color: #fff;
+    color: var(--primary-contrast-color);
 }
 
 .btn-dark:hover {
@@ -135,7 +135,7 @@
 
 .btn-outline-primary:hover {
     background-color: #3b82f6;
-    color: #fff;
+    color: var(--primary-contrast-color);
 }
 
 .btn-outline-success {
@@ -145,7 +145,7 @@
 
 .btn-outline-success:hover {
     background-color: #10b981;
-    color: #fff;
+    color: var(--primary-contrast-color);
 }
 
 .btn-outline-danger {
@@ -155,7 +155,7 @@
 
 .btn-outline-danger:hover {
     background-color: #ef4444;
-    color: #fff;
+    color: var(--primary-contrast-color);
 }
 
 .btn-outline-warning {
@@ -165,7 +165,7 @@
 
 .btn-outline-warning:hover {
     background-color: #f59e0b;
-    color: #fff;
+    color: var(--primary-contrast-color);
 }
 
 /* ================= EXTRA TOUCH ================= */

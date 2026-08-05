@@ -1,0 +1,23 @@
+
+.rekon-penyesuaian-view {
+  padding: 1.5rem;
+}
+
+.content-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.branch-recap-section {
+  margin-top: 1rem;
+}
+
+.results-section {
+  margin-top: 1rem;
+}
+
+@media (max-width: 768px) {
+  .rekon-penyesuaian-view {
+    padding: 1rem;
+  }
+}

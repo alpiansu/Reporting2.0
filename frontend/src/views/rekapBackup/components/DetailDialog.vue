@@ -30,9 +30,9 @@
 
         <!-- ============ RESUME VIEW ============ -->
         <div v-if="viewMode === 'resume'" key="resume">
-          <div class="detail-nav" style="margin-bottom: 1rem; background: #f8fafc; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid #e2e8f0;">
+          <div class="detail-nav" style="margin-bottom: 1rem; background: var(--surface-ground); padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--surface-border);">
             <div class="detail-nav__left" style="flex: 1;">
-              <p style="margin: 0; font-size: 0.825rem; color: #475569; line-height: 1.5;">
+              <p style="margin: 0; font-size: 0.825rem; color: var(--text-color-secondary); line-height: 1.5;">
                 Menampilkan history data <strong>{{ type }}</strong> untuk <strong>{{ getCabangName(cabang) }}</strong>.<br>Klik chevron untuk melihat log detail.
               </p>
             </div>
@@ -289,7 +289,7 @@
             <!-- Waktu Update -->
             <Column field="updtime" header="Diperbarui" sortable style="width: 150px;">
               <template #body="{ data }">
-                <span class="cell-date" style="font-size: 0.78rem; color: #94a3b8;">
+                <span class="cell-date" style="font-size: 0.78rem; color: var(--text-color-secondary);">
                   {{ formatDate(data.updtime) }}
                 </span>
               </template>
@@ -342,7 +342,7 @@
             </Column>
           </DataTable>
           <!-- Info pagination -->
-          <div class="detail-pagination-info" style="font-size: 0.8rem; color: #64748b; padding: 0.5rem 0.25rem;">
+          <div class="detail-pagination-info" style="font-size: 0.8rem; color: var(--text-color-secondary); padding: 0.5rem 0.25rem;">
             <span>Menampilkan {{ detailRangeStart }}–{{ detailRangeEnd }} dari {{ detailTotal.toLocaleString('id-ID') }} record</span>
           </div>
         </div>

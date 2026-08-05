@@ -34,14 +34,4 @@ const handleScreeningStarted = () => {
 };
 </script>
 
-<style scoped>
-.rekon-persediaan-view {
-  padding: 1.5rem;
-}
-.screening-form-card {
-  padding: 1.5rem;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-}
-</style>
+<style scoped src="./index.style.css"></style>

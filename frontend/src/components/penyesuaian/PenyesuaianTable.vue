@@ -181,30 +181,7 @@
 
 <style src="./PenyesuaianTable.css" scoped></style>
 
-<style scoped>
-.confirm-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.5rem 0;
-  text-align: center;
-}
-.confirm-content p {
-  margin: 0;
-  font-size: 0.95rem;
-  color: #374151;
-  line-height: 1.5;
-}
-.confirm-icon {
-  font-size: 2rem;
-  color: #3b82f6;
-}
-.btn-processing {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-</style>
+<style scoped src="./PenyesuaianTable.style.css"></style>
 <script setup>
 import { ref, computed } from 'vue';
 import { useToastService } from '../../utils/toast';

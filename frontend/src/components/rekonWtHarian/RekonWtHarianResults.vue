@@ -268,20 +268,4 @@ defineExpose({
 });
 </script>
 
-<style scoped>
-.results-container {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  width: 100%;
-}
-
-
-
-.pagination-info {
-  text-align: center;
-  color: #666;
-  font-size: 0.9rem;
-  margin-top: 1rem;
-}
-</style>
+<style scoped src="./RekonWtHarianResults.style.css"></style>

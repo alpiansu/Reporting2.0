@@ -34,6 +34,7 @@ onMounted(() => {
 
 <style>
 :root {
+  color-scheme: light;
   --primary-color: #4f46e5;
   --primary-color-rgb: 79, 70, 229;
   --primary-color-darken: #3730a3;
@@ -58,182 +59,57 @@ onMounted(() => {
   --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   --input-bg: var(--surface-color);
   --input-border: var(--border-color);
+
+  /* Semantic aliases (PrimeVue-compatible naming) mapped to app tokens */
+  --surface-ground: var(--background-color);
+  --surface-section: var(--background-color);
+  --surface-card: var(--surface-color);
+  --surface-overlay: var(--surface-color);
+  --surface-border: var(--border-color);
+  --surface-hover: rgba(0, 0, 0, 0.05);
+  --surface-active: var(--border-color);
+  --surface-mask: rgba(0, 0, 0, 0.5);
+  --surface-highlight: rgba(var(--primary-color-rgb), 0.08);
+  --surface-0: var(--p-surface-0);
+  --surface-50: var(--p-surface-50);
+  --surface-100: var(--p-surface-100);
+  --surface-200: var(--p-surface-200);
+  --surface-300: var(--p-surface-300);
+  --surface-400: var(--p-surface-400);
+  --surface-500: var(--p-surface-500);
+  --surface-600: var(--p-surface-600);
+  --surface-700: var(--p-surface-700);
+  --surface-800: var(--p-surface-800);
+  --surface-900: var(--p-surface-900);
+  --surface-950: var(--p-surface-950);
+  --primary-50: #eef2ff;
+  --primary-100: #e0e7ff;
+  --primary-200: #c7d2fe;
+  --primary-300: #a5b4fc;
+  --primary-400: #818cf8;
+  --primary-500: #6366f1;
+  --primary-600: #4f46e5;
+  --primary-700: #4338ca;
+  --primary-800: #3730a3;
+  --primary-900: #312e81;
+  --primary-950: #1e1b4b;
+  --primary-contrast-color: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
+    color-scheme: dark;
     --background-color: #0f172a;
     --surface-color: #1e293b;
     --text-color: #f1f5f9;
     --text-color-secondary: #94a3b8;
     --border-color: #334155;
+    --surface-hover: rgba(255, 255, 255, 0.08);
+    --surface-highlight: rgba(var(--primary-color-rgb), 0.15);
     
     /* Overrides for common classes */
     --card-bg: #1e293b;
     --input-bg: #0f172a;
-  }
-}
-
-/* Global Dark Mode Helper Overrides */
-@media (prefers-color-scheme: dark) {
-  .card, 
-  [class*="card"],
-  .rekon-persediaan-table-container,
-  .controls-section {
-    background-color: var(--surface-color) !important;
-    border-color: var(--border-color) !important;
-    color: var(--text-color) !important;
-  }
-
-  .page-header h1,
-  .page-title,
-  .header-title-content h1,
-  .stat-value,
-  .dialog-title {
-    color: var(--text-color) !important;
-  }
-
-  .page-header p,
-  .stat-label,
-  .detail-label,
-  .update-text {
-    color: var(--text-color-secondary) !important;
-  }
-
-  input, select, textarea, .form-input, .p-inputtext {
-    background-color: var(--background-color) !important;
-    color: var(--text-color) !important;
-    border-color: var(--border-color) !important;
-  }
-
-  /* Specific fix for transparency/glassmorphism patterns */
-  [style*="background: rgba(255, 255, 255"],
-  [style*="background-color: rgba(255, 255, 255"] {
-    background-color: rgba(30, 41, 59, 0.7) !important;
-    backdrop-filter: blur(10px);
-  }
-
-  /* Specific Layout Overrides */
-  .app-bar, .dropdown, .user-dropdown, .notifications-dropdown {
-    background-color: var(--surface-color) !important;
-    border-color: var(--border-color) !important;
-    color: var(--text-color) !important;
-  }
-
-  .username, .dropdown-item span, .dropdown-header-left span {
-    color: var(--text-color) !important;
-  }
-
-  .menu-button:hover, 
-  .notification-button:hover, 
-  .user-menu:hover,
-  .dropdown-item:hover {
-    background-color: rgba(255, 255, 255, 0.05) !important;
-    color: var(--primary-color) !important;
-  }
-
-  .dropdown-divider {
-    background-color: var(--border-color) !important;
-  }
-
-  .notification-title {
-    color: var(--text-color) !important;
-  }
-
-  .notification-message {
-    color: var(--text-color-secondary) !important;
-  }
-
-  .notification-time {
-    color: var(--text-color-secondary) !important;
-    opacity: 0.7;
-  }
-
-  .notification-item:hover {
-    background: rgba(255, 255, 255, 0.04) !important;
-  }
-
-  .notification-item:not(:last-child)::after {
-    background: var(--border-color) !important;
-  }
-
-  .notification-icon {
-    background: rgba(255, 255, 255, 0.06) !important;
-  }
-
-  .notification-unread .notification-icon {
-    background: rgba(59, 130, 246, 0.15) !important;
-  }
-
-  .notification-badge {
-    box-shadow: 0 0 0 2px var(--surface-color) !important;
-  }
-
-  .notification-dot {
-    box-shadow: 0 0 0 2px var(--surface-color) !important;
-  }
-
-  .close-btn {
-    color: var(--text-color-secondary) !important;
-  }
-
-  .close-btn:hover {
-    background: rgba(255, 255, 255, 0.08) !important;
-    color: var(--text-color) !important;
-  }
-
-  .clear-all:hover {
-    background: rgba(var(--primary-color-rgb), 0.15) !important;
-  }
-
-  .notification-list::-webkit-scrollbar-thumb {
-    background: var(--border-color) !important;
-  }
-
-  .notification-list::-webkit-scrollbar-thumb:hover {
-    background: var(--text-color-secondary) !important;
-  }
-
-  /* Force sidebar to match dark theme if needed */
-  .sidebar {
-    background-color: #0f172a !important; /* Slightly darker than surface */
-    border-right: 1px solid var(--border-color) !important;
-  }
-
-  /* PrimeVue specific global fixes */
-  .p-dialog, .p-confirm-dialog, .p-toast, .dialog-content {
-    background-color: var(--surface-color) !important;
-    color: var(--text-color) !important;
-    border-color: var(--border-color) !important;
-  }
-
-  /* Profile & Specialized Card Patterns */
-  .profile-card, .security-card, .activity-card, .detail-item, .activity-item, .two-factor-toggle, .backup-codes {
-    background-color: var(--surface-color) !important;
-    color: var(--text-color) !important;
-    border-color: var(--border-color) !important;
-  }
-
-  .profile-details {
-    background-color: var(--background-color) !important;
-  }
-
-  .profile-avatar {
-    border-color: var(--surface-color) !important;
-  }
-
-  .dialog-header, .profile-header, .card-title {
-    border-bottom: 1px solid var(--border-color) !important;
-  }
-
-  .setup-button, .upload-button, .remove-button, .cancel-button, .download-codes-button, .code-item {
-    background-color: var(--surface-color) !important;
-    border-color: var(--border-color) !important;
-    color: var(--text-color) !important;
-  }
-
-  .slider {
-    background-color: #334155 !important;
   }
 }
 

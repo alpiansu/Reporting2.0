@@ -43,30 +43,4 @@ const model = computed({
 });
 </script>
 
-<style scoped>
-.img-wrapper {
-  width: 100%;
-  height: calc(75vh - 120px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #111;
-}
-
-.preview-img {
-  max-width: 100%;
-  max-height: 100%;
-  width: auto;
-  height: auto;
-  object-fit: contain;
-  display: block;
-}
-
-.no-image {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  color: #888;
-}
-</style>
+<style scoped src="./ImagePreviewDialog.style.css"></style>

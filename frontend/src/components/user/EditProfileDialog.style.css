@@ -22,7 +22,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--primary-contrast-color);
   font-size: 2rem;
   font-weight: bold;
   overflow: hidden;
@@ -54,7 +54,7 @@
 
 .upload-button {
   background-color: var(--primary-color, #3B82F6);
-  color: white;
+  color: var(--primary-contrast-color);
   border: none;
 }
 
@@ -88,13 +88,13 @@
 
 .form-group label {
   font-weight: 500;
-  color: var(--text-color-secondary, #64748B);
+  color: var(--text-color-secondary, var(--text-color-secondary));
   font-size: 0.875rem;
 }
 
 .form-group input {
   padding: 0.75rem;
-  border: 1px solid var(--surface-border, #E2E8F0);
+  border: 1px solid var(--surface-border, var(--surface-border));
   border-radius: 4px;
   font-size: 1rem;
   transition: border-color 0.2s;
@@ -108,13 +108,13 @@
 }
 
 .form-group input:disabled {
-  background-color: var(--surface-ground, #F8FAFC);
+  background-color: var(--surface-ground, var(--surface-ground));
   cursor: not-allowed;
 }
 
 .field-hint {
   font-size: 0.75rem;
-  color: var(--text-color-secondary, #64748B);
+  color: var(--text-color-secondary, var(--text-color-secondary));
   margin-top: 0.25rem;
 }
 

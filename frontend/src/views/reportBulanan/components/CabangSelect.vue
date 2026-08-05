@@ -31,22 +31,4 @@ defineProps({
 defineEmits(['update:modelValue']);
 </script>
 
-<style scoped>
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  flex: 1;
-  min-width: 200px;
-}
-
-.field-label {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--text-color, #212529);
-}
-
-:deep(.p-dropdown) {
-  width: 100%;
-}
-</style>
+<style scoped src="./CabangSelect.style.css"></style>

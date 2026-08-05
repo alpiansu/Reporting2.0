@@ -1,0 +1,151 @@
+
+.custab-form {
+  max-width: 900px;
+}
+
+.custab-form h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.subtitle {
+  margin: 0 0 1.25rem;
+  font-size: 0.85rem;
+  color: var(--text-color-secondary, #6c757d);
+}
+
+/* ─── Form Rows ─── */
+
+.form-row {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.form-row--3col {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+.form-row .field {
+  flex: 1;
+  min-width: 200px;
+}
+
+/* Field di dalam grid 3-col: periode awal & akhir sejajar */
+.form-row--3col .field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.form-row--3col .field label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-color, #212529);
+}
+
+.form-row--3col .field small {
+  font-size: 0.75rem;
+  color: var(--text-color-secondary, #6c757d);
+}
+
+/* Force Calendar width sama untuk periode awal & akhir */
+.form-row--3col :deep(.p-calendar) {
+  width: 100%;
+}
+
+.shop-options {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.shop-options label {
+  margin: 0;
+  cursor: pointer;
+}
+
+.actions {
+  margin-top: 1rem;
+}
+
+.required {
+  color: #ef4444;
+}
+
+.error {
+  color: #ef4444;
+}
+
+.success {
+  color: #22c55e;
+}
+
+.csv-uploader {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.template-btn {
+  flex-shrink: 0;
+}
+
+.csv-help {
+  margin-top: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.csv-help small {
+  font-size: 0.75rem;
+  color: var(--text-color-secondary, #6c757d);
+  line-height: 1.4;
+}
+
+.csv-summary {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.csv-summary small {
+  display: block;
+  font-size: 0.78rem;
+}
+
+.csv-summary .warn {
+  color: #d97706;
+}
+
+.csv-summary .success {
+  font-weight: 600;
+}
+
+:deep(.p-fileupload-basic) {
+  width: 100%;
+}
+
+:deep(.p-multiselect) {
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .form-row--3col {
+    grid-template-columns: 1fr;
+  }
+
+  .form-row .field {
+    min-width: unset;
+    width: 100%;
+  }
+}

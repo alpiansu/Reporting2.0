@@ -63,8 +63,4 @@ const handleProcess = async (formData) => {
 };
 </script>
 
-<style scoped>
-.cetak-nrb-view { padding: 1.5rem; max-width: 1200px; margin: 0 auto; }
-.content-container { display: flex; flex-direction: column; }
-@media (max-width: 768px) { .cetak-nrb-view { padding: 1rem; } }
-</style>
+<style scoped src="./index.style.css"></style>

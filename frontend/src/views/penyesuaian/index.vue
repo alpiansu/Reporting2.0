@@ -91,27 +91,4 @@ function handleViewResults(data) {
 }
 </script>
 
-<style scoped>
-.rekon-penyesuaian-view {
-  padding: 1.5rem;
-}
-
-.content-container {
-  display: flex;
-  flex-direction: column;
-}
-
-.branch-recap-section {
-  margin-top: 1rem;
-}
-
-.results-section {
-  margin-top: 1rem;
-}
-
-@media (max-width: 768px) {
-  .rekon-penyesuaian-view {
-    padding: 1rem;
-  }
-}
-</style>
+<style scoped src="./index.style.css"></style>

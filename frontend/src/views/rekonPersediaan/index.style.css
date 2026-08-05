@@ -1,0 +1,10 @@
+
+.rekon-persediaan-view {
+  padding: 1.5rem;
+}
+.screening-form-card {
+  padding: 1.5rem;
+  background: var(--surface-card);
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+}

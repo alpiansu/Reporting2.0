@@ -62,23 +62,4 @@ const handleViewResults = (data) => {
 };
 </script>
 
-<style scoped>
-.rekon-virtual-mrg-view {
-  padding: 1.5rem;
-}
-
-.content-container {
-  display: flex;
-  flex-direction: column;
-}
-
-.results-section {
-  margin-top: 1rem;
-}
-
-@media (max-width: 768px) {
-  .rekon-virtual-mrg-view {
-    padding: 1rem;
-  }
-}
-</style>
+<style scoped src="./index.style.css"></style>

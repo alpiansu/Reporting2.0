@@ -40,7 +40,7 @@
 .search-input {
   background: transparent;
   border: none;
-  color: white;
+  color: var(--primary-contrast-color);
   font-size: 0.9rem;
   width: 100%;
   outline: none;
@@ -58,7 +58,7 @@
 }
 
 .clear-icon:hover {
-  color: white;
+  color: var(--primary-contrast-color);
 }
 
 /* No results */
@@ -164,7 +164,7 @@
   align-items: center;
   justify-content: center;
   background: var(--primary-color);
-  color: white;
+  color: var(--primary-contrast-color);
   border: none;
   cursor: pointer;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
@@ -232,7 +232,7 @@
 
 .nav-item.active {
   background-color: var(--primary-color);
-  color: white;
+  color: var(--primary-contrast-color);
   font-weight: 500;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
@@ -244,7 +244,7 @@
   top: 0;
   height: 100%;
   width: 4px;
-  background-color: #fff;
+  background-color: var(--surface-card);
   border-radius: 0 2px 2px 0;
 }
 

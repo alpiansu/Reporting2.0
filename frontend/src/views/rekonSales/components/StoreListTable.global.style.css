@@ -1,0 +1,50 @@
+
+/* Note Popover (unscoped - rendered in body portal by PrimeVue) */
+.note-popover-content {
+  width: 300px;
+  padding: 0.75rem;
+}
+
+.note-popover-category {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--primary-contrast-color);
+  background: #3b82f6;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+}
+
+.note-popover-text {
+  font-size: 0.875rem;
+  color: var(--text-color);
+  line-height: 1.5;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.note-popover-meta {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.625rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--surface-border);
+}
+
+.note-popover-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--text-color-secondary);
+}
+
+.note-popover-empty {
+  font-size: 0.85rem;
+  color: var(--text-color-secondary);
+  font-style: italic;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}

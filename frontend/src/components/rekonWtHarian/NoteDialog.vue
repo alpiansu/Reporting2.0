@@ -60,10 +60,4 @@ const onDelete = () => emit('delete');
 const onCancel = () => { visible.value = false; };
 </script>
 
-<style scoped>
-.note-form { display: flex; flex-direction: column; gap: .75rem; }
-.meta { display: flex; justify-content: space-between; align-items: center; color: var(--text-color); }
-.controls { display: flex; justify-content: space-between; align-items: center; }
-.last-update { color: var(--text-color-secondary); font-size: .75rem; }
-.footer { display: flex; justify-content: flex-end; gap: .5rem; }
-</style>
+<style scoped src="./NoteDialog.style.css"></style>

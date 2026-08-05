@@ -49,19 +49,4 @@ const props = defineProps({
 const emit = defineEmits(['export', 'print']);
 </script>
 
-<style scoped>
-.export-print-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-@media (max-width: 576px) {
-  .export-print-actions {
-    flex-direction: column;
-  }
-  
-  .btn {
-    width: 100%;
-  }
-}
-</style>
+<style scoped src="./ExportPrintActions.style.css"></style>

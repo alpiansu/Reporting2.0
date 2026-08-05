@@ -27,28 +27,4 @@ const emit = defineEmits(['rule-selected']);
 const onRuleSelected = (keys) => emit('rule-selected', keys);
 </script>
 
-<style scoped>
-.dashboard-container {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-}
-
-@media (max-width: 1024px) {
-    .dashboard-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-@media (min-width: 1025px) {
-    .dashboard-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1.5rem;
-    }
-
-    .grid-item {
-        min-width: 0;
-    }
-}
-</style>
+<style scoped src="./Dashboard.style.css"></style>

@@ -103,8 +103,4 @@ onMounted(() => {
 });
 </script>
 
-<style scoped>
-.animation-paused {
-  animation-play-state: paused;
-}
-</style>
+<style scoped src="./AnimatedElement.style.css"></style>

@@ -276,14 +276,4 @@ function rowClass(data) {
 }
 </script>
 
-<style scoped>
-.capture-section { border-top: 1px solid var(--surface-border); padding-top: 0.75rem; margin-top: 0.25rem; }
-.capture-upload-row { display: flex; align-items: center; gap: 0.75rem; }
-.capture-preview-box {
-  width: 128px; height: 88px; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-  background: var(--surface-section); border: 1px solid var(--surface-border); border-radius: 6px; overflow: hidden;
-}
-.capture-upload-actions { display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start; }
-.capture-filename { font-size: 0.78rem; color: var(--text-color-secondary); word-break: break-all; max-width: 200px; }
-</style>
+<style scoped src="./TabSpaceHdd.style.css"></style>

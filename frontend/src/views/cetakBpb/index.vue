@@ -103,29 +103,4 @@ const handleProcessNrb = async (formData) => {
 };
 </script>
 
-<style scoped>
-.cetak-bpb-view {
-  padding: 1.5rem;
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.content-container {
-  display: flex;
-  flex-direction: column;
-}
-
-:deep(.p-tabview-panels) {
-  padding: 0;
-}
-
-:deep(.p-tabview-panel) {
-  padding: 0;
-}
-
-@media (max-width: 768px) {
-  .cetak-bpb-view {
-    padding: 1rem;
-  }
-}
-</style>
+<style scoped src="./index.style.css"></style>

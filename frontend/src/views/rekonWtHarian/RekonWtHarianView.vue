@@ -55,36 +55,4 @@ const handleViewResults = (data) => {
 };
 </script>
 
-<style scoped>
-.rekon-wt-harian-view {
-  padding: 1.5rem;
-}
-
-.content-container {
-  display: flex;
-  flex-direction: column;
-}
-
-.section-title {
-  font-size: 1.25rem;
-  margin-top: 0;
-  margin-bottom: 0.5rem;
-  color: var(--primary-color);
-}
-
-.section-subtitle {
-  font-size: 0.875rem;
-  color: #666;
-  margin-bottom: 1.5rem;
-}
-
-.results-section {
-  margin-top: 1rem;
-}
-
-@media (max-width: 768px) {
-  .rekon-wt-harian-view {
-    padding: 1rem;
-  }
-}
-</style>
+<style scoped src="./RekonWtHarianView.style.css"></style>

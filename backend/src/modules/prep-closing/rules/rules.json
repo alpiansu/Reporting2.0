@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "lastUpdated": "2026-06-30T09:10:50.002Z",
-  "updatedBy": "admin2",
+  "lastUpdated": "2026-08-05T03:29:59.832Z",
+  "updatedBy": "admin3",
   "description": "Aturan pengecekan kesiapan closing bulanan",
   "rules": [
     {
@@ -699,6 +699,37 @@
         "icon": "pi pi-cog",
         "color": "#3b82f6",
         "helpText": "bisa jalankan dengan helper \"rndagent myini\" dari d:/idm/",
+        "fixable": false,
+        "expandable": true
+      },
+      "metadata": {
+        "impactArea": "General",
+        "estimatedFixTime": "Manual Check"
+      }
+    },
+    {
+      "key": "bckprodmast_table_check",
+      "name": "Check Tabel bckprodmast_yglama",
+      "description": "Memastikan tabel bckprodmast_yglama ini tersedia",
+      "category": "database",
+      "priority": 99,
+      "enabled": true,
+      "query": {
+        "type": "calculation",
+        "sql": "SELECT COUNT(*) AS filet_lama FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='bckprodmast_yglama'"
+      },
+      "validation": {
+        "type": "equals",
+        "operator": "GREATER_THAN",
+        "expected": "",
+        "passMessage": "Tabel bckprodmast_yglama sudah tersedia",
+        "failMessage": "Tabel bckprodmast_yglama belum tersedia"
+      },
+      "severity": "critical",
+      "ui": {
+        "icon": "pi pi-cog",
+        "color": "#FFFF00",
+        "helpText": "Tabel 'bckprodmast_yglama' harus sudah dibuat sebelum closing",
         "fixable": false,
         "expandable": true
       },

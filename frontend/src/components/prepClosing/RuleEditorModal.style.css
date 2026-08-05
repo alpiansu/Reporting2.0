@@ -49,9 +49,9 @@
   gap: 0.5rem;
   padding: 0.625rem 1rem;
   background: rgba(239, 68, 68, 0.1);
-  border: 1px solid #fecaca;
+  border: 1px solid rgba(239, 68, 68, 0.4);
   border-radius: 0.5rem;
-  color: #dc2626;
+  color: var(--error-color);
   font-size: 0.85rem;
   margin-bottom: 1rem;
 }
@@ -86,7 +86,7 @@
 }
 
 .section-violet {
-  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(139, 92, 246, 0.15) 100%);
 }
 
 .section-icon {
@@ -96,8 +96,8 @@
   width: 2rem;
   height: 2rem;
   border-radius: 0.5rem;
-  background: rgba(255, 255, 255, 0.7);
-  color: #475569;
+  background: var(--surface-highlight);
+  color: var(--primary-color);
   flex-shrink: 0;
 }
 
@@ -138,7 +138,7 @@
 .field-group label {
   font-size: 0.8rem;
   font-weight: 600;
-  color: #475569;
+  color: var(--text-color);
 }
 
 .label-disabled {

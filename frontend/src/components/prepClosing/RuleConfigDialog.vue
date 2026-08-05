@@ -59,7 +59,7 @@
           <template #header>
             <div class="flex justify-content-between align-items-center w-full">
               <span class="p-input-icon-left">
-                <i class="pi pi-search" />
+                <i class="pi pi-search mr-2" />
                 <InputText v-model="filters['global'].value" placeholder="Cari rule..." class="p-inputtext-sm" />
               </span>
             </div>

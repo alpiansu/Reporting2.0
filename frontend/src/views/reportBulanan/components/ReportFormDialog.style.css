@@ -40,7 +40,7 @@
   border-radius: 6px;
   font-size: 0.82rem;
   color: var(--text-color-secondary, #6c757d);
-  background: var(--surface-50, #f8f9fa);
+  background: var(--surface-ground);
   border: 1px dashed var(--surface-border, #dee2e6);
   text-align: center;
 }
@@ -151,7 +151,7 @@
   margin-top: 0.75rem;
   font-size: 0.78rem;
   color: var(--text-color-secondary, #6c757d);
-  background: var(--surface-50, #f8f9fa);
+  background: var(--surface-ground);
   border-radius: 6px;
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--surface-border, #dee2e6);

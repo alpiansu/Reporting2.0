@@ -247,12 +247,12 @@
 
 .issue-detail-label {
   font-weight: 600;
-  color: #92400e;
+  color: var(--warning-color);
 }
 
 .issue-detail-desc {
   font-size: 0.875rem;
-  color: #a16207;
+  color: var(--warning-color);
 }
 
 .wrc-detail {

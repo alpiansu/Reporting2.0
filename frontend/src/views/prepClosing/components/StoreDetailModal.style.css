@@ -91,22 +91,22 @@
 
 .stat-blue {
     background: rgba(59, 130, 246, 0.1);
-    border-color: #dbeafe;
+    border-color: rgba(59, 130, 246, 0.4);
 }
 
 .stat-green {
     background: rgba(16, 185, 129, 0.1);
-    border-color: #bbf7d0;
+    border-color: rgba(16, 185, 129, 0.4);
 }
 
 .stat-red {
     background: rgba(239, 68, 68, 0.1);
-    border-color: #fecaca;
+    border-color: rgba(239, 68, 68, 0.4);
 }
 
 .stat-amber {
     background: rgba(245, 158, 11, 0.1);
-    border-color: #fde68a;
+    border-color: rgba(245, 158, 11, 0.4);
 }
 
 .stat-icon {
@@ -178,7 +178,7 @@
     gap: 0.875rem;
     padding: 1.25rem;
     background: rgba(16, 185, 129, 0.1);
-    border: 1px solid #bbf7d0;
+    border: 1px solid rgba(16, 185, 129, 0.4);
     border-radius: 0.625rem;
 }
 
@@ -191,14 +191,14 @@
 .no-issues-title {
     margin: 0;
     font-weight: 700;
-    color: #065f46;
+    color: var(--success-color);
     font-size: 0.95rem;
 }
 
 .no-issues-sub {
     margin: 0.125rem 0 0 0;
     font-size: 0.8rem;
-    color: #047857;
+    color: var(--success-color);
 }
 
 /* === Note Card === */
@@ -212,7 +212,7 @@
 
 .note-text {
     margin: 0 0 0.625rem 0;
-    color: #334155;
+    color: var(--text-color);
     line-height: 1.6;
     font-size: 0.88rem;
 }

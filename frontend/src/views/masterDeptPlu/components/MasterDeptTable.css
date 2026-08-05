@@ -144,7 +144,7 @@
 
 :deep(.results-table) th {
     background: linear-gradient(to bottom, var(--surface-ground), var(--surface-section));
-    color: #4a5568;
+    color: var(--text-color);
     font-weight: 600;
     text-align: left;
     border-bottom: 2px solid var(--surface-border);

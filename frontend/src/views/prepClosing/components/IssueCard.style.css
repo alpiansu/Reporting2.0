@@ -144,12 +144,12 @@
     margin: 0 0 0.5rem 0;
     font-size: 0.875rem;
     font-weight: 600;
-    color: #1e40af;
+    color: var(--info-color);
 }
 
 .help-section p {
     margin: 0;
-    color: #1e3a8a;
+    color: var(--info-color);
     line-height: 1.6;
 }
 

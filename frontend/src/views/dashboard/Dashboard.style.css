@@ -146,7 +146,7 @@
 
 .db-ip-badge {
     font-family: "Courier New", monospace;
-    background: var(--surface-100, #f3f4f6);
+    background: var(--surface-ground);
     border: 1px solid var(--surface-border);
     border-radius: 4px;
     padding: 1px 6px;

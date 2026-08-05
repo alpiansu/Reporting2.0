@@ -336,6 +336,10 @@
   font-weight: 700;
   color: var(--text-color);
   margin: 0 0 0.25rem 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .loading-text {
@@ -347,8 +351,10 @@
 /* Store Grid */
 .store-grid-modern {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
   gap: 1.5rem;
+  width: 100%;
+  max-width: 100%;
 }
 
 .store-card-modern {
@@ -359,6 +365,7 @@
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   position: relative;
+  min-width: 0;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
@@ -374,6 +381,10 @@
   justify-content: space-between;
   padding: 1.5rem 1.5rem 1rem;
   border-bottom: 1px solid var(--surface-border);
+}
+
+.store-identity {
+  min-width: 0;
 }
 
 .store-identity h3 {
@@ -464,12 +475,15 @@
   align-items: center;
   justify-content: space-between;
   border-top: 1px solid var(--border-color);
+  min-width: 0;
 }
 
 .update-info {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .update-icon {
@@ -480,6 +494,9 @@
 .update-text {
   color: var(--text-color-secondary);
   font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .store-actions {
@@ -683,6 +700,26 @@
   padding: 1.5rem;
   max-height: 70vh;
   overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
+}
+
+.dialog-body-modern::-webkit-scrollbar {
+  width: 6px;
+}
+
+.dialog-body-modern::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dialog-body-modern::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+.dialog-body-modern::-webkit-scrollbar-thumb:hover {
+  background: var(--text-color-secondary);
 }
 
 /* Form Styles */
@@ -690,11 +727,12 @@
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  min-width: 0;
 }
 
 .form-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
 }
 
@@ -702,6 +740,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  min-width: 0;
 }
 
 .form-group-modern.full-width {
@@ -715,6 +754,9 @@
 }
 
 .form-input, .form-select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 0.875rem 1rem;
   border: 1px solid var(--surface-border);
   border-radius: 8px;
@@ -734,6 +776,19 @@
   gap: 1rem;
   justify-content: flex-end;
   margin-top: 1rem;
+}
+
+/* Sticky footer khusus dialog add/edit: tombol aksi selalu terlihat saat body di-scroll vertikal */
+.store-form-modern .form-actions-modern {
+  position: sticky;
+  bottom: 0;
+  margin-bottom: -1.5rem;
+  margin-left: -1.5rem;
+  margin-right: -1.5rem;
+  padding: 1rem 1.5rem;
+  background: var(--surface-color);
+  border-top: 1px solid var(--border-color);
+  z-index: 1;
 }
 
 .btn-secondary, .btn-primary {

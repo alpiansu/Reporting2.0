@@ -18,6 +18,10 @@
   flex-shrink: 0;
 }
 
+.mr-2 {
+  margin-right: 0.5rem;
+}
+
 .header-text {
   display: flex;
   flex-direction: column;
@@ -117,7 +121,7 @@
 
 .logic-operator {
   font-weight: 700;
-  color: #475569;
+  color: var(--text-color);
 }
 
 .logic-expected {
@@ -179,7 +183,7 @@
   padding: 0.625rem 0.75rem;
   font-size: 0.8rem;
   font-weight: 600;
-  color: #475569;
+  color: var(--text-color);
   background: var(--surface-ground);
 }
 

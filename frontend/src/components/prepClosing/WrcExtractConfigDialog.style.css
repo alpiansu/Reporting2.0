@@ -38,7 +38,7 @@
   gap: 1rem;
   padding: 0.75rem 1rem;
   background: rgba(59, 130, 246, 0.1);
-  border: 1px solid #dbeafe;
+  border: 1px solid rgba(59, 130, 246, 0.4);
   border-radius: 0.5rem;
   margin-bottom: 1rem;
   flex-wrap: wrap;
@@ -49,7 +49,7 @@
   align-items: center;
   gap: 0.5rem;
   font-size: 0.8rem;
-  color: #1e40af;
+  color: var(--info-color);
 }
 
 .info-bar-content i {
@@ -174,9 +174,9 @@
   gap: 0.5rem;
   padding: 0.625rem 1rem;
   background: rgba(239, 68, 68, 0.1);
-  border: 1px solid #fecaca;
+  border: 1px solid rgba(239, 68, 68, 0.4);
   border-radius: 0.5rem;
-  color: #dc2626;
+  color: var(--error-color);
   font-size: 0.85rem;
   margin-bottom: 1rem;
 }
@@ -212,8 +212,8 @@
   width: 2rem;
   height: 2rem;
   border-radius: 0.5rem;
-  background: rgba(255, 255, 255, 0.7);
-  color: #475569;
+  background: var(--surface-highlight);
+  color: var(--primary-color);
   flex-shrink: 0;
 }
 
@@ -238,7 +238,7 @@
 .field-group label {
   font-size: 0.8rem;
   font-weight: 600;
-  color: #475569;
+  color: var(--text-color);
 }
 
 .req { color: #ef4444; }
@@ -253,7 +253,7 @@
   display: block;
   font-size: 0.8rem;
   font-weight: 600;
-  color: #475569;
+  color: var(--text-color);
   margin-bottom: 0.375rem;
 }
 
@@ -308,7 +308,7 @@
   padding: 0.625rem 0.75rem;
   font-size: 0.8rem;
   font-weight: 600;
-  color: #475569;
+  color: var(--text-color);
   background: var(--surface-ground);
 }
 

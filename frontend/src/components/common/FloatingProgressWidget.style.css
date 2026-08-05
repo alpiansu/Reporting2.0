@@ -5,9 +5,8 @@
   top: 74px;
   right: 20px;
   z-index: 9999;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: var(--surface-overlay);
+  border: 1px solid var(--surface-border);
   border-radius: 12px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
   padding: 12px;
@@ -45,7 +44,7 @@
 .process-icon {
   width: 32px;
   height: 32px;
-  background: linear-gradient(135deg, #4f46e5, #818cf8);
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -112,7 +111,7 @@
 
 .mode-toggle:hover {
   background: var(--surface-hover);
-  color: #4f46e5;
+  color: var(--primary-color);
 }
 
 .cancel-btn {
@@ -124,7 +123,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #ef4444;
+  color: var(--error-color);
   cursor: pointer;
   transition: all 0.2s;
   padding: 0;
@@ -167,7 +166,7 @@
 .percentage-text {
   font-size: 0.85rem;
   font-weight: 800;
-  color: #4f46e5;
+  color: var(--primary-color);
 }
 
 /* ── Progress bar ──────────────────────────────────────────────────────────── */
@@ -186,7 +185,7 @@
 
 .progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #4f46e5, #818cf8);
+  background: linear-gradient(90deg, var(--primary-color), var(--primary-light));
   border-radius: 3px;
   transition: width 0.3s ease;
   position: relative;
@@ -225,9 +224,9 @@
 .processing-stores {
   margin-top: 8px;
   padding: 6px 8px;
-  background: #f8f9ff;
+  background: var(--surface-ground);
   border-radius: 6px;
-  border: 1px solid #eef0ff;
+  border: 1px solid var(--surface-border);
 }
 
 .stores-header {
@@ -241,7 +240,7 @@
 
 .stores-header .pi {
   font-size: 0.6rem;
-  color: #818cf8;
+  color: var(--primary-light);
 }
 
 .stores-list {
@@ -256,8 +255,8 @@
   padding: 2px 7px;
   font-size: 0.65rem;
   font-weight: 600;
-  color: #4f46e5;
-  background: #eef2ff;
+  color: var(--primary-color);
+  background: var(--surface-highlight);
   border-radius: 4px;
   line-height: 1.4;
   white-space: nowrap;
@@ -289,7 +288,7 @@
   bottom: 0;
   left: 0;
   height: 100%;
-  background: #4f46e5;
+  background: var(--primary-color);
   transition: width 0.3s ease;
 }
 

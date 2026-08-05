@@ -1,7 +1,7 @@
 /* Shared container logic */
 .master-dept-view {
     padding: 1.25rem;
-    background: linear-gradient(135deg, #f5f7fa 0%, #e4e7eb 100%);
+    background: linear-gradient(135deg, var(--surface-ground) 0%, var(--surface-border) 100%);
     min-height: 100vh;
 }
 

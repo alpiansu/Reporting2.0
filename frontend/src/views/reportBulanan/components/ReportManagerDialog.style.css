@@ -83,5 +83,5 @@
 :deep(.manager-table .p-datatable-thead th) {
   font-size: 0.82rem;
   font-weight: 700;
-  background: var(--surface-50, #f8f9fa);
+  background: var(--surface-ground);
 }

@@ -1,13 +1,13 @@
 .cetak-bpb-form-card {
   padding: 2rem;
-  background: white;
+  background: var(--surface-card);
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
 }
 
 .form-header {
   margin-bottom: 2rem;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--surface-border);
   padding-bottom: 1.5rem;
 }
 
@@ -19,8 +19,8 @@
 
 .header-icon {
   font-size: 2.5rem;
-  color: #ef4444; /* PDF Red */
-  background: #fef2f2;
+  color: var(--error-color);
+  background: rgba(239, 68, 68, 0.12);
   padding: 0.75rem;
   border-radius: 12px;
 }
@@ -28,24 +28,24 @@
 .form-title {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--text-color);
   margin: 0;
 }
 
 .form-subtitle {
-  color: #64748b;
+  color: var(--text-color-secondary);
   margin: 0.25rem 0 0 0;
 }
 
 .field label {
-  color: #334155;
+  color: var(--text-color);
 }
 
 .form-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 1rem;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid var(--surface-border);
   padding-top: 1.5rem;
 }
 

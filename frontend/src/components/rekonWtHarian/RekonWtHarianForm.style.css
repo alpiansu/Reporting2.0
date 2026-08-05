@@ -37,7 +37,7 @@
 }
 
 .form-description {
-  color: #666;
+  color: var(--text-color-secondary);
   margin-bottom: 1.5rem;
 }
 
@@ -72,7 +72,7 @@ label {
 }
 
 .error-text {
-  color: #e74c3c;
+  color: var(--error-color);
   font-size: 0.875rem;
   margin-top: 0.25rem;
 }

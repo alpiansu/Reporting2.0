@@ -49,7 +49,7 @@
     margin: 0;
     font-size: 1.25rem;
     font-weight: 600;
-    color: #2d3748;
+    color: var(--text-color);
 }
 
 .modal-close {
@@ -57,7 +57,7 @@
     border: none;
     font-size: 1.5rem;
     cursor: pointer;
-    color: #a0aec0;
+    color: var(--text-color-secondary);
     padding: 0;
     width: 1.5rem;
     height: 1.5rem;
@@ -67,7 +67,7 @@
 }
 
 .modal-close:hover {
-    color: #718096;
+    color: var(--text-color);
 }
 
 .modal-body {
@@ -83,7 +83,7 @@
     display: block;
     margin-bottom: 0.5rem;
     font-weight: 500;
-    color: #4a5568;
+    color: var(--text-color);
     font-size: 0.875rem;
 }
 

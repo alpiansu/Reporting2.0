@@ -9,7 +9,7 @@
 }
 
 .card-header {
-  background: linear-gradient(120deg, var(--primary-50), var(--surface-0));
+  background: linear-gradient(120deg, rgba(var(--primary-color-rgb), 0.12), var(--surface-card));
   padding: 1.5rem;
   border-bottom: 1px solid var(--surface-border);
 }
@@ -32,7 +32,7 @@
   width: 56px;
   height: 56px;
   border-radius: 12px;
-  background: linear-gradient(135deg, var(--primary-100), var(--primary-50));
+  background: linear-gradient(135deg, rgba(var(--primary-color-rgb), 0.15), rgba(var(--primary-color-rgb), 0.08));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -40,19 +40,19 @@
 
 .icon-wrapper i {
   font-size: 1.75rem;
-  color: var(--primary-600);
+  color: var(--primary-color);
 }
 
 .text-content .card-title {
   margin: 0;
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--surface-900);
+  color: var(--text-color);
 }
 
 .text-content .card-subtitle {
   margin: 0.25rem 0 0 0;
-  color: var(--surface-600);
+  color: var(--text-color-secondary);
   font-size: 0.95rem;
 }
 
@@ -75,7 +75,7 @@
 
 .filter-label {
   font-weight: 600;
-  color: var(--surface-800);
+  color: var(--text-color);
   font-size: 0.95rem;
 }
 
@@ -93,7 +93,7 @@
 
 .toggle-option label {
   font-size: 0.9rem;
-  color: var(--surface-700);
+  color: var(--text-color);
   cursor: pointer;
 }
 
@@ -123,8 +123,8 @@
 }
 
 .badge {
-  background: var(--primary-100);
-  color: var(--primary-700);
+  background: rgba(var(--primary-color-rgb), 0.12);
+  color: var(--primary-color);
   padding: 0.25rem 0.75rem;
   border-radius: 20px;
   font-size: 0.85rem;
@@ -157,27 +157,27 @@
 }
 
 .status-badge.success {
-  background: var(--green-100);
-  color: var(--green-700);
-  border: 1px solid var(--green-200);
+  background: rgba(16, 185, 129, 0.15);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
 .status-badge.failed {
-  background: var(--red-100);
-  color: var(--red-700);
-  border: 1px solid var(--red-200);
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .status-badge.all {
-  background: var(--surface-100);
-  color: var(--surface-700);
-  border: 1px solid var(--surface-200);
+  background: var(--surface-hover);
+  color: var(--text-color-secondary);
+  border: 1px solid var(--surface-border);
 }
 
 .active-filters-summary {
   margin-top: 1.5rem;
   padding-top: 1.5rem;
-  border-top: 1px dashed var(--surface-300);
+  border-top: 1px dashed var(--surface-border);
 }
 
 .summary-content {
@@ -189,7 +189,7 @@
 
 .summary-label {
   font-weight: 600;
-  color: var(--surface-700);
+  color: var(--text-color);
   font-size: 0.9rem;
 }
 
@@ -200,9 +200,9 @@
 }
 
 .filter-chip :deep(.p-chip) {
-  background: var(--primary-100);
-  color: var(--primary-700);
-  border: 1px solid var(--primary-200);
+  background: rgba(var(--primary-color-rgb), 0.12);
+  color: var(--primary-color);
+  border: 1px solid rgba(var(--primary-color-rgb), 0.3);
   border-radius: 20px;
   font-size: 0.85rem;
   padding: 0.25rem 0.75rem;
@@ -228,13 +228,13 @@
 
 .pic-username {
   font-weight: 600;
-  color: var(--surface-900);
+  color: var(--text-color);
   font-size: 0.95rem;
 }
 
 .pic-fullname {
   font-size: 0.85rem;
-  color: var(--surface-600);
+  color: var(--text-color-secondary);
 }
 
 .kdtk-suggestion-item {
@@ -257,13 +257,13 @@
 
 .kdtk-code {
   font-weight: 600;
-  color: var(--surface-900);
+  color: var(--text-color);
   font-size: 0.95rem;
 }
 
 .kdtk-name {
   font-size: 0.85rem;
-  color: var(--surface-600);
+  color: var(--text-color-secondary);
 }
 
 .actions-section {
@@ -281,14 +281,14 @@
 
 .reset-btn {
   border-radius: 8px;
-  background: var(--surface-100);
-  border: 1px solid var(--surface-300);
-  color: var(--surface-700);
+  background: var(--surface-ground);
+  border: 1px solid var(--surface-border);
+  color: var(--text-color);
 }
 
 .reset-btn:hover {
-  background: var(--surface-200);
-  border-color: var(--surface-400);
+  background: var(--surface-hover);
+  border-color: var(--surface-border);
 }
 
 .export-btn {
@@ -306,15 +306,15 @@
 }
 
 .export-btn:disabled {
-  background: var(--surface-300);
-  color: var(--surface-500);
+  background: var(--surface-border);
+  color: var(--text-color-secondary);
   cursor: not-allowed;
 }
 
 .validation-message {
   margin-top: 0.75rem;
   text-align: right;
-  color: var(--red-500);
+  color: var(--error-color);
   font-size: 0.9rem;
   display: flex;
   align-items: center;

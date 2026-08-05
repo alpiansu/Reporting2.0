@@ -8,6 +8,7 @@
     :style="{ width: '520px' }"
     class="user-form-dialog"
     @hide="onHide"
+    @click="closeDialog"
   >
     <div class="form-body">
       <!-- Username -->

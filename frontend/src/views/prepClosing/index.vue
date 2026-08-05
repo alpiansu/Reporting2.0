@@ -36,7 +36,7 @@
       <!-- Advanced Config Toolbar -->
       <div class="flex justify-content-end align-items-center mb-4">
         <span class="text-color-secondary mr-3 text-sm" style="margin-top: 5px;">
-          <i class="pi pi-info-circle mr-1"></i> Developer & Admin Only:
+          <i class="pi pi-info-circle mr-1"></i> Konfigurasi: WRC Engine & Rule Management
         </span>
         &nbsp;
         <Button icon="pi pi-database" label="Config WRC Engine" class="p-button-outlined p-button-warning p-button-sm mr-2" :disabled="isScreening || loading" @click="showWrcConfig = true" />

@@ -79,9 +79,9 @@ export default {
    * Each schedule = 1 cron job. Modules run sequentially per store (1 connection).
    */
   schedules: [
-    { time: "06:00", modules: ["rekon_virtual_mrg", "penyesuaian", "prep_closing", "rekon_sales"], enabled: true, description: "Pagi - All Modules" },
-    { time: "12:15", modules: ["rekon_virtual_mrg", "penyesuaian", "prep_closing", "rekon_sales"], enabled: true, description: "Siang - All Modules" },
-    { time: "20:00", modules: ["rekon_wt_harian"], enabled: true, description: "Malam - WT Harian" },
+    { time: "06:00", modules: ["rekon_virtual_mrg", "penyesuaian", "rekon_sales"], enabled: true, description: "Pagi - Rekon Virtual, Penyesuaian, Rekon Sales" },
+    { time: "12:15", modules: ["rekon_virtual_mrg", "penyesuaian", "rekon_sales"], enabled: true, description: "Siang - Rekon Virtual, Penyesuaian, Rekon Sales" },
+    { time: "20:00", modules: ["prep_closing", "rekon_wt_harian"], enabled: true, description: "Malam - Prep Closing + WT Harian" },
   ],
 
   /**

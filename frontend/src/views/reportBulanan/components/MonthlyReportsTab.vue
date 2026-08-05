@@ -88,6 +88,9 @@
           <div class="export-job__info">
             <span class="export-job__name">{{ job.reportName }}</span>
             <span class="export-job__meta">{{ job.cab }} &bull; {{ job.prd }}</span>
+            <span class="export-job__meta" v-if="job.fileCreatedAt">
+              <i class="pi pi-clock mr-1" />{{ formatFileDate(job.fileCreatedAt) }}
+            </span>
           </div>
           <Button
             label="Unduh"
@@ -248,6 +251,16 @@ const downloadReady = async (job) => {
   } catch (err) {
     toast.showError('Gagal', `${job.reportName}: ${err.response?.data?.message || err.message}`);
   }
+};
+
+const formatFileDate = (isoString) => {
+  const d = new Date(isoString);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
 };
 
 const openForm = (reportData = null) => {

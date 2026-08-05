@@ -228,6 +228,9 @@ export const startExport = async (req, res) => {
       );
     }
 
+    // Bersihkan job completed lama untuk kombinasi yang sama (overwrite)
+    await exportJob.removeCompletedJobByKey({ reportId: id, cab, prd });
+
     const taskId = `monthly_report_${cab}_${prd}_${id}_${Date.now()}`;
 
     // Buat job (status 'queued') lalu masukkan ke antrian FIFO.

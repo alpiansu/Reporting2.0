@@ -290,6 +290,7 @@ export function completeJob(taskId, { fileName, filePath }) {
   job.message = "Export selesai. File siap diunduh.";
   job.fileName = fileName;
   job.filePath = filePath;
+  job.fileCreatedAt = new Date().toISOString();
   job.error = null;
   job.updatedAt = new Date().toISOString();
   clearAbort(taskId);
@@ -431,6 +432,42 @@ export function findActiveJobByKey({ reportId, cab, prd }) {
     }
   }
   return null;
+}
+
+/** Cari job completed untuk laporan+cab+prd yang sama. */
+export function findCompletedJobByKey({ reportId, cab, prd }) {
+  for (const job of jobMap.values()) {
+    if (
+      job.status === "completed" &&
+      job.reportId === reportId &&
+      job.cab === cab &&
+      job.prd === prd
+    ) {
+      return job;
+    }
+  }
+  return null;
+}
+
+/**
+ * Hapus job completed lama untuk kombinasi reportId+cab+prd.
+ * Membersihkan registry entry + direktori staging + broadcast SSE remove.
+ * Return daftar taskId yang dihapus.
+ */
+export async function removeCompletedJobByKey({ reportId, cab, prd }) {
+  const removed = [];
+  for (const [taskId, job] of jobMap.entries()) {
+    if (
+      job.status === "completed" &&
+      job.reportId === reportId &&
+      job.cab === cab &&
+      job.prd === prd
+    ) {
+      await removeJobAndDir(taskId);
+      removed.push(taskId);
+    }
+  }
+  return removed;
 }
 
 // ─── ExportFileResponse: adapter stream (meniru Express res minimal) ─────────
@@ -583,6 +620,8 @@ export default {
   listJobsByUser,
   getQueueStats,
   findActiveJobByKey,
+  findCompletedJobByKey,
+  removeCompletedJobByKey,
   cleanupStaleExports,
   ExportFileResponse,
   waitForStreamFinished,

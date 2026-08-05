@@ -33,8 +33,18 @@ export const useExportsStore = defineStore("exports", {
         ["queued", "processing"].includes(j.status),
       ),
     hasActiveJobs: (getters) => getters.activeJobs.length > 0,
-    readyJobs: (state) =>
-      Object.values(state.jobs).filter((j) => j.status === "completed"),
+    readyJobs: (state) => {
+  const completed = Object.values(state.jobs).filter((j) => j.status === "completed");
+  const seen = new Map();
+  for (const job of completed) {
+    const key = `${job.reportId}|${job.cab}|${job.prd}`;
+    const existing = seen.get(key);
+    if (!existing || new Date(job.updatedAt) > new Date(existing.updatedAt)) {
+      seen.set(key, job);
+    }
+  }
+  return [...seen.values()].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+},
     hasReadyJobs: (getters) => getters.readyJobs.length > 0,
     totalPercentage: (getters) => {
       const active = getters.activeJobs;

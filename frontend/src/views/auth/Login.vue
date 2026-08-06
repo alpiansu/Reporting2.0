@@ -62,19 +62,38 @@
       </form>
       
       <div class="login-footer">
-        <p>© {{ new Date().getFullYear() }} Reporting 2.0. All rights reserved.</p>
+        <p>© {{ new Date().getFullYear() }} Reporting 2.0 — v{{ frontendVersion }}. All rights reserved.</p>
+        <div v-if="isVersionMismatch" class="login-version-warning">
+          <i class="pi pi-exclamation-triangle"></i>
+          <span>Backend belum diperbarui (v{{ backendVersion }} ≠ v{{ frontendVersion }}).</span>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../../stores';
+import { healthService } from '../../services';
 
 const router = useRouter();
 const authStore = useAuthStore();
+
+// Versi frontend di-inject saat build oleh vite.config.ts (dari package.json)
+const frontendVersion = healthService.normalizeVersion(import.meta.env.VITE_APP_VERSION) || 'dev';
+const backendVersion = ref(null);
+const isVersionMismatch = computed(() => {
+  return backendVersion.value && backendVersion.value !== frontendVersion;
+});
+
+onMounted(async () => {
+  const data = await healthService.getHealth();
+  if (data?.version) {
+    backendVersion.value = healthService.normalizeVersion(data.version);
+  }
+});
 
 // Form state
 const username = ref('');

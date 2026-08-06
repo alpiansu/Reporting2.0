@@ -1,13 +1,14 @@
 import swaggerJSDoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 import path from 'path';
+import { APP_VERSION } from '../utils/version.utils.js';
 
 // Swagger definition
 const swaggerDefinition = {
   openapi: "3.0.0",
   info: {
     title: "Web Reporting 2.0 API",
-    version: "1.0.0",
+    version: APP_VERSION,
     description: "API documentation for Web Reporting 2.0",
   },
   servers: [

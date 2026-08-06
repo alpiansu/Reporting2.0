@@ -14,6 +14,7 @@ import userService from "./user.service";
 import rekapBackupService from "./rekapBackup.service";
 import ntbVsGlslpService from "./ntbVsGlslp.service";
 import notificationsService from "./notifications.service";
+import healthService from "./health.service";
 
 export {
   authService,
@@ -32,4 +33,5 @@ export {
   rekapBackupService,
   ntbVsGlslpService,
   notificationsService,
+  healthService,
 };

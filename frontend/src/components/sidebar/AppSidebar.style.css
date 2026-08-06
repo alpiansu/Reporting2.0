@@ -156,6 +156,110 @@
   margin-bottom: 16px;
 }
 
+/* Version badge */
+.version-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background-color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.75);
+  border-radius: 14px;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.version-badge:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  color: var(--primary-contrast-color);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.version-badge-icon {
+  font-size: 0.72rem;
+}
+
+.version-badge-text {
+  letter-spacing: 0.3px;
+}
+
+.version-warning {
+  border-color: rgba(245, 158, 11, 0.6);
+  background-color: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+.version-warning:hover {
+  border-color: #fbbf24;
+  background-color: rgba(245, 158, 11, 0.25);
+  color: #fcd34d;
+}
+
+.version-warning-icon {
+  font-size: 0.7rem;
+  color: #fbbf24;
+}
+
+/* About dialog content */
+.about-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.about-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--surface-border);
+  font-size: 0.9rem;
+}
+
+.about-item:last-of-type {
+  border-bottom: none;
+}
+
+.about-label {
+  color: var(--text-color-secondary);
+}
+
+.about-value {
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.about-value-error {
+  color: var(--error-color);
+}
+
+.about-value-success {
+  color: var(--success-color);
+}
+
+.about-mismatch {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background-color: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: var(--warning-color);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.about-mismatch i {
+  margin-top: 2px;
+}
+
 .toggle-button {
   width: 22px;
   height: 22px;

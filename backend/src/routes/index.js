@@ -2,8 +2,30 @@ import express from "express";
 import progressRoutes from "./progress.routes.js";
 import { authenticateJWT } from "../middlewares/index.js";
 import modules from "../modules/index.js";
+import config from "../config/index.js";
+import { APP_NAME, APP_VERSION } from "../utils/version.utils.js";
 
 const router = express.Router();
+
+// Health check — public (tanpa auth) agar bisa dipanggil frontend sebelum login
+router.get("/api/health", (req, res) => {
+  try {
+    const dbStatus = config.resilientDb.getStatus();
+    res.json({
+      status: "ok",
+      service: APP_NAME,
+      version: APP_VERSION,
+      nodeEnv: config.nodeEnv,
+      uptime: process.uptime(),
+      db: {
+        connected: dbStatus.isConnected,
+        reconnecting: dbStatus.reconnecting,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ status: "error", error: err.message });
+  }
+});
 
 // Global progress routes
 router.use("/api/progress", authenticateJWT, progressRoutes);

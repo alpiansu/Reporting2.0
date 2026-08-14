@@ -5,7 +5,37 @@ export default {
   // Query templates
   queries: {
     // WRC query template
-    wrc: ``,
+    wrc: `SELECT KIRIM AS CABANG, SHOP, TANGGAL, PRDCD, SINGKATAN, ACOST, PRICE, MS_QTY AS QTY_MSTRAN, MT_QTY AS QTY_MTRAN, SEL, NOW() AS LASTCATCH FROM (
+    SELECT KODE_GUDANG AS KIRIM, MTRAN.SHOP, MTRAN.TANGGAL, MTRAN.PRDCD, MS_QTY, MT_QTY, MS_QTY - MT_QTY AS SEL FROM
+    (
+    SELECT M.SHOP, M.TANGGAL, M.PRDCD, SUM(IFNULL(IF(MT.RTYPE='J',MT.QTY,MT.QTY*-1),0)) AS MT_QTY FROM (
+      SELECT SHOP, TANGGAL, PRDCD FROM (
+      SELECT STR_TO_DATE(TANGGAL,"%d-%m-%Y") AS TANGGAL, SHOP, PRDCD FROM DT_yymmdd WHERE PRDCD IN (SELECT DISTINCT PRDCD FROM PR_yymmdd WHERE CAT_COD IN ('034203','034202') AND KONS = 'K' AND SUPCO IS NOT NULL) 
+      UNION ALL
+      SELECT STR_TO_DATE(TGLTRX,"%d%m%Y") AS TANGGAL, KDTOKO AS SHOP, PRDCD FROM RMB_yymmdd WHERE PRDCD IN (SELECT DISTINCT PRDCD FROM PR_yymmdd WHERE CAT_COD IN ('034203','034202') AND KONS = 'K' AND SUPCO IS NOT NULL)
+      ) CEK GROUP BY PRDCD
+    ) M LEFT JOIN DT_yymmdd MT USING(SHOP, PRDCD) 
+    GROUP BY M.SHOP, M.PRDCD
+
+    ) MTRAN 
+    LEFT JOIN 
+    (
+    SELECT M.SHOP, M.TANGGAL, M.PRDCD, SUM(IFNULL(QTY,0)) AS MS_QTY FROM (
+      SELECT SHOP, TANGGAL, PRDCD FROM 
+      (
+      SELECT STR_TO_DATE(TANGGAL,"%d-%m-%Y") AS TANGGAL, SHOP, PRDCD FROM DT_yymmdd WHERE PRDCD IN (SELECT DISTINCT PRDCD FROM PR_yymmdd WHERE CAT_COD IN ('034203','034202') AND KONS = 'K' AND SUPCO IS NOT NULL) 
+      UNION ALL
+      SELECT STR_TO_DATE(TGLTRX,"%d%m%Y") AS TANGGAL, KDTOKO AS SHOP, PRDCD FROM RMB_yymmdd WHERE PRDCD IN (SELECT DISTINCT PRDCD FROM PR_yymmdd WHERE CAT_COD IN ('034203','034202') AND KONS = 'K' AND SUPCO IS NOT NULL)
+      ) AS CEK GROUP BY PRDCD 
+    ) M
+    LEFT JOIN RMB_yymmdd MS ON M.PRDCD = MS.PRDCD AND M.SHOP = MS.KDTOKO 
+    GROUP BY M.SHOP, M.PRDCD
+    ) MSTRAN 
+
+    USING(SHOP, PRDCD)
+
+    LEFT JOIN mstr_toko_all T ON SHOP = T.KODE_TOKO HAVING SEL != 0
+    ) AS DT LEFT JOIN PR_yymmdd P USING(PRDCD);`,
 
     // Store query template
     // store: `SELECT (SELECT KIRIM FROM toko) AS CABANG, (SELECT KDTK FROM toko) AS SHOP, TANGGAL, PRDCD, SINGKATAN, ACOST, PRICE, QTY_MSTRAN, QTY_MTRAN, QTY_MSTRAN - QTY_MTRAN AS SEL, NOW() AS LASTCATCH FROM (
@@ -60,6 +90,10 @@ export default {
     storeTimeoutMs: 10000, // 10 seconds - reduced for better timeout testing
     // Timeout for individual query execution (milliseconds)
     queryTimeoutMs: 8000, // 8 seconds - reduced for better timeout testing
+    // Timeout for WRC per-date query execution (milliseconds)
+    // Query WRC per tanggal cukup berat (subquery DT/RMB/PR per tabel tanggal).
+    // Terukur 40-100 detik/tanggal di G033 — jangan diturunkan tanpa profiling ulang.
+    wrcQueryTimeoutMs: 300000, // 5 minutes
   },
 
   taskProgressName: "rekonVirtualMarginTask",

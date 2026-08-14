@@ -3,6 +3,8 @@
  */
 import fs from "fs/promises";
 import path from "path";
+import os from "os";
+import mysql from "mysql2/promise";
 import logger from "../../config/logger.js";
 import SaldoVirtual from "../../models/saldovirtual.model.js";
 import dbStore from "../../config/db_store.js";
@@ -15,6 +17,9 @@ import noteCategoriesService from "../note_categories/noteCategories.service.js"
 import notesService from "../notes/notes.service.js";
 import progressService from "../progress/progress.service.js";
 import screeningGuard from "../../utils/screeningGuard.js";
+import WrcUtils from "../../utils/wrc.utils.js";
+import wrcBulananService from "../../services/wrc.service.js";
+import MCabangService from "../m_cabang/m_cabang.service.js";
 import { Op } from "sequelize";
 
 // Path untuk folder JSON rekon_virtual_mrg_based (akan di-split per periode)
@@ -446,6 +451,414 @@ class RekonVirtualService {
   //   }
   // }
   /**
+   * Register progress task. Reused oleh jalur db toko (Level 3) dan jalur WRC (Level 1 & 2).
+   * Melempar error spesifik jika gagal (mis. maximum concurrent task).
+   */
+  async registerProgressTask(taskId, total, fullName, username) {
+    const timeStart = moment().format("YYYY-MM-DD HH:mm:ss");
+    try {
+      await progressService.startProgress(taskId, total, {
+        module: "rekon_virtual_mrg",
+        title: "Screening Virtual Margin",
+        description: "registering task",
+        startedBy: fullName || username,
+        status: "registering",
+        createdAt: timeStart,
+      });
+
+      logger.info(`Progress task registered for user ${username}, taskId: ${taskId}`);
+    } catch (error) {
+      logger.error(`Error registering progress task: ${error.message}`);
+
+      if (error.message.includes("Maximum concurrent")) {
+        await progressService.failProgress(taskId, {
+          description: `Task failed: ${error.message}`,
+          status: "failed",
+        });
+        throw new Error("[service rekon_virtual_mrg] System is busy processing other tasks");
+      }
+
+      await progressService.failProgress(taskId, {
+        description: `Task failed: ${error.message}`,
+        status: "failed",
+      });
+      throw new Error("[service rekon_virtual_mrg] Failed to register progress task");
+    }
+  }
+
+  /**
+   * Finalisasi screening: simpan log rekap_remote, merge ke JSON cache, dan selesaikan progress.
+   * Reused oleh jalur db toko (Level 3) dan jalur WRC (Level 1 & 2).
+   */
+  async finalizeScreening({ taskId, skipProgress, processedCount, periode, newRecords, allDeletedKeys }) {
+    logger.info(`[rekon_virtual_mrg.service] Screening process completed for periode ${periode}`);
+
+    // If task was cancelled during processing, stop before finalizing
+    if (!skipProgress && progressService.isAborted(taskId)) {
+      logger.info(`[rekon_virtual_mrg] Task ${taskId} was cancelled — skipping finalization`);
+      throw new Error("Proses dibatalkan oleh pengguna");
+    }
+
+    //update status to progress service if not skipping
+    if (!skipProgress) {
+      await progressService.updateProgress(taskId, processedCount, {
+        description: "Finalizing screening process, saving logs to database",
+        status: "finalizing",
+      });
+    }
+
+    // Save logs to database - dengan global timeout agar tidak hang selamanya
+    const FINALIZE_TIMEOUT_MS = 2 * 60 * 1000; // 2 menit
+    try {
+      await Promise.race([
+        RekapRemoteService.saveLogsToDatabase(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("saveLogsToDatabase timeout after 2 minutes")), FINALIZE_TIMEOUT_MS),
+        ),
+      ]);
+    } catch (saveErr) {
+      logger.error(`[rekon_virtual_mrg.service] saveLogsToDatabase error/timeout: ${saveErr.message}`);
+      // Tidak throw - lanjut agar completeProgress tetap terpanggil
+    }
+
+    //update status to progress service if not skipping
+    if (!skipProgress) {
+      await progressService.updateProgress(taskId, processedCount, {
+        description: "Syncing data to JSON file, please wait...",
+        status: "finalizing",
+      });
+    }
+
+    // Sync database to JSON file - merge upsert + prune obsolete dari memory/JSON
+    if (newRecords.length > 0 || allDeletedKeys.size > 0) {
+      await this.mergeAndSavePeriod(periode, newRecords, allDeletedKeys);
+    }
+
+    const timeCompleted = moment().format("YYYY-MM-DD HH:mm:ss");
+    if (!skipProgress) {
+      await progressService.completeProgress(taskId, {
+        description: "All processed",
+        status: "completed",
+        completedAt: timeCompleted,
+      });
+    }
+
+    return {
+      success: true,
+      message: "Screening process completed",
+      processedRecords: newRecords.length,
+    };
+  }
+
+  /**
+   * Screening Level 1 & 2 via db WRC.
+   *
+   * Alasan: tabel di db WRC bersifat per tanggal (prefix yymmdd), sehingga loop dilakukan
+   * per tanggal (bukan per toko seperti db toko). Rentang tanggal:
+   *   - periode = tahun & bulan berjalan → tanggal 1 s.d H-1 hari ini
+   *   - periode lain → tanggal 1 s.d hari terakhir bulan periode tsb
+   *
+   * Hasil tiap tanggal di-export ke temp JSON untuk membatasi penggunaan memori,
+   * lalu di-akumulasi di akhir sebelum disinkronkan ke model (logika simpan sama persis
+   * dengan jalur db toko via syncStoreResultToDb).
+   *
+   * Daily guard (screeningGuard) TIDAK berlaku di jalur ini.
+   */
+  async screeningViaWrc(options) {
+    const username = options.username;
+    const fullName = options.fullName;
+    const taskId = `${config.taskProgressName}_${username}`;
+
+    const limitBranches = pLimit(config.parallelProcessing.branchConcurrencyLimit);
+
+    let skipProgress = true;
+    try {
+      // === STEP 1: Resolve branches ===
+      // Level 1 (cabang=All): daftar cabang dari module m_cabang.
+      // Level 2 (cabang spesifik): hanya cabang tsb.
+      let branches = [];
+      if (options.cabang === "All" || options.cabang === "ALL") {
+        const mCabangService = new MCabangService();
+        const cabangList = await mCabangService.getAllCabang();
+        branches = cabangList.map(c => c.kdcab);
+      } else {
+        branches = [options.cabang];
+      }
+
+      if (branches.length === 0) {
+        logger.warn(`[rekon_virtual_mrg.service][WRC] No branches to process`);
+        return { success: true, message: "No branches to process", processedRecords: 0 };
+      }
+
+      logger.info(`[rekon_virtual_mrg.service][WRC] Branches to process: ${branches.join(", ")}`);
+
+      // === STEP 2: Rentang tanggal loop ===
+      const strYear = moment(options.periode, "YYMM").format("YYYY");
+      const strMonth = moment(options.periode, "YYMM").format("MM");
+
+      // getAllDatesInMonth(year, month, untilYesterday=true):
+      //   - periode berjalan → tanggal 1 s.d H-1
+      //   - periode lain → tanggal 1 s.d akhir bulan
+      const dates = WrcUtils.getAllDatesInMonth(strYear, strMonth, true).map(d => {
+        const parts = d.split("-");
+        return parts[0].substring(2) + parts[1] + parts[2]; // YYYY-MM-DD → YYMMDD
+      });
+
+      if (dates.length === 0) {
+        logger.warn(`[rekon_virtual_mrg.service][WRC] No dates to process for periode ${options.periode}`);
+        return {
+          success: true,
+          message: "No dates to process (H-1 periode berjalan belum tersedia)",
+          processedRecords: 0,
+        };
+      }
+
+      logger.info(`[rekon_virtual_mrg.service][WRC] Dates to process: ${dates.join(", ")}`);
+
+      // === STEP 3: Progress registration ===
+      const totalSteps = branches.length * dates.length;
+      skipProgress = totalSteps <= 1;
+      if (!skipProgress) {
+        await this.registerProgressTask(taskId, totalSteps, fullName, username);
+      }
+
+      logger.info(
+        `[rekon_virtual_mrg.service][WRC] Starting screening for ${branches.length} branch(es) × ${dates.length} date(s)`,
+      );
+
+      // Kumpulan path temp file per tanggal (untuk akumulasi di akhir)
+      const tempFiles = [];
+      let processedCount = 0;
+      const incrementProgress = async (cab, yymmdd, statusText) => {
+        processedCount++;
+        if (!skipProgress) {
+          await progressService.updateProgress(taskId, processedCount, {
+            description: `Cabang ${cab} → ${yymmdd} ${statusText} (${processedCount}/${totalSteps})`,
+            status: "Screening to WRC",
+          });
+        }
+      };
+
+      // === STEP 4: Loop per cabang (paralel), per tanggal (sequential) ===
+      try {
+        await Promise.all(
+          branches.map(cab =>
+          limitBranches(async () => {
+            // Check abort sebelum mulai branch
+            if (!skipProgress && progressService.isAborted(taskId)) {
+              logger.info(`[rekon_virtual_mrg][WRC] Skipping branch ${cab} — task aborted`);
+              await incrementProgress(cab, "-", "Dibatalkan");
+              return;
+            }
+
+            // Buka koneksi WRC sekali per cabang
+            let wrcConnection = null;
+            try {
+              const wrcInstance = new wrcBulananService();
+              const wrcConfig = await wrcInstance.getConnWRC(cab);
+              wrcConnection = await mysql.createConnection(wrcConfig);
+              logger.info(`[rekon_virtual_mrg.service][WRC] Connected to WRC for branch ${cab}`);
+            } catch (err) {
+              await RekapRemoteService.addToTemp(
+                cab,
+                cab,
+                "rekon_virtual_mrg",
+                `[WRC][${cab}] ERROR connect: ${err.message}`,
+              );
+              await incrementProgress(cab, "-", "Error ❌");
+              return;
+            }
+
+            try {
+              let branchAllDatesSuccess = true;
+              const branchTempFiles = [];
+
+              for (const yymmdd of dates) {
+                // Check abort antar tanggal
+                if (!skipProgress && progressService.isAborted(taskId)) {
+                  logger.info(`[rekon_virtual_mrg][WRC] Skipping date ${yymmdd} branch ${cab} — task aborted`);
+                  branchAllDatesSuccess = false;
+                  break;
+                }
+
+                // Placeholder "_yymmdd" → "_260801": underscore DI-PERTAHANKAN karena
+                // tabel WRC asli bernama dt_260801, pr_260801, rmb_260801 (dengan underscore).
+                const finalSql = config.queries.wrc.replaceAll("_yymmdd", `_${yymmdd}`);
+
+                try {
+                  const [rows] = await wrcConnection.query({
+                    sql: finalSql,
+                    timeout: config.parallelProcessing.wrcQueryTimeoutMs,
+                  });
+
+                  // Export hasil per tanggal ke temp JSON
+                  const tempFile = path.join(
+                    os.tmpdir(),
+                    `virtual_mrg_wrc_${cab}_${yymmdd}_${Date.now()}.json`,
+                  );
+                  await fs.writeFile(tempFile, JSON.stringify(rows || []));
+                  branchTempFiles.push(tempFile);
+                  tempFiles.push(tempFile);
+
+                  await RekapRemoteService.addToTemp(
+                    cab,
+                    cab,
+                    "rekon_virtual_mrg",
+                    `[WRC][${cab}] ${yymmdd} query completed, got ${(rows || []).length} records`,
+                  );
+                  await incrementProgress(cab, yymmdd, "Success ✅");
+                } catch (err) {
+                  branchAllDatesSuccess = false;
+                  await RekapRemoteService.addToTemp(
+                    cab,
+                    cab,
+                    "rekon_virtual_mrg",
+                    `[WRC][${cab}] ${yymmdd} ERROR: ${err.message}`,
+                  );
+                  await incrementProgress(cab, yymmdd, "Error ❌");
+                }
+              }
+
+              if (!branchAllDatesSuccess) {
+                // Guard "all-or-nothing": jika ada 1 tanggal gagal, cabang ini TIDAK di-sync
+                // (mencegah obsolete deletion menghapus data tanggal yang gagal ter-capture).
+                logger.warn(
+                  `[rekon_virtual_mrg.service][WRC] Branch ${cab} has failed date(s) — skipping DB sync for this branch`,
+                );
+                await RekapRemoteService.addToTemp(
+                  cab,
+                  cab,
+                  "rekon_virtual_mrg",
+                  `[WRC][${cab}] screening dibatalkan sebagian (ada tanggal gagal) — data saldo_virtual tidak disentuh`,
+                );
+                // Hapus temp file cabang yang gagal agar tidak ikut terakumulasi
+                for (const f of branchTempFiles) {
+                  await fs.unlink(f).catch(() => {});
+                  const idx = tempFiles.indexOf(f);
+                  if (idx >= 0) tempFiles.splice(idx, 1);
+                }
+              }
+            } finally {
+              if (wrcConnection) {
+                await wrcConnection.end().catch(() => {});
+              }
+            }
+          }),
+        ),
+      );
+      } catch (err) {
+        // Bersihkan temp file yang sudah terakumulasi jika ada error tak terduga
+        // (agar tidak bocor ke os.tmpdir), lalu rethrow.
+        for (const tempFile of tempFiles) {
+          await fs.unlink(tempFile).catch(() => {});
+        }
+        throw err;
+      }
+
+      logger.info(`[rekon_virtual_mrg.service][WRC] WRC screening loop completed for periode ${options.periode}`);
+
+      // === STEP 5: Akumulasi semua temp file ===
+      const newRecords = [];
+      const allDeletedKeys = new Set();
+      try {
+        for (const tempFile of tempFiles) {
+          const raw = await fs.readFile(tempFile, "utf8");
+          const rows = JSON.parse(raw);
+          newRecords.push(...rows);
+        }
+      } catch (err) {
+        logger.error(`[rekon_virtual_mrg.service][WRC] Error accumulating temp files: ${err.message}`);
+        throw err;
+      } finally {
+        // === WAJIB: hapus semua temp file setelah selesai diakumulasi ===
+        for (const tempFile of tempFiles) {
+          await fs.unlink(tempFile).catch(() => {});
+        }
+      }
+
+      logger.info(
+        `[rekon_virtual_mrg.service][WRC] Accumulated ${newRecords.length} records from ${tempFiles.length} temp files`,
+      );
+
+      // === STEP 6: Sinkronisasi ke DB per grup (CABANG, SHOP) ===
+      // Kelompokkan per CABANG + SHOP agar logika obsolete detection & preservasi RECID
+      // sama persis dengan jalur db toko.
+      if (newRecords.length > 0) {
+        const groups = new Map();
+        for (const rec of newRecords) {
+          const key = `${rec.CABANG}_${rec.SHOP}`;
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push(rec);
+        }
+
+        const failedKeys = new Set();
+        for (const [key, records] of groups.entries()) {
+          const cab = key.split("_")[0];
+          const shop = key.split("_")[1];
+          const result = { success: false, newRecords: [], deletedKeys: new Set() };
+          try {
+            await this.syncStoreResultToDb(cab, shop, records, strYear, strMonth, result);
+            result.success = true;
+            if (result.deletedKeys.size > 0) {
+              result.deletedKeys.forEach(k => allDeletedKeys.add(k));
+            }
+          } catch (err) {
+            failedKeys.add(key);
+            await RekapRemoteService.addToTemp(
+              cab,
+              shop,
+              "rekon_virtual_mrg",
+              `[WRC][${cab}/${shop}] ERROR sync: ${err.message}`,
+            );
+          }
+        }
+
+        // Hapus records milik grup yang gagal sync agar tidak ikut di-upsert ke JSON cache
+        if (failedKeys.size > 0) {
+          const excluded = newRecords.filter(rec => failedKeys.has(`${rec.CABANG}_${rec.SHOP}`));
+          const kept = newRecords.filter(rec => !failedKeys.has(`${rec.CABANG}_${rec.SHOP}`));
+          newRecords.length = 0;
+          newRecords.push(...kept);
+          logger.warn(
+            `[rekon_virtual_mrg.service][WRC] Excluded ${excluded.length} records dari ${failedKeys.size} grup yang gagal sync`,
+          );
+        }
+      }
+
+      // === STEP 7: Finalisasi ===
+      return this.finalizeScreening({
+        taskId,
+        skipProgress,
+        processedCount,
+        periode: options.periode,
+        newRecords,
+        allDeletedKeys,
+      });
+    } catch (error) {
+      // If task was cancelled by user, don't call failProgress (already handled by cancelTask)
+      if (!skipProgress && progressService.isAborted(taskId)) {
+        logger.info(`[rekon_virtual_mrg.service][WRC] Task ${taskId} was cancelled — skipping failProgress`);
+        return {
+          success: false,
+          message: "Proses dibatalkan oleh pengguna",
+          cancelled: true,
+        };
+      }
+
+      logger.error(`[rekon_virtual_mrg.service][WRC] Error during screening: ${error.message}`);
+
+      if (!skipProgress) {
+        await progressService.failProgress(taskId, {
+          description: `Task failed: ${error.message}`,
+          status: "failed",
+        });
+      }
+
+      throw error;
+    }
+  }
+
+  /**
    * Screening stores to rekon virtual margin based on store query
    */
   async screening(options) {
@@ -468,6 +881,12 @@ class RekonVirtualService {
         new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout: ${label}`)), ms)),
       ]);
     };
+
+    // Jalur screening WRC untuk Level 1 & 2 (cabang / all cabang).
+    // Level 3 (toko tertentu, ditandai options.shops terisi) tetap ke db toko (flow di bawah).
+    if (!(options.shops && options.shops.length > 0)) {
+      return this.screeningViaWrc(options);
+    }
 
     let skipProgress = true;
     try {
@@ -514,35 +933,7 @@ class RekonVirtualService {
 
       // Register progress task if not skipping
       if (!skipProgress) {
-        try {
-          const timeStart = moment().format("YYYY-MM-DD HH:mm:ss");
-          await progressService.startProgress(taskId, storesToProcess.length, {
-            module: "rekon_virtual_mrg",
-            title: "Screening Virtual Margin",
-            description: "registering task",
-            startedBy: fullName || username,
-            status: "registering",
-            createdAt: timeStart,
-          });
-
-          logger.info(`Progress task registered for user ${username}, taskId: ${taskId}`);
-        } catch (error) {
-          logger.error(`Error registering progress task: ${error.message}`);
-
-          if (error.message.includes("Maximum concurrent")) {
-            await progressService.failProgress(taskId, {
-              description: `Task failed: ${error.message}`,
-              status: "failed",
-            });
-            throw new Error("[service rekon_virtual_mrg] System is busy processing other tasks");
-          }
-
-          await progressService.failProgress(taskId, {
-            description: `Task failed: ${error.message}`,
-            status: "failed",
-          });
-          throw new Error("[service rekon_virtual_mrg] Failed to register progress task");
-        }
+        await this.registerProgressTask(taskId, storesToProcess.length, fullName, username);
       }
 
       logger.info(`[rekon_virtual_mrg.service] Starting screening for branches: ${branches.join(", ")}`);
@@ -636,63 +1027,14 @@ class RekonVirtualService {
         ),
       );
 
-      logger.info(`[rekon_virtual_mrg.service] Screening process completed for periode ${options.periode}`);
-
-      // If task was cancelled during store processing, stop before finalizing
-      if (!skipProgress && progressService.isAborted(taskId)) {
-        logger.info(`[rekon_virtual_mrg] Task ${taskId} was cancelled — skipping finalization`);
-        throw new Error("Proses dibatalkan oleh pengguna");
-      }
-
-      //update status to progress service if not skipping
-      if (!skipProgress) {
-        await progressService.updateProgress(taskId, processedCount, {
-          description: "Finalizing screening process, saving logs to database",
-          status: "finalizing",
-        });
-      }
-
-      // Save logs to database - dengan global timeout agar tidak hang selamanya
-      const FINALIZE_TIMEOUT_MS = 2 * 60 * 1000; // 2 menit
-      try {
-        await Promise.race([
-          RekapRemoteService.saveLogsToDatabase(),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("saveLogsToDatabase timeout after 2 minutes")), FINALIZE_TIMEOUT_MS),
-          ),
-        ]);
-      } catch (saveErr) {
-        logger.error(`[rekon_virtual_mrg.service] saveLogsToDatabase error/timeout: ${saveErr.message}`);
-        // Tidak throw - lanjut agar completeProgress tetap terpanggil
-      }
-
-      //update status to progress service if not skipping
-      if (!skipProgress) {
-        await progressService.updateProgress(taskId, processedCount, {
-          description: "Syncing data to JSON file, please wait...",
-          status: "finalizing",
-        });
-      }
-
-      // Sync database to JSON file - merge upsert + prune obsolete dari memory/JSON
-      if (newRecords.length > 0 || allDeletedKeys.size > 0) {
-        await this.mergeAndSavePeriod(options.periode, newRecords, allDeletedKeys);
-      }
-
-      const timeCompleted = moment().format("YYYY-MM-DD HH:mm:ss");
-      if (!skipProgress) {
-        await progressService.completeProgress(taskId, {
-          description: "All stores processed",
-          status: "completed",
-          completedAt: timeCompleted,
-        });
-      }
-
-      return {
-        success: true,
-        message: "Screening process completed",
-        processedRecords: newRecords.length,
-      };
+      return this.finalizeScreening({
+        taskId,
+        skipProgress,
+        processedCount,
+        periode: options.periode,
+        newRecords,
+        allDeletedKeys,
+      });
     } catch (error) {
       // If task was cancelled by user, don't call failProgress (already handled by cancelTask)
       if (!skipProgress && progressService.isAborted(taskId)) {
@@ -777,60 +1119,7 @@ class RekonVirtualService {
         }
 
         if (result.length > 0) {
-          const startDate = `${strYear}-${strMonth}-01`;
-          const endDate = moment(`${strYear}-${strMonth}`, "YYYY-MM").endOf("month").format("YYYY-MM-DD");
-
-          // 1. Fetch current local records for this shop & period to compare against
-          const existingRecords = await SaldoVirtual.findAll({
-            where: {
-              CABANG: cab,
-              SHOP: storeCode,
-              TANGGAL: { [Op.between]: [startDate, endDate] },
-            },
-            attributes: ["TANGGAL", "PRDCD"],
-          });
-
-          // 2. Build reference set for incoming composite keys (TANGGAL + PRDCD)
-          const incomingKeys = new Set();
-          result.forEach(r => {
-            const dateStr = moment(r.TANGGAL).format("YYYY-MM-DD");
-            incomingKeys.add(`${dateStr}_${r.PRDCD}`);
-          });
-
-          // 3. Identify obsolete records (existing ones whose TANGGAL + PRDCD is not in incoming keys)
-          const obsoleteRecords = existingRecords.filter(ex => {
-            const dateStr = moment(ex.TANGGAL).format("YYYY-MM-DD");
-            return !incomingKeys.has(`${dateStr}_${ex.PRDCD}`);
-          });
-
-          // 4. Safely destroy obsolete records in chunks to prevent SQL param exhaustion
-          if (obsoleteRecords.length > 0) {
-            for (let i = 0; i < obsoleteRecords.length; i += 100) {
-              const chunk = obsoleteRecords.slice(i, i + 100);
-              await SaldoVirtual.destroy({
-                where: {
-                  CABANG: cab,
-                  SHOP: storeCode,
-                  [Op.or]: chunk.map(obs => ({
-                    TANGGAL: obs.TANGGAL,
-                    PRDCD: obs.PRDCD,
-                  })),
-                },
-              });
-            }
-
-            // Kumpulkan composite key yang dihapus agar bisa diprune dari JSON cache
-            obsoleteRecords.forEach(obs => {
-              const dateStr = moment(obs.TANGGAL).format("YYYY-MM-DD");
-              results.deletedKeys.add(`${cab}_${storeCode}_${dateStr}_${obs.PRDCD}`);
-            });
-          }
-
-          await SaldoVirtual.bulkCreate(result, {
-            updateOnDuplicate: ["QTY_MSTRAN", "QTY_MTRAN", "SEL", "LASTCATCH", "SINGKATAN", "ACOST", "PRICE"],
-          });
-
-          results.newRecords = result;
+          await this.syncStoreResultToDb(cab, storeCode, result, strYear, strMonth, results);
         } else {
           await this.deleteStorePeriod(cab, storeCode, strYear, strMonth);
         }
@@ -856,6 +1145,85 @@ class RekonVirtualService {
     }
 
     return results;
+  }
+
+  /**
+   * Sinkronkan hasil screening ke database SaldoVirtual (obsolete detection + bulkCreate)
+   * dan kumpulkan deletedKeys untuk pruning JSON cache.
+   * Dipakai oleh dua jalur:
+   *   1. Jalur db toko (Level 3) — dipanggil dari processSingleStore()
+   *   2. Jalur WRC (Level 1 & 2) — dipanggil per grup (CABANG, SHOP)
+   *
+   * Logika ini mempertahankan perilaku lama:
+   *   - RECID lama dipertahankan karena tidak termasuk updateOnDuplicate
+   *   - Obsolete record dihapus per 100 untuk menghindari SQL param exhaustion
+   *
+   * @param {string} cab - Branch code
+   * @param {string} shop - Store code
+   * @param {Array} incomingRecords - Records hasil screening (akan di-upsert)
+   * @param {string} strYear - Year in YYYY format
+   * @param {string} strMonth - Month in MM format
+   * @param {Object} results - { success, newRecords: [], deletedKeys: Set }
+   */
+  async syncStoreResultToDb(cab, shop, incomingRecords, strYear, strMonth, results) {
+    if (incomingRecords.length > 0) {
+      const startDate = `${strYear}-${strMonth}-01`;
+      const endDate = moment(`${strYear}-${strMonth}`, "YYYY-MM").endOf("month").format("YYYY-MM-DD");
+
+      // 1. Fetch current local records for this shop & period to compare against
+      const existingRecords = await SaldoVirtual.findAll({
+        where: {
+          CABANG: cab,
+          SHOP: shop,
+          TANGGAL: { [Op.between]: [startDate, endDate] },
+        },
+        attributes: ["TANGGAL", "PRDCD"],
+      });
+
+      // 2. Build reference set for incoming composite keys (TANGGAL + PRDCD)
+      const incomingKeys = new Set();
+      incomingRecords.forEach(r => {
+        const dateStr = moment(r.TANGGAL).format("YYYY-MM-DD");
+        incomingKeys.add(`${dateStr}_${r.PRDCD}`);
+      });
+
+      // 3. Identify obsolete records (existing ones whose TANGGAL + PRDCD is not in incoming keys)
+      const obsoleteRecords = existingRecords.filter(ex => {
+        const dateStr = moment(ex.TANGGAL).format("YYYY-MM-DD");
+        return !incomingKeys.has(`${dateStr}_${ex.PRDCD}`);
+      });
+
+      // 4. Safely destroy obsolete records in chunks to prevent SQL param exhaustion
+      if (obsoleteRecords.length > 0) {
+        for (let i = 0; i < obsoleteRecords.length; i += 100) {
+          const chunk = obsoleteRecords.slice(i, i + 100);
+          await SaldoVirtual.destroy({
+            where: {
+              CABANG: cab,
+              SHOP: shop,
+              [Op.or]: chunk.map(obs => ({
+                TANGGAL: obs.TANGGAL,
+                PRDCD: obs.PRDCD,
+              })),
+            },
+          });
+        }
+
+        // Kumpulkan composite key yang dihapus agar bisa diprune dari JSON cache
+        obsoleteRecords.forEach(obs => {
+          const dateStr = moment(obs.TANGGAL).format("YYYY-MM-DD");
+          results.deletedKeys.add(`${cab}_${shop}_${dateStr}_${obs.PRDCD}`);
+        });
+      }
+
+      await SaldoVirtual.bulkCreate(incomingRecords, {
+        updateOnDuplicate: ["QTY_MSTRAN", "QTY_MTRAN", "SEL", "LASTCATCH", "SINGKATAN", "ACOST", "PRICE"],
+      });
+
+      results.newRecords.push(...incomingRecords);
+    } else {
+      await this.deleteStorePeriod(cab, shop, strYear, strMonth);
+    }
   }
 
   async deleteStorePeriod(cabang, shop, year, month) {

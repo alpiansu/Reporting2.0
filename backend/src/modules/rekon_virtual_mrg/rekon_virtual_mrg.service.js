@@ -3,6 +3,7 @@
  */
 import fs from "fs/promises";
 import path from "path";
+import mysql from "mysql2/promise";
 import logger from "../../config/logger.js";
 import SaldoVirtual from "../../models/saldovirtual.model.js";
 import dbStore from "../../config/db_store.js";
@@ -15,6 +16,8 @@ import noteCategoriesService from "../note_categories/noteCategories.service.js"
 import notesService from "../notes/notes.service.js";
 import progressService from "../progress/progress.service.js";
 import screeningGuard from "../../utils/screeningGuard.js";
+import WrcBulananService from "../../services/wrc.service.js";
+const wrcService = new WrcBulananService();
 import { Op } from "sequelize";
 
 // Path untuk folder JSON rekon_virtual_mrg_based (akan di-split per periode)
@@ -312,7 +315,7 @@ class RekonVirtualService {
 
     logger.info(
       `[mergeAndSavePeriod] Merged ${hasNewRecords ? newRecords.length : 0} records, ` +
-      `pruned ${deletedKeys.size} keys for periode ${periode}`,
+        `pruned ${deletedKeys.size} keys for periode ${periode}`,
     );
     return hasNewRecords ? newRecords.length : 0;
   }
@@ -482,7 +485,7 @@ class RekonVirtualService {
 
       logger.info(`[rekon_virtual_mrg.service] Branches to process: ${branches.join(", ")}`);
 
-      // === STEP 2: Collect all stores ===
+      // === STEP 2: Collect all stores === ==> DI ganti jadi ke db wrc tapi tetap loop per toko nantinya
       const storeGroups = await Promise.all(
         branches.map(cab =>
           limitBranches(async () => {
@@ -724,55 +727,62 @@ class RekonVirtualService {
    * @param {Object} store - Store object with storeCode and cab
    * @param {string} strYear - Year in YYYY format
    * @param {string} strMonth - Month in MM format
-   * @param {Object|null} sharedConnection - Shared DB connection from combined screening
+   * @param {Object|null} _sharedConnection - Ignored (WRC connection is always created)
    * @returns {Promise<Object>} Result with success status and newRecords
    */
-  async processSingleStore(store, strYear, strMonth, sharedConnection = null, options = {}) {
+  async processSingleStore(store, strYear, strMonth, _sharedConnection = null, options = {}) {
     const { suppressIntermediateLogs = false } = options;
     const { storeCode, cab } = store;
     const results = { success: false, newRecords: [], deletedKeys: new Set() };
-    const isShared = !!sharedConnection;
 
+    let wrcConnection;
     try {
-      // --- Store info --- //
-      const storeInfo = await storeService.getStoreIPHost(storeCode);
+      // --- Create WRC connection --- //
+      wrcConnection = await mysql.createConnection(await wrcService.getConnWRC(cab));
 
-      if (!storeInfo) {
-        await RekapRemoteService.addToTemp(cab, storeCode, "rekon_virtual_mrg", `[${storeCode}] store info not found`);
-        return results;
-      }
-
-      // --- Create DB connection (or use shared) --- //
-      const storeConnection = isShared
-        ? sharedConnection
-        : await dbStore.createDbStore(storeInfo.dbHost, config.connectionRetry.maxRetries);
-
-      if (!storeConnection) {
+      if (!wrcConnection) {
         await RekapRemoteService.addToTemp(
           cab,
           storeCode,
           "rekon_virtual_mrg",
-          `[${storeCode}] failed to connect after ${config.connectionRetry.maxRetries} attempts`,
+          `[${storeCode}] failed to connect to WRC`,
         );
         return results;
       }
 
       try {
-        const params = `${strYear}-${strMonth}`;
-        const [result] = await storeConnection.query(
-          {
-            sql: config.queries.store,
-            timeout: config.parallelProcessing.queryTimeoutMs,
-          },
-          [params, params, params, params],
-        );
+        // --- Generate date-based table names & execute WRC query per day in parallel --- //
+        const daysInMonth = moment(`${strYear}-${strMonth}`, "YYYY-MM").daysInMonth();
+        const dateQueries = [];
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateStr = moment(`${strYear}-${strMonth}`, "YYYY-MM")
+            .date(d)
+            .format("YYMMDD");
+          const sql = config.queries.wrc
+            .replace(/\{yymmdd\}/g, dateStr)
+            .replace(/\{kdtk\}/g, storeCode);
+          dateQueries.push(
+            wrcConnection
+              .query({ sql, timeout: config.parallelProcessing.queryTimeoutMs })
+              .then(([rows]) => rows)
+              .catch(err => {
+                logger.warn(
+                  `[rekon_virtual_mrg] WRC query failed for ${storeCode} date ${dateStr}: ${err.message}`,
+                );
+                return [];
+              }),
+          );
+        }
+
+        const dayResults = await Promise.all(dateQueries);
+        const result = dayResults.flat();
 
         if (!suppressIntermediateLogs) {
           await RekapRemoteService.addToTemp(
             cab,
             storeCode,
             "rekon_virtual_mrg",
-            `[${storeCode}] query completed, got ${result.length} records`,
+            `[${storeCode}] WRC query completed, got ${result.length} records from ${daysInMonth} days`,
           );
         }
 
@@ -846,9 +856,8 @@ class RekonVirtualService {
           );
         }
       } finally {
-        // Only close connection if we opened it
-        if (!isShared && storeConnection) {
-          await storeConnection.end();
+        if (wrcConnection) {
+          await wrcConnection.end();
         }
       }
     } catch (err) {

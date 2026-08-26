@@ -92,10 +92,6 @@ export default {
     storeTimeoutMs: 10000, // 10 seconds - reduced for better timeout testing
     // Timeout for individual query execution (milliseconds)
     queryTimeoutMs: 8000, // 8 seconds - reduced for better timeout testing
-    // Timeout for WRC per-date query execution (milliseconds)
-    // Query WRC per tanggal cukup berat (subquery DT/RMB/PR per tabel tanggal).
-    // Terukur 40-100 detik/tanggal di G033 — jangan diturunkan tanpa profiling ulang.
-    wrcQueryTimeoutMs: 300000, // 5 minutes
   },
 
   taskProgressName: "rekonVirtualMarginTask",

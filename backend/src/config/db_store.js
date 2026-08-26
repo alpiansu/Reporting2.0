@@ -99,6 +99,10 @@ class DbStoreService {
       const dbConfigurations = [
         {
           user: "kasir",
+          password: "HmtPVo5Rf+XCLUdpjRoOF4zSNjegX5qB0=Kh2bF3x+gO",
+        },
+        {
+          user: "kasir",
           password: "ZjHPhpS3T4+YFNh3F94EWJn4m/TeNsBFE=DS0J/Y7Vu4",
         },
         {

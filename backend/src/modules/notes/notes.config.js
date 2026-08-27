@@ -42,7 +42,7 @@ export default {
       B.QTY AS QTY_MSTR,
       B.SUPCO,
       COALESCE(MID(B.KETER,1,9),'') AS DOCNO_MSTR,
-      CAST (CASE
+      CAST(CASE
           WHEN (A.QTY>B.QTY) AND (LASTRESPDETIL LIKE'%sukses%' OR STATUS=1) 
               THEN CONCAT('1| Transaksi ',FLAVOUR,' ',E.nama,' Qty MTRAN lebih besar dari qty MSTRAN. Indikasi transaksi kembali terPush ke POS kasir. shift:',A.shift,' , station:',A.station,' , tanggal:',A.tanggal,' , docno:',A.docno,' , QtyMtran:',A.QTY,' , QtyMstran:',IFNULL(B.qty,0))
           WHEN STATUS != 1 AND KTART IS NOT NULL AND GROUP_CONCAT(DISTINCT A.RTYPE) NOT LIKE'%D%' AND TTYPE<>'BATV' AND (B.QTY IS NULL OR B.QTY='') 
@@ -132,7 +132,7 @@ export default {
       WHERE A.TANGGAL = ?
       AND A.PLU = ?
       GROUP BY A.SHIFT, A.STATION, A.DOCNO, A.TANGGAL
-      HAVING keterangan IS NOT NULL )XX GROUP BY SHIFT, STATION, DOCNO, TANGGAL,PLU ORDER BY TANGGAL ASC
+      HAVING keterangan IS NOT NULL )XX GROUP BY SHIFT, STATION, DOCNO, TANGGAL,PLU ORDER BY TANGGAL ASC;
     `,
     rekonVirtualMrgDelon: `
         SELECT 

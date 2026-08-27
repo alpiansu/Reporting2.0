@@ -153,8 +153,6 @@
   </DataTable>
 
   <!-- Confirmation Dialog When note is already available -->
-  <confirm-dialog v-model="showDialogConfirm" :title="confirmDialogData.title" :message="confirmDialogData.message"
-    :confirm-text="confirmDialogData.confirmText" @confirm="handlingConfirmation" />
 </template>
 
 <style src="./RekonVirtualMrgTable.css" scoped></style>
@@ -165,7 +163,6 @@ import DataTable from '../common/DataTable.vue';
 import * as XLSX from 'xlsx';
 import { noteCategoriesService, rekonVirtualMrgService } from '../../services/index.js';
 import Button from 'primevue/button';
-import ConfirmDialog from '../common/ConfirmDialog.vue';
 import { useAuthStore } from '../../stores';
 
 const authStore = useAuthStore();
@@ -212,14 +209,6 @@ const toast = useToastService();
 const autoUpdatingItems = reactive(new Set());
 const highlightedItems = reactive(new Set());
 const savingNotes = ref(new Set());
-const showDialogConfirm = ref(false);
-const confirmDialogData = ref({
-  title: 'Confirmation Dialog',
-  message: 'Are you sure?',
-  confirmText: 'Yes',
-});
-// Confirmation dialog state
-const selectedItem = ref(null);
 
 // Search functionality
 const searchQuery = ref('');
@@ -238,38 +227,11 @@ const filteredData = computed(() => {
 
 // trigger when button auto note clicked
 const hitButtonAutoNote = async (item) => {
-  console.log('Auto Note clicked for item:', item.note);
-  // kalau note kosong, langsung update
-  if (!item.note?.length == 0 || item.note == null || (item.note.noteText.trim() === '' && (item.note.categoryId == null || item.note.categoryId === ''))) {
-    autoUpdateNote(item);
-    return;
-  }
-
-  // kalau sudah ada note, tampilkan dialog konfirmasi
-  selectedItem.value = item;
-  confirmDialogData.value.message = 'Catatan sudah ada sebelumnya. Apakah Anda ingin menimpa catatan lama dengan auto note baru?';
-  confirmDialogData.value.title = 'Konfirmasi Auto Note';
-  confirmDialogData.value.confirmText = 'Ya!';
-  showDialogConfirm.value = true;
-};
-
-//function handling confirmation dialog
-const handlingConfirmation = () => {
-  if (selectedItem.value) {
-    autoUpdateNote(selectedItem.value)
-  }
-  showDialogConfirm.value = false
-  selectedItem.value = null
-}
-
-//method for auto note
-const autoUpdateNote = async (item) => {
   const itemKey = `${item.CABANG}_${item.SHOP}_${item.TANGGAL}_${item.PRDCD}`;
   try {
-    // Add item to loading set
     autoUpdatingItems.add(itemKey);
-
-    toast.showInfo('Proses', 'Sedang memperbarui notes secara otomatis...');
+    toast.showInfo('Proses', 'Sedang menyiapkan query untuk auto note...');
+    
     const hasilAutoNote = await rekonVirtualMrgService.autoUpdateNote(
       item.CABANG,
       item.SHOP,
@@ -277,17 +239,27 @@ const autoUpdateNote = async (item) => {
       item.PRDCD
     );
     
-    item.note = hasilAutoNote.data.data;
+    const queries = hasilAutoNote.data?.data?.queries || [];
+    if (queries.length === 0) {
+      toast.showWarning('Perhatian', 'Tidak ada query yang di-generate');
+      return;
+    }
 
+    const queryText = queries
+      .map(q => `-- ${q.title}\n${q.sql}`)
+      .join('\n\n');
+
+    await navigator.clipboard.writeText(queryText);
+    toast.showSuccess('Berhasil', 'Query telah di-copy ke clipboard. Silakan paste dan jalankan di SQL client.');
+    
     highlightedItems.add(itemKey);
-    // Remove highlight after animation (2 detik)
     setTimeout(() => {
       highlightedItems.delete(itemKey);
     }, 2000);
   } catch (error) {
-    console.error('Error auto updating notes:', error);
-    toast.showError('Error', `Gagal memperbarui notes kdtk ${item.SHOP} secara otomatis`);
-  }finally {
+    console.error('Error generating auto note queries:', error);
+    toast.showError('Error', `Gagal menyiapkan query untuk kdtk ${item.SHOP}: ${error.response?.data?.message || error.message}`);
+  } finally {
     autoUpdatingItems.delete(itemKey);
   }
 };

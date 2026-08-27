@@ -6,7 +6,7 @@ export default {
   queries: {
     // WRC query template
     wrc: `SELECT KIRIM AS CABANG, SHOP, TANGGAL, PRDCD, SINGKATAN, ACOST, PRICE, MS_QTY AS QTY_MSTRAN, MT_QTY AS QTY_MTRAN, SEL, NOW() AS LASTCATCH FROM (
-            SELECT KODE_GUDANG AS KIRIM, MTRAN.SHOP, MTRAN.TANGGAL, MTRAN.PRDCD, MS_QTY, MT_QTY, MS_QTY - MT_QTY AS SEL FROM
+            SELECT KODE_GUDANG AS KIRIM, MTRAN.SHOP, MTRAN.TANGGAL, MTRAN.PRDCD, IFNULL(MS_QTY,0) AS MS_QTY, IFNULL(MT_QTY,0) AS MT_QTY, IFNULL(MS_QTY,0) - IFNULL(MT_QTY,0) AS SEL FROM
             (
             SELECT M.SHOP, M.TANGGAL, M.PRDCD, SUM(IFNULL(IF(MT.RTYPE='J',MT.QTY,MT.QTY*-1),0)) AS MT_QTY FROM (
               SELECT SHOP, TANGGAL, PRDCD FROM (
@@ -89,7 +89,7 @@ export default {
     // Maximum number of branches to process concurrently (for reconcileAllBranches)
     branchConcurrencyLimit: 3,
     // Timeout for individual store processing (milliseconds)
-    storeTimeoutMs: 10000, // 10 seconds - reduced for better timeout testing
+    storeTimeoutMs: 20000, // 20 seconds - reduced for better timeout testing
     // Timeout for individual query execution (milliseconds)
     queryTimeoutMs: 8000, // 8 seconds - reduced for better timeout testing
   },

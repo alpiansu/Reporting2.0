@@ -621,15 +621,21 @@ class RekonVirtualService {
                 }
                 await incrementProgress(storeCode, `Success ✅ (${result.newRecords.length} rows)`);
               } else {
-                await incrementProgress(storeCode, "Error ❌");
+                logger.warn(
+                  `[rekon_virtual_mrg] Screening failed for store ${storeCode}: ${result.error?.message || "Unknown error"}`,
+                );
+                await incrementProgress(storeCode, "Error ❌", result.error ? result.error.message : "Unknown error");
               }
             } catch (err) {
+              logger.error(`[rekon_virtual_mrg] Error processing store ${storeCode}: ${err.message}`);
               await RekapRemoteService.addToTemp(
                 cab,
                 storeCode,
                 "rekon_virtual_mrg",
                 `[${storeCode}] ERROR: ${err.message}`,
               );
+
+              logger.error(`[rekon_virtual_mrg] Error processing store ${storeCode}: ${err.message}`);
 
               await incrementProgress(storeCode, "Error ❌");
             } finally {
@@ -752,23 +758,34 @@ class RekonVirtualService {
 
       try {
         // --- Generate date-based table names & execute WRC query per day in parallel --- //
-        const daysInMonth = moment(`${strYear}-${strMonth}`, "YYYY-MM").daysInMonth();
+        const targetMonth = moment(`${strYear}-${strMonth}`, "YYYY-MM");
+        const today = moment();
+
+        const daysInMonth = targetMonth.daysInMonth();
+
+        let endDay = daysInMonth;
+
+        // Bulan berjalan → ambil sampai H-1
+        if (targetMonth.isSame(today, "month")) {
+          endDay = today.date() - 1;
+        }
+
         const dateQueries = [];
-        for (let d = 1; d <= daysInMonth; d++) {
-          const dateStr = moment(`${strYear}-${strMonth}`, "YYYY-MM")
-            .date(d)
-            .format("YYMMDD");
-          const sql = config.queries.wrc
-            .replace(/\{yymmdd\}/g, dateStr)
-            .replace(/\{kdtk\}/g, storeCode);
+
+        for (let d = 1; d <= endDay; d++) {
+          const dateStr = targetMonth.clone().date(d).format("YYMMDD");
+
+          const sql = config.queries.wrc.replace(/\{yymmdd\}/g, dateStr).replace(/\{kdtk\}/g, storeCode);
+
           dateQueries.push(
             wrcConnection
-              .query({ sql, timeout: config.parallelProcessing.queryTimeoutMs })
+              .query({
+                sql,
+                timeout: config.parallelProcessing.queryTimeoutMs,
+              })
               .then(([rows]) => rows)
               .catch(err => {
-                logger.warn(
-                  `[rekon_virtual_mrg] WRC query failed for ${storeCode} date ${dateStr}: ${err.message}`,
-                );
+                logger.warn(`[rekon_virtual_mrg] WRC query failed for ${storeCode} date ${dateStr}: ${err.message}`);
                 return [];
               }),
           );

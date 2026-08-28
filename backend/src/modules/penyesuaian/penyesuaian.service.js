@@ -3,6 +3,7 @@
  */
 import fs from "fs/promises";
 import path from "path";
+import mysql from "mysql2/promise";
 import logger from "../../config/logger.js";
 import SesuaiToko from "./penyesuaian.model.js";
 import SesuaiTokoSummary from "./penyesuaian_summary.model.js";
@@ -20,6 +21,9 @@ import { isNumericString, toNumber, formatNumber } from "../../utils/numberUtils
 import { fileUtils } from "../../utils/index.js";
 import screeningGuard from "../../utils/screeningGuard.js";
 import notificationsService from "../notifications/notifications.service.js";
+import WrcBulananService from "../../services/wrc.service.js";
+
+const wrcService = new WrcBulananService();
 
 // Path untuk folder JSON penyesuaian (akan di-split per periode)
 const PENYESUAIAN_DATA_DIR = path.join(process.cwd(), "data/penyesuaian");
@@ -211,7 +215,9 @@ class PenyesuaianService {
         // Sync to JSON file
         await this.syncToJsonFile(periode);
         if (result.hasIssue === false) {
-          const err = new Error("Nilai penyesuaian toko ini sudah di bawah ambang batas Rp 500.000, data detail tidak dapat ditampilkan.");
+          const err = new Error(
+            "Nilai penyesuaian toko ini sudah di bawah ambang batas Rp 500.000, data detail tidak dapat ditampilkan.",
+          );
           err.code = "STORE_BELOW_THRESHOLD";
           throw err;
         }
@@ -550,44 +556,41 @@ class PenyesuaianService {
    * @param {string} strMonth - Month in MM format
    * @returns {Promise<Object>} Result with success status, records, and hasIssue flag
    */
-  async processSingleStore(store, strPeriode, strYear, strMonth, sharedConnection = null, sessionId, options = {}) {
+  async processSingleStore(store, strPeriode, strYear, strMonth, _sharedConnection = null, sessionId, options = {}) {
     const { suppressIntermediateLogs = false } = options;
     const { storeCode, cab } = store;
 
     const results = { success: false, records: [], hasIssue: false };
-    const isShared = !!sharedConnection;
 
+    let wrcConnection;
     try {
-      // --- Store info --- //
-      const storeInfo = await storeService.getStoreIPHost(storeCode);
+      // --- Create WRC connection (per-branch) --- //
+      wrcConnection = await mysql.createConnection(await wrcService.getConnWRC(cab));
 
-      if (!storeInfo) {
-        await RekapRemoteService.addToTemp(cab, storeCode, "penyesuaian", `[${storeCode}] store info not found`);
-        return results;
-      }
-
-      // --- Create DB connection (or use shared) --- //
-      const storeConnection = isShared
-        ? sharedConnection
-        : await dbStore.createDbStore(storeInfo.dbHost, config.connectionRetry.maxRetries);
-
-      if (!storeConnection) {
-        await RekapRemoteService.addToTemp(
-          cab,
-          storeCode,
-          "penyesuaian",
-          `[${storeCode}] failed to connect after ${config.connectionRetry.maxRetries} attempts`,
-        );
+      if (!wrcConnection) {
+        await RekapRemoteService.addToTemp(cab, storeCode, "penyesuaian", `[${storeCode}] failed to connect to WRC`);
         return results;
       }
 
       try {
-        // Generate filetToko table name
-        const filetToko = this.getFiletTokoTableName(storeCode, strPeriode);
+        // --- Generate lastday (YYMMDD) for the target period --- //
+        // Bulan berjalan → ambil sampai H-1 (data hari ini belum lengkap)
+        // Selain itu → ambil sampai akhir bulan
+        const targetMonth = moment(`${strYear}-${strMonth}`, "YYYY-MM");
+        const today = moment();
+        let lastday;
+        if (targetMonth.isSame(today, "month")) {
+          lastday = today.subtract(1, "day").format("YYMMDD");
+        } else {
+          lastday = targetMonth.endOf("month").format("YYMMDD");
+        }
 
-        // STEP 1: Run filter query to check if store has data exceeding threshold
-        const filterQuery = config.queries.filter(filetToko, strPeriode, strMonth, strYear);
-        const [filterResult] = await storeConnection.query(filterQuery, [strMonth, strYear, strMonth, strYear]);
+        // STEP 1: Run filterWrc query to check if store has data exceeding threshold
+        const filterQuery = config.queries.filterWrc(cab, strPeriode, storeCode, lastday);
+        const [filterResult] = await wrcConnection.query({
+          sql: filterQuery,
+          timeout: config.parallelProcessing.queryTimeoutMs,
+        });
         if (!suppressIntermediateLogs) {
           await RekapRemoteService.addToTemp(
             cab,
@@ -597,7 +600,7 @@ class PenyesuaianService {
           );
         }
 
-        logger.info(`[penyesuaian.service] filterResult.length : ${filterResult.length}`);
+        logger.info(`[penyesuaian.service] filterResult.length toko ${storeCode} : ${filterResult.length}`);
         // STEP 2: If threshold exceeded, run detail query
         if (filterResult.length > 0) {
           await SesuaiTokoSummary.upsert(filterResult[0]);
@@ -618,12 +621,12 @@ class PenyesuaianService {
           );
         }
       } finally {
-        if (!isShared && storeConnection) {
-          await storeConnection.end();
+        if (wrcConnection) {
+          await wrcConnection.end();
         }
       }
     } catch (err) {
-      logger.error(`[penyesuaian.service] processSingleStore : error : ${err}`);
+      logger.error(`[penyesuaian.service] processSingleStore toko ${storeCode} : error : ${err}`);
       await RekapRemoteService.addToTemp(cab, storeCode, "penyesuaian", `[${storeCode}] ERROR: ${err.message}`);
     }
 
@@ -1480,11 +1483,11 @@ class PenyesuaianService {
           ...item,
           note: {
             unixKey: note.unixKey,
-            noteText: parsed.noteText,           // clean text tanpa snapshot
+            noteText: parsed.noteText, // clean text tanpa snapshot
             pic: note.pic,
             fullName: note.fullName || null,
             updated_at: note.updated_at || null,
-            snapshot: parsed.snapshot,           // { sesuaSaatNote, updtimeSaatNote } atau null
+            snapshot: parsed.snapshot, // { sesuaSaatNote, updtimeSaatNote } atau null
           },
         };
       });
@@ -1523,11 +1526,11 @@ class PenyesuaianService {
               ...item,
               note: {
                 unixKey: legacyNote.unixKey,
-                noteText: parsed.noteText,           // clean text tanpa snapshot
+                noteText: parsed.noteText, // clean text tanpa snapshot
                 pic: legacyNote.pic,
                 fullName: legacyNote.fullName,
                 updated_at: legacyNote.updated_at,
-                snapshot: parsed.snapshot,           // { sesuaSaatNote, updtimeSaatNote } atau null
+                snapshot: parsed.snapshot, // { sesuaSaatNote, updtimeSaatNote } atau null
               },
             };
           }
@@ -1576,7 +1579,9 @@ class PenyesuaianService {
     });
 
     if (!items || items.length === 0) {
-      logger.info(`[penyesuaian.service] generateAutoNote: data detail ${kdtk}/${periode} kosong, menarik dari store...`);
+      logger.info(
+        `[penyesuaian.service] generateAutoNote: data detail ${kdtk}/${periode} kosong, menarik dari store...`,
+      );
       await this.getDetailFromStore(kdtk, periode);
       // Re-query setelah data ditarik
       model = await SesuaiToko.getModel();
@@ -1620,13 +1625,8 @@ class PenyesuaianService {
       // Jika total plus → cari item dengan SESUAI positif (penyebab kenaikan)
       // Jika total minus → cari item dengan SESUAI negatif (penyebab penurunan)
       const isTotalPlus = totalSesuai >= 0;
-      const sameDirItems = rawItems.filter(i => isTotalPlus
-        ? Number(i.SESUAI) > 0
-        : Number(i.SESUAI) < 0
-      );
-      let sameDirAbsTotal = sameDirItems.reduce(
-        (s, i) => s + Math.abs(Number(i.SESUAI) || 0), 0
-      );
+      const sameDirItems = rawItems.filter(i => (isTotalPlus ? Number(i.SESUAI) > 0 : Number(i.SESUAI) < 0));
+      let sameDirAbsTotal = sameDirItems.reduce((s, i) => s + Math.abs(Number(i.SESUAI) || 0), 0);
 
       let sorted = [...sameDirItems]
         .map(i => ({ ...i, absSesuai: Math.abs(Number(i.SESUAI) || 0) }))
@@ -1680,29 +1680,25 @@ class PenyesuaianService {
           if (acostAnalysis.cause === "transaction_evidence" && changes.length > 0) {
             // Ambil perubahan pertama yang signifikan untuk diringkas
             const firstChange = changes[0];
-            const tgl = firstChange.tanggal
-              ? moment(firstChange.tanggal).format("DD MMMM YYYY")
-              : "";
+            const tgl = firstChange.tanggal ? moment(firstChange.tanggal).format("DD MMMM YYYY") : "";
             const hargaDari = Number(firstChange.dari).toLocaleString("en-US");
             const hargaKe = Number(firstChange.ke).toLocaleString("en-US");
-            const sourceLabel = {
-              bpb_i: "BPB/Transfer Masuk",
-              retur_k: "Retur",
-              trfout_o: "Transfer Keluar",
-              konversi_bm: "Konversi Racikan",
-              ba: "Barang Afkir",
-              bs: "Barang Rusak",
-              stock_opname: "Stock Opname",
-              mtran_hpp: "Penjualan (HPP)",
-            }[firstChange.source] || firstChange.source;
+            const sourceLabel =
+              {
+                bpb_i: "BPB/Transfer Masuk",
+                retur_k: "Retur",
+                trfout_o: "Transfer Keluar",
+                konversi_bm: "Konversi Racikan",
+                ba: "Barang Afkir",
+                bs: "Barang Rusak",
+                stock_opname: "Stock Opname",
+                mtran_hpp: "Penjualan (HPP)",
+              }[firstChange.source] || firstChange.source;
 
             detailInfo = `${sourceLabel} — harga berubah ${tgl ? `per ${tgl} ` : ""}dari Rp ${hargaDari} menjadi Rp ${hargaKe}`;
 
             // Cek apakah retur K dengan LCOST match
-            if (
-              firstChange.source === "retur_k" &&
-              firstChange.lcostMatch === true
-            ) {
+            if (firstChange.source === "retur_k" && firstChange.lcostMatch === true) {
               detailInfo += " (LCOST sesuai rule)";
             }
           } else if (acostAnalysis.cause === "protect_sync") {
@@ -1715,17 +1711,13 @@ class PenyesuaianService {
             detailInfo = `Perubahan harga tanpa transaksi tercatat (BEGBAL: Rp ${Number(acostAnalysis.begbal).toLocaleString("en-US")}, ACOST: Rp ${Number(acostAnalysis.acostSekarang).toLocaleString("en-US")})`;
           }
         } catch (inspectErr) {
-          logger.warn(
-            `[penyesuaian.service] Gagal deep dive ${kdtk}/${prdcd}: ${inspectErr.message}`,
-          );
+          logger.warn(`[penyesuaian.service] Gagal deep dive ${kdtk}/${prdcd}: ${inspectErr.message}`);
           // Fallback: berdasarkan data sesuai_toko
           detailInfo += ` (data dari sesuai_toko — BEGBAL: Rp ${begbal.toLocaleString("en-US")})`;
         }
 
         const arah = sesuiVal >= 0 ? "kenaikan" : "penurunan";
-        lines.push(
-          `• ${nama} - ${prdcd}: ${arah} Rp ${Math.abs(sesuiVal).toLocaleString("en-US")} — ${detailInfo}`,
-        );
+        lines.push(`• ${nama} - ${prdcd}: ${arah} Rp ${Math.abs(sesuiVal).toLocaleString("en-US")} — ${detailInfo}`);
       }
 
       noteText = lines.join("\n");
@@ -1775,14 +1767,12 @@ class PenyesuaianService {
       if (!summary) return null;
 
       const snapshotSesuai = Math.round(Number(summary.SESUAI) || 0);
-      const formatLocal = (d) => {
+      const formatLocal = d => {
         const date = d instanceof Date ? d : new Date(d);
         const pad = n => String(n).padStart(2, "0");
-        return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
       };
-      const snapshotUpdtime = summary.UPDTIME
-        ? formatLocal(summary.UPDTIME)
-        : formatLocal(new Date());
+      const snapshotUpdtime = summary.UPDTIME ? formatLocal(summary.UPDTIME) : formatLocal(new Date());
 
       return { snapshotSesuai, snapshotUpdtime };
     } catch (err) {
@@ -1870,14 +1860,24 @@ class PenyesuaianService {
       const maxPosByCab = {};
       for (const r of maxPositiveRows) {
         if (!maxPosByCab[r.CABANG] || Math.abs(Number(r.SESUAI)) > Math.abs(Number(maxPosByCab[r.CABANG].SESUAI))) {
-          maxPosByCab[r.CABANG] = { prdcd: r.PRDCD, name: r.SINGKATAN, kdtk: r.KDTK, sesui: Math.round(Number(r.SESUAI)) };
+          maxPosByCab[r.CABANG] = {
+            prdcd: r.PRDCD,
+            name: r.SINGKATAN,
+            kdtk: r.KDTK,
+            sesui: Math.round(Number(r.SESUAI)),
+          };
         }
       }
 
       const maxNegByCab = {};
       for (const r of maxNegativeRows) {
         if (!maxNegByCab[r.CABANG] || Math.abs(Number(r.SESUAI)) > Math.abs(Number(maxNegByCab[r.CABANG].SESUAI))) {
-          maxNegByCab[r.CABANG] = { prdcd: r.PRDCD, name: r.SINGKATAN, kdtk: r.KDTK, sesui: Math.round(Number(r.SESUAI)) };
+          maxNegByCab[r.CABANG] = {
+            prdcd: r.PRDCD,
+            name: r.SINGKATAN,
+            kdtk: r.KDTK,
+            sesui: Math.round(Number(r.SESUAI)),
+          };
         }
       }
 
@@ -2038,15 +2038,13 @@ class PenyesuaianService {
 
     const signDirection = totalSesuai >= 0 ? "positive" : "negative";
     const signFiltered =
-      totalSesuai >= 0
-        ? records.filter((r) => Number(r.SESUAI) > 0)
-        : records.filter((r) => Number(r.SESUAI) < 0);
+      totalSesuai >= 0 ? records.filter(r => Number(r.SESUAI) > 0) : records.filter(r => Number(r.SESUAI) < 0);
 
     const sorted = [...signFiltered].sort((a, b) => Math.abs(b.SESUAI) - Math.abs(a.SESUAI));
 
     const filteredTotal = sorted.reduce((sum, r) => sum + Math.abs(Number(r.SESUAI)), 0);
 
-    const topItems = sorted.slice(0, 5).map((r) => ({
+    const topItems = sorted.slice(0, 5).map(r => ({
       prdcd: r.PRDCD,
       name: r.SINGKATAN,
       sesui: Number(r.SESUAI),
@@ -2055,7 +2053,7 @@ class PenyesuaianService {
     }));
 
     let cumulative = 0;
-    const paretoCount = sorted.filter((r) => {
+    const paretoCount = sorted.filter(r => {
       cumulative += Math.abs(Number(r.SESUAI));
       return cumulative / filteredTotal <= 0.8;
     }).length;
@@ -2096,9 +2094,7 @@ class PenyesuaianService {
       const summaries = await SesuaiTokoSummary.findAll({
         where: { PERIODE: periode },
       });
-      const summaryMap = new Map(
-        summaries.map(s => [`${s.KDTK}${s.PERIODE}`, Number(s.SESUAI) || 0])
-      );
+      const summaryMap = new Map(summaries.map(s => [`${s.KDTK}${s.PERIODE}`, Number(s.SESUAI) || 0]));
 
       let notifiedCount = 0;
 
@@ -2140,7 +2136,7 @@ class PenyesuaianService {
           metadataFilters: { kdtk, periode },
         });
 
-        const buildMessage = (pct) =>
+        const buildMessage = pct =>
           `${storeName} (${kdtk}) — penyesuaian bergerak ${pct}% lebih besar sejak note dibuat`;
 
         if (existingNotif) {
@@ -2196,7 +2192,9 @@ class PenyesuaianService {
       }
 
       if (notifiedCount > 0) {
-        logger.info(`[penyesuaian.service] checkAndNotifyWorsened: ${notifiedCount} notifications created for periode ${periode}`);
+        logger.info(
+          `[penyesuaian.service] checkAndNotifyWorsened: ${notifiedCount} notifications created for periode ${periode}`,
+        );
       }
     } catch (err) {
       logger.error(`[penyesuaian.service] checkAndNotifyWorsened error: ${err.message}`);

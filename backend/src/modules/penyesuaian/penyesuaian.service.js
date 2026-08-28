@@ -7,7 +7,6 @@ import mysql from "mysql2/promise";
 import logger from "../../config/logger.js";
 import SesuaiToko from "./penyesuaian.model.js";
 import SesuaiTokoSummary from "./penyesuaian_summary.model.js";
-import dbStore from "../../config/db_store.js";
 import config from "./penyesuaian.config.js";
 import storeService from "../store/storeService.js";
 import pLimit from "p-limit";
@@ -527,25 +526,20 @@ class PenyesuaianService {
   }
 
   /**
-   * Calculate previous periode (1 month before)
-   * @param {string} periode - Current periode in YYMM format
-   * @returns {string} Previous periode in YYMM format
+   * Generate lastday (YYMMDD) untuk periode target
+   * Bulan berjalan → H-1 (data hari ini belum lengkap)
+   * Selain itu → akhir bulan
+   * @param {string} strYear - Year in YYYY format
+   * @param {string} strMonth - Month in MM format
+   * @returns {string} lastday in YYMMDD format
    */
-  getPreviousPeriode(periode) {
-    const currentDate = moment(periode, "YYMM");
-    const previousDate = currentDate.subtract(1, "months");
-    return previousDate.format("YYMM");
-  }
-
-  /**
-   * Generate filetToko table name
-   * @param {string} kdtk - Store code
-   * @param {string} periode - Current periode in YYMM format
-   * @returns {string} Table name (e.g., TW752510)
-   */
-  getFiletTokoTableName(kdtk, periode) {
-    const previousPeriode = this.getPreviousPeriode(periode);
-    return `${kdtk}${previousPeriode}`;
+  getLastday(strYear, strMonth) {
+    const targetMonth = moment(`${strYear}-${strMonth}`, "YYYY-MM");
+    const today = moment();
+    if (targetMonth.isSame(today, "month")) {
+      return today.subtract(1, "day").format("YYMMDD");
+    }
+    return targetMonth.endOf("month").format("YYMMDD");
   }
 
   /**
@@ -573,17 +567,7 @@ class PenyesuaianService {
       }
 
       try {
-        // --- Generate lastday (YYMMDD) for the target period --- //
-        // Bulan berjalan → ambil sampai H-1 (data hari ini belum lengkap)
-        // Selain itu → ambil sampai akhir bulan
-        const targetMonth = moment(`${strYear}-${strMonth}`, "YYYY-MM");
-        const today = moment();
-        let lastday;
-        if (targetMonth.isSame(today, "month")) {
-          lastday = today.subtract(1, "day").format("YYMMDD");
-        } else {
-          lastday = targetMonth.endOf("month").format("YYMMDD");
-        }
+        const lastday = this.getLastday(strYear, strMonth);
 
         // STEP 1: Run filterWrc query to check if store has data exceeding threshold
         const filterQuery = config.queries.filterWrc(cab, strPeriode, storeCode, lastday);
@@ -669,6 +653,11 @@ class PenyesuaianService {
         );
 
         // ✅ FINALIZING
+
+        // Jika toko resolved (RECID='1'), hapus detail sesuai_toko agar tidak tampil
+        if (result.success && !result.hasIssue) {
+          await SesuaiToko.mergeStagingAndCleanup(sessionId, strPeriode, [kdtk]);
+        }
 
         // Save logs to database
         await RekapRemoteService.saveLogsToDatabase();
@@ -772,6 +761,7 @@ class PenyesuaianService {
       const newRecords = [];
       const screenedStores = new Set(); // All stores that were processed (success or error)
       const activeStores = new Set(); // Stores that still have issues
+      const resolvedStores = new Set(); // Stores now resolved (RECID='1'), detail harus dibersihkan
 
       let processedCount = 0;
       const totalStores = storesToProcess.length;
@@ -830,7 +820,8 @@ class PenyesuaianService {
                   newRecords.push(...result.records);
                   await incrementProgress(storeCode, `Success ✅ (${result.records.length} rows)`);
                 } else {
-                  // Store below threshold (no issues)
+                  // Store below threshold (no issues) → resolved, hapus detail nanti
+                  resolvedStores.add(storeCode);
                   await incrementProgress(storeCode, "Masih Dibawah Nilai Toleransi ✓");
                 }
               } else {
@@ -866,6 +857,12 @@ class PenyesuaianService {
         description: "Merging staging data & cleaning up resolved stores…",
         status: "finalizing",
       });
+
+      // Hapus detail sesuai_toko untuk toko yang kini resolved (RECID='1')
+      if (resolvedStores.size > 0) {
+        await SesuaiToko.mergeStagingAndCleanup(sessionId, strPeriode, [...resolvedStores]);
+        logger.info(`[penyesuaian.service] Cleaned up detail for ${resolvedStores.size} resolved stores`);
+      }
 
       // ── Sisa finalizing ──
       await progressService.updateProgress(taskId, processedCount, {
@@ -1165,68 +1162,78 @@ class PenyesuaianService {
     }
   }
 
-  //buat function untuk melihat detail langsung open connection ke store, tanpa cache, tanpa json file, tanpa summary, langsung query ke store
+  //buat function untuk melihat detail langsung open connection ke WRC, tanpa cache, tanpa json file, tanpa summary, langsung query ke WRC
   async getDetailFromStore(kdtk, strPeriode) {
     try {
       const strYear = moment(strPeriode, "YYMM").format("YYYY");
       const strMonth = moment(strPeriode, "YYMM").format("MM");
       const results = { success: false, records: [], hasIssue: false };
-      const filetToko = this.getFiletTokoTableName(kdtk, strPeriode);
-      const query = config.queries.fullDetail(filetToko, strPeriode);
+
+      // Resolve cabang untuk koneksi WRC
       await storeService.ensureInitialized();
-      const storeIp = await storeService.getStoreIPHost(kdtk);
+      const storeInfo = await storeService.getStoreByCode(kdtk);
+      const cab = storeInfo ? storeInfo.branch || storeInfo.cab : "UNKNOWN";
+      const lastday = this.getLastday(strYear, strMonth);
+      const query = config.queries.fullDetailWrc(cab, strPeriode, kdtk, lastday);
 
-      if (!storeIp) {
-        throw new Error(`Store IP info not found for ${kdtk}`);
-      }
-      const storeConnection = await dbStore.createDbStore(storeIp.dbHost, config.connectionRetry.maxRetries);
+      let wrcConnection;
+      try {
+        wrcConnection = await mysql.createConnection(await wrcService.getConnWRC(cab));
 
-      if (!storeConnection) {
-        throw new Error(`Connection to store ${kdtk} has failed to open!`);
-      }
-      const [detailResult] = await storeConnection.query(query, [strMonth, strYear, strMonth, strYear]);
-      //insert detail ke table sesuai_toko
-      if (detailResult.length > 0) {
-        // Normalize field names to match model (uppercase)
-        const normalizedRecords = detailResult.map(record => ({
-          RECID: "*", // Default value for tracking
-          CABANG: record.CAB,
-          PERIODE: record.PERIODE,
-          KDTK: record.KDTK,
-          PRDCD: record.PRDCD,
-          SINGKATAN: record.SINGKATAN,
-          RECID_PRODMAST: record.RECID_PRODMAST,
-          PTAG: record.PTAG,
-          BEGBAL: record.BEGBAL,
-          TRFIN: record.TRFIN,
-          TRFOUT: record.TRFOUT,
-          RP_SALES: record.RP_SALES,
-          RP_RETUR_SALES: record.RP_RETUR_SALES,
-          ADJ: record.ADJ,
-          BA: record.BA,
-          BS: record.BS,
-          ACOST: record.ACOST,
-          LCOST: record.lcost,
-          STOCK: record.stock,
-          RP_STOCK: record.rp_stock,
-          SESUAI: record.sesuai,
-          UPDTIME: new Date(),
-        }));
-
-        //hapus dulu data detail di sesuai_toko
-        await SesuaiToko.destroy({
-          where: { kdtk: kdtk, periode: strPeriode },
+        if (!wrcConnection) {
+          throw new Error(`Connection to WRC for store ${kdtk} has failed to open!`);
+        }
+        const [detailResult] = await wrcConnection.query({
+          sql: query,
+          timeout: config.parallelProcessing.queryTimeoutMs,
         });
+        //insert detail ke table sesuai_toko
+        if (detailResult.length > 0) {
+          // Normalize field names to match model (uppercase)
+          const normalizedRecords = detailResult.map(record => ({
+            RECID: "*", // Default value for tracking
+            CABANG: record.CABANG,
+            PERIODE: record.PERIODE,
+            KDTK: record.KDTK,
+            PRDCD: record.PRDCD ?? record.prdcd,
+            SINGKATAN: record.SINGKATAN,
+            RECID_PRODMAST: record.RECID_PRODMAST,
+            PTAG: record.PTAG,
+            BEGBAL: record.BEGBAL,
+            TRFIN: record.TRFIN,
+            TRFOUT: record.TRFOUT,
+            RP_SALES: record.RP_SALES,
+            RP_RETUR_SALES: record.RP_RETUR_SALES,
+            ADJ: record.ADJ,
+            BA: record.BA,
+            BS: record.BS,
+            ACOST: record.ACOST,
+            LCOST: record.lcost,
+            STOCK: record.stock,
+            RP_STOCK: record.rp_stock,
+            SESUAI: record.sesuai,
+            UPDTIME: new Date(),
+          }));
 
-        // Bulk create records to database (detail table)
-        await SesuaiToko.bulkCreate(normalizedRecords);
+          //hapus dulu data detail di sesuai_toko
+          await SesuaiToko.destroy({
+            where: { kdtk: kdtk, periode: strPeriode },
+          });
 
-        results.records = normalizedRecords;
-        results.hasIssue = true; // Store has issues
-        results.success = true;
-      } else {
-        results.success = true; // Below threshold is still success
-        results.hasIssue = false; // No issues
+          // Bulk create records to database (detail table)
+          await SesuaiToko.bulkCreate(normalizedRecords);
+
+          results.records = normalizedRecords;
+          results.hasIssue = true; // Store has issues
+          results.success = true;
+        } else {
+          results.success = true; // Below threshold is still success
+          results.hasIssue = false; // No issues
+        }
+      } finally {
+        if (wrcConnection) {
+          await wrcConnection.end();
+        }
       }
       return results;
     } catch (error) {

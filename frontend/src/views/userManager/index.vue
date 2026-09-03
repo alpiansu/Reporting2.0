@@ -226,11 +226,10 @@
 
     <!-- ===== FORM DIALOG ===== -->
     <UserFormDialog
-      :visible="formDialogVisible"
+      v-model:visible="formDialogVisible"
       :user="selectedUser"
       :isEditing="isEditing"
       :saving="formSaving"
-      @close="closeFormDialog"
       @save="handleSaveUser"
     />
 

@@ -7,8 +7,8 @@
     :draggable="false"
     :style="{ width: '520px' }"
     class="user-form-dialog"
+    @update:visible="onDialogUpdateVisible"
     @hide="onHide"
-    @click="closeDialog"
   >
     <div class="form-body">
       <!-- Username -->
@@ -157,7 +157,7 @@ const props = defineProps({
 });
 
 // ── Emits ────────────────────────────────────────────────────────────────
-const emit = defineEmits(['close', 'save']);
+const emit = defineEmits(['update:visible', 'save']);
 
 // ── Constants ────────────────────────────────────────────────────────────
 const roleOptions = [
@@ -247,12 +247,15 @@ function submitForm() {
 }
 
 function closeDialog() {
-  emit('close');
+  emit('update:visible', false);
+}
+
+function onDialogUpdateVisible(value) {
+  emit('update:visible', value);
 }
 
 function onHide() {
-  // Dialog closed via backdrop click / escape — notify parent
-  emit('close');
+  emit('update:visible', false);
 }
 </script>
 

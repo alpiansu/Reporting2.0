@@ -1207,7 +1207,7 @@ class PenyesuaianService {
             ADJ: record.ADJ,
             BA: record.BA,
             BS: record.BS,
-            ACOST: record.ACOST,
+            ACOST: record.acost,
             LCOST: record.lcost,
             STOCK: record.stock,
             RP_STOCK: record.rp_stock,

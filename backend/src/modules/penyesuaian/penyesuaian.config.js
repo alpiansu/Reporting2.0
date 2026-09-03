@@ -848,7 +848,7 @@ export default {
     // Timeout for individual store processing (milliseconds)
     storeTimeoutMs: 90000, // 90 seconds
     // Timeout for individual query execution (milliseconds)
-    queryTimeoutMs: 8000, // 8 seconds
+    queryTimeoutMs: 20000, // 20 seconds
   },
 
   // Threshold for filtering data (absolute value)

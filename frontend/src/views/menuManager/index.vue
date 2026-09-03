@@ -20,6 +20,28 @@
     <div class="card">
       <div class="card-header">
         <h2>Daftar Menu</h2>
+        <div class="search-wrapper">
+          <div class="search-input-group">
+            <i class="pi pi-search search-icon"></i>
+            <input
+              v-model="searchQuery"
+              type="text"
+              class="search-input"
+              placeholder="Cari menu, path, atau icon..."
+            />
+            <button
+              v-if="searchQuery"
+              class="search-clear-btn"
+              @click="searchQuery = ''"
+              title="Hapus pencarian"
+            >
+              <i class="pi pi-times"></i>
+            </button>
+          </div>
+          <span v-if="searchQuery" class="search-count">
+            {{ filteredCategories.length }} kategori, {{ filteredCategories.reduce((sum, c) => sum + (c.items?.length || 0), 0) }} item
+          </span>
+        </div>
       </div>
 
       <div class="card-body">
@@ -46,7 +68,14 @@
         </div>
 
         <div v-else>
-          <div v-for="(category, index) in menuStore.menuCategories" :key="index" class="menu-category mb-4">
+          <div v-if="searchQuery && filteredCategories.length === 0" class="empty-state">
+            <i class="pi pi-search"></i>
+            <p>Tidak ditemukan menu yang cocok dengan pencarian "{{ searchQuery }}"</p>
+            <button class="add-button" @click="searchQuery = ''">
+              <i class="pi pi-times"></i> Hapus Pencarian
+            </button>
+          </div>
+          <div v-for="(category, index) in filteredCategories" :key="index" class="menu-category mb-4">
             <div class="menu-category-header">
               <h3>{{ category.name }}</h3>
               <div class="category-actions">
@@ -143,7 +172,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useMenuStore } from '../../stores';
 import { useToastService } from '../../utils/toast';
 import CategoryDialog from '../../components/CategoryDialog.vue';
@@ -168,6 +197,29 @@ const currentMenuItemId = ref(null);
 const confirmMessage = ref('');
 const confirmCallback = ref(null);
 const confirmType = ref('warning');
+
+// Search
+const searchQuery = ref('');
+
+const filteredCategories = computed(() => {
+  const q = searchQuery.value.toLowerCase().trim();
+  if (!q) return menuStore.menuCategories;
+
+  return menuStore.menuCategories
+    .map((category) => {
+      const categoryMatch = category.name?.toLowerCase().includes(q);
+      const filteredItems = (category.items || []).filter(
+        (item) =>
+          item.text?.toLowerCase().includes(q) ||
+          item.path?.toLowerCase().includes(q) ||
+          item.icon?.toLowerCase().includes(q)
+      );
+      if (categoryMatch) return { ...category };
+      if (filteredItems.length > 0) return { ...category, items: filteredItems };
+      return null;
+    })
+    .filter(Boolean);
+});
 
 // Load menus on component mount
 onMounted(async () => {

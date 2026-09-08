@@ -1,6 +1,4 @@
-import UserService from "../modules/user/user.service.js";
-
-const userService = new UserService();
+import userService from "../modules/user/user.service.js";
 
 const UserWrapper = {
   async findAll(options = {}) {

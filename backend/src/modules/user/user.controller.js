@@ -1,7 +1,5 @@
-import UserService from "./user.service.js";
+import userService from "./user.service.js";
 import logger from "../../config/logger.js";
-
-const userService = new UserService();
 
 /**
  * Get all users

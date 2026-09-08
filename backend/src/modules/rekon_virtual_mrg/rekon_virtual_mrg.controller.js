@@ -5,10 +5,8 @@ import logger from "../../config/logger.js";
 import { apiResponse } from "../../utils/index.js";
 import rekonVirtualService from "./rekon_virtual_mrg.service.js";
 import notesService from "../notes/notes.service.js";
-import UserService from "../user/user.service.js";
+import userService from "../user/user.service.js";
 import noteCategoriesService from "../note_categories/noteCategories.service.js";
-
-const userService = new UserService();
 
 /**
  * Start screening/reconciliation process

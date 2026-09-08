@@ -14,9 +14,7 @@ import { fileURLToPath } from "url";
 import { dirname } from "path";
 import crypto from "crypto";
 import logger from "../../../config/logger.js";
-import UserService from "../../user/user.service.js";
-
-const userService = new UserService();
+import userService from "../../user/user.service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

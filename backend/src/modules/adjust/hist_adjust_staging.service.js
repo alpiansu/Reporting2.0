@@ -3,7 +3,7 @@ import { createWriteStream } from "fs";
 import path from "path";
 import logger from "../../config/logger.js";
 import HistAdjust from "../../models/hist_adjust.model.js";
-import UserService from "../user/user.service.js";
+import userService from "../user/user.service.js";
 import lockfile from "proper-lockfile";
 import { Op } from "sequelize";
 
@@ -26,7 +26,7 @@ class HistAdjustStagingService {
     this.cacheTTL = 5 * 60 * 1000; // 5 minutes TTL
     this.isInitialized = false;
 
-    this.userService = new UserService();
+    this.userService = userService;
   }
 
   /**

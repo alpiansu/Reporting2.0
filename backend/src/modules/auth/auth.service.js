@@ -2,12 +2,11 @@ import User from "../../models/user.model.js";
 import jwt from "../../config/jwt.js";
 import logger from "../../config/logger.js";
 import UserActivityService from "../user-activity/userActivity.service.js";
-import UserService from "../user/user.service.js";
+import userService from "../user/user.service.js";
 import fs from "fs";
 import path from "path";
 
 const userActivityService = new UserActivityService();
-const userService = new UserService();
 
 /**
  * Service for handling authentication related operations

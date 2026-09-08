@@ -5,7 +5,7 @@ import logger from "../../config/logger.js";
 import { apiResponse } from "../../utils/index.js";
 import penyesuaianService from "./penyesuaian.service.js";
 import notesService from "../notes/notes.service.js";
-import UserService from "../user/user.service.js";
+import userService from "../user/user.service.js";
 import storeInspectorService from "../../services/storeInspector.service.js";
 
 /**
@@ -321,7 +321,7 @@ export const updateNote = async (req, res) => {
       return apiResponse.badRequest(res, "noteText wajib diisi");
     }
 
-    const userService = new UserService();
+    
     const user = await userService.findByCredentials(pic);
 
     // ✨ Ambil snapshot SESUAI saat ini dari summary

@@ -5,7 +5,7 @@ import logger from "../../config/logger.js";
 import { apiResponse } from "../../utils/index.js";
 import rekonSalesService from "./rekon_sales.service.js";
 import notesService from "../notes/notes.service.js";
-import UserService from "../user/user.service.js";
+import userService from "../user/user.service.js";
 
 /**
  * Start screening process
@@ -334,7 +334,7 @@ export const updateNote = async (req, res) => {
       return apiResponse.badRequest(res, "noteText wajib diisi");
     }
 
-    const userService = new UserService();
+    
     const user = await userService.findByCredentials(pic);
 
     // Jika note kosong (hapus note)

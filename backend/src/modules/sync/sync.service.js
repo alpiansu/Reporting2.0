@@ -4,7 +4,7 @@
 import ExternalDbService from './external-db.service.js';
 import storeService from '../store/storeService.js';
 import MDeptService from '../m_dept/m_dept.service.js';
-import UserService from '../user/user.service.js';
+import userService from '../user/user.service.js';
 import logger from '../../config/logger.js';
 import syncConfig from '../../config/sync.config.js';
 
@@ -168,7 +168,7 @@ class SyncService {
 
       logger.info(`Processing ${externalData.length} user records from external database`);
 
-      const userService = new UserService();
+      
       await userService.init();
 
       let updated = 0;

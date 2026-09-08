@@ -15,7 +15,7 @@ import RekapRemoteService from "../rekap_remote/rekap_remote.service.js";
 import notesService from "../notes/notes.service.js";
 import progressService from "../progress/progress.service.js";
 import storeInspectorService from "../../services/storeInspector.service.js";
-import UserService from "../user/user.service.js";
+import userService from "../user/user.service.js";
 import { isNumericString, toNumber, formatNumber } from "../../utils/numberUtils.js";
 import { fileUtils } from "../../utils/index.js";
 import screeningGuard from "../../utils/screeningGuard.js";
@@ -1750,8 +1750,8 @@ class PenyesuaianService {
     const note = await notesService.upsert(noteData);
     const parsed = this.parseNoteSnapshot(noteText, snapshot);
 
-    const us = new UserService();
-    const user = await us.findByCredentials(pic);
+    
+    const user = await userService.findByCredentials(pic);
 
     const result = {
       ...note.toJSON(),

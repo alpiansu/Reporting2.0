@@ -11,7 +11,7 @@ import {
   cleanupTestData,
 } from './user.controller.js';
 import userRoutes from './user.routes.js';
-import UserService from './user.service.js';
+import userService from './user.service.js';
 
 const UserController = {
   getAllUsers,
@@ -28,9 +28,6 @@ export default {
   userRoutes,
   UserService,
   initialize: (app) => {
-    // Initialize services
-    const userService = new UserService();
-    
     // Register routes
     app.use('/api/users', userRoutes);
     

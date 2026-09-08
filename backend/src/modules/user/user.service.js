@@ -488,4 +488,11 @@ class UserService {
   }
 }
 
-export default UserService;
+/**
+ * Singleton: semua module share 1 instance yang sama.
+ * Ini memastikan cache terhubung — update di satu tempat terlihat di semua tempat.
+ * Tanpa singleton, setiap `new UserService()` punya cache terpisah,
+ * sehingga auth service tidak tahu kalau role user di-update di user management.
+ */
+const userServiceInstance = new UserService();
+export default userServiceInstance;

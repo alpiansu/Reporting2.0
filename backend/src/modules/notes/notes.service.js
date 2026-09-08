@@ -9,9 +9,7 @@ import NotesModel from "../../models/notes.model.js";
 import config from "./notes.config.js";
 import sysConfig from "../../config/index.js";
 import logger from "../../config/logger.js";
-import UserService from "../user/user.service.js";
-
-const userService = new UserService();
+import userService from "../user/user.service.js";
 
 class NotesService {
   constructor() {

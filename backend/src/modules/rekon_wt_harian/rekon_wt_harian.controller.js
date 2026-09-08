@@ -4,7 +4,7 @@
 import rekonWtHarianService from "./rekon_wt_harian.service.js";
 import progressService from "../progress/progress.service.js";
 import notesService from "../notes/notes.service.js";
-import UserService from "../user/user.service.js";
+import userService from "../user/user.service.js";
 import logger from "../../config/logger.js";
 import config from "../../config/rekon_wt_harian.config.js";
 import storeService from "../../modules/store/storeService.js";
@@ -379,7 +379,7 @@ export const updateNote = async (req, res) => {
       return res.status(400).json({ success: false, message: "noteText wajib diisi" });
     }
 
-    const userService = new UserService();
+    
     const user = await userService.findByCredentials(pic);
 
     if (String(noteText).trim().length === 0) {

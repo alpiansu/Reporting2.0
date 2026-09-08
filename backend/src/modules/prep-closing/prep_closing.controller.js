@@ -5,7 +5,7 @@ import logger from "../../config/logger.js";
 import { apiResponse } from "../../utils/index.js";
 import prepClosingService from "./prep_closing.service.js";
 import notesService from "../notes/notes.service.js";
-import UserService from "../user/user.service.js";
+import userService from "../user/user.service.js";
 import { wrcExtractorService } from "./wrc_extractor.service.js";
 
 /**
@@ -326,7 +326,7 @@ export const updateNote = async (req, res) => {
       return apiResponse.badRequest(res, "noteText wajib diisi");
     }
 
-    const userService = new UserService();
+    
     const user = await userService.findByCredentials(pic);
 
     const noteData = {

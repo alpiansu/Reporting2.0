@@ -132,14 +132,6 @@
               @click="refreshStoreData(item)" :disabled="isItemBusy(item)"
               :label="isItemAutoUpdating(item) ? ` ...` : `Refresh`" />
           </div>
-          <Button
-            :label="isItemAutoNoting(item) ? 'Processing...' : 'Auto Note'"
-            @click="hitAutoNote(item)"
-            :disabled="isItemBusy(item)"
-            :icon="isItemAutoNoting(item) ? 'pi pi-spin pi-spinner' : 'pi pi-sparkles'"
-            :class="{ 'btn-processing': isItemAutoNoting(item), 'sparkle-icon': !isItemAutoNoting(item) }"
-            severity="secondary" outlined size="small"
-          />
         </div>
       </td>
     </template>
@@ -149,19 +141,6 @@
   <PenyesuaianDetailModal :show="detailModalVisible" :periode="periode" :cab="selectedItem?.CABANG"
     :kdtk="selectedItem?.KDTK || ''" :sesuai="formatCurrency(selectedItem?.SESUAI)"
     :noteSnapshotData="getSnapshotInfo(selectedItem)" @close="closeDetailModal" />
-
-  <!-- Auto Note Confirmation Dialog -->
-  <Dialog v-model:visible="autoNoteDialogVisible" header="Konfirmasi Auto Note" :modal="true" :closable="true"
-    class="auto-note-dialog" :style="{ width: '450px' }">
-    <div class="confirm-content">
-      <i class="pi pi-refresh confirm-icon"></i>
-      <p>Catatan sudah ada sebelumnya. Apakah Anda ingin menimpa catatan lama dengan auto note baru?</p>
-    </div>
-    <template #footer>
-      <Button label="Batal" severity="secondary" @click="cancelAutoNote" />
-      <Button label="Ya, Timpa!" severity="success" icon="pi pi-check" @click="executeAutoNote()" />
-    </template>
-  </Dialog>
 
   <!-- Delete Note Confirmation Dialog -->
   <Dialog v-model:visible="deleteDialogVisible" header="Hapus Note" :modal="true" :closable="true"
@@ -238,11 +217,6 @@ const deletingNote = ref(false);
 const deleteDialogVisible = ref(false);
 const itemToDelete = ref(null);
 const selectedItem = ref(null);
-
-// Auto Note state
-const autoNoteDialogVisible = ref(false);
-const selectedAutoNoteItem = ref(null);
-const autoNotingItems = ref(new Set());
 
 // Search functionality
 const searchQuery = ref('');
@@ -573,64 +547,10 @@ const closeDetailModal = () => {
   selectedItem.value = null;
 };
 
-// Helper: cek apakah item sedang sibuk (auto-note atau refresh)
+// Helper: cek apakah item sedang sibuk (refreshing)
 const isItemBusy = (item) => {
   const key = `${item.CABANG}_${item.KDTK}`;
-  return autoUpdatingItems.value.has(key) || autoNotingItems.value.has(key);
-};
-
-// ─── Auto Note Methods ──────────────────────────────────────────────
-const isItemAutoNoting = (item) => {
-  const key = `${item.CABANG}_${item.KDTK}`;
-  return autoNotingItems.value.has(key);
-};
-
-const hitAutoNote = (item) => {
-  // Jika belum ada note, langsung auto-generate
-  if (!item.note || !item.note.noteText || item.note.noteText.trim() === '') {
-    executeAutoNote(item);
-    return;
-  }
-  // Jika sudah ada note, tampilkan dialog konfirmasi
-  selectedAutoNoteItem.value = item;
-  autoNoteDialogVisible.value = true;
-};
-
-const cancelAutoNote = () => {
-  autoNoteDialogVisible.value = false;
-  selectedAutoNoteItem.value = null;
-};
-
-const executeAutoNote = async (item) => {
-  const target = item || selectedAutoNoteItem.value;
-  if (!target) return;
-
-  autoNoteDialogVisible.value = false;
-  selectedAutoNoteItem.value = null;
-
-  const key = `${target.CABANG}_${target.KDTK}`;
-  autoNotingItems.value.add(key);
-
-  try {
-    const res = await penyesuaianService.autoUpdateNote(
-      target.CABANG,
-      target.KDTK,
-      props.periode
-    );
-
-    target.note = res.data.data;
-
-    // Highlight row
-    highlightedItems.value.add(key);
-    setTimeout(() => { highlightedItems.value.delete(key); }, 3000);
-
-    toast.showSuccess('Sukses', `Auto note untuk ${target.KDTK} berhasil dibuat`);
-  } catch (error) {
-    const msg = error.response?.data?.message || error.message || 'Gagal auto note';
-    toast.showError('Error', msg);
-  } finally {
-    autoNotingItems.value.delete(key);
-  }
+  return autoUpdatingItems.value.has(key);
 };
 
 const refreshStoreData = async (item) => {

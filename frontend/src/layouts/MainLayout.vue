@@ -196,13 +196,22 @@ const menuCategories = computed(() => {
         },
         // Manage User — hanya superadmin
         ...(userRole === 'superadmin'
-          ? [{
-              id: 'user-manager',
-              text: 'Manage User',
-              path: '/user-manager',
-              icon: 'pi pi-users',
-              roles: ['superadmin'],
-            }]
+          ? [
+              {
+                id: 'user-manager',
+                text: 'Manage User',
+                path: '/user-manager',
+                icon: 'pi pi-users',
+                roles: ['superadmin'],
+              },
+              {
+                id: 'store-configs',
+                text: 'Store Configs',
+                path: '/store-configs',
+                icon: 'pi pi-key',
+                roles: ['superadmin'],
+              },
+            ]
           : []),
       ],
     };

@@ -143,6 +143,18 @@ const addDynamicRoutes = async () => {
           roles: ["admin", "superadmin"],
         },
       },
+      // Rute store-configs — hanya superadmin
+      {
+        path: "store-configs",
+        name: "StoreConfigs",
+        component: () => import("../views/storeConfigs/index.vue"),
+        meta: {
+          requiresAuth: true,
+          title: "Store Configs",
+          layout: "main",
+          roles: ["superadmin"],
+        },
+      },
     ];
 
     // Tambahkan routes untuk setiap menu item

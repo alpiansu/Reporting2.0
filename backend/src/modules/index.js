@@ -37,6 +37,7 @@ import dthrFtpModule from "./dthr_ftp/index.js";
 import jenisReturModule from "./jenis-retur/index.js";
 import notificationsModule from "./notifications/index.js";
 import salesCustabModule from "./sales_custab/index.js";
+import storeConfigModule from "./store-config/index.js";
 
 export default {
   // Export all modules
@@ -74,6 +75,7 @@ export default {
   jenisReturModule,
   notificationsModule,
   salesCustabModule,
+  storeConfigModule,
 
   // Initialize all modules
   initialize: app => {
@@ -111,6 +113,7 @@ export default {
     const jenisRetur = jenisReturModule.initialize(app);
     const notifications = notificationsModule.initialize(app);
     const salesCustab = salesCustabModule.initialize(app);
+    const storeConfig = storeConfigModule.initialize(app);
 
     // Initialize menu manager module
     app.use("/api/menu-manager", menuManagerModule.routes);
@@ -149,6 +152,7 @@ export default {
       jenisRetur,
       notifications,
       salesCustab,
+      storeConfig,
       menuManager: true,
     };
   },

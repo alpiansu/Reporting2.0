@@ -3,6 +3,10 @@
  */
 import mysql from "mysql2/promise";
 import logger from "./logger.js";
+import dotenv from "dotenv";
+import { loadStoreInterfenceConfigs } from "../utils/crypto.utils.js";
+
+dotenv.config();
 
 class DbStoreService {
   /**
@@ -95,26 +99,20 @@ class DbStoreService {
     try {
       let dbStore = null;
 
-      // Database configurations to try - expanded array for multiple options
-      const dbConfigurations = [
-        {
-          user: "kasir",
-          password: "HmtPVo5Rf+XCLUdpjRoOF4zSNjegX5qB0=Kh2bF3x+gO",
-        },
-        {
-          user: "kasir",
-          password: "ZjHPhpS3T4+YFNh3F94EWJn4m/TeNsBFE=DS0J/Y7Vu4",
-        },
-        {
-          user: "root",
-          password: "phha8KKaFMraZOx7X4WYkJRJE6nlIrREM=XeAb9A5JTq",
-        },
-        {
-          user: "root",
-          password: "vdhoTZNDyeEcyiAV/5vlUcd6srNsylsVE=U0o+YPeZ/L",
-        },
-        // Add more configurations as needed
-      ];
+      // Load encrypted configurations from JSON file
+      const passphrase = process.env.STORE_CONFIG_KEY;
+      if (!passphrase) {
+        throw new Error(
+          "STORE_CONFIG_KEY not set in .env. Cannot decrypt store interfence configs."
+        );
+      }
+      const dbConfigurations = await loadStoreInterfenceConfigs(passphrase);
+
+      if (dbConfigurations.length === 0) {
+        throw new Error(
+          "No store interfence configs available. Run: node scripts/setup-store-interfence-configs.js"
+        );
+      }
 
       // Try each configuration first for access denied scenarios
       for (let configIndex = 0; configIndex < dbConfigurations.length; configIndex++) {

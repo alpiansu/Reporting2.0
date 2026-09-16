@@ -26,7 +26,7 @@ const UserController = {
 export default {
   UserController,
   userRoutes,
-  UserService,
+  userService,
   initialize: (app) => {
     // Register routes
     app.use('/api/users', userRoutes);

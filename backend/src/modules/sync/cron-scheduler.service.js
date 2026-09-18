@@ -155,22 +155,21 @@ class CronScheduler {
    */
   async runSynchronization() {
     try {
-      const storeResult = await syncService.synchronizeStores();
+      // SEMENTARA DINONAKTIFKAN: sync store lama (db_edp.rekap_ip -> stores.json) dihentikan
+      // hingga Sync Master baru (TOKOMAIN.ini + WRC) final. User & dept tetap jalan.
       const deptResult = await syncService.synchronizeDept();
       const userResult = await syncService.synchronizeUsers();
 
       const result = {
-        success: storeResult.success && deptResult.success && userResult.success,
+        success: deptResult.success && userResult.success,
         message: "All scheduled synchronizations completed",
-        store: storeResult,
         dept: deptResult,
         user: userResult,
       };
 
       if (result.success) {
         logger.info(
-          `Scheduled synchronization completed: stores (${storeResult.updated} updated, ${storeResult.created} created), ` +
-            `departments (${deptResult.updated} updated, ${deptResult.created} created), ` +
+          `Scheduled synchronization completed: departments (${deptResult.updated} updated, ${deptResult.created} created), ` +
             `users (${userResult.updated} updated, ${userResult.created} created)`,
         );
       } else {

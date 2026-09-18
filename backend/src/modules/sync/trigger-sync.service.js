@@ -16,8 +16,9 @@ class TriggerSyncService {
       let result = {};
       
       if (type === "store" || type === "all") {
-        const storeResult = await syncService.synchronizeStores();
-        result.store = storeResult;
+        // SEMENTARA DINONAKTIFKAN: sync store lama (db_edp.rekap_ip -> stores.json) dihentikan
+        // hingga Sync Master baru (TOKOMAIN.ini + WRC) final.
+        result.store = { success: true, message: "Sync store (rekap_ip) sementara dinonaktifkan", updated: 0, created: 0, disabled: true };
       }
       
       if (type === "dept" || type === "all") {

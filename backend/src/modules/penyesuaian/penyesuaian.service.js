@@ -188,13 +188,14 @@ class PenyesuaianService {
 
     if (records.length == 0 || records[0]?.STATUS_UPDTIME != "OK") {
       // ✅ Bug 2 fix: Guard rekursi dipindah ke DALAM if block
+      // Pass kedua sudah pernah mencoba refresh di pass pertama (tarik detail WRC).
+      // Selalu return di sini untuk mencegah rekursi tak berbatas ketika re-screen
+      // terus gagal (mis. WRC down) sementara tarik detail berhasil.
       if (hasRefreshed) {
         logger.warn(
           `[penyesuaian.service] Loop ke 2 atas toko ${kdtk} dengan status saat ini ${records[0]?.STATUS_UPDTIME}`,
         );
-        if (records.length == 0) {
-          return [];
-        }
+        return records;
       }
 
       // ✅ Bug 1 fix: Gunakan optional chaining + fallback value
@@ -207,18 +208,41 @@ class PenyesuaianService {
 
       // ✅ Bug 3 fix: length dicek duluan, gunakan ===
       if (records.length > 0 && statusUpdtime === "UPD-SUMMARY") {
+        // UPD-SUMMARY = UPDTIME detail lebih baru dari summary (rekap jadul).
+        // Re-screen toko untuk memvalidasi apakah masih di atas ambang batas.
+        // Cabang WAJIB di-resolve via storeService: parameter `cabang` filter query
+        // bisa undefined/null (pemanggil via getAllRecords kdtk-only & getStoreInsights),
+        // sehingga sebelumnya getConnWRC selalu gagal → result.hasIssue=false → toko
+        // salah dilaporkan "di bawah ambang batas".
         logger.info(`[penyesuaian.service] jalankan processSingleStore toko ${kdtk}`);
-        const result = await this.processSingleStore({ storeCode: kdtk, cabang }, periode, strYear, strMonth);
+        await storeService.ensureInitialized();
+        const storeInfo = await storeService.getStoreByCode(kdtk);
+        const storeCab = storeInfo ? storeInfo.branch || storeInfo.cab : "UNKNOWN";
+
+        const result = await this.processSingleStore({ storeCode: kdtk, cab: storeCab }, periode, strYear, strMonth);
         // Invalidate cache to force reload from JSON file on next request
         this.invalidateCache();
         // Sync to JSON file
         await this.syncToJsonFile(periode);
-        if (result.hasIssue === false) {
+
+        // Hanya laporkan "di bawah ambang batas" bila screening benar-benar sukses.
+        // result.success === false (WRC down / config cabang hilang) BUKAN berarti
+        // toko resolved — lanjutkan dengan data detail terbaru hasil tarikan WRC.
+        if (result.success && result.hasIssue === false) {
+          // Toko benar-benar resolved → bersihkan detail basi agar buka modal
+          // berikutnya tidak menampilkan data (konsisten dengan cleanup
+          // mergeStagingAndCleanup di alur screening).
+          await SesuaiToko.destroy({ where: { kdtk: kdtk, periode } });
           const err = new Error(
             "Nilai penyesuaian toko ini sudah di bawah ambang batas Rp 500.000, data detail tidak dapat ditampilkan.",
           );
           err.code = "STORE_BELOW_THRESHOLD";
           throw err;
+        }
+        if (!result.success) {
+          logger.warn(
+            `[penyesuaian.service] Re-screening toko ${kdtk} gagal (koneksi/config WRC), melanjutkan dengan data detail terbaru`,
+          );
         }
       }
 

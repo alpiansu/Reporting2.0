@@ -37,7 +37,11 @@ export const useUserActivityStore = defineStore('userActivity', {
      * Get the total number of pages
      * @returns {number}
      */
-    totalPages: (state) => Math.ceil(state.totalActivities / state.pagination.limit),
+    totalPages: (state) => {
+      const total = Number(state.totalActivities) || 0;
+      const limit = Number(state.pagination.limit) || 10;
+      return Math.max(1, Math.ceil(total / limit));
+    },
   },
 
   actions: {
@@ -64,7 +68,7 @@ export const useUserActivityStore = defineStore('userActivity', {
         const result = await userActivityService.getUserActivities(options);
         
         this.activities = result.activities;
-        this.totalActivities = result.total;
+        this.totalActivities = result.pagination?.total ?? 0;
       } catch (error) {
         this.error = error.message || 'Failed to fetch user activities';
         console.error('Error fetching user activities:', error);

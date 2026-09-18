@@ -206,11 +206,27 @@
 }
 
 .pagination-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background-color: var(--surface-section);
   border: 1px solid var(--surface-border);
-  border-radius: 4px;
-  padding: 5px 10px;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 0.9rem;
+  color: var(--text-color);
   cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.pagination-btn i {
+  font-size: 0.75rem;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
+  color: var(--primary-contrast-color);
 }
 
 .pagination-btn:disabled {

@@ -108,6 +108,7 @@
         @click="goToPage(currentPage - 1)"
       >
         <i class="fas fa-chevron-left"></i>
+        <span>Previous</span>
       </button>
       
       <span class="pagination-info">
@@ -119,6 +120,7 @@
         :disabled="currentPage === totalPages" 
         @click="goToPage(currentPage + 1)"
       >
+        <span>Next</span>
         <i class="fas fa-chevron-right"></i>
       </button>
       

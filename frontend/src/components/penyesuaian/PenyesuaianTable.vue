@@ -208,7 +208,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['refresh', 'page-change', 'items-per-page-change', 'sort-change']);
+const emit = defineEmits(['refresh', 'page-change', 'items-per-page-change', 'sort-change', 'shop-updated', 'shop-removed']);
 const toast = useToastService();
 const autoUpdatingItems = ref(new Set());
 const highlightedItems = ref(new Set());
@@ -566,7 +566,8 @@ const refreshStoreData = async (item) => {
     // ➜ JIKA HASILNYA NULL / KOSONG → HAPUS ROW
     if (!newDataArray || newDataArray.length === 0) {
       toast.showInfo('Info', `Toko ${item.KDTK} sudah sesuai, menghapus baris...`);
-      emit('refresh'); // Refresh parent to remove row
+      // Hapus baris secara surgical via parent (tanpa reload penuh)
+      emit('shop-removed', { cab: item.CABANG, shop: item.KDTK });
       return;
     }
 

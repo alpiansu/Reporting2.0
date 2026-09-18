@@ -1093,6 +1093,9 @@ class PenyesuaianService {
 
   /**
    * Ambil resume nilai per KDTK dari file JSON (tanpa query DB)
+   * Only return RECID='*' records (unresolved) — konsisten dengan getResumeByKdtk,
+   * agar toko yang sudah resolved (RECID='1') tidak lagi muncul di hasil refresh
+   * single store di frontend.
    */
   async getSingleResumeKdtk(options = {}) {
     const { periode, kdtk } = options;
@@ -1101,7 +1104,7 @@ class PenyesuaianService {
       await this.ensureDataLoaded(periode);
       await storeService.ensureInitialized();
 
-      let filtered = this.penyesuaianData.filter(i => i.PERIODE === periode && i.KDTK === kdtk);
+      let filtered = this.penyesuaianData.filter(i => i.PERIODE === periode && i.KDTK === kdtk && i.RECID === "*");
 
       // Ambil nama toko dari storeService
       let results = [];

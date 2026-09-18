@@ -193,11 +193,10 @@ class SyncService {
         const existingUser = await userService.findByCredentials(userData.username);
 
         if (existingUser) {
-          // Update existing user (only update fullName, email, and role)
+          // Update existing user (only fullName and email; role is set locally via User Manager)
           await userService.updateUser(existingUser.id, {
             fullName: userData.fullName,
             email: userData.email,
-            role: userData.role,
           });
           updated++;
         } else {

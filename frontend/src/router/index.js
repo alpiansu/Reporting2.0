@@ -155,6 +155,18 @@ const addDynamicRoutes = async () => {
           roles: ["superadmin"],
         },
       },
+      // Rute store-master — upload & sinkronisasi master toko (admin/superadmin)
+      {
+        path: "store-master",
+        name: "StoreMaster",
+        component: () => import("../views/storeMaster/index.vue"),
+        meta: {
+          requiresAuth: true,
+          title: "Master Toko",
+          layout: "main",
+          roles: ["admin", "superadmin"],
+        },
+      },
     ];
 
     // Tambahkan routes untuk setiap menu item

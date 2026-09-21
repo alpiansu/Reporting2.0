@@ -9,6 +9,9 @@ import {
   updateStore,
   deleteStore,
   testConnection,
+  uploadTokomain,
+  getSyncStatus,
+  syncMaster,
 } from './store.controller.js';
 import storeRoutes from './store.routes.js';
 import StoreService from './store.service.js';
@@ -21,6 +24,9 @@ const StoreController = {
   updateStore,
   deleteStore,
   testConnection,
+  uploadTokomain,
+  getSyncStatus,
+  syncMaster,
 };
 
 export default {

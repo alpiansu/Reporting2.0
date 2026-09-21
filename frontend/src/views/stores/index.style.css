@@ -628,7 +628,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 2000;
   padding: 1rem;
 }
 
@@ -910,3 +910,265 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Master Store Sync Bar */
+.sync-bar-modern {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.sync-info-modern {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.upload-csv-btn-modern {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #2563eb;
+  border: none;
+  color: #fff;
+  padding: 0.6rem 1.1rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  white-space: nowrap;
+}
+
+.upload-csv-btn-modern:hover {
+  background: #1d4ed8;
+}
+
+.sync-info-modern {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.sync-info-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.sync-icon-modern {
+  color: var(--primary-color, #0ea5e9);
+  margin-top: 2px;
+}
+
+.sync-label {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-color-secondary);
+}
+
+.sync-value {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+
+
+/* Dialog header variants */
+.dialog-header-modern.warning {
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.dialog-header-modern.success {
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.dialog-icon.warning {
+  color: var(--warning-color, #f59e0b);
+}
+
+.dialog-icon.success {
+  color: #22c55e;
+}
+
+/* Sync result dialog */
+.sync-result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.sync-result-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: var(--surface-ground);
+  border: 1px solid var(--surface-border);
+  border-radius: 10px;
+  padding: 0.85rem 0.5rem;
+}
+
+.sync-result-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--primary-color, #0ea5e9);
+}
+
+.sync-result-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--text-color-secondary);
+}
+
+.sync-result-meta {
+  font-size: 0.85rem;
+  color: var(--text-color-secondary);
+  margin: 0.5rem 0 0.25rem;
+}
+
+.sync-result-warn {
+  font-size: 0.78rem;
+  color: var(--warning-color, #b45309);
+  background: rgba(245, 158, 11, 0.08);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  margin: 0.5rem 0 0;
+}
+
+.w-full {
+  width: 100%;
+  justify-content: center;
+}
+
+/* CSV upload dialog */
+.csv-upload-area {
+  border: 2px dashed var(--surface-border);
+  border-radius: 8px;
+  padding: 24px;
+  text-align: center;
+  background: var(--surface-ground);
+  margin-bottom: 1rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.csv-upload-area:hover {
+  border-color: var(--primary-color);
+}
+
+/* Input file disembunyikan total; picker dibuka via click() dari area upload */
+.file-input-hidden {
+  display: none;
+}
+
+.csv-upload-prompt {
+  pointer-events: none;
+}
+
+.csv-upload-preview {
+  pointer-events: none;
+}
+
+.csv-file-remove {
+  pointer-events: auto;
+}
+
+.csv-prompt-icon {
+  font-size: 2.5rem;
+  color: var(--primary-color);
+  margin-bottom: 8px;
+}
+
+.csv-upload-prompt p {
+  margin: 0;
+  color: var(--text-color-secondary);
+}
+
+.csv-upload-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+}
+
+.csv-file-name {
+  font-weight: 500;
+  color: var(--text-color);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.csv-file-remove {
+  background: none;
+  border: none;
+  color: var(--text-color-secondary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.csv-file-remove:hover {
+  color: var(--error-color);
+  background: var(--surface-highlight);
+}
+
+.csv-upload-message {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+}
+
+.csv-upload-message.success {
+  color: var(--success-color);
+}
+
+.csv-upload-message.error {
+  color: var(--error-color);
+}
+
+/* Stage indicator di dalam area upload */
+.csv-upload-area.is-busy {
+  cursor: wait;
+  border-color: var(--primary-color);
+}
+
+.csv-stage {
+  padding: 8px 0;
+}
+
+.csv-stage-icon {
+  font-size: 2.5rem;
+  color: var(--primary-color);
+  margin-bottom: 8px;
+}
+
+.csv-stage-title {
+  margin: 0 0 4px;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.csv-stage-sub {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-color-secondary);
+  max-width: 320px;
+  margin-left: auto;
+  margin-right: auto;
+}
+

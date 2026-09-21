@@ -7,6 +7,9 @@ import logger from "../../config/logger.js";
 import syncConfig from "../../config/sync.config.js";
 import wrcUtils from "../../utils/wrc.utils.js";
 
+const TOKOMAIN_SNAPSHOT_PATH = path.join(process.cwd(), "data/tokomain-snapshot.json");
+const MASTER_CSV_SNAPSHOT_PATH = path.join(process.cwd(), "data/master-tokomain-csv-snapshot.json");
+
 class StoreService {
   constructor() {
     // Get the absolute path to the JSON file
@@ -79,10 +82,15 @@ class StoreService {
   }
 
   /**
-   * Get all stores with pagination
-   * @param {Object} options - Query options
-   * @returns {Object} Paginated stores
+   * Get ALL raw stores from stores.json tanpa filter/pagination.
+   * Dipakai untuk proses sync internal (INDUK + STB sekaligus).
+   * @returns {Promise<Array>} Array semua store
    */
+  async getAllStoresRaw() {
+    await this.ensureInitialized();
+    return [...this.stores];
+  }
+
   /**
    * Get all stores with pagination
    * @param {Object} options - Query options
@@ -697,6 +705,262 @@ class StoreService {
       return filteredStores;
     } catch (error) {
       logger.error(`Failed to get stores by codes: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Validate a string as a valid IPv4 address
+   * @param {string} ip
+   * @returns {boolean}
+   */
+  isValidIpAddress(ip) {
+    if (!ip) return false;
+    const parts = String(ip).trim().split(".");
+    if (parts.length !== 4) return false;
+    return parts.every(part => {
+      if (!/^\d{1,3}$/.test(part)) return false;
+      const num = Number(part);
+      return num >= 0 && num <= 255;
+    });
+  }
+
+  /**
+   * Parse TOKOMAIN.ini content. Only extracts kode toko + IP for
+   * INDUK (IS_INDUK=1) and STB (STATION=STB) rows.
+   * Column layout (caret-delimited):
+   *   CABANG^TOKO^NAMA^STATION^IP^KONEKSI^REPORT^IS_INDUK
+   * @param {Buffer|string} content - Raw file buffer or string
+   * @returns {Object} { records, induk, stb, invalid, total }
+   */
+  parseTokomain(content) {
+    const raw = Buffer.isBuffer(content) ? content.toString("utf8") : String(content || "");
+    const lines = raw.split(/\r?\n/);
+    const records = [];
+    let induk = 0;
+    let stb = 0;
+    let invalid = 0;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line || !line.trim()) continue;
+
+      const cols = line.split("^").map(c => c.trim());
+      if (cols.length < 8) {
+        invalid++;
+        continue;
+      }
+
+      // Skip header line (e.g. CABANG^TOKO^...)
+      if (/^cabang$/i.test(cols[0]) || /^toko$/i.test(cols[1])) {
+        continue;
+      }
+
+      const toko = cols[1];
+      const station = cols[3];
+      const ip = cols[4];
+      const isInduk = cols[7];
+
+      if (!toko || !ip) {
+        invalid++;
+        continue;
+      }
+
+      // Determine type: INDUK if IS_INDUK=1, STB if station equals STB
+      let type = null;
+      if (isInduk === "1") {
+        type = "INDUK";
+      } else if (/^stb$/i.test(station)) {
+        type = "STB";
+      }
+
+      if (!type) continue; // skip other stations (02, 03, ...) that are neither INDUK nor STB
+
+      if (!this.isValidIpAddress(ip)) {
+        invalid++;
+        continue;
+      }
+
+      if (type === "INDUK") induk++;
+      else stb++;
+
+      records.push({
+        storeCode: toko.toUpperCase(),
+        station,
+        ip,
+        type,
+      });
+    }
+
+    return { records, induk, stb, invalid, total: induk + stb };
+  }
+
+  /**
+   * Persist the latest TOKOMAIN snapshot (single, newest-wins)
+   * @param {Object} parsed - Result of parseTokomain
+   * @param {Object} meta - { uploadedBy, deviceId, clientIp, sourcePath }
+   * @returns {Promise<Object>} Saved snapshot
+   */
+  async saveTokomainSnapshot(parsed, meta = {}) {
+    const snapshot = {
+      updatedAt: new Date().toISOString(),
+      uploadedBy: meta.uploadedBy || null,
+      deviceId: meta.deviceId || null,
+      clientIp: meta.clientIp || null,
+      sourcePath: meta.sourcePath || null,
+      stats: {
+        induk: parsed.induk,
+        stb: parsed.stb,
+        invalid: parsed.invalid,
+        total: parsed.total,
+      },
+      records: parsed.records,
+    };
+
+    await fs.mkdir(path.dirname(TOKOMAIN_SNAPSHOT_PATH), { recursive: true });
+    await fs.writeFile(TOKOMAIN_SNAPSHOT_PATH, JSON.stringify(snapshot, null, 2));
+    logger.info(`TOKOMAIN snapshot saved: ${parsed.total} records (${parsed.induk} induk, ${parsed.stb} stb)`);
+    return snapshot;
+  }
+
+  /**
+   * Get the latest TOKOMAIN snapshot
+   * @returns {Promise<Object|null>}
+   */
+  async getTokomainSnapshot() {
+    try {
+      const data = await fs.readFile(TOKOMAIN_SNAPSHOT_PATH, "utf8");
+      return JSON.parse(data);
+    } catch (error) {
+      if (error.code === "ENOENT") return null;
+      if (error instanceof SyntaxError) {
+        logger.warn("TOKOMAIN snapshot corrupted, ignoring it");
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Parse master-tokomain.csv content.
+   * Header: kdcab,toko,nama,station,ip,is_induk,...
+   * Hanya baris INDUK (is_induk=1) dan STB (station=STB) yang diambil.
+   * @param {string} csvText - Raw CSV string (BOM-safe)
+   * @returns {Object} { records, induk, stb, invalid, total }
+   */
+  parseMasterTokomainCsv(csvText) {
+    const raw = String(csvText || "").replace(/^\ufeff/, "");
+    const lines = raw.split(/\r?\n/);
+
+    if (lines.length === 0) {
+      return { records: [], induk: 0, stb: 0, invalid: 0, total: 0 };
+    }
+
+    // Normalisasi header ke lowercase agar case-insensitive
+    const header = lines[0]
+      .split(",")
+      .map(c => c.trim().toLowerCase())
+      .map(c => c.replace(/^"|"$/g, ""));
+
+    const idx = {
+      kdcab: header.indexOf("kdcab"),
+      toko: header.indexOf("toko"),
+      nama: header.indexOf("nama"),
+      station: header.indexOf("station"),
+      ip: header.indexOf("ip"),
+      is_induk: header.indexOf("is_induk"),
+    };
+
+    const records = [];
+    let induk = 0;
+    let stb = 0;
+    let invalid = 0;
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line || !line.trim()) continue;
+
+      const cols = line.split(",").map(c => c.trim().replace(/^"|"$/g, ""));
+
+      const kdcab = idx.kdcab >= 0 ? cols[idx.kdcab] : "";
+      const toko = idx.toko >= 0 ? cols[idx.toko] : "";
+      const nama = idx.nama >= 0 ? cols[idx.nama] : "";
+      const station = idx.station >= 0 ? cols[idx.station] : "";
+      const ip = idx.ip >= 0 ? cols[idx.ip] : "";
+      const isInduk = idx.is_induk >= 0 ? cols[idx.is_induk] : "";
+
+      if (!toko || !ip) {
+        invalid++;
+        continue;
+      }
+
+      const type = isInduk === "1" ? "INDUK" : /^stb$/i.test(station) ? "STB" : null;
+      if (!type) continue;
+
+      if (!this.isValidIpAddress(ip)) {
+        invalid++;
+        continue;
+      }
+
+      if (type === "INDUK") induk++;
+      else stb++;
+
+      records.push({
+        storeCode: toko.toUpperCase(),
+        station,
+        storeName: nama || toko,
+        ip,
+        type,
+      });
+    }
+
+    return { records, induk, stb, invalid, total: induk + stb };
+  }
+
+  /**
+   * Persist the latest master-tokomain.csv snapshot.
+   * @param {Object} parsed - Result of parseMasterTokomainCsv
+   * @param {Object} meta - { uploadedBy, uploadedByFullName, clientIp, sourcePath }
+   * @returns {Promise<Object>} Saved snapshot
+   */
+  async saveMasterCsvSnapshot(parsed, meta = {}) {
+    const snapshot = {
+      updatedAt: new Date().toISOString(),
+      uploadedBy: meta.uploadedBy || null,
+      uploadedByFullName: meta.uploadedByFullName || null,
+      clientIp: meta.clientIp || null,
+      sourcePath: meta.sourcePath || null,
+      stats: {
+        induk: parsed.induk,
+        stb: parsed.stb,
+        invalid: parsed.invalid,
+        total: parsed.total,
+      },
+      records: parsed.records,
+    };
+
+    await fs.mkdir(path.dirname(MASTER_CSV_SNAPSHOT_PATH), { recursive: true });
+    await fs.writeFile(MASTER_CSV_SNAPSHOT_PATH, JSON.stringify(snapshot, null, 2));
+    logger.info(
+      `Master CSV snapshot saved: ${parsed.total} records (${parsed.induk} induk, ${parsed.stb} stb)`,
+    );
+    return snapshot;
+  }
+
+  /**
+   * Get the latest master-tokomain.csv snapshot
+   * @returns {Promise<Object|null>}
+   */
+  async getMasterCsvSnapshot() {
+    try {
+      const data = await fs.readFile(MASTER_CSV_SNAPSHOT_PATH, "utf8");
+      return JSON.parse(data);
+    } catch (error) {
+      if (error.code === "ENOENT") return null;
+      if (error instanceof SyntaxError) {
+        logger.warn("master-tokomain-csv-snapshot.json corrupted, ignoring it");
+        return null;
+      }
       throw error;
     }
   }

@@ -38,6 +38,7 @@ import jenisReturModule from "./jenis-retur/index.js";
 import notificationsModule from "./notifications/index.js";
 import salesCustabModule from "./sales_custab/index.js";
 import storeConfigModule from "./store-config/index.js";
+import deviceConfigModule from "./device-config/index.js";
 
 export default {
   // Export all modules
@@ -76,6 +77,7 @@ export default {
   notificationsModule,
   salesCustabModule,
   storeConfigModule,
+  deviceConfigModule,
 
   // Initialize all modules
   initialize: app => {
@@ -114,6 +116,7 @@ export default {
     const notifications = notificationsModule.initialize(app);
     const salesCustab = salesCustabModule.initialize(app);
     const storeConfig = storeConfigModule.initialize(app);
+    const deviceConfig = deviceConfigModule.initialize(app);
 
     // Initialize menu manager module
     app.use("/api/menu-manager", menuManagerModule.routes);
@@ -153,6 +156,7 @@ export default {
       notifications,
       salesCustab,
       storeConfig,
+      deviceConfig,
       menuManager: true,
     };
   },

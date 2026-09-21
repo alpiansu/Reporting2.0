@@ -71,6 +71,54 @@ class StoreService {
   deleteStore(id) {
     return api.delete(`/stores/${id}`);
   }
+
+  /**
+   * Upload TOKOMAIN.ini snapshot (kode toko + IP untuk INDUK/STB)
+   * @param {File} file - TOKOMAIN.ini file
+   * @param {Object} meta - { deviceId, sourcePath }
+   */
+  async uploadTokomain(file, meta = {}) {
+    const formData = new FormData();
+    formData.append("file", file);
+    if (meta.deviceId) formData.append("deviceId", meta.deviceId);
+    if (meta.sourcePath) formData.append("sourcePath", meta.sourcePath);
+
+    const response = await api.post("/stores/upload-tokomain", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response.data;
+  }
+
+  /**
+   * Get master store sync status (TOKOMAIN snapshot + last sync info)
+   */
+  async getSyncStatus() {
+    const response = await api.get("/stores/sync-status");
+    return response.data;
+  }
+
+  /**
+   * Upload master-tokomain.csv snapshot (INDUK + STB)
+   * @param {File} file - master-tokomain.csv file
+   */
+  async uploadMasterCsv(file) {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await api.post("/stores/upload-master-csv", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response.data;
+  }
+
+  /**
+   * Execute master store sync from uploaded master-tokomain.csv
+   * @param {boolean} force - Skip 24-hour confirmation guard
+   */
+  async syncMasterCsv(force = false) {
+    const response = await api.post("/stores/sync-master-csv", { force });
+    return response.data;
+  }
 }
 
 export default new StoreService();

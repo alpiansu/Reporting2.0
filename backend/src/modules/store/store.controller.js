@@ -1,5 +1,8 @@
 import storeService from './storeService.js';
+import StoreSyncService from './store-sync.service.js';
 import logger from '../../config/logger.js';
+
+const storeSyncService = new StoreSyncService();
 
 /**
  * Get all stores with pagination
@@ -171,6 +174,154 @@ export const testConnection = async (req, res, next) => {
     
     res.status(200).json(result);
   } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Upload TOKOMAIN.ini from a client device. Parses only INDUK + STB rows
+ * (kode toko + IP) and saves it as the latest snapshot.
+ */
+export const uploadTokomain = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'File TOKOMAIN.ini tidak ditemukan' });
+    }
+
+    const parsed = storeService.parseTokomain(req.file.buffer);
+    if (parsed.records.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tidak ada data INDUK/STB yang valid ditemukan di file ini',
+        stats: parsed,
+      });
+    }
+
+    const snapshot = await storeService.saveTokomainSnapshot(parsed, {
+      uploadedBy: req.user?.username || null,
+      deviceId: req.body?.deviceId || null,
+      clientIp: req.ip || req.socket?.remoteAddress || null,
+      sourcePath: req.body?.sourcePath || req.file.originalname || null,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Snapshot TOKOMAIN tersimpan: ${parsed.total} records (${parsed.induk} induk, ${parsed.stb} stb)`,
+      snapshot: {
+        updatedAt: snapshot.updatedAt,
+        uploadedBy: snapshot.uploadedBy,
+        deviceId: snapshot.deviceId,
+        sourcePath: snapshot.sourcePath,
+        stats: snapshot.stats,
+        count: snapshot.records.length,
+      },
+    });
+  } catch (error) {
+    logger.error(`Upload TOKOMAIN error: ${error.message}`);
+    next(error);
+  }
+};
+
+/**
+ * Get sync status: latest TOKOMAIN snapshot info + last master sync info
+ */
+export const getSyncStatus = async (req, res, next) => {
+  try {
+    const status = await storeSyncService.getSyncStatus();
+    res.status(200).json({ success: true, ...status });
+  } catch (error) {
+    logger.error(`Get sync status error: ${error.message}`);
+    next(error);
+  }
+};
+
+/**
+ * Execute master store sync (TOKOMAIN merge with WRC all cabang).
+ * Body: { force: boolean } to skip the 24-hour confirmation guard.
+ */
+export const syncMaster = async (req, res, next) => {
+  try {
+    const force = Boolean(req.body?.force);
+    const result = await storeSyncService.syncMaster(req.user, force);
+
+    if (result.needsConfirmation) {
+      return res.status(200).json(result);
+    }
+    if (result.needsSnapshot) {
+      return res.status(400).json(result);
+    }
+    res.status(200).json(result);
+  } catch (error) {
+    logger.error(`Sync master toko error: ${error.message}`);
+    next(error);
+  }
+};
+
+/**
+ * Upload master-tokomain.csv snapshot.
+ * Hanya baris INDUK (is_induk=1) dan STB (station=STB) yang dipakai.
+ */
+export const uploadMasterCsv = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'File master-tokomain.csv tidak ditemukan' });
+    }
+
+    const text = req.file.buffer.toString('utf8');
+    const parsed = storeService.parseMasterTokomainCsv(text);
+
+    if (parsed.records.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tidak ada data INDUK/STB yang valid ditemukan di file ini',
+        stats: parsed,
+      });
+    }
+
+    const snapshot = await storeService.saveMasterCsvSnapshot(parsed, {
+      uploadedBy: req.user?.username || null,
+      uploadedByFullName: req.user?.fullName || null,
+      clientIp: req.ip || req.socket?.remoteAddress || null,
+      sourcePath: req.file.originalname || null,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Snapshot master-tokomain.csv tersimpan: ${parsed.total} records (${parsed.induk} induk, ${parsed.stb} stb)`,
+      snapshot: {
+        updatedAt: snapshot.updatedAt,
+        uploadedBy: snapshot.uploadedBy,
+        uploadedByFullName: snapshot.uploadedByFullName,
+        clientIp: snapshot.clientIp,
+        sourcePath: snapshot.sourcePath,
+        stats: snapshot.stats,
+        count: snapshot.records.length,
+      },
+    });
+  } catch (error) {
+    logger.error(`Upload master CSV error: ${error.message}`);
+    next(error);
+  }
+};
+
+/**
+ * Execute master store sync from uploaded master-tokomain.csv.
+ * Body: { force: boolean } to skip the 24-hour confirmation guard.
+ */
+export const syncMasterCsv = async (req, res, next) => {
+  try {
+    const force = Boolean(req.body?.force);
+    const result = await storeSyncService.syncFromMasterCsv(req.user, force);
+
+    if (result.needsConfirmation) {
+      return res.status(200).json(result);
+    }
+    if (result.needsSnapshot) {
+      return res.status(400).json(result);
+    }
+    res.status(200).json(result);
+  } catch (error) {
+    logger.error(`Sync master CSV error: ${error.message}`);
     next(error);
   }
 };

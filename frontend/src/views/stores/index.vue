@@ -19,6 +19,30 @@
       </div>
     </div>
 
+    <!-- Master Store Sync Bar -->
+    <div v-if="canEdit" class="sync-bar-modern">
+      <div class="sync-info-modern">
+        <div class="sync-info-item">
+          <i class="pi pi-sync sync-icon-modern"></i>
+          <div>
+            <span class="sync-label">Last Sync</span>
+            <span class="sync-value">{{ lastSyncText }}</span>
+          </div>
+        </div>
+        <div class="sync-info-item">
+          <i class="pi pi-file-import sync-icon-modern"></i>
+          <div>
+            <span class="sync-label">Snapshot CSV</span>
+            <span class="sync-value">{{ csvSnapshotText }}</span>
+          </div>
+        </div>
+      </div>
+      <button class="upload-csv-btn-modern" @click="openCsvUploadDialog" :title="csvSnapshotReady ? 'Upload CSV lainnya' : 'Upload master CSV'">
+        <i class="pi pi-upload"></i>
+        {{ csvSnapshotReady ? 'Upload CSV Lainnya' : 'Upload Master CSV' }}
+      </button>
+    </div>
+
     <!-- Search and Filter Section -->
     <div class="controls-section">
       <div class="search-controls">
@@ -294,12 +318,128 @@
       </div>
     </div>
 
+    <!-- Sync Confirmation Dialog (24h guard) -->
+    <div v-if="showSyncConfirmDialog" class="dialog-overlay-modern" @click.self="closeSyncConfirmDialog">
+      <div class="dialog-content-modern sm" @click.stop>
+        <div class="dialog-header-modern warning">
+          <div class="dialog-title-section">
+            <i class="pi pi-exclamation-triangle dialog-icon warning"></i>
+            <h2 class="dialog-title">Konfirmasi Sync Ulang</h2>
+          </div>
+          <button class="dialog-close-btn" @click="closeSyncConfirmDialog">
+            <i class="pi pi-times"></i>
+          </button>
+        </div>
+        <div class="dialog-body-modern text-center">
+          <p class="delete-msg">
+            Data master toko baru saja di-update oleh <strong>{{ syncConfirmLastSync?.syncedByFullName || syncConfirmLastSync?.syncedBy || '-' }}</strong>
+            pada <strong>{{ formatDateTime(syncConfirmLastSync?.lastSyncedAt) }}</strong>
+            (sumber: {{ syncConfirmLastSync?.source || '-' }}).
+          </p>
+          <p class="delete-sub-msg">
+            Apakah Anda tetap ingin melakukan sinkronisasi master toko lagi?
+          </p>
+
+          <div class="form-actions-modern mt-6">
+            <button class="btn-secondary" @click="closeSyncConfirmDialog" :disabled="isSyncingAfterUpload">Batal</button>
+            <button class="btn-primary" @click="runSyncAfterUploadWithForce()" :disabled="isSyncingAfterUpload">
+              <span v-if="!isSyncingAfterUpload">Ya, Lanjutkan</span>
+              <div v-else class="loading-spinner">
+                <i class="pi pi-spin pi-spinner"></i>
+                <span>Menyinkronkan...</span>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Store Detail Dialog Component -->
     <StoreDetails 
       :is-open="showDetailDialog" 
       :store="selectedStore" 
       @close="closeDetailDialog" 
     />
+
+    <!-- CSV Upload Dialog -->
+    <div v-if="showCsvUploadDialog" class="dialog-overlay-modern" @click.self="closeCsvUploadDialog">
+      <div class="dialog-content-modern sm" @click.stop>
+        <div class="dialog-header-modern">
+          <div class="dialog-title-section">
+            <i class="pi pi-file-excel dialog-icon"></i>
+            <h2 class="dialog-title">Upload Master Toko (CSV)</h2>
+          </div>
+          <button class="dialog-close-btn" @click="closeCsvUploadDialog">
+            <i class="pi pi-times"></i>
+          </button>
+        </div>
+        <div class="dialog-body-modern">
+          <p class="delete-sub-msg">
+            Format yang didukung: <code>master-tokomain.csv</code>.
+            Setelah upload, sistem otomatis memproses update data master toko.
+          </p>
+
+          <div
+            class="csv-upload-area"
+            :class="{ 'is-busy': uploadStage === 'uploading' || uploadStage === 'syncing' }"
+            @click="triggerFilePicker"
+          >
+            <input
+              ref="csvFileInput"
+              type="file"
+              accept=".csv"
+              class="file-input-hidden"
+              @change="onCsvFileChange"
+            />
+
+            <!-- Stage: uploading -->
+            <div v-if="uploadStage === 'uploading'" class="csv-stage">
+              <i class="pi pi-spin pi-spinner csv-stage-icon"></i>
+              <p class="csv-stage-title">Mengupload file...</p>
+              <p class="csv-stage-sub">{{ csvFile?.name }}</p>
+            </div>
+
+            <!-- Stage: syncing -->
+            <div v-else-if="uploadStage === 'syncing'" class="csv-stage">
+              <i class="pi pi-spin pi-spinner csv-stage-icon"></i>
+              <p class="csv-stage-title">Memproses update master toko...</p>
+              <p class="csv-stage-sub">Update IP & nama, lalu menyamakan kode cabang dari semua server WRC. Proses ini bisa memakan waktu beberapa menit.</p>
+            </div>
+
+            <!-- Stage: select / error -->
+            <template v-else>
+              <div v-if="!csvFile" class="csv-upload-prompt">
+                <i class="pi pi-upload csv-prompt-icon"></i>
+                <p>Pilih file CSV</p>
+              </div>
+              <div v-else class="csv-upload-preview">
+                <i class="pi pi-file-excel csv-prompt-icon"></i>
+                <span class="csv-file-name">{{ csvFile.name }}</span>
+                <button class="csv-file-remove" @click.stop="clearCsvFile">
+                  <i class="pi pi-times"></i>
+                </button>
+              </div>
+            </template>
+          </div>
+
+          <div class="form-actions-modern">
+            <button class="btn-secondary" :disabled="uploadStage === 'uploading' || uploadStage === 'syncing'" @click="closeCsvUploadDialog">Batal</button>
+            <button
+              class="btn-primary"
+              :disabled="!csvFile || uploadStage === 'uploading' || uploadStage === 'syncing'"
+              @click="uploadCsv"
+            >
+              <i v-if="uploadStage === 'uploading' || uploadStage === 'syncing'" class="pi pi-spin pi-spinner"></i>
+              {{ uploadStage === 'syncing' ? 'Memproses...' : 'Upload & Update' }}
+            </button>
+          </div>
+
+          <p v-if="csvUploadMessage && uploadStage === 'error'" class="csv-upload-message error">
+            {{ csvUploadMessage }}
+          </p>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -309,11 +449,14 @@ import { useRouter } from 'vue-router';
 import { useStoreStore, useAuthStore } from '../../stores';
 import { useToastService } from '../../utils/toast';
 import StoreDetails from './StoreDetails.vue';
+import storeService from '../../services/store.service.js';
 
 const router = useRouter();
 const storeStore = useStoreStore();
 const authStore = useAuthStore();
 const toast = useToastService();
+
+const csvFileInput = ref(null);
 
 // Role Computeds
 const userRole = computed(() => authStore.user?.role || 'user');
@@ -334,6 +477,22 @@ const formLoading = ref(false);
 const isEditing = ref(false);
 const storeToDelete = ref(null);
 const selectedStore = ref(null);
+
+// Master store sync state
+const syncStatus = ref(null);
+const syncing = ref(false);
+const showSyncConfirmDialog = ref(false);
+const syncConfirmLastSync = ref(null);
+const syncResult = ref(null);
+
+// CSV Upload state — uploadStage: select | uploading | syncing | error
+const showCsvUploadDialog = ref(false);
+const uploadStage = ref('select');
+const csvFile = ref(null);
+const csvUploadMessage = ref('');
+const csvSnapshot = ref(null);
+const isSyncingAfterUpload = ref(false);
+const csvSnapshotReady = computed(() => csvSnapshot.value !== null);
 
 const formStore = ref({
   id: null,
@@ -390,7 +549,172 @@ onMounted(async () => {
     console.error('Error fetching stores:', error);
     toast.showError('Error', 'Failed to load stores');
   }
+
+  if (canEdit.value) {
+    await loadSyncStatus();
+  }
 });
+
+const loadSyncStatus = async () => {
+  try {
+    const data = await storeService.getSyncStatus();
+    syncStatus.value = data;
+  } catch (error) {
+    console.error('Error fetching sync status:', error);
+  }
+};
+
+const lastSyncText = computed(() => {
+  const lastSync = syncStatus.value?.lastSync;
+  if (!lastSync) return 'Belum pernah sync';
+  return `${formatDate(lastSync.lastSyncedAt)} · oleh ${lastSync.syncedBy}`;
+});
+
+const snapshotText = computed(() => {
+  const snapshot = syncStatus.value?.snapshot;
+  if (!snapshot) return 'Belum ada upload';
+  return `${snapshot.stats?.induk ?? 0} induk, ${snapshot.stats?.stb ?? 0} stb · ${formatDate(snapshot.updatedAt)}`;
+});
+
+const csvSnapshotText = computed(() => {
+  if (!csvSnapshot.value) return 'Belum ada CSV';
+  return `${csvSnapshot.value.stats?.induk ?? 0} induk, ${csvSnapshot.value.stats?.stb ?? 0} stb · ${formatDate(csvSnapshot.value.updatedAt)}`;
+});
+
+const runSyncAfterUploadWithForce = async () => {
+  if (isSyncingAfterUpload.value) return;
+  showSyncConfirmDialog.value = false;
+  syncConfirmLastSync.value = null;
+  isSyncingAfterUpload.value = true;
+  try {
+    const result = await storeService.syncMasterCsv(true);
+
+    if (result.needsSnapshot) {
+      toast.showError('Sinkronisasi Master Toko', result.message || 'Belum ada data CSV.');
+      return;
+    }
+
+    if (result.needsConfirmation) {
+      syncConfirmLastSync.value = result.lastSync || null;
+      showSyncConfirmDialog.value = true;
+      return;
+    }
+
+    // Selesai -> dialog hasil sinkronisasi
+    syncResult.value = result;
+    await loadSyncStatus();
+  } catch (error) {
+    console.error('Error syncing master stores:', error);
+    toast.showError('Sinkronisasi Master Toko', error?.response?.data?.message || 'Gagal melakukan sinkronisasi master toko');
+  } finally {
+    isSyncingAfterUpload.value = false;
+  }
+};
+
+const closeSyncConfirmDialog = () => {
+  if (syncing.value) return;
+  showSyncConfirmDialog.value = false;
+  syncConfirmLastSync.value = null;
+};
+
+const closeSyncResult = () => {
+  syncResult.value = null;
+};
+
+const formatDateTime = (value) => {
+  if (!value) return '-';
+  return new Date(value).toLocaleString('id-ID', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+};const openCsvUploadDialog = () => {
+  csvFile.value = null;
+  csvUploadMessage.value = '';
+  uploadStage.value = 'select';
+  showCsvUploadDialog.value = true;
+};
+
+const closeCsvUploadDialog = () => {
+  if (uploadStage.value === 'uploading' || uploadStage.value === 'syncing') return; // jangan tutup saat proses
+  showCsvUploadDialog.value = false;
+};
+
+const triggerFilePicker = () => {
+  if (uploadStage.value !== 'select' && uploadStage.value !== 'error') return;
+  csvFileInput.value?.click();
+};
+
+const onCsvFileChange = (event) => {
+  const file = event.target.files?.[0];
+  if (file) {
+    csvFile.value = file;
+    csvUploadMessage.value = '';
+  }
+};
+
+const clearCsvFile = () => {
+  csvFile.value = null;
+  if (csvFileInput.value) csvFileInput.value.value = '';
+  csvUploadMessage.value = '';
+};
+
+/**
+ * Satu alur: upload CSV → langsung proses update store.json.
+ * Stage: select -> uploading -> syncing -> selesai (dialog hasil sync) / error.
+ */
+const uploadCsv = async () => {
+  if (!csvFile.value || uploadStage.value === 'uploading' || uploadStage.value === 'syncing') return;
+
+  // 1) Upload & simpan snapshot CSV
+  uploadStage.value = 'uploading';
+  csvUploadMessage.value = '';
+  try {
+    const result = await storeService.uploadMasterCsv(csvFile.value);
+    if (!result.success) {
+      uploadStage.value = 'error';
+      csvUploadMessage.value = result.message || 'Upload gagal.';
+      return;
+    }
+    csvSnapshot.value = result.snapshot;
+  } catch (error) {
+    uploadStage.value = 'error';
+    csvUploadMessage.value = error?.response?.data?.message || 'Terjadi kesalahan saat upload CSV.';
+    return;
+  }
+
+  // 2) Proses update store.json (fase IP/nama + fase kode cabang)
+  uploadStage.value = 'syncing';
+  isSyncingAfterUpload.value = true;
+  try {
+    const sync = await storeService.syncMasterCsv(false);
+
+    if (sync.needsSnapshot) {
+      uploadStage.value = 'error';
+      csvUploadMessage.value = sync.message || 'Belum ada data CSV.';
+      return;
+    }
+
+    if (sync.needsConfirmation) {
+      // Belum 24 jam sejak sync terakhir -> minta konfirmasi dulu
+      syncConfirmLastSync.value = sync.lastSync || null;
+      showSyncConfirmDialog.value = true;
+      showCsvUploadDialog.value = false;
+      uploadStage.value = 'select';
+      return;
+    }
+
+    // Selesai -> tampilkan dialog hasil sinkronisasi
+    syncResult.value = sync;
+    await loadSyncStatus();
+    showCsvUploadDialog.value = false;
+    uploadStage.value = 'select';
+  } catch (error) {
+    uploadStage.value = 'error';
+    csvUploadMessage.value = error?.response?.data?.message || 'Gagal melakukan sinkronisasi master toko.';
+  } finally {
+    isSyncingAfterUpload.value = false;
+  }
+};
 
 // Watch for search and filter changes to update the store list
 watch([searchQuery, selectedRegions, selectedCities, selectedStatuses], () => {

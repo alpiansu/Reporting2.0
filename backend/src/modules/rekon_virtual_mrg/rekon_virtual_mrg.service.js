@@ -559,6 +559,8 @@ class RekonVirtualService {
       const newRecords = [];
       // Kumpulkan composite key dari obsolete records yang dihapus dari DB
       const allDeletedKeys = new Set();
+      // Stores dengan table pendukung tidak ada — screening DIBATALKAN, tanpa update DB
+      const dataMissingStores = new Set();
 
       let processedCount = 0;
       const totalStores = storesToProcess.length;
@@ -612,7 +614,12 @@ class RekonVirtualService {
                 `process store ${storeCode}`,
               );
 
-              if (result.success) {
+              if (result.outcome === "DATA_TABLES_MISSING") {
+                // Screening DIBATALKAN (table pendukung tidak ada) — tanpa update DB,
+                // data toko lama dibiarkan apa adanya
+                dataMissingStores.add(storeCode);
+                await incrementProgress(storeCode, "Dibatalkan — table pendukung tidak ada ⛔");
+              } else if (result.success) {
                 if (result.newRecords.length > 0) {
                   newRecords.push(...result.newRecords);
                 }
@@ -632,7 +639,8 @@ class RekonVirtualService {
                 cab,
                 storeCode,
                 "rekon_virtual_mrg",
-                `[${storeCode}] ERROR: ${err.message}`,
+                `[${storeCode}] ERROR`,
+                `[${storeCode}] ${err.message}`,
               );
 
               logger.error(`[rekon_virtual_mrg] Error processing store ${storeCode}: ${err.message}`);
@@ -645,7 +653,10 @@ class RekonVirtualService {
         ),
       );
 
-      logger.info(`[rekon_virtual_mrg.service] Screening process completed for periode ${options.periode}`);
+      logger.info(
+        `[rekon_virtual_mrg.service] Screening process completed for periode ${options.periode} ` +
+          `(data missing / dibatalkan: ${dataMissingStores.size})`,
+      );
 
       // If task was cancelled during store processing, stop before finalizing
       if (!skipProgress && progressService.isAborted(taskId)) {
@@ -701,6 +712,7 @@ class RekonVirtualService {
         success: true,
         message: "Screening process completed",
         processedRecords: newRecords.length,
+        dataMissingStores: dataMissingStores.size,
       };
     } catch (error) {
       // If task was cancelled by user, don't call failProgress (already handled by cancelTask)
@@ -734,12 +746,23 @@ class RekonVirtualService {
    * @param {string} strYear - Year in YYYY format
    * @param {string} strMonth - Month in MM format
    * @param {Object|null} _sharedConnection - Ignored (WRC connection is always created)
-   * @returns {Promise<Object>} Result with success status and newRecords
+   * @returns {Promise<Object>} { success, newRecords, deletedKeys, outcome, cancelled }
+   *   outcome: "SYNCED" | "NO_DATA" | "DATA_TABLES_MISSING" | null
+   *   - SYNCED              → hasil query disinkronkan (prune obsolete + bulkCreate)
+   *   - NO_DATA             → semua query sukses tapi 0 baris → record lama dibersihkan
+   *   - DATA_TABLES_MISSING → table pendukung (DT_/PR_/RMB_) tidak ada / query gagal /
+   *                           belum ada hari H-1 → screening DIBATALKAN (success=false,
+   *                           cancelled=true), TANPA update DB apa pun — data toko
+   *                           dibiarkan apa adanya
    */
   async processSingleStore(store, strYear, strMonth, _sharedConnection = null, options = {}) {
+    // suppressIntermediateLogs dipertahankan untuk kompatibilitas pemanggil
+    // (combined_screening). Log per toko kini hanya 1 baris FINAL yang SELALU
+    // ditulis ke rekap_remote agar statusnya jelas per toko:
+    // SYNCED / NO_DATA / DATA_TABLES_MISSING / ERROR.
     const { suppressIntermediateLogs = false } = options;
     const { storeCode, cab } = store;
-    const results = { success: false, newRecords: [], deletedKeys: new Set() };
+    const results = { success: false, newRecords: [], deletedKeys: new Set(), outcome: null, cancelled: false };
 
     let wrcConnection;
     try {
@@ -751,7 +774,8 @@ class RekonVirtualService {
           cab,
           storeCode,
           "rekon_virtual_mrg",
-          `[${storeCode}] failed to connect to WRC`,
+          `[${storeCode}] ERROR`,
+          `[${storeCode}] Gagal membuka koneksi ke WRC cabang ${cab}`,
         );
         return results;
       }
@@ -770,7 +794,25 @@ class RekonVirtualService {
           endDay = today.date() - 1;
         }
 
+        // ── DATA_TABLES_MISSING: periode berjalan tapi belum ada hari H-1 ──
+        // Dulu: 0 query → 0 baris → deleteStorePeriod menghapus data local.
+        // Kini: screening DIBATALKAN — tanpa update DB apa pun.
+        if (endDay < 1) {
+          results.success = false;
+          results.cancelled = true;
+          results.outcome = "DATA_TABLES_MISSING";
+          const detail =
+            `DATA_TABLES_MISSING — screening DIBATALKAN: periode ${strYear}-${strMonth} berjalan, ` +
+            `belum ada hari H-1 untuk di-screen (0 query harian). ` +
+            `Tanpa update DB — data toko dibiarkan apa adanya; screen ulang besok.`;
+          logger.warn(`[rekon_virtual_mrg] processSingleStore toko ${storeCode}: ${detail}`);
+          await RekapRemoteService.addToTemp(cab, storeCode, "rekon_virtual_mrg", `[${storeCode}] DATA_TABLES_MISSING`, `[${storeCode}] ${detail}`);
+          return results;
+        }
+
         const dateQueries = [];
+        // Hari yang query-nya gagal (table DT_/PR_/RMB_ tidak ada, timeout, dll)
+        const failedDays = [];
 
         for (let d = 1; d <= endDay; d++) {
           const dateStr = targetMonth.clone().date(d).format("YYMMDD");
@@ -785,7 +827,9 @@ class RekonVirtualService {
               })
               .then(([rows]) => rows)
               .catch(err => {
+                // ⚠️ Jangan dianggap "0 baris" — catat sebagai data pendukung hilang
                 logger.warn(`[rekon_virtual_mrg] WRC query failed for ${storeCode} date ${dateStr}: ${err.message}`);
+                failedDays.push({ date: dateStr, message: err.message });
                 return [];
               }),
           );
@@ -794,14 +838,25 @@ class RekonVirtualService {
         const dayResults = await Promise.all(dateQueries);
         const result = dayResults.flat();
 
-        if (!suppressIntermediateLogs) {
-          await RekapRemoteService.addToTemp(
-            cab,
-            storeCode,
-            "rekon_virtual_mrg",
-            `[${storeCode}] WRC query completed, got ${result.length} records from ${daysInMonth} days`,
-          );
+        // ── DATA_TABLES_MISSING: ada query harian gagal → screening DIBATALKAN ──
+        // Data hasil query TIDAK LENGKAP — kalau tetap diproses, record existing
+        // dari hari yang gagal akan dianggap obsolete lalu DIHAPUS (hilang data).
+        if (failedDays.length > 0) {
+          results.success = false;
+          results.cancelled = true;
+          results.outcome = "DATA_TABLES_MISSING";
+          const first = failedDays[0];
+          const detail =
+            `DATA_TABLES_MISSING — screening DIBATALKAN: ${failedDays.length}/${endDay} query harian WRC gagal ` +
+            `(contoh: ${first.date} → ${first.message}). ` +
+            `Tanpa update DB — data toko periode ${strYear}-${strMonth} dibiarkan apa adanya; ` +
+            `screen ulang setelah table pendukung (DT_/PR_/RMB_) tersedia.`;
+          logger.warn(`[rekon_virtual_mrg] processSingleStore toko ${storeCode}: ${detail}`);
+          await RekapRemoteService.addToTemp(cab, storeCode, "rekon_virtual_mrg", `[${storeCode}] DATA_TABLES_MISSING`, `[${storeCode}] ${detail}`);
+          return results;
         }
+
+        let logDetail;
 
         if (result.length > 0) {
           const startDate = `${strYear}-${strMonth}-01`;
@@ -858,27 +913,47 @@ class RekonVirtualService {
           });
 
           results.newRecords = result;
+          results.success = true;
+          results.outcome = "SYNCED";
+          logDetail =
+            `SYNCED — ${result.length} baris data virtual margin dari ${endDay} hari (periode ${strYear}-${strMonth}) disinkronkan` +
+            `${obsoleteRecords.length > 0 ? `, ${obsoleteRecords.length} record lama dihapus (obsolete)` : ""}.`;
         } else {
-          await this.deleteStorePeriod(cab, storeCode, strYear, strMonth);
+          // Semua query SUKSES tapi 0 baris → wajar: tidak ada transaksi virtual
+          // margin di periode ini → record lama memang layak dibersihkan.
+          const deletedCount = await this.deleteStorePeriod(cab, storeCode, strYear, strMonth);
+          results.success = true;
+          results.outcome = "NO_DATA";
+          logDetail =
+            `NO_DATA — semua ${endDay} query harian WRC sukses tapi 0 baris (tidak ada transaksi virtual margin, ` +
+            `periode ${strYear}-${strMonth})${deletedCount > 0 ? ` → ${deletedCount} record lama dibersihkan` : ""}.`;
         }
 
-        results.success = true;
-
-        if (!suppressIntermediateLogs) {
-          await RekapRemoteService.addToTemp(
-            cab,
-            storeCode,
-            "rekon_virtual_mrg",
-            `[${storeCode}] ${results.newRecords.length > 0 ? "issue_found" : "success"}`,
-          );
-        }
+        // ✅ Log FINAL — 1 baris jelas per toko, SELALU ditulis (termasuk saat
+        //    combined screening). Status dipakai screeningGuard:
+        //    SYNCED/NO_DATA → skip screen ulang hari ini;
+        //    DATA_TABLES_MISSING & ERROR → screen ulang hari yang sama.
+        await RekapRemoteService.addToTemp(
+          cab,
+          storeCode,
+          "rekon_virtual_mrg",
+          `[${storeCode}] ${results.outcome}`,
+          `[${storeCode}] ${logDetail}`,
+        );
       } finally {
         if (wrcConnection) {
           await wrcConnection.end();
         }
       }
     } catch (err) {
-      await RekapRemoteService.addToTemp(cab, storeCode, "rekon_virtual_mrg", `[${storeCode}] ERROR: ${err.message}`);
+      logger.error(`[rekon_virtual_mrg.service] processSingleStore toko ${storeCode} : error : ${err}`);
+      await RekapRemoteService.addToTemp(
+        cab,
+        storeCode,
+        "rekon_virtual_mrg",
+        `[${storeCode}] ERROR`,
+        `[${storeCode}] ${err.message}`,
+      );
     }
 
     return results;

@@ -542,6 +542,15 @@ class CombinedScreeningService {
             logger.info(`[combined_screening] [MODULE] ${storeCode}/${moduleConfig.name}: done in ${moduleElapsed}ms`);
             // Success marker deferred to finalization — written only after module sync succeeds
             moduleResults[moduleConfig.name] = "success";
+          } else if (modResult && modResult.cancelled) {
+            // Module membatalkan screening (mis. penyesuaian: data ST tidak ada).
+            // Tanpa update DB dan TANPA marker apa pun — status log rekap_remote
+            // milik module (mis. DATA_ST_MISSING) harus tetap utuh untuk analisa
+            // dan agar screeningGuard mau men-screen ulang toko di hari yang sama.
+            logger.info(
+              `[combined_screening] [MODULE] ${storeCode}/${moduleConfig.name}: cancelled in ${moduleElapsed}ms (${modResult.outcome || "no outcome"})`,
+            );
+            moduleResults[moduleConfig.name] = "cancelled";
           } else {
             logger.warn(`[combined_screening] [MODULE] ${storeCode}/${moduleConfig.name}: completed with failure in ${moduleElapsed}ms`);
             await this.persistModuleResult(moduleConfig.name, cab, storeCode, "error", "module returned success: false");

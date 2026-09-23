@@ -32,11 +32,21 @@ class ScreeningGuard {
       // Belum ada data untuk toko ini di module ini
       if (!entry) return { screened: false, reason: "no_data", updtime: null };
 
-      // Cek apakah status gagal (mengandung "error" atau "failed" case-insensitive)
-      const isFailed = /(error|failed)/i.test(entry.status || "");
+      // Cek apakah status perlu di-screen ulang hari ini:
+      //   - "error" / "failed" → screening sebelumnya gagal
+      //   - "missing"           → data sumber belum ada (mis. DATA_ST_MISSING
+      //                           pada module penyesuaian) → cek lagi nanti hari ini,
+      //     supaya begitu data ST masuk toko bisa langsung di-resolve/di-EXCEEDED-kan.
+      const status = entry.status || "";
+      const isRetryable = /(error|failed|missing)/i.test(status);
 
-      logger.info(`[screeningGuard] Cek status untuk ${moduleName}/${kdtk}: ${isFailed ? "gagal" : "berhasil"}`);
-      if (isFailed) return { screened: false, reason: "previous_failed", updtime: entry.updtime };
+      logger.info(
+        `[screeningGuard] Cek status untuk ${moduleName}/${kdtk}: ${isRetryable ? "perlu screen ulang" : "berhasil"}`,
+      );
+      if (isRetryable) {
+        const reason = /missing/i.test(status) && !/(error|failed)/i.test(status) ? "data_incomplete" : "previous_failed";
+        return { screened: false, reason, updtime: entry.updtime };
+      }
 
       // Cek apakah updtime hari ini (Asia/Jakarta)
       const today = moment.tz("Asia/Jakarta").format("YYYY-MM-DD");

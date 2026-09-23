@@ -228,6 +228,8 @@ class PenyesuaianService {
         // Hanya laporkan "di bawah ambang batas" bila screening benar-benar sukses.
         // result.success === false (WRC down / config cabang hilang) BUKAN berarti
         // toko resolved — lanjutkan dengan data detail terbaru hasil tarikan WRC.
+        // result.outcome === "DATA_MISSING" (success=false, cancelled=true — screening
+        // dibatalkan) juga TIDAK masuk blok ini — detail & summary dipertahankan apa adanya.
         if (result.success && result.hasIssue === false) {
           // Toko benar-benar resolved → bersihkan detail basi agar buka modal
           // berikutnya tidak menampilkan data (konsisten dengan cleanup
@@ -240,9 +242,15 @@ class PenyesuaianService {
           throw err;
         }
         if (!result.success) {
-          logger.warn(
-            `[penyesuaian.service] Re-screening toko ${kdtk} gagal (koneksi/config WRC), melanjutkan dengan data detail terbaru`,
-          );
+          if (result.outcome === "DATA_MISSING") {
+            logger.warn(
+              `[penyesuaian.service] Re-screening toko ${kdtk} DIBATALKAN (data ST tidak ada) — tanpa update DB, data detail dipertahankan apa adanya`,
+            );
+          } else {
+            logger.warn(
+              `[penyesuaian.service] Re-screening toko ${kdtk} gagal (koneksi/config WRC), melanjutkan dengan data detail terbaru`,
+            );
+          }
         }
       }
 
@@ -572,13 +580,23 @@ class PenyesuaianService {
    * @param {string} strPeriode - Period in YYMM format
    * @param {string} strYear - Year in YYYY format
    * @param {string} strMonth - Month in MM format
-   * @returns {Promise<Object>} Result with success status, records, and hasIssue flag
+   * @returns {Promise<Object>} { success, records, hasIssue, outcome }
+   *   outcome: "EXCEEDED" | "BELOW_THRESHOLD" | "DATA_MISSING" | null
+   *   - EXCEEDED       → |SESUAI| > sesuaiThreshold → summary RECID='*' (tampil di list)
+   *   - BELOW_THRESHOLD→ data ada, |SESUAI| <= threshold → summary RECID='1' (resolve)
+   *   - DATA_MISSING   → data ST/sumber tidak ada di WRC → screening DIBATALKAN
+   *                      (success=false, cancelled=true), TANPA update DB apa pun,
+   *                      hasIssue=true agar toko TIDAK hilang dari list
    */
   async processSingleStore(store, strPeriode, strYear, strMonth, _sharedConnection = null, sessionId, options = {}) {
+    // suppressIntermediateLogs dipertahankan untuk kompatibilitas pemanggil
+    // (combined_screening). Log per toko kini hanya 1 baris FINAL yang SELALU
+    // ditulis ke rekap_remote agar statusnya jelas per toko:
+    // EXCEEDED / BELOW_THRESHOLD / DATA_ST_MISSING / ERROR.
     const { suppressIntermediateLogs = false } = options;
     const { storeCode, cab } = store;
 
-    const results = { success: false, records: [], hasIssue: false };
+    const results = { success: false, records: [], hasIssue: false, outcome: null, cancelled: false };
 
     let wrcConnection;
     try {
@@ -586,48 +604,99 @@ class PenyesuaianService {
       wrcConnection = await mysql.createConnection(await wrcService.getConnWRC(cab));
 
       if (!wrcConnection) {
-        await RekapRemoteService.addToTemp(cab, storeCode, "penyesuaian", `[${storeCode}] failed to connect to WRC`);
+        await RekapRemoteService.addToTemp(
+          cab,
+          storeCode,
+          "penyesuaian",
+          `[${storeCode}] ERROR`,
+          `[${storeCode}] Gagal membuka koneksi ke WRC cabang ${cab}`,
+        );
         return results;
       }
 
       try {
         const lastday = this.getLastday(strYear, strMonth);
+        const threshold = Number(config.sesuaiThreshold);
 
-        // STEP 1: Run filterWrc query to check if store has data exceeding threshold
+        // STEP 1: Ambil NILAI PENYESUAIAN AKTUAL toko dari WRC (tanpa filter threshold di SQL).
+        //   SESUAI > threshold   → EXCEEDED
+        //   SESUAI dalam rentang → BELOW_THRESHOLD (resolve)
+        //   SESUAI NULL          → DATA_MISSING: data sumber (st_lastday) tidak ada,
+        //                          BUKAN berarti di bawah threshold → jangan resolve!
         const filterQuery = config.queries.filterWrc(cab, strPeriode, storeCode, lastday);
         const [filterResult] = await wrcConnection.query({
           sql: filterQuery,
           timeout: config.parallelProcessing.queryTimeoutMs,
         });
-        if (!suppressIntermediateLogs) {
-          await RekapRemoteService.addToTemp(
-            cab,
-            storeCode,
-            "penyesuaian",
-            `[${storeCode}] filter query completed, threshold check: ${filterResult.length > 0 ? "EXCEEDED" : "OK"}`,
-          );
-        }
 
-        logger.info(`[penyesuaian.service] filterResult.length toko ${storeCode} : ${filterResult.length}`);
-        // STEP 2: If threshold exceeded, run detail query
-        if (filterResult.length > 0) {
-          await SesuaiTokoSummary.upsert(filterResult[0]);
+        const filterRow = Array.isArray(filterResult) ? filterResult[0] : null;
+        const rawSesuai = filterRow ? filterRow.SESUAI : null;
+        const sesuaiValue = rawSesuai === null || rawSesuai === undefined || rawSesuai === "" ? null : Number(rawSesuai);
+
+        const fmtRp = n => `Rp ${Math.round(n).toLocaleString("en-US")}`;
+        let logDetail;
+
+        if (sesuaiValue === null || Number.isNaN(sesuaiValue)) {
+          // ── DATA_MISSING: data sumber tidak ada di WRC → SCREENING DIBATALKAN ──
+          // Tanpa update DB sama sekali: tidak ada upsert summary, tidak ada
+          // markSummaryAsResolved, tidak ada hapus detail — data toko lama
+          // (termasuk yang masih bernilai penyesuaian tinggi) dibiarkan apa adanya.
+          results.success = false;
+          results.cancelled = true;
+          results.hasIssue = true; // tetap dianggap belum-resolved → toko TIDAK hilang dari list
+          results.outcome = "DATA_MISSING";
+
+          // Diagnostik untuk analisa: apakah ST toko benar-benar belum ada,
+          // atau barisnya ada tapi terfilter semua (CAT_COD / PRDCD exclusion)?
+          let stRows = null;
+          try {
+            const [cntRows] = await wrcConnection.query({
+              sql: config.queries.countStRows(storeCode, lastday),
+              timeout: config.parallelProcessing.queryTimeoutMs,
+            });
+            stRows = Number(cntRows && cntRows[0] ? cntRows[0].cnt : 0);
+          } catch (cntErr) {
+            logger.warn(`[penyesuaian.service] countStRows toko ${storeCode} gagal: ${cntErr.message}`);
+          }
+
+          logDetail =
+            `DATA_MISSING — screening DIBATALKAN: nilai penyesuaian tidak dapat dihitung (SESUAI NULL) ` +
+            `periode ${strPeriode} (lastday ${lastday}). st_${lastday} milik toko: ` +
+            `${stRows === null ? "cek gagal" : stRows > 0 ? `${stRows} baris (semua terfilter)` : "0 baris (data belum ada)"}. ` +
+            `Tidak ada update ke DB — data toko dibiarkan apa adanya; screen ulang setelah data ST masuk.`;
+          logger.warn(`[penyesuaian.service] processSingleStore toko ${storeCode}: ${logDetail}`);
+        } else if (Math.abs(sesuaiValue) > threshold) {
+          // ── EXCEEDED: nilai di atas threshold → toko bermasalah ──
           results.success = true;
           results.hasIssue = true;
+          results.outcome = "EXCEEDED";
+          await SesuaiTokoSummary.upsert({ ...filterRow, SESUAI: sesuaiValue });
+          logDetail =
+            `EXCEEDED — nilai penyesuaian ${fmtRp(sesuaiValue)} melebihi threshold ±${fmtRp(threshold)} ` +
+            `(periode ${strPeriode}, lastday ${lastday}).`;
         } else {
-          await this.markSummaryAsResolved({ periode: strPeriode, kdtk: storeCode });
+          // ── BELOW_THRESHOLD: data ada dan nilainya di bawah threshold → resolve ──
           results.success = true;
           results.hasIssue = false;
+          results.outcome = "BELOW_THRESHOLD";
+          await this.markSummaryAsResolved({ periode: strPeriode, kdtk: storeCode });
+          logDetail =
+            `BELOW_THRESHOLD — nilai penyesuaian ${fmtRp(sesuaiValue)} masih di bawah threshold ±${fmtRp(threshold)} ` +
+            `(periode ${strPeriode}, lastday ${lastday}) → toko di-resolve.`;
         }
 
-        if (!suppressIntermediateLogs) {
-          await RekapRemoteService.addToTemp(
-            cab,
-            storeCode,
-            "penyesuaian",
-            `[${storeCode}] ${results.hasIssue ? "issue_found" : "success"}`,
-          );
-        }
+        // ✅ Log FINAL — 1 baris jelas per toko, SELALU ditulis (termasuk saat
+        //    combined screening). Status dipakai screeningGuard: hanya
+        //    EXCEEDED/BELOW_THRESHOLD yang di-skip pada screen berikutnya hari ini;
+        //    DATA_ST_MISSING & ERROR akan di-screen ulang hari yang sama.
+        const statusToken = results.outcome === "DATA_MISSING" ? "DATA_ST_MISSING" : results.outcome;
+        await RekapRemoteService.addToTemp(
+          cab,
+          storeCode,
+          "penyesuaian",
+          `[${storeCode}] ${statusToken}`,
+          `[${storeCode}] ${logDetail}`,
+        );
       } finally {
         if (wrcConnection) {
           await wrcConnection.end();
@@ -635,7 +704,13 @@ class PenyesuaianService {
       }
     } catch (err) {
       logger.error(`[penyesuaian.service] processSingleStore toko ${storeCode} : error : ${err}`);
-      await RekapRemoteService.addToTemp(cab, storeCode, "penyesuaian", `[${storeCode}] ERROR: ${err.message}`);
+      await RekapRemoteService.addToTemp(
+        cab,
+        storeCode,
+        "penyesuaian",
+        `[${storeCode}] ERROR`,
+        `[${storeCode}] ${err.message}`,
+      );
     }
 
     return results;
@@ -691,10 +766,15 @@ class PenyesuaianService {
         // Sync to JSON file
         await this.syncToJsonFile(strPeriode);
 
+        const cancelled = result.outcome === "DATA_MISSING";
         return {
           success: true,
-          message: `Single store screening completed for ${kdtk}`,
+          message: cancelled
+            ? `Screening ${kdtk} DIBATALKAN — data ST tidak ada, tidak ada update data (rekap_remote: DATA_ST_MISSING)`
+            : `Single store screening completed for ${kdtk} — ${result.outcome || "UNKNOWN"}`,
           processedRecords: result.records.length,
+          outcome: result.outcome,
+          cancelled,
         };
       } catch (error) {
         logger.error(`[penyesuaian.service] Error during single store screening: ${error.message}`);
@@ -786,6 +866,7 @@ class PenyesuaianService {
       const screenedStores = new Set(); // All stores that were processed (success or error)
       const activeStores = new Set(); // Stores that still have issues
       const resolvedStores = new Set(); // Stores now resolved (RECID='1'), detail harus dibersihkan
+      const dataMissingStores = new Set(); // Stores dengan data ST tidak ada — screening DIBATALKAN, tanpa update DB, tetap di list
 
       let processedCount = 0;
       const totalStores = storesToProcess.length;
@@ -836,17 +917,21 @@ class PenyesuaianService {
                 `process store ${storeCode}`,
               );
 
-              if (result.success) {
-                // logger.info(`[penyesuaian.service] value result: ${JSON.stringify(result)}`);
-                if (result.hasIssue) {
-                  // Store has issues
+              if (result.outcome === "DATA_MISSING") {
+                // Screening DIBATALKAN (data ST tidak ada) — tanpa update DB,
+                // toko tetap di list dengan data lama apa adanya
+                dataMissingStores.add(storeCode);
+                await incrementProgress(storeCode, "Dibatalkan — data ST tidak ada ⛔");
+              } else if (result.success) {
+                if (result.outcome === "BELOW_THRESHOLD") {
+                  // Data ada & di bawah threshold → resolved, detail dibersihkan nanti
+                  resolvedStores.add(storeCode);
+                  await incrementProgress(storeCode, "Masih Dibawah Nilai Toleransi ✓");
+                } else {
+                  // EXCEEDED — store has issues
                   activeStores.add(storeCode);
                   newRecords.push(...result.records);
                   await incrementProgress(storeCode, `Success ✅ (${result.records.length} rows)`);
-                } else {
-                  // Store below threshold (no issues) → resolved, hapus detail nanti
-                  resolvedStores.add(storeCode);
-                  await incrementProgress(storeCode, "Masih Dibawah Nilai Toleransi ✓");
                 }
               } else {
                 await incrementProgress(storeCode, "Error ❌");
@@ -863,7 +948,8 @@ class PenyesuaianService {
 
       logger.info(`[penyesuaian.service] Screening process completed for periode ${periode}`);
       logger.info(
-        `[penyesuaian.service] Screened stores: ${screenedStores.size}, Active stores (has issues): ${activeStores.size}`,
+        `[penyesuaian.service] Screened stores: ${screenedStores.size}, Active stores (has issues): ${activeStores.size}, ` +
+          `Data missing (dibatalkan, tanpa update DB): ${dataMissingStores.size}`,
       );
 
       // If task was cancelled during store processing, stop before finalizing
@@ -915,6 +1001,7 @@ class PenyesuaianService {
         processedRecords: newRecords.length,
         screenedStores: screenedStores.size,
         activeStores: activeStores.size,
+        dataMissingStores: dataMissingStores.size,
       };
     } catch (error) {
       // If task was cancelled by user, don't call failProgress (already handled by cancelTask)

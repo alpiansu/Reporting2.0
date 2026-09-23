@@ -328,12 +328,26 @@ export default {
         20067408
       )
 
-    ) AS rp_sesuai_toko
-
-    HAVING SESUAI > 500000
-        OR SESUAI < -500000;
+    ) AS rp_sesuai_toko;
   `;
     },
+
+    /**
+     * Query diagnostik: jumlah baris data st (stok akhir) milik toko di WRC.
+     *
+     * Dipakai saat hasil filterWrc mengembalikan SESUAI NULL, untuk membedakan:
+     *   - 0 baris   → data ST toko benar-benar belum ada di WRC
+     *                 (JANGAN dianggap di bawah threshold → jangan resolve toko)
+     *   - >0 baris  → data ada, tapi baris terfilter semua (CAT_COD / PRDCD exclusion)
+     *
+     * Aman dipanggil setelah filterWrc sukses, karena filterWrc sudah
+     * memakai tabel st_${lastday} yang sama (jika tidak ada, filterWrc sudah error duluan).
+     */
+    countStRows: (kdtk, lastday) => `
+      SELECT COUNT(*) AS cnt
+      FROM st_${lastday}
+      WHERE kode_toko = '${kdtk}'
+    `,
 
     fullDetailWrc: (cab, prd, kdtk, lastday) => {
       // ============================================================
@@ -851,7 +865,11 @@ export default {
     queryTimeoutMs: 20000, // 20 seconds
   },
 
-  // Threshold for filtering data (absolute value)
+  // Threshold untuk menentukan toko "bermasalah": |SESUAI| > sesuaiThreshold.
+  // Sumber kebenaran tunggal — query filterWrc TIDAK lagi memfilter di SQL
+  // (HAVING dihapus) supaya kasus "data tidak ada (SESUAI NULL)" bisa
+  // dibedakan dari "nilai di bawah threshold" di service.
+  // Kasus NULL → outcome DATA_MISSING → toko TIDAK di-resolve (tetap di list).
   sesuaiThreshold: 500000,
 
   taskProgressName: "penyesuaianTask",

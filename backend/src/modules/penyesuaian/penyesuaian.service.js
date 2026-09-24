@@ -204,7 +204,17 @@ class PenyesuaianService {
         `[penyesuaian.service] status updtime ${statusUpdtime} tarik data detail penyesuaian toko ${kdtk} terlebih dahulu!`,
       );
 
-      await this.getDetailFromStore(kdtk, periode);
+      const detailFetch = await this.getDetailFromStore(kdtk, periode);
+
+      // Tarik detail DIBATALKAN (tabel sumber WRC tidak lengkap / WRC down).
+      // Tanpa update DB: data detail LAMA dipertahankan apa adanya dan user tetap
+      // bisa melihat detail — jangan throw, jangan re-screen (tidak ada data baru).
+      if (detailFetch.cancelled) {
+        logger.warn(
+          `[penyesuaian.service] Tarik detail toko ${kdtk} periode ${periode} DIBATALKAN (${detailFetch.error || "tabel sumber WRC tidak lengkap"}) — menampilkan ${records.length} baris data detail lama, tanpa update DB`,
+        );
+        return records;
+      }
 
       // ✅ Bug 3 fix: length dicek duluan, gunakan ===
       if (records.length > 0 && statusUpdtime === "UPD-SUMMARY") {
@@ -572,6 +582,36 @@ class PenyesuaianService {
       return today.subtract(1, "day").format("YYMMDD");
     }
     return targetMonth.endOf("month").format("YYMMDD");
+  }
+
+  /**
+   * Derive lastday (YYMMDD) dari UPDTIME sesuai_toko_summary — yaitu tanggal
+   * terakhir tarikan penyesuaian toko/periode itu SUKSES di WRC.
+   *
+   * Saat tarikan penyesuaian sukses pada hari D, lastday yang dipakai adalah:
+   *   - periode bulan berjalan → H-1 dari tanggal D (pola getLastday)
+   *   - periode bulan lampau  → akhir bulan periode
+   * Tabel sumber (st_/pr_/wt_/dt_) pada lastday tersebut PASTI pernah ada,
+   * sehingga tarik data detail bisa memakai tanggal yang sama walau tabel
+   * terbaru H-1 belum lengkap di WRC.
+   *
+   * @param {string} strYear - Tahun periode (YYYY)
+   * @param {string} strMonth - Bulan periode (MM)
+   * @param {Date|string|null} updtime - UPDTIME summary (null bila belum ada)
+   * @returns {string|null} lastday YYMMDD, atau null jika updtime tidak valid
+   */
+  getLastdayFromUpdtime(strYear, strMonth, updtime) {
+    if (!updtime) return null;
+    const pulledAt = moment(updtime);
+    if (!pulledAt.isValid()) return null;
+    const targetMonth = moment(`${strYear}-${strMonth}`, "YYYY-MM");
+    if (!targetMonth.isValid()) return null;
+    // Tarikan terjadi masih di bulan periode → pakai pola H-1
+    if (pulledAt.isSame(targetMonth, "month")) {
+      return pulledAt.clone().subtract(1, "day").format("YYMMDD");
+    }
+    // Tarikan terjadi di luar bulan periode → pakai pola akhir bulan
+    return targetMonth.clone().endOf("month").format("YYMMDD");
   }
 
   /**
@@ -1276,78 +1316,137 @@ class PenyesuaianService {
     }
   }
 
-  //buat function untuk melihat detail langsung open connection ke WRC, tanpa cache, tanpa json file, tanpa summary, langsung query ke WRC
+  /**
+   * Tarik data detail penyesuaian toko dari WRC → sesuai_toko (tanpa cache/JSON/summary).
+   *
+   * ANTI "DETAIL TERCANCEL": lastday diprioritaskan dari UPDTIME sesuai_toko_summary —
+   * tanggal terakhir tarikan penyesuaian toko/periode itu SUKSES. Tabel sumber
+   * (st_/pr_/wt_/dt_) pada tanggal itu pasti pernah ada, jadi detail tetap bisa ditarik
+   * walau tabel terbaru (H-1) belum lengkap di WRC. Kandidat kedua: lastday terbaru —
+   * dipakai hanya jika summary belum ada atau kandidat pertama ikut gagal.
+   *
+   * Jika SEMUA kandidat gagal → results.cancelled=true, TANPA update DB apa pun
+   * (data detail lama dipertahankan) dan TIDAK melempar error.
+   *
+   * @returns {Promise<Object>} { success, records, hasIssue, cancelled, lastday, error? }
+   */
   async getDetailFromStore(kdtk, strPeriode) {
+    const results = { success: false, records: [], hasIssue: false, cancelled: false, lastday: null };
     try {
       const strYear = moment(strPeriode, "YYMM").format("YYYY");
       const strMonth = moment(strPeriode, "YYMM").format("MM");
-      const results = { success: false, records: [], hasIssue: false };
 
       // Resolve cabang untuk koneksi WRC
       await storeService.ensureInitialized();
       const storeInfo = await storeService.getStoreByCode(kdtk);
       const cab = storeInfo ? storeInfo.branch || storeInfo.cab : "UNKNOWN";
-      const lastday = this.getLastday(strYear, strMonth);
-      const query = config.queries.fullDetailWrc(cab, strPeriode, kdtk, lastday);
 
-      let wrcConnection;
+      // ── Susun kandidat lastday sesuai prioritas ──
+      const lastdayLatest = this.getLastday(strYear, strMonth);
+      const candidates = [];
       try {
-        wrcConnection = await mysql.createConnection(await wrcService.getConnWRC(cab));
+        const summary = await SesuaiTokoSummary.findOne({ where: { KDTK: kdtk, PERIODE: strPeriode } });
+        const lastdayFromSummary = this.getLastdayFromUpdtime(strYear, strMonth, summary?.UPDTIME);
+        if (lastdayFromSummary) candidates.push(lastdayFromSummary);
+        if (lastdayFromSummary !== lastdayLatest) candidates.push(lastdayLatest);
+      } catch (summaryErr) {
+        logger.warn(
+          `[penyesuaian.service] Gagal baca UPDTIME summary toko ${kdtk} periode ${strPeriode}: ${summaryErr.message} — memakai lastday terbaru ${lastdayLatest}`,
+        );
+        candidates.push(lastdayLatest);
+      }
 
-        if (!wrcConnection) {
-          throw new Error(`Connection to WRC for store ${kdtk} has failed to open!`);
-        }
-        const [detailResult] = await wrcConnection.query({
-          sql: query,
-          timeout: config.parallelProcessing.queryTimeoutMs,
-        });
-        //insert detail ke table sesuai_toko
-        if (detailResult.length > 0) {
-          // Normalize field names to match model (uppercase)
-          const normalizedRecords = detailResult.map(record => ({
-            RECID: "*", // Default value for tracking
-            CABANG: record.CABANG,
-            PERIODE: record.PERIODE,
-            KDTK: record.KDTK,
-            PRDCD: record.PRDCD ?? record.prdcd,
-            SINGKATAN: record.SINGKATAN,
-            RECID_PRODMAST: record.RECID_PRODMAST,
-            PTAG: record.PTAG,
-            BEGBAL: record.BEGBAL,
-            TRFIN: record.TRFIN,
-            TRFOUT: record.TRFOUT,
-            RP_SALES: record.RP_SALES,
-            RP_RETUR_SALES: record.RP_RETUR_SALES,
-            ADJ: record.ADJ,
-            BA: record.BA,
-            BS: record.BS,
-            ACOST: record.acost,
-            LCOST: record.lcost,
-            STOCK: record.stock,
-            RP_STOCK: record.rp_stock,
-            SESUAI: record.sesuai,
-            UPDTIME: new Date(),
-          }));
-
-          //hapus dulu data detail di sesuai_toko
-          await SesuaiToko.destroy({
-            where: { kdtk: kdtk, periode: strPeriode },
+      // ── Tarik dari WRC: coba tiap kandidat, berhenti saat query sukses ──
+      let detailResult = null;
+      let lastError = null;
+      for (const lastday of candidates) {
+        let wrcConnection;
+        try {
+          wrcConnection = await mysql.createConnection(await wrcService.getConnWRC(cab));
+          if (!wrcConnection) {
+            throw new Error(`Connection to WRC for store ${kdtk} has failed to open!`);
+          }
+          const [rows] = await wrcConnection.query({
+            sql: config.queries.fullDetailWrc(cab, strPeriode, kdtk, lastday),
+            timeout: config.parallelProcessing.queryTimeoutMs,
           });
-
-          // Bulk create records to database (detail table)
-          await SesuaiToko.bulkCreate(normalizedRecords);
-
-          results.records = normalizedRecords;
-          results.hasIssue = true; // Store has issues
-          results.success = true;
-        } else {
-          results.success = true; // Below threshold is still success
-          results.hasIssue = false; // No issues
+          detailResult = Array.isArray(rows) ? rows : [];
+          results.lastday = lastday;
+          break;
+        } catch (pullErr) {
+          lastError = pullErr;
+          logger.warn(
+            `[penyesuaian.service] Tarik detail toko ${kdtk} periode ${strPeriode} dengan lastday ${lastday} gagal: ${pullErr.message}`,
+          );
+        } finally {
+          if (wrcConnection) {
+            try {
+              await wrcConnection.end();
+            } catch {
+              /* koneksi mungkin sudah tertutup */
+            }
+          }
         }
-      } finally {
-        if (wrcConnection) {
-          await wrcConnection.end();
-        }
+      }
+
+      // ── Semua kandidat gagal → DIBATALKAN, tanpa update DB apa pun ──
+      if (detailResult === null) {
+        results.cancelled = true;
+        results.error = lastError ? lastError.message : "Tidak ada kandidat lastday";
+        logger.warn(
+          `[penyesuaian.service] Tarik detail toko ${kdtk} periode ${strPeriode} DIBATALKAN (${results.error}) — memakai data detail lama yang tersimpan, tanpa update DB`,
+        );
+        return results;
+      }
+
+      if (results.lastday !== lastdayLatest) {
+        logger.info(
+          `[penyesuaian.service] Detail toko ${kdtk} periode ${strPeriode} memakai lastday ${results.lastday} (periode tarikan penyesuaian terakhir sukses), bukan lastday terbaru ${lastdayLatest}`,
+        );
+      }
+
+      //insert detail ke table sesuai_toko
+      if (detailResult.length > 0) {
+        // Normalize field names to match model (uppercase)
+        const normalizedRecords = detailResult.map(record => ({
+          RECID: "*", // Default value for tracking
+          CABANG: record.CABANG,
+          PERIODE: record.PERIODE,
+          KDTK: record.KDTK,
+          PRDCD: record.PRDCD ?? record.prdcd,
+          SINGKATAN: record.SINGKATAN,
+          RECID_PRODMAST: record.RECID_PRODMAST,
+          PTAG: record.PTAG,
+          BEGBAL: record.BEGBAL,
+          TRFIN: record.TRFIN,
+          TRFOUT: record.TRFOUT,
+          RP_SALES: record.RP_SALES,
+          RP_RETUR_SALES: record.RP_RETUR_SALES,
+          ADJ: record.ADJ,
+          BA: record.BA,
+          BS: record.BS,
+          ACOST: record.acost,
+          LCOST: record.lcost,
+          STOCK: record.stock,
+          RP_STOCK: record.rp_stock,
+          SESUAI: record.sesuai,
+          UPDTIME: new Date(),
+        }));
+
+        //hapus dulu data detail di sesuai_toko
+        await SesuaiToko.destroy({
+          where: { kdtk: kdtk, periode: strPeriode },
+        });
+
+        // Bulk create records to database (detail table)
+        await SesuaiToko.bulkCreate(normalizedRecords);
+
+        results.records = normalizedRecords;
+        results.hasIssue = true; // Store has issues
+        results.success = true;
+      } else {
+        results.success = true; // Below threshold is still success
+        results.hasIssue = false; // No issues — data detail lama TIDAK dihapus
       }
       return results;
     } catch (error) {
@@ -1690,6 +1789,7 @@ class PenyesuaianService {
 
     // 1. Ambil semua item toko dari sesuai_toko
     // Jika belum ada data detail (misal user belum klik Detail), tarik dulu dari store
+    let pullResult = null;
     let model = await SesuaiToko.getModel();
     let items = await model.findAll({
       where: {
@@ -1703,7 +1803,7 @@ class PenyesuaianService {
       logger.info(
         `[penyesuaian.service] generateAutoNote: data detail ${kdtk}/${periode} kosong, menarik dari store...`,
       );
-      await this.getDetailFromStore(kdtk, periode);
+      pullResult = await this.getDetailFromStore(kdtk, periode);
       // Re-query setelah data ditarik
       model = await SesuaiToko.getModel();
       items = await model.findAll({
@@ -1716,7 +1816,10 @@ class PenyesuaianService {
     }
 
     if (!items || items.length === 0) {
-      throw new Error(`Data detail untuk toko ${kdtk} periode ${periode} tetap kosong setelah ditarik dari store`);
+      const alasan = pullResult?.cancelled
+        ? ` — tarik detail DIBATALKAN: ${pullResult.error || "tabel sumber WRC belum lengkap"}`
+        : "";
+      throw new Error(`Data detail untuk toko ${kdtk} periode ${periode} tetap kosong setelah ditarik dari store${alasan}`);
     }
 
     const rawItems = items.map(r => r.toJSON());

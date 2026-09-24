@@ -44,6 +44,7 @@ jest.mock("../modules/penyesuaian/penyesuaian_summary.model.js", () => ({
   __esModule: true,
   default: {
     getModel: jest.fn(async () => null),
+    findOne: jest.fn(),
     upsert: jest.fn(),
     update: jest.fn(),
     findAll: jest.fn(async () => []),
@@ -131,6 +132,7 @@ jest.mock("p-limit", () => ({
 
 import mysql from "mysql2/promise";
 import RekapRemoteService from "../modules/rekap_remote/rekap_remote.service.js";
+import SesuaiToko from "../modules/penyesuaian/penyesuaian.model.js";
 import SesuaiTokoSummary from "../modules/penyesuaian/penyesuaian_summary.model.js";
 import penyesuaianConfig from "../modules/penyesuaian/penyesuaian.config.js";
 import penyesuaianService from "../modules/penyesuaian/penyesuaian.service.js";
@@ -178,6 +180,35 @@ const sesuaiRow = value => ({
 function lastRekapLog() {
   const calls = RekapRemoteService.addToTemp.mock.calls;
   return calls.length ? calls[calls.length - 1] : null;
+}
+
+/** Satu baris hasil query fullDetailWrc (field sesuai kebutuhan normalisasi) */
+const detailRow = prdcd => ({
+  CABANG: CAB,
+  PERIODE,
+  KDTK,
+  PRDCD: prdcd,
+  SINGKATAN: `Item ${prdcd}`,
+  RECID_PRODMAST: "*",
+  PTAG: "A",
+  sesuai: 600000,
+});
+
+/**
+ * Mock koneksi WRC untuk query DETAIL (fullDetailWrc).
+ * Query yang sql-nya mengandung st_<lastday> bisa dipaksa gagal per-lastday
+ * (mensimulasikan tabel sumber belum ada di WRC).
+ */
+function mockDetailWrc({ rows = [], failLastdays = [], failAll = false } = {}) {
+  const conn = { query: jest.fn(), end: jest.fn(async () => {}) };
+  conn.query.mockImplementation(async ({ sql }) => {
+    if (failAll) throw new Error("Table 'st_260714' doesn't exist");
+    const hit = failLastdays.find(ld => sql.includes(`st_${ld}`));
+    if (hit) throw new Error(`Table 'st_${hit}' doesn't exist`);
+    return [rows];
+  });
+  mysql.createConnection.mockResolvedValue(conn);
+  return conn;
 }
 
 beforeEach(() => {
@@ -345,5 +376,85 @@ describe("config queries — filterWrc tidak lagi menyaring threshold di SQL", (
 
   test("sesuaiThreshold dipakai sebagai sumber kebenaran threshold", () => {
     expect(penyesuaianConfig.sesuaiThreshold).toBe(500000);
+  });
+});
+
+describe("getDetailFromStore — lastday periode tarikan penyesuaian terakhir SUKSES", () => {
+  test("pakai lastday dari UPDTIME summary (H-1 tanggal tarikan penyesuaian terakhir sukses)", async () => {
+    SesuaiTokoSummary.findOne.mockResolvedValue({ UPDTIME: new Date("2026-07-15T10:00:00") });
+    const conn = mockDetailWrc({ rows: [detailRow("000001")] });
+
+    const result = await penyesuaianService.getDetailFromStore(KDTK, PERIODE);
+
+    expect(result.success).toBe(true);
+    expect(result.cancelled).toBe(false);
+    expect(result.lastday).toBe("260714"); // H-1 dari 15 Juli 2026
+    expect(conn.query).toHaveBeenCalledTimes(1);
+    expect(conn.query.mock.calls[0][0].sql).toContain("st_260714");
+    expect(SesuaiToko.destroy).toHaveBeenCalledTimes(1);
+    expect(SesuaiToko.bulkCreate).toHaveBeenCalledTimes(1);
+    expect(result.records).toHaveLength(1);
+  });
+
+  test("lastday summary gagal (tabel hilang) → fallback ke lastday terbaru dan tetap sukses", async () => {
+    SesuaiTokoSummary.findOne.mockResolvedValue({ UPDTIME: new Date("2026-07-15T10:00:00") });
+    const latest = penyesuaianService.getLastday("2026", "07");
+    const conn = mockDetailWrc({ rows: [detailRow("000001")], failLastdays: ["260714"] });
+
+    const result = await penyesuaianService.getDetailFromStore(KDTK, PERIODE);
+
+    expect(result.success).toBe(true);
+    expect(result.lastday).toBe(latest);
+    expect(conn.query).toHaveBeenCalledTimes(2);
+    expect(conn.query.mock.calls[1][0].sql).toContain(`st_${latest}`);
+    expect(SesuaiToko.bulkCreate).toHaveBeenCalledTimes(1);
+  });
+
+  test("SEMUA kandidat gagal → cancelled=true, TANPA update DB (detail lama dipertahankan), tidak throw", async () => {
+    SesuaiTokoSummary.findOne.mockResolvedValue({ UPDTIME: new Date("2026-07-15T10:00:00") });
+    const conn = mockDetailWrc({ failAll: true });
+
+    await expect(penyesuaianService.getDetailFromStore(KDTK, PERIODE)).resolves.toMatchObject({
+      success: false,
+      cancelled: true,
+    });
+
+    expect(SesuaiToko.destroy).not.toHaveBeenCalled();
+    expect(SesuaiToko.bulkCreate).not.toHaveBeenCalled();
+    expect(conn.end).toHaveBeenCalled();
+  });
+
+  test("summary belum ada → langsung pakai lastday terbaru (1 percobaan)", async () => {
+    SesuaiTokoSummary.findOne.mockResolvedValue(null);
+    const latest = penyesuaianService.getLastday("2026", "07");
+    const conn = mockDetailWrc({ rows: [detailRow("000001")] });
+
+    const result = await penyesuaianService.getDetailFromStore(KDTK, PERIODE);
+
+    expect(result.lastday).toBe(latest);
+    expect(conn.query).toHaveBeenCalledTimes(1);
+    expect(conn.query.mock.calls[0][0].sql).toContain(`st_${latest}`);
+  });
+});
+
+describe("loadRecordsDetailFromDb — tarik detail dibatalkan → data detail lama tetap dipakai", () => {
+  test("records lama dikembalikan apa adanya, tanpa update DB & tanpa log rekap_remote", async () => {
+    const staleRows = [
+      { RECID: "*", CABANG: CAB, PERIODE, KDTK, PRDCD: "000001", SINGKATAN: "Item", SESUAI: "600000", STATUS_UPDTIME: "UPD" },
+    ];
+    SesuaiToko.getModel.mockResolvedValue({ sequelize: { query: jest.fn(async () => staleRows) } });
+    SesuaiTokoSummary.findOne.mockResolvedValue({ UPDTIME: new Date("2026-07-15T10:00:00") });
+    mockDetailWrc({ failAll: true });
+
+    const result = await penyesuaianService.loadRecordsDetailFromDb({ periode: PERIODE, cabang: CAB, kdtk: KDTK });
+
+    expect(result).toEqual(staleRows);
+    expect(result).toHaveLength(1);
+    // Tanpa update DB apa pun
+    expect(SesuaiToko.destroy).not.toHaveBeenCalled();
+    expect(SesuaiToko.bulkCreate).not.toHaveBeenCalled();
+    // Menampilkan detail BUKAN screening → tidak boleh menulis rekap_remote
+    // (status log screening bisa menipu screeningGuard agar skip hari yang sama)
+    expect(RekapRemoteService.addToTemp).not.toHaveBeenCalled();
   });
 });

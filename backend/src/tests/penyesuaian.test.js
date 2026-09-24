@@ -458,3 +458,38 @@ describe("loadRecordsDetailFromDb — tarik detail dibatalkan → data detail la
     expect(RekapRemoteService.addToTemp).not.toHaveBeenCalled();
   });
 });
+
+describe("getAllRecords — cache detail wajib aktif dalam TTL", () => {
+  test("request berulang tidak query ulang (dulu: isCacheValid salah panggil → selalu miss)", async () => {
+    penyesuaianService.invalidateCache();
+    const row = {
+      RECID: "*",
+      CABANG: CAB,
+      PERIODE,
+      KDTK,
+      PRDCD: "000001",
+      SINGKATAN: "Item",
+      SESUAI: "600000",
+      STATUS_UPDTIME: "OK",
+    };
+    const queryMock = jest.fn(async () => [row]);
+    SesuaiToko.getModel.mockResolvedValue({ sequelize: { query: queryMock } });
+
+    const opts = { periode: PERIODE, cabang: CAB, kdtk: KDTK, page: 1, limit: 10 };
+
+    const r1 = await penyesuaianService.getAllRecords(opts);
+    expect(queryMock).toHaveBeenCalledTimes(1);
+    expect(r1.data).toHaveLength(1);
+
+    const r2 = await penyesuaianService.getAllRecords(opts);
+    expect(queryMock).toHaveBeenCalledTimes(1); // ← HIT dari cache (dulu selalu2+)
+
+    // Kedaluwarsakan entry → wajib refresh dari DB lagi
+    const key = penyesuaianService.generateCacheKey(PERIODE, CAB, KDTK);
+    penyesuaianService.cacheDetailData.get(key).lastAccessTime =
+      Date.now() - (penyesuaianService.cacheTTL + 1000);
+
+    await penyesuaianService.getAllRecords(opts);
+    expect(queryMock).toHaveBeenCalledTimes(2);
+  });
+});

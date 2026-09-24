@@ -12,6 +12,14 @@ class wrcBulananService {
    * @returns {Promise<Object>} Connection config object
    */
   async getConnWRC(cab) {
+    // ── Cache constring per cabang (TTL5 menit) ──
+    // Tanpa cache, screening massal membuka+tutup koneksi EDP per toko per
+   // module (ribuan handshake TCP+auth yang bisa menimbulkan lag).
+    const cached = this.connWrCache.get(cab);
+    if (cached && Date.now() - cached.cachedAt < this.connWrTTL) {
+      return { ...cached.config }; // salinan — pemakai tidak boleh merubah cache
+    }
+
     let conDBEdp;
     try {
       conDBEdp = await mysql.createConnection({
@@ -49,7 +57,9 @@ class wrcBulananService {
       // Default options
       config.multipleStatements = true;
       config.dateStrings = ["DATE", "DATETIME"];
-      return config;
+      // Cache hanya disimpan saat sukses — kegagalan tidak di-cache
+      this.connWrCache.set(cab, { config: { ...config }, cachedAt: Date.now() });
+      return { ...config };
     } catch (error) {
       logger.error(`getConnWRC error: ${error.message}`);
       throw error;
@@ -86,6 +96,9 @@ class wrcBulananService {
   constructor() {
     this.config = syncConfig.externalDbEDP;
     this.connection = null;
+    // Cache constring WRC per cabang — constring jarang berubah
+    this.connWrCache = new Map(); // cab → { config, cachedAt }
+    this.connWrTTL = 5 * 60 * 1000; //5 menit
   }
 
   /**

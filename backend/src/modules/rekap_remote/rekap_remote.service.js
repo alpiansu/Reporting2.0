@@ -23,6 +23,45 @@ class RekapRemoteService {
     this.tempFilePath = path.join(os.tmpdir(), "rekap_remote_logs.json");
     this.tempDir = path.dirname(this.tempFilePath);
     this.fileMutex = new Mutex(); // Mutex untuk sinkronisasi akses file
+
+    // ── Akumulasi log IN-MEMORY + flush debounce ──
+    // Dulu setiap addToTemp membaca + menulis ulang SELURUH file (O(n²) I/O saat
+    // screening massal ribuan toko). Kini log dikumpulkan di memori dan ditulis
+    // paling sering per flushDelayMs (merge dengan isi file agar data eksternal
+    // tidak hilang). Trade-off: maksimal flushDelayMs log bisa hilang jika proses
+    // crash di antara update & flush — masih jauh lebih aman dari file korup/race.
+    this.memLogs = null; // null = belum dimuat; {} = kosong
+    this.memDirty = false; // ada perubahan yang belum tertulis ke file
+    this.flushTimer = null;
+    this.flushDelayMs = 150; // debounce flush (150ms)
+  }
+
+  /**
+   * Ambil mutex dengan hold-timeout30 detik; fungsi release yang dikembalikan
+   * IDEMPOTENT — aman dipanggil dari timeout callback DAN dari finally.
+   * Dulu release() dipanggil di dua tempat tanpa penanda: saat timeout PASTI
+   * terjadi double-release → mutex kelepas2× → dua penulis berjalan bersamaan
+   * → file log bisa korup/hilang.
+   * @param {string} label - Prefix untuk pesan log
+   * @returns {Promise<() => void>} release yang aman dipanggil berulang
+   */
+  async _acquireWithTimeout(label) {
+    const release = await this.fileMutex.acquire();
+    let released = false;
+    let timeoutId = null;
+    const safeRelease = () => {
+      if (released) return;
+      released = true;
+      if (timeoutId) clearTimeout(timeoutId);
+      release();
+    };
+    timeoutId = setTimeout(() => {
+      logger.error(
+        `${label} mutex hold timeout after 30 seconds — lock dilepas agar tidak menahan proses lain (operasi asli mungkin masih berjalan)`,
+      );
+      safeRelease();
+    }, 30000);
+    return safeRelease;
   }
 
   /**
@@ -63,22 +102,21 @@ class RekapRemoteService {
    * Clean up temporary files with mutex protection
    */
   async cleanupTempFiles() {
-    // Gunakan mutex dengan timeout untuk mencegah hang
-    const release = await this.fileMutex.acquire();
-    const timeoutId = setTimeout(() => {
-      logger.error("cleanupTempFiles mutex acquisition timeout after 30 seconds");
-      release();
-    }, 30000); // 30 second timeout
-
+    const release = await this._acquireWithTimeout("[REKAP REMOTE] cleanupTempFiles");
     try {
+      // Bersihkan juga akumulasi memori + timer flush
+      this.memLogs = null;
+      this.memDirty = false;
+      if (this.flushTimer) {
+        clearTimeout(this.flushTimer);
+        this.flushTimer = null;
+      }
       await fs.unlink(this.tempFilePath);
       logger.info("Cleaned up rekap_remote temporary files");
     } catch (error) {
       // File doesn't exist, ignore error
       logger.debug(`Cleanup temp file: ${error.message}`);
     } finally {
-      // Clear timeout dan release mutex
-      clearTimeout(timeoutId);
       release();
     }
   }
@@ -106,21 +144,16 @@ class RekapRemoteService {
    * @param {string} message - Optional message
    */
   async addToTemp(cab, kdtk, moduleName, status, message = "") {
-    // Gunakan mutex dengan timeout untuk mencegah hang
-    const release = await this.fileMutex.acquire();
-    const timeoutId = setTimeout(() => {
-      logger.error("addToTemp mutex acquisition timeout after 30 seconds");
-      release();
-    }, 30000); // 30 second timeout
-
+    const release = await this._acquireWithTimeout("[REKAP REMOTE] addToTemp");
     try {
-      // Ensure temp directory exists
-      await fs.mkdir(this.tempDir, { recursive: true });
+      // Ensure temp directory exists (hanya saat load pertama — hemat I/O)
+      if (!this.memLogs) {
+        await fs.mkdir(this.tempDir, { recursive: true });
+        this.memLogs = await this._readLogsWithRetry();
+      }
 
-      // Load existing logs menggunakan helper function dengan retry
-      const logs = await this._readLogsWithRetry();
-
-      // Create or update log entry
+      // Create or update log entry (IN-MEMORY — tidak menulis file per panggilan)
+      const logs = this.memLogs;
       const key = `${cab}_${kdtk}_${moduleName}`;
       const currentTime = this.getCurrentDateTimeForMySQL();
 
@@ -147,14 +180,47 @@ class RekapRemoteService {
         logger.debug(`Added rekap log: ${cab}-${kdtk} - ${moduleName} - ${status}`);
       }
 
-      // Save back to file dengan atomic write retry
-      await this._writeAtomicWithRetry(logs);
+      this.memDirty = true;
+      this._scheduleFlush();
     } catch (error) {
       logger.error(`Error adding to temp file: ${error.message}`);
       throw error;
     } finally {
-      // Clear timeout dan release mutex
-      clearTimeout(timeoutId);
+      release();
+    }
+  }
+
+  /**
+   * Jadwalkan flush debounce — dipanggil saat ada perubahan baru.
+   * Satu timer untuk semua perubahan beruntun (mass logging → tulis per jeda,
+   * bukan per log).
+   */
+  _scheduleFlush() {
+    if (this.flushTimer) return;
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = null;
+      this.flushToTemp().catch(err =>
+        logger.error(`[REKAP REMOTE] Flush temp log gagal: ${err.message}`),
+      );
+    }, this.flushDelayMs);
+  }
+
+  /**
+   * Tulis akumulasi memori ke file temp secara atomic.
+   * Isi file di-MERGE dulu (file sebagai base, memori menimpa — lebih baru) agar
+   * perubahan eksternal tidak hilang. Dipanggil otomatis oleh debounce flush.
+   */
+  async flushToTemp() {
+    const release = await this._acquireWithTimeout("[REKAP REMOTE] flushToTemp");
+    try {
+      if (!this.memDirty || !this.memLogs) return;
+      const fileLogs = await this._readLogsWithRetry();
+      const merged = { ...fileLogs, ...this.memLogs };
+      await fs.mkdir(this.tempDir, { recursive: true });
+      await this._writeAtomicWithRetry(merged);
+      this.memDirty = false;
+      logger.debug(`[REKAP REMOTE] Flushed ${Object.keys(merged).length} rekap logs to temp file`);
+    } finally {
       release();
     }
   }
@@ -170,27 +236,40 @@ class RekapRemoteService {
     let updatedModules = [];
 
     const acquireMutex = async () => {
-      const release = await this.fileMutex.acquire();
-      const timeoutId = setTimeout(() => {
-        logger.error("saveToDatabase mutex acquisition timeout after 30 seconds [REKAP REMOTE]");
-        release();
-      }, 30000); 
+      const release = await this._acquireWithTimeout("[REKAP REMOTE] saveToDatabase");
 
       try {
-        logs = await this._readLogsWithRetry();
+        // Sumber kebenaran: file (sisa flush/proses lain) DI-MERGE dengan memori
+        // (menimpa — lebih baru, mungkin belum sempat flush)
+        const fileLogs = await this._readLogsWithRetry();
+        logs = { ...fileLogs, ...(this.memLogs || {}) };
+
         if (Object.keys(logs).length > 0) {
           logsToSave = Object.values(logs);
           updatedModules = [...new Set(logsToSave.map(log => log.module_name).filter(m => !!m))];
-          // Hapus file segera setelah data di-load ke memory agar proses lain tidak bentrok
-          await fs.unlink(this.tempFilePath);
-          logger.info("Checked and unlinked rekap_remote temporary files [REKAP REMOTE]");
+          // Ambil alih & kosongkan memori + batalkan flush yang tertunda
+          // (konsisten dengan perilaku lama: file langsung di-unlink)
+          this.memLogs = {};
+          this.memDirty = false;
+          if (this.flushTimer) {
+            clearTimeout(this.flushTimer);
+            this.flushTimer = null;
+          }
+          // Hapus file sementara agar tidak terbaca ganda
+          try {
+            await fs.unlink(this.tempFilePath);
+            logger.info("Checked and unlinked rekap_remote temporary files [REKAP REMOTE]");
+          } catch (unlinkError) {
+            if (unlinkError.code !== "ENOENT") {
+              logger.error(`Error during rekap file extraction: ${unlinkError.message}`);
+            }
+          }
         }
       } catch (error) {
         if (error.code !== "ENOENT") {
           logger.error(`Error during rekap file extraction: ${error.message}`);
         }
       } finally {
-        clearTimeout(timeoutId);
         release();
       }
     };

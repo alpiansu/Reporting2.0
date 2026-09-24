@@ -1486,7 +1486,11 @@ class PenyesuaianService {
       let warning = null;
 
       // 🔄 Cek apakah cache masih valid
-      if (!cacheEntry || !this.isCacheValid(cacheEntry)) {
+      // FIX: dulu salah memanggil isCacheValid(cacheEntry) — method itu untuk string
+      // periode, sehingga selalu false dan cache detail TIDAK PERNAH dipakai
+      // (setiap request selalu query penuh ke DB). Method yang benar untuk entry
+      // adalah isCacheFromDbValid(entry).
+      if (!cacheEntry || !this.isCacheFromDbValid(cacheEntry)) {
         let freshData;
         try {
           freshData = await this.loadRecordsDetailFromDb({

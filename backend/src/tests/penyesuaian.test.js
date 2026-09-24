@@ -493,3 +493,37 @@ describe("getAllRecords — cache detail wajib aktif dalam TTL", () => {
     expect(queryMock).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("ensureDataLoaded — busy-wait dibatasi30 dtk (anti stuck)", () => {
+  afterEach(() => {
+    penyesuaianService.invalidateCache();
+    jest.useRealTimers();
+  });
+
+  test("loader macet > timeout → diambil alih, data tetap dimuat (bukan poll selamanya)", async () => {
+    jest.useFakeTimers();
+    const { fileUtils } = jest.requireMock("../utils/index.js");
+    fileUtils.readFileWithRetry.mockResolvedValue(JSON.stringify([]));
+
+    penyesuaianService.isLoading = true; // "loader lain" macet
+
+    const pending = penyesuaianService.ensureDataLoaded(PERIODE);
+    await jest.advanceTimersByTimeAsync(31000); // lewati batas30 dtk
+    await pending;
+
+    expect(penyesuaianService.loadedPeriod).toBe(PERIODE);
+    expect(penyesuaianService.isLoading).toBe(false);
+    expect(fileUtils.readFileWithRetry).toHaveBeenCalled();
+  });
+
+  test("jalur normal tidak berubah: load sekali, request berikutnya cache hit", async () => {
+    const { fileUtils } = jest.requireMock("../utils/index.js");
+    fileUtils.readFileWithRetry.mockResolvedValue(JSON.stringify([]));
+
+    await penyesuaianService.ensureDataLoaded(PERIODE);
+    await penyesuaianService.ensureDataLoaded(PERIODE);
+
+    expect(fileUtils.readFileWithRetry).toHaveBeenCalledTimes(1);
+    expect(penyesuaianService.isCacheValid(PERIODE)).toBe(true);
+  });
+});

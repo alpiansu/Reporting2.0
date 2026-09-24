@@ -17,6 +17,14 @@ class NotesService {
     this.cacheTimer = null;
     this.lastLoaded = 0;
 
+    // Memo hasil enrich getAll() — dulu .map() dievaluasi di SETIAP request
+    // (enrichWithNotes dll) padahal isinya tidak berubah selama cacheTTL.
+    // Invalidasi: writeJson (mutasi note) & kedaluwarsa cacheTTL.
+    // Catatan: userMapTTL (10mnt) >= cacheTTL (1mnt), jadi tidak perlu
+    // invalidasi terpisah saat userMap reload.
+    this.allNotesCache = null;
+    this.allNotesCachedAt = 0;
+
     this.userMap = null;
     this.userMapLoadedAt = 0;
     this.userMapTTL = 10 * 60 * 1000; // 10 menit
@@ -57,6 +65,7 @@ class NotesService {
     fs.writeFileSync(config.jsonPath, JSON.stringify(data, null, 2));
     this.cache = null;
     this.lastLoaded = 0;
+    this.allNotesCache = null; // hasil enrich ikut kedaluwarsa saat note berubah
     logger.info("[Notes] JSON synced and cache cleared.");
   }
 
@@ -91,16 +100,28 @@ class NotesService {
     return await this.userMapPromise;
   }
 
-  /** Get all notes (cached) */
+  /**
+   * Get all notes (cached)
+   * Hasil enrich di-memo per cacheTTL; call site tidak berubah — bentuk return
+   * tetap Array<Object> yang sama (read-only, konsisten dgn cache readJson).
+   */
   async getAll() {
+    const now = Date.now();
+    if (this.allNotesCache && now - this.allNotesCachedAt < config.cacheTTL) {
+      return this.allNotesCache;
+    }
+
     const notes = await this.readJson();
     const userMap = await this.ensureUserMap();
 
     // Enrich each note
-    return notes.map(note => ({
+    const enriched = notes.map(note => ({
       ...note,
       fullName: userMap.get(note.pic) || null,
     }));
+    this.allNotesCache = enriched;
+    this.allNotesCachedAt = Date.now();
+    return enriched;
   }
 
   /** Get single note by key */

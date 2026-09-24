@@ -27,6 +27,10 @@ const wrcService = new WrcBulananService();
 // Path untuk folder JSON penyesuaian (akan di-split per periode)
 const PENYESUAIAN_DATA_DIR = path.join(process.cwd(), "data/penyesuaian");
 
+// Batas waktu menunggu loader yang sedang berjalan (ms) sebelum mengambil alih —
+// dulu poll100ms tanpa batas → bila loader macet, request menumpuk selamanya (stuck)
+const LOAD_WAIT_TIMEOUT_MS = 30 * 1000;
+
 class PenyesuaianService {
   constructor() {
     this.penyesuaianData = [];
@@ -399,13 +403,21 @@ class PenyesuaianService {
       return;
     }
 
-    // Prevent concurrent loading
+    // Prevent concurrent loading — tunggu loader yang sedang jalan MAKSIMAL
+    // LOAD_WAIT_TIMEOUT_MS (dulu: poll tanpa batas → request bisa "stuck"
+    // selamanya bila loader macet). Lewat batas → ambil alih pemuatannya,
+    // tujuan tetap sama: caller akhirnya mendapat data periode yang diminta.
     if (this.isLoading) {
-      // Wait for ongoing loading to complete
-      while (this.isLoading) {
+      let waitedMs = 0;
+      while (this.isLoading && waitedMs < LOAD_WAIT_TIMEOUT_MS) {
         await new Promise(resolve => setTimeout(resolve, 100));
+        waitedMs += 100;
       }
-      return;
+      if (!this.isLoading) return;
+      logger.warn(
+        `[penyesuaian.service] Loader data penyesuaian lain belum selesai setelah ${LOAD_WAIT_TIMEOUT_MS}ms — mengambil alih pemuatan periode ${periode}`,
+      );
+      this.isLoading = false; // anggap loader lama terkunci; kita lanjut sendiri
     }
 
     try {

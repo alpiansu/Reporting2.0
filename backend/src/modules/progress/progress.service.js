@@ -24,6 +24,11 @@ class ProgressService extends EventEmitter {
     // In-memory map of taskId → string[] of store codes currently being processed.
     // No disk I/O, no mutex — purely for real-time SSE display.
     this.processingStoresMap = new Map();
+
+    // Debounce tulis progress.json — updateProgress dipanggil ±2× per toko saat
+    // screening massal; tanpa debounce ribuan atomic write kecil menumpuk di mutex.
+    this.saveTimer = null;
+    this.saveDelayMs = 500;
   }
 
   /**
@@ -218,6 +223,43 @@ class ProgressService extends EventEmitter {
   }
 
   /**
+   * Debounce tulis progress.json (jalur panas: updateProgress per toko).
+   * Callback SELALU mengambil isi progressMap SAAT INI (bukan snapshot),
+   * sehingga data yang tertulis selalu yang terbaru.
+   */
+  _scheduleSaveProgressData() {
+    if (this.saveTimer) return;
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = null;
+      const run = async () => {
+        const release = await this.mutex.acquire();
+        try {
+          await this._saveProgressData();
+        } finally {
+          release();
+        }
+      };
+      run().catch((err) =>
+        logger.error(`[ProgressService] Deferred save failed: ${err.message}`),
+      );
+    }, this.saveDelayMs);
+  }
+
+  /**
+   * Jika ada tulis progress.json terjadwal (debounce), langsung jalankan SEKARANG.
+   * WAJIB dipanggil saat memegang mutex, SEBELUM _loadProgressData() — tanpa ini,
+   * reload dari disk bisa mengembalikan state yang belum sempat tertulis
+   * (persentase/status task mundur / task salah dianggap masih aktif).
+   * @returns {Promise<void>}
+   */
+  async _flushPendingSaveLocked() {
+    if (!this.saveTimer) return;
+    clearTimeout(this.saveTimer);
+    this.saveTimer = null;
+    await this._saveProgressData();
+  }
+
+  /**
    * Register new progress
    */
   async startProgress(taskId, total = 100, info = "") {
@@ -225,6 +267,9 @@ class ProgressService extends EventEmitter {
 
     const release = await this.mutex.acquire();
     try {
+      // Pastikan tulis terjadwal (debounce) sudah flush SEBELUM reload dari disk,
+      // supaya state yang di-reload identik dengan perilaku tulis-langsung dulu
+      await this._flushPendingSaveLocked();
       // Reload data from disk to ensure we have the latest state from all potential workers/processes
       await this._loadProgressData();
 
@@ -314,7 +359,9 @@ class ProgressService extends EventEmitter {
       task.updatedAt = new Date().toISOString();
 
       this.progressMap.set(taskId, task);
-      await this._saveProgressData();
+      // Jalur panas (per toko saat screening) — debounce; state terbaru tetap
+      // ikut tercatat saat flush karena yang diserialisasi adalah progressMap saat ini
+      this._scheduleSaveProgressData();
 
       this.emit("progressUpdate", task);
       return task;
@@ -434,6 +481,8 @@ class ProgressService extends EventEmitter {
   async cancelTask(taskId) {
     const release = await this.mutex.acquire();
     try {
+      // Flush debounce dulu supaya reload tidak mengembalikan state basi
+      await this._flushPendingSaveLocked();
       await this._loadProgressData();
       const task = this.progressMap.get(taskId);
       if (!task) throw new Error(`Task '${taskId}' tidak ditemukan`);

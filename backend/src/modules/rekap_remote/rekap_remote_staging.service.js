@@ -13,6 +13,10 @@ import { fileUtils } from "../../utils/index.js";
 const REKAP_REMOTE_DATA_DIR = path.join(process.cwd(), "data/rekap_remote");
 const LEGACY_JSON_PATH = path.join(process.cwd(), "data/rekap_remote.json");
 
+// Batas waktu menunggu loader module yang sedang berjalan (ms) sebelum mengambil alih —
+// dulu poll100ms tanpa batas → bila loader macet, request menumpuk selamanya (stuck)
+const LOAD_WAIT_TIMEOUT_MS = 30 * 1000;
+
 class RekapRemoteStagingService {
   constructor() {
     this.rekapCache = new Map(); // moduleName -> data array
@@ -146,12 +150,21 @@ class RekapRemoteStagingService {
     if (moduleName) {
       if (this.isCacheValid(moduleName)) return;
       
-      // Prevent concurrent loading for the same module
+      // Prevent concurrent loading for the same module — tunggu maksimal
+      // LOAD_WAIT_TIMEOUT_MS (dulu: poll tanpa batas → request bisa "stuck"
+      // selamanya bila loader macet). Lewat batas → ambil alih pemuatannya;
+      // loader asli yang nanti selesai tetap aman (baca file idempoten).
       if (this.isModuleLoading.get(moduleName)) {
-        while (this.isModuleLoading.get(moduleName)) {
+        let waitedMs = 0;
+        while (this.isModuleLoading.get(moduleName) && waitedMs < LOAD_WAIT_TIMEOUT_MS) {
           await new Promise(resolve => setTimeout(resolve, 100));
+          waitedMs += 100;
         }
-        return;
+        // Loader selesai → pakai hasilnya (sama dgn perilaku lama: return tanpa load ulang)
+        if (this.isCacheValid(moduleName)) return;
+        logger.warn(
+          `[rekap_remote_staging] Loader module ${moduleName} belum selesai dalam ${LOAD_WAIT_TIMEOUT_MS}ms — mengambil alih`,
+        );
       }
 
       try {

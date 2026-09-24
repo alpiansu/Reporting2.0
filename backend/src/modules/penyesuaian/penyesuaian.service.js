@@ -2354,7 +2354,7 @@ class PenyesuaianService {
         } catch {}
 
         // Cek apakah sudah ada notifikasi sebelumnya untuk kasus yang sama
-        const existingNotif = notificationsService.findByMetadata({
+        const existingNotif = await notificationsService.findByMetadata({
           username: note.pic,
           type: "penyesuaian-worsened",
           metadataFilters: { kdtk, periode },
@@ -2366,7 +2366,7 @@ class PenyesuaianService {
         if (existingNotif) {
           if (existingNotif.read) {
             // SUDAH DIBACA → buat notifikasi baru (push lagi)
-            notificationsService.create({
+            await notificationsService.create({
               username: note.pic,
               type: "penyesuaian-worsened",
               title: "Penyesuaian Memburuk",
@@ -2384,7 +2384,7 @@ class PenyesuaianService {
             notifiedCount++;
           } else {
             // BELUM DIBACA → tiban (update) dengan info pergerakan terbaru
-            notificationsService.update(existingNotif.id, {
+            await notificationsService.update(existingNotif.id, {
               title: "Penyesuaian Memburuk",
               message: buildMessage(persen),
               metadata: {
@@ -2396,7 +2396,7 @@ class PenyesuaianService {
           }
         } else {
           // BELUM ADA → buat notifikasi baru
-          notificationsService.create({
+          await notificationsService.create({
             username: note.pic,
             type: "penyesuaian-worsened",
             title: "Penyesuaian Memburuk",

@@ -18,8 +18,8 @@ export const getAll = async (req, res) => {
     const { username, limit } = req.query;
     if (!username) return apiResponse.badRequest(res, "username required");
 
-    const data = service.getByUser(username, parseInt(limit) || 50);
-    const unread = service.getUnreadCount(username);
+    const data = await service.getByUser(username, parseInt(limit) || 50);
+    const unread = await service.getUnreadCount(username);
     res.json({ success: true, data, unread, count: data.length });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -32,7 +32,7 @@ export const getAll = async (req, res) => {
 export const markRead = async (req, res) => {
   try {
     const { id } = req.params;
-    const result = service.markRead(id);
+    const result = await service.markRead(id);
     if (!result) return apiResponse.notFound(res, "Notification not found");
     res.json({ success: true, message: "Marked as read" });
   } catch (err) {
@@ -48,7 +48,7 @@ export const markAllRead = async (req, res) => {
   try {
     const { username } = req.body;
     if (!username) return apiResponse.badRequest(res, "username required");
-    service.markAllRead(username);
+    await service.markAllRead(username);
     res.json({ success: true, message: "All marked as read" });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -62,7 +62,7 @@ export const getUnreadCount = async (req, res) => {
   try {
     const { username } = req.query;
     if (!username) return apiResponse.badRequest(res, "username required");
-    const count = service.getUnreadCount(username);
+    const count = await service.getUnreadCount(username);
     res.json({ success: true, data: { count } });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -82,25 +82,36 @@ export const sseStream = (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.flushHeaders();
 
-  // Kirim existing unread notifications sebagai init event
-  const existing = service.getByUser(username);
-  const unread = service.getUnreadCount(username);
-  res.write(`event: init\ndata: ${JSON.stringify({ notifications: existing, unread })}\n\n`);
+  // Init event (readJson kini async) + pasang listener & heartbeat setelahnya.
+  // Semua write DIBERI GUARD writableEnded/destroyed agar koneksi yang sudah
+  // menutup tidak melempar ERR_STREAM_WRITE_AFTER_END dari dalam interval (bisa crash).
+  (async () => {
+    const existing = await service.getByUser(username);
+    const unread = await service.getUnreadCount(username);
+    if (res.writableEnded || res.destroyed) return;
+    res.write(`event: init\ndata: ${JSON.stringify({ notifications: existing, unread })}\n\n`);
 
-  // Listen untuk notifikasi baru
-  const handler = (notif) => {
-    res.write(`event: new\ndata: ${JSON.stringify(notif)}\n\n`);
-  };
-  eventEmitter.on(`notif:${username}`, handler);
+    // Listen untuk notifikasi baru
+    const handler = (notif) => {
+      if (res.writableEnded || res.destroyed) return;
+      res.write(`event: new\ndata: ${JSON.stringify(notif)}\n\n`);
+    };
+    eventEmitter.on(`notif:${username}`, handler);
 
-  // Heartbeat
-  const heartbeat = setInterval(() => {
-    res.write(":heartbeat\n\n");
-  }, 30000);
+    // Heartbeat
+    const heartbeat = setInterval(() => {
+      if (res.writableEnded || res.destroyed) return;
+      res.write(":heartbeat\n\n");
+    }, 30000);
 
-  // Cleanup on disconnect
-  req.on("close", () => {
-    eventEmitter.off(`notif:${username}`, handler);
-    clearInterval(heartbeat);
+    // Cleanup on disconnect
+    req.on("close", () => {
+      eventEmitter.off(`notif:${username}`, handler);
+      clearInterval(heartbeat);
+      if (!res.writableEnded) res.end();
+    });
+  })().catch(err => {
+    logger.error(`SSE notifications init untuk ${username} gagal: ${err.message}`);
+    if (!res.writableEnded) res.end();
   });
 };

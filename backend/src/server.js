@@ -104,11 +104,13 @@ async function startServer() {
   }
 }
 
-// Handle unhandled promise rejections
-process.on("unhandledRejection", err => {
-  logger.error(`Unhandled Rejection: ${err.message}`);
-  // Close server & exit process
-  process.exit(1);
+// Handle unhandled promise rejections — CATAT detail, JANGAN mematikan proses.
+// Dulu: process.exit(1) → cukup1 floating promise untuk membunuh seluruh backend
+// mendadak (dianggap "stuck" oleh user). Sekarang: dicatat lengkap dengan stack
+// agar bisa dilace, service tetap berjalan dan user tidak terputus.
+process.on("unhandledRejection", reason => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  logger.error(`Unhandled Rejection: ${err.message}\n${err.stack || "(no stack)"}`);
 });
 
 // Start server

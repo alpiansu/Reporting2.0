@@ -9,6 +9,9 @@ export default {
   service,
   initialize: app => {
     app.use("/api/notifications", routes);
+    // Pemangkasan berkala (read >30 hari, unread >90 hari) supaya notifications.json
+    // tidak tumbuh tanpa batas — jalankan saat start + interval1 jam
+    service.scheduleCleanup();
     return { service };
   },
 };

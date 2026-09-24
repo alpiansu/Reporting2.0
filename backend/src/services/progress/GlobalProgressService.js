@@ -15,6 +15,7 @@ class GlobalProgressService {
     
     // SSE clients management
     this.clients = new Map();
+    this.clientSeq = 0; // penghasil clientId unik — Date.now() bisa tabrakan antar koneksi pada ms yang sama
     this.initialized = false;
   }
 
@@ -326,6 +327,8 @@ class GlobalProgressService {
    */
   sendToClient(res, data) {
     try {
+      // Jangan menulis ke response yang sudah end/destroyed (anti ERR_STREAM_WRITE_AFTER_END)
+      if (!res || res.writableEnded || res.destroyed) return;
       // Wrap progress data in the format expected by frontend
       const wrappedData = {
         type: 'progress',
@@ -381,11 +384,13 @@ class GlobalProgressService {
       
       // Implement heartbeat to keep connection alive
       const heartbeatInterval = setInterval(() => {
+        if (res.writableEnded || res.destroyed) return;
         res.write(":heartbeat\n\n");
       }, 30000); // Send heartbeat every 30 seconds
 
-      // Simpan connection
-      const clientId = `client-${Date.now()}`;
+      // Simpan connection — clientId harus unik: tabrakan = entry tertimpa,
+      // interval heartbeat lama bocor selamanya & koneksi baru kehilangan heartbeat
+      const clientId = `client-${Date.now()}-${++this.clientSeq}`;
       this.clients.set(clientId, {
         id: clientId,
         response: res,
@@ -399,9 +404,10 @@ class GlobalProgressService {
 
       // Handle client disconnect
       req.on("close", () => {
-        // Clear heartbeat interval when client disconnects
-        if (this.clients.get(clientId)?.heartbeatInterval) {
-          clearInterval(this.clients.get(clientId).heartbeatInterval);
+        // clientId unik → entry yang diambil dijamin milik koneksi INI
+        const entry = this.clients.get(clientId);
+        if (entry?.heartbeatInterval) {
+          clearInterval(entry.heartbeatInterval);
         }
         this.clients.delete(clientId);
       });

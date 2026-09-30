@@ -82,7 +82,7 @@ class RekapBackupController {
   async exportExcel(req, res) {
     try {
       const { cabang, startYear, endYear } = req.query;
-      const buffer = await rekapBackupService.generateExcel(cabang, startYear, endYear);
+      const workbook = await rekapBackupService.generateExcel(cabang, startYear, endYear);
 
       let filename = "FORMAT DATA BULANAN & HARIAN";
       if (startYear && startYear !== 'All') {
@@ -100,9 +100,17 @@ class RekapBackupController {
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
       res.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
-      res.send(buffer);
+      // [Health fix #11] Stream workbook langsung ke response (pola sama dengan
+      // ceklist-prep-closing) — tanpa buffer penuh di memori seperti res.send(buffer).
+      await workbook.xlsx.write(res);
+      if (!res.writableEnded) res.end();
     } catch (error) {
       logger.error(`Error exportExcel: ${error.message}`);
+      // Jangan kirim JSON jika stream sudah mulai (headersSent) — cukup tutup koneksi.
+      if (res.headersSent) {
+        if (!res.writableEnded) res.end();
+        return;
+      }
       res.status(500).json({ success: false, message: "Terjadi kesalahan server : " + error.message });
     }
   }

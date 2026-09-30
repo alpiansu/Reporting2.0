@@ -367,7 +367,10 @@ class RekapBackupService {
         });
       });
 
-      return await workbook.xlsx.writeBuffer();
+      // [Health fix #11] Return workbook, bukan writeBuffer() — caller
+      // men-stream langsung ke response (pola sama dengan ceklist-prep-closing).
+      // writeBuffer membangun salinan penuh file xlsx di memori.
+      return workbook;
     } catch (error) {
       logger.error(`Error in generateExcel: ${error.message}`);
       throw error;

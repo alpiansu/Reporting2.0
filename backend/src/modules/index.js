@@ -39,6 +39,7 @@ import notificationsModule from "./notifications/index.js";
 import salesCustabModule from "./sales_custab/index.js";
 import storeConfigModule from "./store-config/index.js";
 import deviceConfigModule from "./device-config/index.js";
+import ceklistPanduanModule from "./ceklist_panduan/index.js";
 
 export default {
   // Export all modules
@@ -78,6 +79,7 @@ export default {
   salesCustabModule,
   storeConfigModule,
   deviceConfigModule,
+  ceklistPanduanModule,
 
   // Initialize all modules
   initialize: app => {
@@ -117,6 +119,7 @@ export default {
     const salesCustab = salesCustabModule.initialize(app);
     const storeConfig = storeConfigModule.initialize(app);
     const deviceConfig = deviceConfigModule.initialize(app);
+    const ceklistPanduan = ceklistPanduanModule.initialize(app);
 
     // Initialize menu manager module
     app.use("/api/menu-manager", menuManagerModule.routes);
@@ -157,6 +160,7 @@ export default {
       salesCustab,
       storeConfig,
       deviceConfig,
+      ceklistPanduan,
       menuManager: true,
     };
   },

@@ -5,8 +5,9 @@
 import { Op } from "sequelize";
 import logger from "../../../config/logger.js";
 import { CeklistSpaceTampungWrapper } from "../ceklist_prep_closing.model.js";
-import storeService from "../../store/storeService.js";
+import ceklistPanduanService from "../../ceklist_panduan/ceklist_panduan.service.js";
 import { findCaptureFile } from "../ceklist_capture.middleware.js";
+import { getIndukKdcabs } from "../ceklist_kdcabs.helper.js";
 
 class SpaceTampungService {
   /**
@@ -76,39 +77,48 @@ class SpaceTampungService {
     return { deleted };
   }
   /**
-   * Generate skeleton records for all INDUK branches missing in the given periode.
+   * Generate + backfill skeleton records untuk semua INDUK branches.
+   * PATH otomatis diisi dari panduan saat cabang belum punya PATH.
    * @param {string} periode  YYMM
    */
   async getBulkTemplate(periode) {
     logger.info(`[space_tampung.service] getBulkTemplate periode=${periode}`);
 
-    await storeService.ensureInitialized();
-
-    const indukStores = storeService.stores.filter(s => s.notes === "INDUK");
-    const cabSet = new Set(
-      indukStores
-        .map(s => (typeof s.branch === "string" ? s.branch.trim().toUpperCase() : ""))
-        .filter(k => /^[A-Z0-9]{4}$/.test(k)),
-    );
-    const allCabs = [...cabSet];
-
+    const allCabs = await getIndukKdcabs();
     if (allCabs.length === 0) return { created: 0, existing: 0, total: 0 };
+
+    const panduanMap = await ceklistPanduanService.getPanduanMap();
 
     const existing = await CeklistSpaceTampungWrapper.findAll({
       where: { PERIODE: periode, CAB: { [Op.in]: allCabs } },
-      attributes: ["CAB"],
     });
     const existingSet = new Set(existing.map(r => r.CAB));
 
+    let backfilled = 0;
+    for (const rec of existing) {
+      const raw = rec.dataValues ?? rec;
+      const p = panduanMap[raw.CAB] || null;
+      if (!p || !p.PATH_TAMPUNG) continue;
+      if (!raw.PATH) {
+        await CeklistSpaceTampungWrapper.update({ PATH: p.PATH_TAMPUNG }, { where: { ID: raw.ID } });
+        backfilled += 1;
+      }
+    }
+
     const toCreate = allCabs
       .filter(c => !existingSet.has(c))
-      .map(c => ({ ID: `${c}${periode}`, CAB: c, PERIODE: periode }));
+      .map(c => ({
+        ID: `${c}${periode}`,
+        CAB: c,
+        PERIODE: periode,
+        PATH: panduanMap[c]?.PATH_TAMPUNG || null,
+      }));
 
     if (toCreate.length > 0) {
       await CeklistSpaceTampungWrapper.bulkCreate(toCreate, { ignoreDuplicates: true });
     }
 
-    logger.info(`[space_tampung.service] getBulkTemplate: created=${toCreate.length} existing=${existingSet.size}`);
+    logger.info(`[space_tampung.service] getBulkTemplate: created=${toCreate.length} existing=${existingSet.size} backfilled=${backfilled}`);
     return { created: toCreate.length, existing: existingSet.size, total: allCabs.length };
   }
 }

@@ -5,7 +5,7 @@
 import { Op } from "sequelize";
 import logger from "../../../config/logger.js";
 import { CeklistImportIdtWrapper } from "../ceklist_prep_closing.model.js";
-import storeService from "../../store/storeService.js";
+import { getIndukKdcabs } from "../ceklist_kdcabs.helper.js";
 
 class ImportIdtService {
   /**
@@ -77,17 +77,7 @@ class ImportIdtService {
   async getBulkTemplate(periode) {
     logger.info(`[import_idt.service] getBulkTemplate periode=${periode}`);
 
-    await storeService.ensureInitialized();
-
-    // Get unique branch codes from INDUK stores
-    const indukStores = storeService.stores.filter(s => s.notes === "INDUK");
-    const kdcabSet = new Set(
-      indukStores
-        .map(s => (typeof s.branch === "string" ? s.branch.trim().toUpperCase() : ""))
-        .filter(k => /^[A-Z0-9]{4}$/.test(k)),
-    );
-    const allKdcabs = [...kdcabSet];
-
+    const allKdcabs = await getIndukKdcabs();
     if (allKdcabs.length === 0) {
       return { created: 0, existing: 0, total: 0 };
     }

@@ -5,8 +5,12 @@
 import { Op } from "sequelize";
 import logger from "../../../config/logger.js";
 import { CeklistSpaceHddWrapper } from "../ceklist_prep_closing.model.js";
-import storeService from "../../store/storeService.js";
+import ceklistPanduanService from "../../ceklist_panduan/ceklist_panduan.service.js";
 import { findCaptureFile } from "../ceklist_capture.middleware.js";
+import { getIndukKdcabs } from "../ceklist_kdcabs.helper.js";
+
+// Nilai yang dianggap "belum diisi" pada skeleton record → backfill dari panduan
+const BLANK = new Set([null, "", "(isi IP)", "[isi IP]"]);
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -172,33 +176,46 @@ class SpaceHddService {
   async getBulkTemplate(periode) {
     logger.info(`[space_hdd.service] getBulkTemplate periode=${periode}`);
 
-    await storeService.ensureInitialized();
-
-    const indukStores = storeService.stores.filter(s => s.notes === "INDUK");
-    const kdcabSet = new Set(
-      indukStores
-        .map(s => (typeof s.branch === "string" ? s.branch.trim().toUpperCase() : ""))
-        .filter(k => /^[A-Z0-9]{4}$/.test(k)),
-    );
-    const allKdcabs = [...kdcabSet];
-
+    const allKdcabs = await getIndukKdcabs();
     if (allKdcabs.length === 0) return { created: 0, existing: 0, total: 0 };
 
+    const panduanMap = await ceklistPanduanService.getPanduanMap();
+
+    // Ukur existing + backfill field parsial (IP/OS) dari panduan
     const existing = await CeklistSpaceHddWrapper.findAll({
       where: { PERIODE: periode, KDCAB: { [Op.in]: allKdcabs } },
-      attributes: ["KDCAB"],
     });
     const existingSet = new Set(existing.map(r => r.KDCAB));
 
+    let backfilled = 0;
+    for (const rec of existing) {
+      const p = panduanMap[rec.KDCAB] || panduanMap[(rec.dataValues ?? rec).KDCAB] || null;
+      if (!p) continue;
+      const raw = rec.dataValues ?? rec;
+      const patch = {};
+      if (BLANK.has(raw.IP) && p.IP_BULANAN) patch.IP = p.IP_BULANAN;
+      if (BLANK.has(raw.OS) && p.OS) patch.OS = p.OS;
+      if (Object.keys(patch).length > 0) {
+        await CeklistSpaceHddWrapper.update(patch, { where: { ID: raw.ID } });
+        backfilled += 1;
+      }
+    }
+
     const toCreate = allKdcabs
       .filter(k => !existingSet.has(k))
-      .map(k => ({ ID: `${k}${periode}`, KDCAB: k, IP: "(isi IP)", PERIODE: periode }));
+      .map(k => ({
+        ID: `${k}${periode}`,
+        KDCAB: k,
+        IP: panduanMap[k]?.IP_BULANAN || "(isi IP)",
+        OS: panduanMap[k]?.OS || null,
+        PERIODE: periode,
+      }));
 
     if (toCreate.length > 0) {
       await CeklistSpaceHddWrapper.bulkCreate(toCreate, { ignoreDuplicates: true });
     }
 
-    logger.info(`[space_hdd.service] getBulkTemplate: created=${toCreate.length} existing=${existingSet.size}`);
+    logger.info(`[space_hdd.service] getBulkTemplate: created=${toCreate.length} existing=${existingSet.size} backfilled=${backfilled}`);
     return { created: toCreate.length, existing: existingSet.size, total: allKdcabs.length };
   }
 }

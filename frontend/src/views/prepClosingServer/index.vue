@@ -70,6 +70,8 @@
             :rows="hddRows"
             :loading="loading"
             :periode="filters.periode"
+            :panduan="panduanMap"
+            :cabangs="cabangs"
             @refresh="loadAll"
             @delete="(row) => askDelete('hdd', row)" />
         </TabPanel>
@@ -84,6 +86,8 @@
             :rows="tampungRows"
             :loading="loading"
             :periode="filters.periode"
+            :panduan="panduanMap"
+            :cabangs="cabangs"
             @refresh="loadAll"
             @delete="(row) => askDelete('tampung', row)" />
         </TabPanel>
@@ -97,6 +101,8 @@
             :rows="idtRows"
             :loading="loading"
             :periode="filters.periode"
+            :panduan="panduanMap"
+            :cabangs="cabangs"
             @refresh="loadAll"
             @delete="(row) => askDelete('idt', row)" />
         </TabPanel>
@@ -108,6 +114,14 @@
             <Badge v-if="rekapData.total > 0" :value="rekapData.total" severity="danger" class="ml-2" />
           </template>
           <TabRekapScreening :data="rekapData" :loading="loading" />
+        </TabPanel>
+
+        <!-- Tab 5: Panduan -->
+        <TabPanel>
+          <template #header>
+            <span class="tab-label"><i class="pi pi-book mr-2"></i>Panduan</span>
+          </template>
+          <TabPanduan :panduanRows="panduanRows" :loading="panduanLoading" />
         </TabPanel>
       </TabView>
 
@@ -148,6 +162,7 @@ import TabSpaceHdd from './components/TabSpaceHdd.vue';
 import TabSpaceTampung from './components/TabSpaceTampung.vue';
 import TabImportIdt from './components/TabImportIdt.vue';
 import TabRekapScreening from './components/TabRekapScreening.vue';
+import TabPanduan from './components/TabPanduan.vue';
 import { useCeklistPrepClosing } from './composables/useCeklistPrepClosing.js';
 import * as api from '@/services/ceklistPrepClosing.service.js';
 
@@ -156,7 +171,8 @@ const {
   filters, periodeDate,
   loading, exporting,
   hddRows, tampungRows, idtRows, rekapData, summary,
-  loadAll, doExport,
+  panduanRows, panduanMap, cabangs, panduanLoading,
+  loadAll, doExport, loadPanduan,
   handlePeriodeSelect,
 } = useCeklistPrepClosing();
 
@@ -211,10 +227,20 @@ onMounted(() => {
   filters.periode = y + m;
   periodeDate.value = now;
 
-  cabangOptions.value = [
-    { kdcab: 'All', namacab: 'SEMUA CABANG' },
-    ...(cabangStore.allCabang || []),
-  ];
+  // Cabang dari panduan (mencakup G295 yang tidak ada di m_cabang), fallback m_cabang
+  loadPanduan().then(() => {
+    if (cabangs.value.length > 0) {
+      cabangOptions.value = [
+        { kdcab: 'All', namacab: 'SEMUA CABANG' },
+        ...cabangs.value,
+      ];
+    } else {
+      cabangOptions.value = [
+        { kdcab: 'All', namacab: 'SEMUA CABANG' },
+        ...(cabangStore.allCabang || []),
+      ];
+    }
+  });
 
   loadAll();
 });

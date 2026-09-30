@@ -49,7 +49,9 @@
       <div class="form-grid">
         <div class="form-field">
           <label>CAB <span class="req">*</span></label>
-          <InputText v-model="form.cab" placeholder="G033" class="w-full" :disabled="isEdit" />
+          <Dropdown v-model="form.cab" :options="cabOptions" optionLabel="label" optionValue="kdcab"
+            placeholder="Pilih Kode Cabang" class="w-full" :disabled="isEdit" filter
+            :showClear="!isEdit" @change="onCabChange" />
         </div>
         <div class="form-field">
           <label>Path</label>
@@ -66,6 +68,12 @@
         <div class="form-field">
           <label>Tgl Check</label>
           <Calendar v-model="form.tglCheck" dateFormat="yy-mm-dd" class="w-full" showIcon />
+        </div>
+
+        <!-- Info Panduan (auto-fill dari guide) -->
+        <div class="form-field form-field-full" v-if="form.cab && panduan[form.cab]">
+          <label>Panduan Cabang <span style="color:var(--text-color-secondary);font-weight:400;font-size:0.8rem">(dari JUKLAK)</span></label>
+          <PanduanCard :panduan="panduan[form.cab]" />
         </div>
 
         <!-- ─── Compact Capture Upload ─── -->
@@ -100,14 +108,16 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue';
+import { ref, reactive, computed } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import ImagePreviewDialog from '@/components/common/ImagePreviewDialog.vue';
+import PanduanCard from './PanduanCard.vue';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
 import Calendar from 'primevue/calendar';
+import Dropdown from 'primevue/dropdown';
 import Dialog from 'primevue/dialog';
 import * as api from '@/services/ceklistPrepClosing.service.js';
 
@@ -115,6 +125,8 @@ const props = defineProps({
   rows:    { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
   periode: { type: String, default: '' },
+  panduan: { type: Object, default: () => ({}) },
+  cabangs: { type: Array,  default: () => [] },
 });
 const emit = defineEmits(['delete', 'refresh']);
 const toast = useToast();
@@ -129,6 +141,21 @@ const fileInput = ref(null);
 const previewVisible = ref(false);
 const previewSrc = ref('');
 const form = reactive({ cab: '', path: '', capacity: '', freeSpace: '', tglCheck: null });
+
+// Cabang yang sudah punya record pada periode ini → tidak boleh ditambah dua kali
+const existingCabs = computed(() => new Set(props.rows.map(r => r.CAB)));
+
+const cabOptions = computed(() =>
+  props.cabangs
+    .filter(c => (isEdit.value ? c.kdcab === form.cab : !existingCabs.value.has(c.kdcab)))
+    .map(c => ({ ...c, label: `${c.kdcab} - ${c.namacab}` })),
+);
+
+// Autofill PATH dari panduan saat kode cabang dipilih
+function onCabChange() {
+  const p = props.panduan[form.cab];
+  if (p && p.PATH_TAMPUNG) form.path = p.PATH_TAMPUNG;
+}
 
 
 function openPreview(url) { previewSrc.value = url; previewVisible.value = true; }

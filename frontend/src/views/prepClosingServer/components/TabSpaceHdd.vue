@@ -92,7 +92,9 @@
       <div class="form-grid">
         <div class="form-field">
           <label>KDCAB <span class="req">*</span></label>
-          <InputText v-model="form.kdcab" placeholder="G033" class="w-full" :disabled="isEdit" />
+          <Dropdown v-model="form.kdcab" :options="kdcabOptions" optionLabel="label" optionValue="kdcab"
+            placeholder="Pilih Kode Cabang" class="w-full" :disabled="isEdit" filter
+            :showClear="!isEdit" @change="onKdcabChange" />
         </div>
         <div class="form-field">
           <label>IP Address <span class="req">*</span></label>
@@ -117,6 +119,12 @@
         <div class="form-field form-field-full">
           <label>Free After FU</label>
           <InputText v-model="form.freeAfter" placeholder="120 GB" class="w-full" />
+        </div>
+
+        <!-- Info Panduan (auto-fill dari guide) -->
+        <div class="form-field form-field-full" v-if="form.kdcab && panduan[form.kdcab]">
+          <label>Panduan Cabang <span style="color:var(--text-color-secondary);font-weight:400;font-size:0.8rem">(dari JUKLAK)</span></label>
+          <PanduanCard :panduan="panduan[form.kdcab]" />
         </div>
 
         <!-- ─── Compact Capture Upload ─── -->
@@ -151,9 +159,10 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue';
+import { ref, reactive, computed } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import ImagePreviewDialog from '@/components/common/ImagePreviewDialog.vue';
+import PanduanCard from './PanduanCard.vue';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Button from 'primevue/button';
@@ -169,6 +178,8 @@ const props = defineProps({
   rows:    { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
   periode: { type: String, default: '' },
+  panduan: { type: Object, default: () => ({}) },
+  cabangs: { type: Array,  default: () => [] },
 });
 const emit = defineEmits(['delete', 'refresh']);
 
@@ -184,6 +195,26 @@ const fileInput = ref(null);
 const previewVisible = ref(false);
 const previewSrc = ref('');
 const form = reactive({ kdcab: '', ip: '', freeSpace: '', os: 'WINDOWS', tglCheck: null, fu: '', freeAfter: '' });
+
+// Cabang yang sudah punya record pada periode ini → tidak boleh ditambah dua kali
+const existingKdcabs = computed(() => new Set(props.rows.map(r => r.KDCAB)));
+
+// Opsi dropdown "Tambah": semua cabang minus yang sudah ada (dedupe);
+// saat edit, hanya cabang milik baris itu sendiri.
+const kdcabOptions = computed(() =>
+  props.cabangs
+    .filter(c => (isEdit.value ? c.kdcab === form.kdcab : !existingKdcabs.value.has(c.kdcab)))
+    .map(c => ({ ...c, label: `${c.kdcab} - ${c.namacab}` })),
+);
+
+// Autofill IP & OS dari panduan saat kode cabang dipilih
+function onKdcabChange() {
+  const p = props.panduan[form.kdcab];
+  if (p) {
+    if (p.IP_BULANAN) form.ip = p.IP_BULANAN;
+    if (p.OS) form.os = p.OS;
+  }
+}
 
 
 function openPreview(url) { previewSrc.value = url; previewVisible.value = true; }

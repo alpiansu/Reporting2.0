@@ -59,7 +59,9 @@
       <div class="form-grid">
         <div class="form-field">
           <label>KDCAB <span class="req">*</span></label>
-          <InputText v-model="form.kdcab" placeholder="G033" class="w-full" :disabled="isEdit" />
+          <Dropdown v-model="form.kdcab" :options="kdcabOptions" optionLabel="label" optionValue="kdcab"
+            placeholder="Pilih Kode Cabang" class="w-full" :disabled="isEdit" filter
+            :showClear="!isEdit" />
         </div>
         <div class="form-field form-field-full">
           <label>Capture / Keterangan</label>
@@ -96,13 +98,14 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue';
+import { ref, reactive, computed } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
 import Dialog from 'primevue/dialog';
+import Dropdown from 'primevue/dropdown';
 import Tag from 'primevue/tag';
 import * as api from '@/services/ceklistPrepClosing.service.js';
 
@@ -111,6 +114,8 @@ const props = defineProps({
   rows:    { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
   periode: { type: String, default: '' },
+  panduan: { type: Object, default: () => ({}) },
+  cabangs: { type: Array,  default: () => [] },
 });
 const emit = defineEmits(['delete', 'refresh']);
 const toast = useToast();
@@ -135,6 +140,15 @@ const saving = ref(false);
 const editDlgVisible = ref(false);
 const isEdit = ref(false);
 const form = reactive({ kdcab: '', capture: '' });
+
+// Cabang yang sudah punya record → tidak boleh ditambah dua kali
+const existingKdcabs = computed(() => new Set(props.rows.map(r => r.KDCAB)));
+
+const kdcabOptions = computed(() =>
+  props.cabangs
+    .filter(c => (isEdit.value ? c.kdcab === form.kdcab : !existingKdcabs.value.has(c.kdcab)))
+    .map(c => ({ ...c, label: `${c.kdcab} - ${c.namacab}` })),
+);
 
 function openCaptureDialog(row = null) {
   isEdit.value = !!row;

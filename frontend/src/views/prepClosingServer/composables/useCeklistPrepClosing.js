@@ -4,6 +4,7 @@
  */
 import { ref, reactive, computed } from 'vue';
 import * as api from '@/services/ceklistPrepClosing.service.js';
+import { getPanduan } from '@/services/panduan.service.js';
 
 export function useCeklistPrepClosing() {
   // ─── Filter State ────────────────────────────────────────────────────────
@@ -19,6 +20,7 @@ export function useCeklistPrepClosing() {
   // ─── Loading flags ───────────────────────────────────────────────────────
   const loading   = ref(false);
   const exporting = ref(false);
+  const panduanLoading = ref(false);
 
   // ─── Data ────────────────────────────────────────────────────────────────
   const hddRows     = ref([]);
@@ -26,6 +28,30 @@ export function useCeklistPrepClosing() {
   const idtRows     = ref([]);
   const rekapData   = ref({ data: [], ruleKeys: [], total: 0 });
   const summary     = ref(null);
+
+  // Panduan (guide before-closing) — statis per cabang, bukan per periode
+  const panduanRows = ref([]);
+  const panduanMap  = computed(() => {
+    const m = {};
+    for (const p of panduanRows.value) m[p.KDCAB] = p;
+    return m;
+  });
+  const cabangs = computed(() =>
+    panduanRows.value.map(p => ({ kdcab: p.KDCAB, namacab: p.NAMACAB || p.KDCAB })),
+  );
+
+  async function loadPanduan() {
+    if (panduanRows.value.length > 0) return;
+    panduanLoading.value = true;
+    try {
+      const rows = await getPanduan();
+      panduanRows.value = rows ?? [];
+    } catch (e) {
+      console.error('loadPanduan error:', e);
+    } finally {
+      panduanLoading.value = false;
+    }
+  }
 
   // ─── Load All ────────────────────────────────────────────────────────────
   async function loadAll() {
@@ -77,9 +103,10 @@ export function useCeklistPrepClosing() {
 
   return {
     filters, periodeDate, paramsStr,
-    loading, exporting,
+    loading, exporting, panduanLoading,
     hddRows, tampungRows, idtRows, rekapData, summary,
-    loadAll, doExport,
+    panduanRows, panduanMap, cabangs,
+    loadAll, doExport, loadPanduan,
     handlePeriodeSelect, formatTgl,
   };
 }

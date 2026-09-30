@@ -4,14 +4,16 @@
  */
 import progressService from "./progress.service.js";
 import logger from "../../config/logger.js";
+import { sseWrite } from "../../utils/sse.utils.js";
 
 // SSE for ALL progress updates (global monitor)
 export const streamAllProgress = async (req, res) => {
   setupSSEHeaders(res);
 
   const sendEvent = (event, data) => {
-    res.write(`event: ${event}\n`);
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
+    // [Health fix #12] update/processingUpdate = snapshot → boleh ditahan saat buffer penuh
+    const droppable = event === "update" || event === "processingUpdate";
+    sseWrite(res, `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`, { droppable });
   };
 
   // Send initial state of ALL tasks
@@ -59,8 +61,9 @@ export const streamTaskProgress = async (req, res) => {
   const sendEvent = (event, data) => {
     // Only send if it's for our task
     if (data.id === taskId || data.taskId === taskId) {
-      res.write(`event: ${event}\n`);
-      res.write(`data: ${JSON.stringify(data)}\n\n`);
+      // [Health fix #12] snapshot update boleh ditahan saat buffer penuh
+      const droppable = event === "update" || event === "processingUpdate";
+      sseWrite(res, `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`, { droppable });
     }
   };
 
@@ -127,8 +130,9 @@ export const streamModuleProgress = async (req, res) => {
   const sendEvent = (event, data) => {
     // Only send if it's for our module
     if (data.module === moduleName) {
-      res.write(`event: ${event}\n`);
-      res.write(`data: ${JSON.stringify(data)}\n\n`);
+      // [Health fix #12] snapshot update boleh ditahan saat buffer penuh
+      const droppable = event === "update" || event === "processingUpdate";
+      sseWrite(res, `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`, { droppable });
     }
   };
 
@@ -177,9 +181,7 @@ function setupSSEHeaders(res) {
 function setupSSECleanup(req, res, listeners) {
   // Send heartbeat every 30 seconds
   const heartbeat = setInterval(() => {
-    if (!res.writableEnded) {
-      res.write(": heartbeat\n\n");
-    }
+    sseWrite(res, ": heartbeat\n\n");
   }, 30000);
 
   // Cleanup on connection close

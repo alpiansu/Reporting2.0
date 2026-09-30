@@ -27,6 +27,7 @@ import { fileURLToPath } from "url";
 import { dirname } from "path";
 import logger from "../../../config/logger.js";
 import config from "../monthly_reports.config.js";
+import { sseWrite } from "../../../utils/sse.utils.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -52,8 +53,11 @@ const userClients = new Map();
 const taskClients = new Map();
 
 function sendSSE(res, event, data) {
-  if (res.writableEnded || res.destroyed) return;
-  res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  // [Health fix #12] event "update" = snapshot job terkini → boleh ditahan
+  // selama buffer socket penuh; init/remove tetap selalu dikirim.
+  sseWrite(res, `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`, {
+    droppable: event === "update",
+  });
 }
 
 function broadcastJob(job) {

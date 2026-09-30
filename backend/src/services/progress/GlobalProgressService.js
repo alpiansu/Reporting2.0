@@ -6,6 +6,7 @@
 import EventEmitter from 'events';
 import logger from '../../config/logger.js';
 import jwt from 'jsonwebtoken';
+import { sseWrite } from '../../utils/sse.utils.js';
 
 class GlobalProgressService {
   constructor() {
@@ -344,7 +345,10 @@ class GlobalProgressService {
           metadata: data.metadata || {}
         }
       };
-      res.write(`data: ${JSON.stringify(wrappedData)}\n\n`);
+      // [Health fix #12] snapshot running boleh ditahan saat buffer socket penuh
+      // (event berikutnya bawa state terkini); status terminal selalu dikirim.
+      const isRunning = wrappedData.data.status === "running";
+      sseWrite(res, `data: ${JSON.stringify(wrappedData)}\n\n`, { droppable: isRunning });
     } catch (error) {
       logger.error(`Error sending SSE data: ${error.message}`);
     }

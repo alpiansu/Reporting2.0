@@ -85,8 +85,12 @@ class SpaceTampungService {
     await storeService.ensureInitialized();
 
     const indukStores = storeService.stores.filter(s => s.notes === "INDUK");
-    const cabSet = new Set(indukStores.map(s => s.branch || s.storeCode?.substring(0, 4)));
-    const allCabs = [...cabSet].filter(Boolean);
+    const cabSet = new Set(
+      indukStores
+        .map(s => (typeof s.branch === "string" ? s.branch.trim().toUpperCase() : ""))
+        .filter(k => /^[A-Z0-9]{4}$/.test(k)),
+    );
+    const allCabs = [...cabSet];
 
     if (allCabs.length === 0) return { created: 0, existing: 0, total: 0 };
 

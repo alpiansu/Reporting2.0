@@ -175,8 +175,12 @@ class SpaceHddService {
     await storeService.ensureInitialized();
 
     const indukStores = storeService.stores.filter(s => s.notes === "INDUK");
-    const kdcabSet = new Set(indukStores.map(s => s.branch || s.storeCode?.substring(0, 4)));
-    const allKdcabs = [...kdcabSet].filter(Boolean);
+    const kdcabSet = new Set(
+      indukStores
+        .map(s => (typeof s.branch === "string" ? s.branch.trim().toUpperCase() : ""))
+        .filter(k => /^[A-Z0-9]{4}$/.test(k)),
+    );
+    const allKdcabs = [...kdcabSet];
 
     if (allKdcabs.length === 0) return { created: 0, existing: 0, total: 0 };
 

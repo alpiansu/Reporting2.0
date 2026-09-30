@@ -21,6 +21,7 @@ class ResilientDatabase {
     this.lastConnectionFailure = null;
     this.connectionCooldown = 30000; // 30 seconds cooldown after real failures
     this.connectionPromise = null;
+    this.retryPromise = null;
     this.generation = 0;
 
     // JSON file paths for offline data
@@ -180,6 +181,27 @@ class ResilientDatabase {
       }
     }
 
+    // [Health fix #13] Satu siklus retry DISHARE antar request yang datang
+    // bersamaan (pola sama dengan connectionPromise di atas): dulu tiap request
+    // menjalankan loop 3 attempt + sleep 2s/4s sendiri → saat DB down, N request
+    // = badai force-reconnect dan N request macet ±6 detik.
+    // Kontrak pemanggil TIDAK berubah: mengembalikan instance sequelize atau null.
+    if (!this.retryPromise) {
+      const cycle = this.runReconnectCycle();
+      this.retryPromise = cycle;
+      const clearCycle = () => {
+        if (this.retryPromise === cycle) this.retryPromise = null;
+      };
+      cycle.then(clearCycle, clearCycle);
+    }
+    return this.retryPromise;
+  }
+
+  /**
+   * Satu siklus reconnect: maks 3 attempt ber-backoff (2s, 4s), lalu null.
+   * Tidak pernah reject — semua error ditangkap di dalam loop.
+   */
+  async runReconnectCycle() {
     const maxRetries = 3;
     const retryDelay = 2000; // 2 seconds
 

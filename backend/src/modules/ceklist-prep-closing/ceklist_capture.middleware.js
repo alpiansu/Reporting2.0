@@ -20,12 +20,22 @@ if (!fs.existsSync(BASE_UPLOAD_DIR)) {
   fs.mkdirSync(BASE_UPLOAD_DIR, { recursive: true });
 }
 
-// ─── Default upload (Import IDT) — TIDAK DIUBAH ──────────────────────────────
+/**
+ * Sanitize a path segment (kdcab/periode) to prevent path traversal.
+ * Accepts ONLY [A-Za-z0-9_-]. Anything else (dots, slashes, backslashes,
+ * spaces, control chars, empty/null) falls back to a safe default.
+ */
+function sanitizeSegment(value, fallback = "unknown") {
+  const str = String(value ?? "").trim();
+  return /^[A-Za-z0-9_-]+$/.test(str) ? str : fallback;
+}
+
+// ─── Default upload (Import IDT) ──────────────────────────────────────────────
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     // Subfolder per KDCAB for easier management
-    const kdcab = req.query?.kdcab || req.body?.kdcab || "unknown";
+    const kdcab = sanitizeSegment(req.query?.kdcab || req.body?.kdcab);
     const dir = path.join(BASE_UPLOAD_DIR, kdcab);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -33,8 +43,8 @@ const storage = multer.diskStorage({
     cb(null, dir);
   },
   filename: function (req, file, cb) {
-    const kdcab  = req.query?.kdcab  || req.body?.kdcab  || "unknown";
-    const periode = req.query?.periode || req.body?.periode || "0000";
+    const kdcab  = sanitizeSegment(req.query?.kdcab  || req.body?.kdcab);
+    const periode = sanitizeSegment(req.query?.periode || req.body?.periode, "0000");
     const ts  = Date.now();
     const ext = path.extname(file.originalname).toLowerCase();
     // e.g. G033_2410_1714385600123.jpg
@@ -65,7 +75,7 @@ export default upload;
  */
 export function getCaptureUrl(req) {
   if (!req.file) return null;
-  const kdcab   = req.query?.kdcab  || req.body?.kdcab  || "unknown";
+  const kdcab   = sanitizeSegment(req.query?.kdcab  || req.body?.kdcab);
   return `/uploads/ceklist-capture/${kdcab}/${req.file.filename}`;
 }
 
@@ -89,14 +99,14 @@ const sharedFileFilter = (req, file, cb) => {
 export function createCaptureUpload(subfolder) {
   const subStorage = multer.diskStorage({
     destination: function (req, file, cb) {
-      const kdcab = req.query?.kdcab || req.body?.kdcab || "unknown";
-      const dir = path.join(BASE_UPLOAD_DIR, subfolder, kdcab);
+      const kdcab = sanitizeSegment(req.query?.kdcab || req.body?.kdcab);
+      const dir = path.join(BASE_UPLOAD_DIR, sanitizeSegment(subfolder), kdcab);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       cb(null, dir);
     },
     filename: function (req, file, cb) {
-      const kdcab  = req.query?.kdcab  || req.body?.kdcab  || "unknown";
-      const periode = req.query?.periode || req.body?.periode || "0000";
+      const kdcab  = sanitizeSegment(req.query?.kdcab  || req.body?.kdcab);
+      const periode = sanitizeSegment(req.query?.periode || req.body?.periode, "0000");
       const ext = path.extname(file.originalname).toLowerCase();
       cb(null, `${kdcab}_${periode}_${Date.now()}${ext}`);
     },
@@ -113,9 +123,9 @@ export function createCaptureUpload(subfolder) {
  * @param {string} periode
  */
 export function findCaptureFile(subfolder, kdcab, periode) {
-  const dir = path.join(BASE_UPLOAD_DIR, subfolder, kdcab);
+  const dir = path.join(BASE_UPLOAD_DIR, sanitizeSegment(subfolder), sanitizeSegment(kdcab));
   if (!fs.existsSync(dir)) return null;
-  const prefix = `${kdcab}_${periode}_`;
+  const prefix = `${sanitizeSegment(kdcab)}_${sanitizeSegment(periode, "0000")}_`;
   const files = fs.readdirSync(dir).filter(f => f.startsWith(prefix));
   if (files.length === 0) return null;
   // Sort by timestamp embedded in name → take latest
@@ -124,6 +134,6 @@ export function findCaptureFile(subfolder, kdcab, periode) {
     const tsB = parseInt(b.replace(prefix, "").split(".")[0], 10) || 0;
     return tsB - tsA;
   });
-  return `/uploads/ceklist-capture/${subfolder}/${kdcab}/${files[0]}`;
+  return `/uploads/ceklist-capture/${sanitizeSegment(subfolder)}/${sanitizeSegment(kdcab)}/${files[0]}`;
 }
 

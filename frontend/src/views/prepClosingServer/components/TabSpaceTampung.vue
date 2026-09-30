@@ -136,7 +136,10 @@ function openPreview(url) { previewSrc.value = url; previewVisible.value = true;
 function onFileChange(e) { captureFile.value = e.target.files[0] || null; }
 
 async function doUpload() {
-  if (!captureFile.value || !form.cab || !props.periode) return;
+  if (!captureFile.value || !form.cab || !props.periode) {
+    toast.add({ severity: 'warn', summary: 'Validasi', detail: 'Pilih file, CAB, dan periode sebelum upload', life: 3000 });
+    return;
+  }
   uploading.value = true;
   try {
     const fd = new FormData();

@@ -47,8 +47,10 @@ export const upsertSpaceHdd = body =>
 export const deleteSpaceHdd = (kdcab, periode) =>
   api.delete(`${BASE_URL}/space-hdd`, { params: { kdcab, periode } }).then(unwrap);
 
+// Body sengaja `undefined`, bukan `null`: axios akan mengubah `null` menjadi
+// string "null" dan express.json() menolaknya. Tanpa body, req.body = {}.
 export const initSpaceHdd = periode =>
-  api.post(`${BASE_URL}/space-hdd/init`, null, { params: { periode } }).then(unwrap);
+  api.post(`${BASE_URL}/space-hdd/init`, undefined, { params: { periode } }).then(unwrap);
 
 export const uploadCaptureHdd = (formData, kdcab, periode) =>
   api.post(`${BASE_URL}/space-hdd/upload`, formData, {
@@ -67,7 +69,7 @@ export const deleteSpaceTampung = (cab, periode) =>
   api.delete(`${BASE_URL}/space-tampung`, { params: { cab, periode } }).then(unwrap);
 
 export const initSpaceTampung = periode =>
-  api.post(`${BASE_URL}/space-tampung/init`, null, { params: { periode } }).then(unwrap);
+  api.post(`${BASE_URL}/space-tampung/init`, undefined, { params: { periode } }).then(unwrap);
 
 export const uploadCaptureTampung = (formData, kdcab, periode) =>
   api.post(`${BASE_URL}/space-tampung/upload`, formData, {
@@ -86,10 +88,13 @@ export const deleteImportIdt = (kdcab, periode) =>
   api.delete(`${BASE_URL}/import-idt`, { params: { kdcab, periode } }).then(unwrap);
 
 export const initImportIdt = periode =>
-  api.post(`${BASE_URL}/import-idt/init`, null, { params: { periode } }).then(unwrap);
+  api.post(`${BASE_URL}/import-idt/init`, undefined, { params: { periode } }).then(unwrap);
 
-export const uploadCapture = formData =>
+// kdcab & periode wajib lewat query: multer sudah menentukan folder + nama file
+// saat memproses part "capture", yaitu sebelum field body kdcab/periode terbaca.
+export const uploadCapture = (formData, kdcab, periode) =>
   api.post(`${BASE_URL}/import-idt/upload`, formData, {
+    params: { kdcab, periode },
     headers: { 'Content-Type': 'multipart/form-data' },
   }).then(unwrap);
 

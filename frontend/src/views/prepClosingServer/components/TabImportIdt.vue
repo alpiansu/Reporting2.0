@@ -175,9 +175,9 @@ async function doUpload() {
   uploading.value = true;
   try {
     const fd = new FormData();
-    fd.append('capture', uploadFile.value);
     fd.append('kdcab', uploadTarget.value.KDCAB);
     fd.append('periode', props.periode);
+    fd.append('capture', uploadFile.value);
     await api.uploadCapture(fd, uploadTarget.value.KDCAB, props.periode);
     closeUpload();
     toast.add({ severity: 'success', summary: 'Upload Berhasil', detail: 'Gambar capture disimpan', life: 3000 });

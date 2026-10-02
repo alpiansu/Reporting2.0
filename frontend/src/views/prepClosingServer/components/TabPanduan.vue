@@ -21,6 +21,7 @@
             <span class="acc-header">
               <b>{{ p.KDCAB }}</b>&nbsp;{{ p.NAMACAB || '' }}
               <Tag :value="p.OS || '—'" :severity="p.OS === 'WINDOWS' ? 'info' : 'warning'" class="ml-2" />
+              <Tag v-if="p.REMOTE_BULANAN" :value="p.REMOTE_BULANAN" :severity="methodSeverity(p.REMOTE_BULANAN)" class="ml-2" />
               <code class="acc-ip" v-if="p.IP_BULANAN">{{ p.IP_BULANAN }}</code>
             </span>
           </template>
@@ -46,6 +47,14 @@ defineProps({
   panduanRows: { type: Array, default: () => [] },
   loading:     { type: Boolean, default: false },
 });
+
+function methodSeverity(method = '') {
+  const m = String(method).toLowerCase();
+  if (m.includes('ssh')) return 'contrast';
+  if (m.includes('vnc')) return 'warn';
+  if (m.includes('rdp')) return 'info';
+  return 'secondary';
+}
 </script>
 
 <style scoped>

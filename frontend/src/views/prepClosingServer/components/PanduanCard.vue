@@ -11,6 +11,11 @@
       <!-- Server Bulanan -->
       <div class="panduan-section">
         <div class="panduan-section-title"><i class="pi pi-server"></i> Server Bulanan</div>
+        <div class="panduan-row" v-if="panduan.REMOTE_BULANAN">
+          <span class="panduan-label">Remote</span>
+          <Tag :value="panduan.REMOTE_BULANAN" :severity="methodSeverity(panduan.REMOTE_BULANAN)" />
+          <code v-if="connStringBulanan" class="cred cred-conn">{{ connStringBulanan }}</code>
+        </div>
         <div class="panduan-row">
           <span class="panduan-label">IP</span>
           <code class="cred cred-ip">{{ panduan.IP_BULANAN || '—' }}</code>
@@ -20,7 +25,7 @@
           <span class="cred">{{ panduan.USER_BULANAN || '—' }}</span>
         </div>
         <div v-if="panduan.USER_BULANAN || panduan.PASS_BULANAN" class="panduan-row">
-          <span class="panduan-label">Pass</span>
+          <span class="panduan-label">Pass{{ panduan.REMOTE_BULANAN === 'VNC' ? ' VNC' : '' }}</span>
           <span class="cred">
             {{ hideSecrets ? '••••••' : (panduan.PASS_BULANAN || '—') }}
             <button v-if="panduan.PASS_BULANAN" type="button" class="eye-btn" @click="hideSecrets = !hideSecrets">
@@ -65,6 +70,10 @@
       <!-- Server Tampung -->
       <div class="panduan-section">
         <div class="panduan-section-title"><i class="pi pi-inbox"></i> Server Tampung</div>
+        <div class="panduan-row" v-if="panduan.REMOTE_TAMPUNG">
+          <span class="panduan-label">Remote</span>
+          <Tag :value="panduan.REMOTE_TAMPUNG" :severity="methodSeverity(panduan.REMOTE_TAMPUNG)" />
+        </div>
         <div class="panduan-row">
           <span class="panduan-label">IP</span>
           <code class="cred cred-ip">{{ panduan.IP_TAMPUNG || '—' }}</code>
@@ -77,6 +86,15 @@
           <span class="panduan-label">Pass</span>
           <span class="cred">
             {{ hideSecrets ? '••••••' : panduan.PASS_TAMPUNG }}
+            <button type="button" class="eye-btn" @click="hideSecrets = !hideSecrets">
+              <i :class="hideSecrets ? 'pi pi-eye' : 'pi pi-eye-slash'"></i>
+            </button>
+          </span>
+        </div>
+        <div v-if="panduan.VNC_PASS_TAMPUNG" class="panduan-row">
+          <span class="panduan-label">Pass VNC</span>
+          <span class="cred">
+            {{ hideSecrets ? '••••••' : panduan.VNC_PASS_TAMPUNG }}
             <button type="button" class="eye-btn" @click="hideSecrets = !hideSecrets">
               <i :class="hideSecrets ? 'pi pi-eye' : 'pi pi-eye-slash'"></i>
             </button>
@@ -101,14 +119,36 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import Tag from 'primevue/tag';
 
-defineProps({
+const props = defineProps({
   panduan: { type: Object, default: null },
 });
 
 const hideSecrets = ref(true);
+
+function methodSeverity(method = '') {
+  const m = String(method).toLowerCase();
+  if (m.includes('ssh')) return 'contrast';
+  if (m.includes('vnc')) return 'warn';
+  if (m.includes('rdp')) return 'info';
+  return 'secondary';
+}
+
+const connStringBulanan = computed(() => {
+  const p = props.panduan;
+  if (!p?.IP_BULANAN) return '';
+  const m = String(p.REMOTE_BULANAN || '').toLowerCase();
+  if (m.includes('ssh')) {
+    const user = p.USER_BULANAN || 'user';
+    const port = p.PORT_BULANAN ? ` -p ${p.PORT_BULANAN}` : '';
+    return `ssh ${user}@${p.IP_BULANAN}${port}`;
+  }
+  if (m.includes('vnc')) return `${p.IP_BULANAN} (VNC)`;
+  if (m.includes('rdp')) return `${p.IP_BULANAN} (RDP)`;
+  return '';
+});
 </script>
 
 <style scoped>
@@ -174,6 +214,11 @@ const hideSecrets = ref(true);
   border-color: #a9dcb8;
   color: #155724;
   font-weight: 600;
+}
+.cred-conn {
+  background: #e2e3e5;
+  border-color: #c6c8ca;
+  color: #383d41;
 }
 .cred-path {
   background: #d1ecf1;

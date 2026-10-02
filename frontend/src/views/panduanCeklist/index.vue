@@ -59,6 +59,20 @@
             </div>
           </template>
         </Column>
+        <Column header="Remote" style="min-width:130px">
+          <template #body="{ data }">
+            <div class="cell-stack">
+              <span class="cell-method" v-if="data.REMOTE_BULANAN">
+                <i class="pi pi-server"></i>
+                <Tag :value="data.REMOTE_BULANAN" :severity="methodSeverity(data.REMOTE_BULANAN)" />
+              </span>
+              <span class="cell-method" v-if="data.REMOTE_TAMPUNG">
+                <i class="pi pi-inbox"></i>
+                <Tag :value="data.REMOTE_TAMPUNG" :severity="methodSeverity(data.REMOTE_TAMPUNG)" />
+              </span>
+            </div>
+          </template>
+        </Column>
         <Column header="Aksi" style="width:90px">
           <template #body="{ data }">
             <div class="row-actions">
@@ -118,6 +132,10 @@
               <label>Port</label>
               <InputText v-model="form.port_bulanan" placeholder="22 / 2808" class="w-full" />
             </div>
+            <div class="form-field">
+              <label>Metode Remote</label>
+              <Dropdown v-model="form.remote_bulanan" :options="['SSH','RDP','VNC']" placeholder="Pilih metode" class="w-full" />
+            </div>
           </div>
         </div>
 
@@ -165,6 +183,19 @@
                 <InputText v-model="form.pass_tampung" :type="showPwd.tampung ? 'text' : 'password'" class="w-full" autocomplete="off" />
                 <button type="button" class="pwd-eye" @click="togglePwd('tampung')" v-tooltip.top="'Tampilkan/Sembunyikan'">
                   <i :class="showPwd.tampung ? 'pi pi-eye-slash' : 'pi pi-eye'"></i>
+                </button>
+              </div>
+            </div>
+            <div class="form-field">
+              <label>Metode Remote</label>
+              <Dropdown v-model="form.remote_tampung" :options="['RDP','RDP + VNC','VNC']" placeholder="Pilih metode" class="w-full" />
+            </div>
+            <div class="form-field">
+              <label>Pass VNC</label>
+              <div class="pwd-field">
+                <InputText v-model="form.vnc_pass_tampung" :type="showPwd.vnc ? 'text' : 'password'" class="w-full" autocomplete="off" />
+                <button type="button" class="pwd-eye" @click="togglePwd('vnc')" v-tooltip.top="'Tampilkan/Sembunyikan'">
+                  <i :class="showPwd.vnc ? 'pi pi-eye-slash' : 'pi pi-eye'"></i>
                 </button>
               </div>
             </div>
@@ -217,23 +248,33 @@ const deleting = ref(false);
 const dlgVisible = ref(false);
 const isEdit = ref(false);
 const confirmDlg = reactive({ visible: false, row: null });
-const showPwd = reactive({ bulanan: false, db: false, tampung: false });
+const showPwd = reactive({ bulanan: false, db: false, tampung: false, vnc: false });
 
 const form = reactive({
   kdcab: '', namacab: '', os: 'WINDOWS',
-  ip_bulanan: '', user_bulanan: '', pass_bulanan: '', port_bulanan: '',
+  ip_bulanan: '', user_bulanan: '', pass_bulanan: '', port_bulanan: '', remote_bulanan: '',
   db_user: '', db_pass: '', db_port: '', hdd_check: '',
-  ip_tampung: '', user_tampung: '', pass_tampung: '', path_tampung: '',
+  ip_tampung: '', user_tampung: '', pass_tampung: '', remote_tampung: '', vnc_pass_tampung: '',
+  path_tampung: '',
   catatan: '',
 });
 
 const COL_MAP = {
   kdcab: 'KDCAB', namacab: 'NAMACAB', os: 'OS',
-  ip_bulanan: 'IP_BULANAN', user_bulanan: 'USER_BULANAN', pass_bulanan: 'PASS_BULANAN', port_bulanan: 'PORT_BULANAN',
+  ip_bulanan: 'IP_BULANAN', user_bulanan: 'USER_BULANAN', pass_bulanan: 'PASS_BULANAN', port_bulanan: 'PORT_BULANAN', remote_bulanan: 'REMOTE_BULANAN',
   db_user: 'DB_USER', db_pass: 'DB_PASS', db_port: 'DB_PORT', hdd_check: 'HDD_CHECK',
-  ip_tampung: 'IP_TAMPUNG', user_tampung: 'USER_TAMPUNG', pass_tampung: 'PASS_TAMPUNG', path_tampung: 'PATH_TAMPUNG',
+  ip_tampung: 'IP_TAMPUNG', user_tampung: 'USER_TAMPUNG', pass_tampung: 'PASS_TAMPUNG', remote_tampung: 'REMOTE_TAMPUNG', vnc_pass_tampung: 'VNC_PASS_TAMPUNG',
+  path_tampung: 'PATH_TAMPUNG',
   catatan: 'CATATAN',
 };
+
+function methodSeverity(method = '') {
+  const m = String(method).toLowerCase();
+  if (m.includes('ssh')) return 'contrast';
+  if (m.includes('vnc')) return 'warn';
+  if (m.includes('rdp')) return 'info';
+  return 'secondary';
+}
 
 async function loadData() {
   loading.value = true;
@@ -314,6 +355,7 @@ onMounted(loadData);
   color: var(--text-color-secondary);
 }
 .cell-stack { display: flex; flex-direction: column; gap: 2px; }
+.cell-method { display: flex; align-items: center; gap: 4px; }
 .cell-sub { font-size: 0.8rem; color: var(--text-color-secondary); }
 .cell-ip {
   font-family: 'Consolas', monospace;

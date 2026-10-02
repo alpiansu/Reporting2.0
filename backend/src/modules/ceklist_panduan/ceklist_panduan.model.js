@@ -56,6 +56,12 @@ const getCeklistPanduanModel = async () => {
             type: DataTypes.STRING(20),
             allowNull: true,
           },
+          REMOTE_BULANAN: {
+            field: "REMOTE_BULANAN",
+            type: DataTypes.STRING(20),
+            allowNull: true,
+            comment: "Metode remote server bulanan: SSH / RDP / VNC",
+          },
           DB_USER: {
             field: "DB_USER",
             type: DataTypes.STRING(50),
@@ -90,6 +96,18 @@ const getCeklistPanduanModel = async () => {
             field: "PASS_TAMPUNG",
             type: DataTypes.STRING(100),
             allowNull: true,
+          },
+          REMOTE_TAMPUNG: {
+            field: "REMOTE_TAMPUNG",
+            type: DataTypes.STRING(20),
+            allowNull: true,
+            comment: "Metode remote server tampung: RDP / RDP+VNC / VNC",
+          },
+          VNC_PASS_TAMPUNG: {
+            field: "VNC_PASS_TAMPUNG",
+            type: DataTypes.STRING(100),
+            allowNull: true,
+            comment: "Pass VNC server tampung (jika ada)",
           },
           PATH_TAMPUNG: {
             field: "PATH_TAMPUNG",

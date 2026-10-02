@@ -21,7 +21,8 @@ jest.mock("fs/promises", () => ({
   writeFile: jest.fn(async () => {}),
 }));
 
-import resilientDb from "../config/resilient-database.js";
+import resilientDb, { DatabaseUnavailableError } from "../config/resilient-database.js";
+import logger from "../config/logger.js";
 
 function freshInstance() {
   // Instance terpisah agar state singleton antar test tidak bocor
@@ -141,5 +142,130 @@ describe("ResilientDatabase.getDatabase (retry cycle dishare)", () => {
     const result = await db.getDatabase();
     expect(result).toEqual({ mark: "live" });
     expect(db.connect).not.toHaveBeenCalled();
+  });
+});
+
+describe("Health fix #14 — batas waktu, hook disconnect & force destroy", () => {
+  test("getDatabase melempar DatabaseUnavailableError (503) saat koneksi menggantung > 15 detik", async () => {
+    const db = freshInstance();
+    db.isConnected = false;
+    db.sequelize = null;
+    db.connect = jest.fn(() => new Promise(() => {})); // menggantung selamanya
+
+    const p = db.getDatabase();
+    const assertion = expect(p).rejects.toMatchObject({
+      name: "DatabaseUnavailableError",
+      statusCode: 503,
+    });
+
+    await jest.advanceTimersByTimeAsync(15000);
+    await assertion;
+
+    // peringatan dini saat request tertahan > 2 detik ikut terpicu
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("tertahan menunggu database"));
+  });
+
+  test("beforeDisconnect TIDAK lagi menandai DB mati (regresi rebuild tiap 10 detik)", () => {
+    const db = freshInstance();
+    const hooks = {};
+    db.sequelize = {
+      addHook: (name, fn) => {
+        hooks[name] = fn;
+      },
+    };
+    db.isConnected = true;
+
+    db.setupConnectionHandlers();
+
+    expect(typeof hooks.beforeDisconnect).toBe("function");
+    hooks.beforeDisconnect();
+    expect(db.isConnected).toBe(true); // dulu: false → memicu rebuild instance tiap request
+
+    hooks.afterConnect();
+    expect(db.isConnected).toBe(true);
+  });
+
+  test("forceDestroyPool membuang koneksi available + in-use tanpa menunggu drain", () => {
+    const db = freshInstance();
+    const makeResource = id => ({ id, destroy: jest.fn() });
+    const available = makeResource(1);
+    const inUse = makeResource(2);
+    const fakePool = {
+      _availableObjects: [{ resource: available }],
+      _inUseObjects: [{ resource: inUse }],
+      destroy: jest.fn(() => Promise.resolve()),
+    };
+
+    db.forceDestroyPool({ connectionManager: { pool: fakePool } });
+
+    expect(fakePool.destroy).toHaveBeenCalledWith(available);
+    expect(fakePool.destroy).toHaveBeenCalledWith(inUse);
+    expect(available.destroy).toHaveBeenCalled(); // socket dipaksa mati dulu
+    expect(inUse.destroy).toHaveBeenCalled();
+  });
+
+  test("close() yang menggantung dibatasi lalu memaksa buang koneksi", async () => {
+    const db = freshInstance();
+    const fakePool = {
+      _availableObjects: [],
+      _inUseObjects: [],
+      destroy: jest.fn(() => Promise.resolve()),
+    };
+    db.sequelize = { close: () => new Promise(() => {}), connectionManager: { pool: fakePool } };
+    db.isConnected = true;
+
+    const p = db.close();
+    await jest.advanceTimersByTimeAsync(5000);
+    await p;
+
+    expect(db.isConnected).toBe(false);
+    expect(db.sequelize).toBeNull();
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("memaksa menutup koneksi"));
+  });
+
+  test("executeOperation: operasi menggantung → 503 setelah deadline; fallback tetap dipakai", async () => {
+    const db = freshInstance();
+    db.getDatabase = jest.fn(async () => ({ mark: "live" }));
+
+    const p1 = db.executeOperation(() => new Promise(() => {}));
+    const a1 = expect(p1).rejects.toMatchObject({ name: "DatabaseUnavailableError" });
+    await jest.advanceTimersByTimeAsync(60000);
+    await a1;
+
+    const p2 = db.executeOperation(() => new Promise(() => {}), { offline: true });
+    const a2 = expect(p2).resolves.toEqual({ offline: true });
+    await jest.advanceTimersByTimeAsync(60000);
+    await a2;
+  });
+
+  test("executeOperation: getDatabase melempar 503 → fallback dipakai", async () => {
+    const db = freshInstance();
+    db.getDatabase = jest.fn(async () => {
+      throw new DatabaseUnavailableError("Menunggu koneksi database melebihi 15000ms");
+    });
+
+    const result = await db.executeOperation(() => Promise.resolve("tidak dipakai"), { cached: 1 });
+    expect(result).toEqual({ cached: 1 });
+  });
+
+  test("heartbeat gagal (authenticate menggantung) → tandai DB down & buang pool", async () => {
+    const db = freshInstance();
+    const fakePool = {
+      _availableObjects: [],
+      _inUseObjects: [],
+      destroy: jest.fn(() => Promise.resolve()),
+    };
+    db.sequelize = {
+      authenticate: jest.fn(() => new Promise(() => {})),
+      connectionManager: { pool: fakePool },
+    };
+    db.isConnected = true;
+
+    const hb = db.runHeartbeat();
+    await jest.advanceTimersByTimeAsync(8000);
+    await hb;
+
+    expect(db.isConnected).toBe(false);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("Heartbeat database gagal"));
   });
 });

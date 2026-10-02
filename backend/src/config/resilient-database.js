@@ -10,6 +10,35 @@ import path from "path";
 
 dotenv.config();
 
+// ── [Health fix #14] Batas waktu & perilaku pool ──────────────────────────────
+// Bug lama (log 2026-09-30): hook beforeDisconnect menandai DB "mati" saat pool
+// membuang koneksi idle (pool.idle = 10 detik) → tiap reconnect membangun instance
+// Sequelize BARU lalu close() instance lama → pool.drain() menggantung selamanya
+// bila ada koneksi in-use → SEMUA request yang menunggu getDatabase() ikut
+// menggantung → UI "pending tanpa henti". Kini: reconnect MEMAKAI instance yang
+// sama (tanpa close), semua operasi koneksi/ambil-DB dibatasi deadline, dan
+// koneksi mati dibuang paksa lewat forceDestroyPool() (tanpa pernah menunggu drain).
+const GET_DB_TIMEOUT_MS = 15000; // getDatabase(): lempar DatabaseUnavailableError (503) bila lewat
+const SLOW_WAIT_WARN_MS = 2000; // peringatan dini bila request tertahan menunggu DB
+const AUTH_TIMEOUT_MS = 10000; // authenticate()/heartbeat dibatasi agar tidak menggantung di koneksi setengah matang
+const CLOSE_TIMEOUT_MS = 5000; // batas menunggu close() polite sebelum paksa buang koneksi
+const OP_TIMEOUT_MS = 60000; // default deadline operasi via executeOperation (bisa di-override per panggilan)
+const HEARTBEAT_MS = 30000; // interval pemeriksaan kesehatan koneksi
+const HEARTBEAT_TIMEOUT_MS = 8000; // deadline 1 heartbeat
+
+/**
+ * Batasi sebuah promise dengan deadline. Bila melebihi → reject
+ * DatabaseUnavailableError (statusCode 503 → dijawab databaseErrorHandler),
+ * sehingga tidak ada proses yang bisa menggantung tanpa batas.
+ */
+function withDeadline(promise, ms, label) {
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new DatabaseUnavailableError(`${label} melebihi ${ms}ms`)), ms);
+  });
+  return Promise.race([Promise.resolve(promise), deadline]).finally(() => clearTimeout(timer));
+}
+
 class ResilientDatabase {
   constructor() {
     this.sequelize = null;
@@ -23,6 +52,8 @@ class ResilientDatabase {
     this.connectionPromise = null;
     this.retryPromise = null;
     this.generation = 0;
+    this.heartbeatTimer = null;
+    this.heartbeatBusy = false;
 
     // JSON file paths for offline data
     this.dataPath = path.join(process.cwd(), "data");
@@ -83,64 +114,71 @@ class ResilientDatabase {
     }
   }
 
+  /**
+   * [Health fix #14] Reconnect TIDAK lagi membangun instance baru + close()
+   * instance lama (itu sumber pool.drain() yang menggantung → semua request
+   * menunggu DB ikut pending tanpa henti). Bila masih ada instance, cukup
+   * authenticate ulang — pool membuka koneksi baru seperlunya. Kegagalan/koneksi
+   * kotor dibuang paksa lewat forceDestroyPool() tanpa pernah menunggu drain.
+   */
   async createConnection() {
-    let nextSequelize = null;
+    const isNew = !this.sequelize;
+    const instance = isNew ? this.buildSequelize() : this.sequelize;
 
     try {
-      nextSequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASSWORD, {
-        host: process.env.DB_HOST,
-        port: process.env.DB_PORT,
-        dialect: "mysql",
-        timezone: "+07:00",
-        logging: process.env.NODE_ENV === "development" ? console.log : false,
-        define: {
-          timestamps: true,
-          underscored: true,
-        },
-        pool: {
-          max: 5,
-          min: 0,
-          acquire: 30000,
-          idle: 10000,
-        },
-        retry: {
-          max: this.maxRetries,
-        },
-      });
-
-      await nextSequelize.authenticate();
-
-      const previousSequelize = this.sequelize;
-      if (previousSequelize && previousSequelize !== nextSequelize) {
-        await previousSequelize.close().catch(error => {
-          logger.warn(`Failed to close previous database connection: ${error.message}`);
-        });
-      }
-
-      this.sequelize = nextSequelize;
-      this.isConnected = true;
-      this.connectionAttempts = 0;
-      this.lastConnectionFailure = null;
-      this.generation++;
-      logger.info("Database connection established successfully");
-
-      this.setupConnectionHandlers();
-
-      return nextSequelize;
+      await withDeadline(instance.authenticate(), AUTH_TIMEOUT_MS, "authenticate database");
     } catch (error) {
       this.isConnected = false;
       this.connectionAttempts++;
       this.lastConnectionFailure = Date.now();
       logger.error(`Database connection failed (attempt ${this.connectionAttempts}): ${error.message}`);
 
-      if (nextSequelize) {
-        await nextSequelize.close().catch(closeError => {
-          logger.warn(`Failed to close failed database connection: ${closeError.message}`);
-        });
-      }
+      // Buang sisa koneksi (termasuk yang setengah matang) agar attempt
+      // berikutnya membuka koneksi baru dari nol — tanpa drain menggantung.
+      this.forceDestroyPool(instance);
 
       throw error;
     }
+
+    this.sequelize = instance;
+    this.isConnected = true;
+    this.connectionAttempts = 0;
+    this.lastConnectionFailure = null;
+    this.generation++;
+    logger.info("Database connection established successfully");
+
+    if (isNew) {
+      this.setupConnectionHandlers();
+      this.startHeartbeat();
+    }
+
+    return instance;
+  }
+
+  /**
+   * Buat instance Sequelize baru dengan konfigurasi pool proyek.
+   */
+  buildSequelize() {
+    return new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASSWORD, {
+      host: process.env.DB_HOST,
+      port: process.env.DB_PORT,
+      dialect: "mysql",
+      timezone: "+07:00",
+      logging: process.env.NODE_ENV === "development" ? console.log : false,
+      define: {
+        timestamps: true,
+        underscored: true,
+      },
+      pool: {
+        max: 5,
+        min: 0,
+        acquire: 30000,
+        idle: 10000,
+      },
+      retry: {
+        max: this.maxRetries,
+      },
+    });
   }
 
   /**
@@ -152,13 +190,23 @@ class ResilientDatabase {
     try {
       // Handle connection errors using Sequelize hooks instead of connectionManager events
       this.sequelize.addHook("afterConnect", () => {
-        logger.info("Database connection established via hook");
+        // [Health fix #14] dipicu PER KONSESI saat pool membuka koneksi —
+        // turunkan ke debug agar tidak membanjiri log (bukan event lifecycle DB).
+        logger.debug("Database connection established via hook");
         this.isConnected = true;
       });
 
       this.sequelize.addHook("beforeDisconnect", () => {
-        logger.warn("Database disconnecting via hook");
-        this.isConnected = false;
+        // [Health fix #14] REGRESI BUG UTAMA: hook ini dipicu PER KONSESI ketika
+        // pool membuang koneksi idle (pool.idle = 10 detik) — perilaku NORMAL,
+        // BUKAN tanda database mati. Dulu hook ini mengeset isConnected = false
+        // sehingga request berikutnya menganggap DB down → teardown+rebuild
+        // instance tiap ~10 detik (197x "disconnecting via hook" + 51 siklus
+        // reconnect di log 2026-09-30) dan memicu close() yang menggantung →
+        // semua request menunggu DB ikut pending tanpa henti.
+        // Sekarang: TIDAK mengubah status; koneksi mati sesungguhnya terdeteksi
+        // lewat kegagalan query / heartbeat (runHeartbeat).
+        logger.debug("Database connection closing via hook (pool idle eviction — normal)");
       });
     } catch (error) {
       logger.warn(`Could not setup connection handlers: ${error.message}`);
@@ -168,11 +216,43 @@ class ResilientDatabase {
   /**
    * Get database instance with automatic reconnection and retry
    */
+  /**
+   * Get database instance with automatic reconnection and retry.
+   * [Health fix #14] Dibatasi GET_DB_TIMEOUT_MS: bila koneksi tidak siap juga,
+   * melempar DatabaseUnavailableError (503) — TIDAK PERNAH menggantung tanpa batas.
+   */
   async getDatabase() {
     if (this.isConnected && this.sequelize) {
       return this.sequelize;
     }
 
+    // Peringatan dini: bila menunggu > 2 detik, ada request yang tertahan.
+    // Log ini jadi jejak diagnostik utama — dulu kemacetan di getDatabase()
+    // tidak meninggalkan log sama sekali (susah dilacak).
+    const slowWarnTimer = setTimeout(() => {
+      logger.warn(
+        `[resilient-db] Request tertahan menunggu database >= ${SLOW_WAIT_WARN_MS}ms ` +
+          `(generation=${this.generation}, connected=${this.isConnected})`
+      );
+    }, SLOW_WAIT_WARN_MS);
+
+    try {
+      return await withDeadline(this.awaitDatabaseReady(), GET_DB_TIMEOUT_MS, "Menunggu koneksi database");
+    } finally {
+      clearTimeout(slowWarnTimer);
+    }
+  }
+
+  /**
+   * [Health fix #14] Inti retry lama getDatabase() — TIDAK PERNAH reject:
+   * connectionPromise gagal → jatuh ke siklus reconnect (hasil akhir null bila
+   * DB benar-benar down). Kontrak pemanggil: instance sequelize | null.
+   * [Health fix #13] Satu siklus retry DISHARE antar request yang datang
+   * bersamaan (pola sama dengan connectionPromise di atas): dulu tiap request
+   * menjalankan loop 3 attempt + sleep 2s/4s sendiri → saat DB down, N request
+   * = badai force-reconnect dan N request macet ±6 detik.
+   */
+  async awaitDatabaseReady() {
     if (this.connectionPromise) {
       try {
         return await this.connectionPromise;
@@ -181,11 +261,6 @@ class ResilientDatabase {
       }
     }
 
-    // [Health fix #13] Satu siklus retry DISHARE antar request yang datang
-    // bersamaan (pola sama dengan connectionPromise di atas): dulu tiap request
-    // menjalankan loop 3 attempt + sleep 2s/4s sendiri → saat DB down, N request
-    // = badai force-reconnect dan N request macet ±6 detik.
-    // Kontrak pemanggil TIDAK berubah: mengembalikan instance sequelize atau null.
     if (!this.retryPromise) {
       const cycle = this.runReconnectCycle();
       this.retryPromise = cycle;
@@ -232,8 +307,20 @@ class ResilientDatabase {
   /**
    * Execute database operation with fallback to offline mode
    */
-  async executeOperation(operation, fallbackData = null) {
-    const db = await this.getDatabase();
+  async executeOperation(operation, fallbackData = null, options = {}) {
+    const { timeoutMs = OP_TIMEOUT_MS } = options;
+
+    let db;
+    try {
+      db = await this.getDatabase();
+    } catch (error) {
+      // getDatabase() melempar DatabaseUnavailableError (menunggu > deadline)
+      if (fallbackData) {
+        logger.info("Database unavailable, using fallback data");
+        return fallbackData;
+      }
+      throw error;
+    }
 
     if (!db) {
       if (fallbackData) {
@@ -244,7 +331,9 @@ class ResilientDatabase {
     }
 
     try {
-      return await operation(db);
+      // [Health fix #14] batasi operasi agar query yang menggantung di koneksi
+      // setengah matang tidak menahan request tanpa batas.
+      return await withDeadline(Promise.resolve().then(() => operation(db)), timeoutMs, "Operasi database");
     } catch (error) {
       logger.error(`Database operation failed: ${error.message}`);
       this.isConnected = false;
@@ -316,19 +405,101 @@ class ResilientDatabase {
   }
 
   /**
+   * [Health fix #14] Buang paksa SEMUA koneksi di pool (available + in-use)
+   * tanpa menunggu drain. Dipakai saat: (a) close() melebihi deadline,
+   * (b) authenticate/heartbeat gagal — koneksi setengah matang harus dibuang
+   * supaya query in-flight langsung error, bukan menggantung selamanya.
+   */
+  forceDestroyPool(instance) {
+    const pool = instance?.connectionManager?.pool;
+    if (!pool) return;
+
+    // mendukung bentuk pool tunggal maupun replication { read, write }
+    const pools = pool.read && pool.write ? [pool.read, pool.write] : [pool];
+
+    for (const p of pools) {
+      try {
+        const resources = [
+          ...(p._availableObjects || []).map(wrapped => wrapped.resource),
+          ...(p._inUseObjects || []).map(wrapped => wrapped.resource),
+        ];
+
+        for (const resource of resources) {
+          try {
+            // paksa tutup socket mysql2 terlebih dulu agar query yang sedang
+            // berjalan langsung error, bukan menunggu TCP timeout
+            resource?.destroy?.();
+          } catch {
+            // socket mungkin sudah mati — abaikan
+          }
+          try {
+            // perbarui state pool; JANGAN di-await (factory.destroy bisa menggantung)
+            p.destroy(resource)?.catch?.(() => {});
+          } catch {
+            // abaikan
+          }
+        }
+
+        logger.warn(`[resilient-db] Memaksa membuang ${resources.length} koneksi dari pool`);
+      } catch (error) {
+        logger.warn(`[resilient-db] Gagal membuang paksa pool: ${error.message}`);
+      }
+    }
+  }
+
+  /**
+   * [Health fix #14] Heartbeat: authenticate ringan tiap 30 detik untuk mendeteksi
+   * koneksi setengah matang (jaringan putus tanpa RST) yang membuat query
+   * menggantung tanpa error. Bila gagal → tandai DB down + buang pool; request
+   * berikutnya otomatis menjalankan siklus reconnect (health fix #13).
+   */
+  startHeartbeat() {
+    if (this.heartbeatTimer) return;
+    this.heartbeatTimer = setInterval(() => this.runHeartbeat(), HEARTBEAT_MS);
+    this.heartbeatTimer.unref?.(); // jangan menahan proses saat shutdown
+  }
+
+  stopHeartbeat() {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  }
+
+  async runHeartbeat() {
+    if (this.heartbeatBusy || !this.sequelize || !this.isConnected) return;
+    this.heartbeatBusy = true;
+    try {
+      await withDeadline(this.sequelize.authenticate(), HEARTBEAT_TIMEOUT_MS, "heartbeat database");
+    } catch (error) {
+      logger.warn(`[resilient-db] Heartbeat database gagal: ${error.message} — menandai DB down & membuang koneksi`);
+      this.isConnected = false;
+      this.forceDestroyPool(this.sequelize);
+    } finally {
+      this.heartbeatBusy = false;
+    }
+  }
+
+  /**
    * Close database connection
    */
   async close() {
-    if (this.sequelize) {
-      try {
-        await this.sequelize.close();
-        this.isConnected = false;
-        this.sequelize = null;
-        this.generation++;
-        logger.info("Database connection closed");
-      } catch (error) {
-        logger.error(`Error closing database connection: ${error.message}`);
-      }
+    this.stopHeartbeat();
+    const instance = this.sequelize;
+    if (!instance) return;
+
+    try {
+      // [Health fix #14] close() → pool.drain() bisa menggantung selamanya bila
+      // ada koneksi in-use; batasi lalu paksa buang koneksi tersisa.
+      await withDeadline(instance.close(), CLOSE_TIMEOUT_MS, "Menutup koneksi database");
+      logger.info("Database connection closed");
+    } catch (error) {
+      logger.warn(`Graceful close tidak selesai: ${error.message} — memaksa menutup koneksi tersisa`);
+      this.forceDestroyPool(instance);
+    } finally {
+      this.isConnected = false;
+      this.sequelize = null;
+      this.generation++;
     }
   }
 

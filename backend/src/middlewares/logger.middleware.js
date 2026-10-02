@@ -25,13 +25,21 @@ const morganFormat = process.env.NODE_ENV === 'production'
 /**
  * Custom stream for morgan that uses winston logger
  */
+// [Health fix #14] Level log default "info" men-drop logger.http() sehingga
+// request TIDAK PERNAH muncul di log — padahal itu jejak diagnostik utama
+// (bug 2026-09-30: GET /api/ceklist-panduan tak tercatat sama sekali di log
+// walau user melaporkan pending). Naikkan ke info; file statis & favicon
+// di-skip agar log tetap ringkas.
 const stream = {
-  write: (message) => logger.http(message.trim()),
+  write: (message) => logger.info(message.trim()),
 };
 
 /**
  * Request logging middleware using morgan
  */
-const requestLogger = morgan(morganFormat, { stream });
+const requestLogger = morgan(morganFormat, {
+  stream,
+  skip: (req) => req.url?.startsWith("/uploads/") || req.url === "/favicon.ico",
+});
 
 export default requestLogger;

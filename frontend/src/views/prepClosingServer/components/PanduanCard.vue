@@ -1,6 +1,6 @@
 <template>
   <div v-if="panduan" class="panduan-card">
-    <div class="panduan-head">
+    <div v-if="!hideHead" class="panduan-head">
       <span class="panduan-title">
         {{ panduan.KDCAB }} · {{ panduan.NAMACAB || '—' }}
       </span>
@@ -124,6 +124,8 @@ import Tag from 'primevue/tag';
 
 const props = defineProps({
   panduan: { type: Object, default: null },
+  // Sembunyikan header judul (KDCAB + OS) — dipakai bila caller sudah menampilkan judul sendiri
+  hideHead: { type: Boolean, default: false },
 });
 
 const hideSecrets = ref(true);

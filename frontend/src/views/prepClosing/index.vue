@@ -1,68 +1,149 @@
 <template>
   <div class="prep-closing-view">
-    <PageHeader title="Prep Closing System" subtitle="Sistem Monitoring Kesiapan Closing Toko"
-      description="Halaman ini menampilkan status kesiapan closing untuk setiap toko berdasarkan rule validation yang telah ditentukan." />
+    <!-- Compact Header Section -->
+    <header class="view-header">
+      <div class="header-main">
+        <div class="header-icon-box">
+          <i class="pi pi-shield"></i>
+        </div>
+        <div class="header-text">
+          <h1 class="header-title">Prep Closing System</h1>
+          <p class="header-subtitle">
+            Sistem monitoring kesiapan closing toko &amp; validasi rule engine WRC
+          </p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <!-- Active Filter Badge -->
+        <div v-if="filters.periode" class="active-filter-badge">
+          <i class="pi pi-calendar"></i>
+          <span>Periode: <strong>{{ filters.periode }}</strong></span>
+          <span v-if="filters.cabang" class="cab-sub-badge">Cabang: {{ filters.cabang }}</span>
+        </div>
+
+        <!-- Refresh Button -->
+        <button
+          type="button"
+          class="btn-header-secondary"
+          :disabled="isScreening || loading"
+          @click="handleRefresh"
+          title="Muat ulang data prep closing"
+        >
+          <i class="pi pi-refresh"></i>
+          <span>Refresh</span>
+        </button>
+      </div>
+    </header>
 
     <div class="content-container">
-      <!-- Filter Form (Seragam dengan Rekon) -->
-      <RekonFormComponent :formData="{ cab: filters.cabang, periode: filters.periode }">
-        <template #title>
-          Filter Prep Closing
-        </template>
-        <template #description>
-          Pilih cabang dan periode untuk melihat status kesiapan closing.
-        </template>
-        <template #cab>
-          <Dropdown v-model="filters.cabang" :options="cabangOptions" optionLabel="namacab" optionValue="kdcab" placeholder="Pilih Cabang" class="w-full" />
-        </template>
-        <template #periode>
-          <Calendar v-model="periodeDate" view="month" dateFormat="mm/yy" placeholder="Pilih Bulan/Tahun" :maxDate="today" showIcon class="w-full" @date-select="handlePeriodeSelect" />
-        </template>
-        <template #actions>
-          <Button icon="pi pi-refresh" label="Refresh" class="p-button-outlined" style="margin-right: 4px;" :disabled="isScreening || loading" @click="handleRefresh" />
-          <Button icon="pi pi-bolt" label="Mulai Screening" class="p-button-primary" :disabled="!filters.periode || isScreening || !isCurrentPeriod || wrcNotSynced" :loading="isScreening" @click="handleStartScreening" />
-        </template>
-      </RekonFormComponent>
-
-      <!-- Force Re-screen Toggle -->
-      <div class="flex align-items-center mb-3 mt-2">
-        <Checkbox v-model="forceScreening" inputId="forceScreening" :binary="true" :disabled="isScreening" />
-        <label for="forceScreening" class="ml-2 text-sm text-color-secondary">
-          <i class="pi pi-exclamation-triangle mr-1 text-yellow-500"></i>
-          Force Re-screen (ulang screening meskipun sudah sukses hari ini)
-        </label>
-      </div>
-
-      <!-- Advanced Config Toolbar -->
-      <div class="flex justify-content-end align-items-center mb-4">
-        <span class="text-color-secondary mr-3 text-sm" style="margin-top: 5px;">
-          <i class="pi pi-info-circle mr-1"></i> Konfigurasi: WRC Engine & Rule Management
-        </span>
-        &nbsp;
-        <Button icon="pi pi-database" label="Config WRC Engine" class="p-button-outlined p-button-warning p-button-sm mr-2" :disabled="isScreening || loading" @click="showWrcConfig = true" />
-        &nbsp;
-        <Button icon="pi pi-cog" label="Rule Management" class="p-button-outlined p-button-secondary p-button-sm" :disabled="isScreening || loading" @click="showRuleConfig = true" />
-      </div>
-
-      <!-- WRC Sync Status Banner -->
-      <div v-if="filters.periode" class="wrc-status-banner" :class="{ 'banner-error': wrcNotSynced, 'banner-warn': !wrcNotSynced && isWrcStale, 'banner-ok': !wrcNotSynced && !isWrcStale }">
-        <div class="banner-content">
-          <i :class="wrcNotSynced ? 'pi pi-times-circle' : (!isWrcStale ? 'pi pi-check-circle' : 'pi pi-exclamation-triangle')" class="banner-icon"></i>
-          <div class="banner-text">
-            <span v-if="wrcNotSynced" class="banner-title">Data WRC Belum Di-Sync</span>
-            <span v-else-if="isWrcStale" class="banner-title">Data WRC Mungkin Sudah Update</span>
-            <span v-else class="banner-title">Data WRC Sudah Di-Sync</span>
-            <span v-if="lastWrcSyncAt" class="banner-subtitle">
-              Terakhir sync: {{ dayjs(lastWrcSyncAt).tz('Asia/Jakarta').format('DD MMM YYYY HH:mm') }}
-            </span>
-            <span v-if="!wrcNotSynced && isWrcStale" class="banner-subtitle">
-              Ada kemungkinan data WRC sudah terbaru. Disarankan untuk melakukan sync ulang.
-            </span>
-            <span v-if="wrcNotSynced" class="banner-subtitle">
-              Silakan buka Config WRC Engine untuk menarik data WRC sebelum melakukan screening.
-            </span>
+      <!-- Consolidated Filter & Control Center Panel -->
+      <div class="prep-filter-panel">
+        <div class="filter-main-bar">
+          <!-- Cabang -->
+          <div class="filter-item">
+            <label class="filter-label">
+              <i class="pi pi-building"></i>
+              <span>Cabang</span>
+              <span class="required-star">*</span>
+            </label>
+            <Dropdown 
+              v-model="filters.cabang" 
+              :options="cabangOptions" 
+              optionLabel="namacab" 
+              optionValue="kdcab" 
+              placeholder="Pilih Cabang" 
+              :disabled="isScreening || loading"
+              class="filter-dropdown" 
+            />
           </div>
-          <Button v-if="wrcNotSynced || isWrcStale" icon="pi pi-sync" label="Sync WRC Sekarang" class="p-button-outlined p-button-sm banner-action" @click="showWrcConfig = true" />
+
+          <!-- Periode -->
+          <div class="filter-item">
+            <label class="filter-label">
+              <i class="pi pi-calendar"></i>
+              <span>Periode</span>
+              <span class="required-star">*</span>
+            </label>
+            <Calendar 
+              v-model="periodeDate" 
+              view="month" 
+              dateFormat="mm/yy" 
+              placeholder="Pilih Bulan/Tahun" 
+              :maxDate="today" 
+              showIcon 
+              class="filter-calendar" 
+              :disabled="isScreening || loading"
+              @date-select="handlePeriodeSelect" 
+            />
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="filter-item filter-item-actions">
+            <label class="filter-label filter-label-hidden">&nbsp;</label>
+            <button 
+              type="button" 
+              class="btn-screening-primary"
+              :disabled="!filters.periode || isScreening || !isCurrentPeriod || wrcNotSynced" 
+              @click="handleStartScreening"
+              title="Mulai screening kesiapan closing"
+            >
+              <i class="pi" :class="isScreening ? 'pi-spin pi-spinner' : 'pi-bolt'"></i>
+              <span>{{ isScreening ? 'Memproses...' : 'Mulai Screening' }}</span>
+            </button>
+          </div>
+
+          <!-- Config Shortcuts -->
+          <div class="filter-item filter-item-config">
+            <label class="filter-label filter-label-hidden">&nbsp;</label>
+            <div class="config-btn-group">
+              <button 
+                type="button" 
+                class="btn-config-btn btn-config-wrc"
+                :disabled="isScreening || loading" 
+                @click="showWrcConfig = true"
+                title="Buka konfigurasi sinkronisasi WRC Engine"
+              >
+                <i class="pi pi-database"></i>
+                <span>Config WRC</span>
+              </button>
+              <button 
+                type="button" 
+                class="btn-config-btn btn-config-rule"
+                :disabled="isScreening || loading" 
+                @click="showRuleConfig = true"
+                title="Kelola aturan validasi kesiapan closing"
+              >
+                <i class="pi pi-cog"></i>
+                <span>Rule Engine</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filter Footer Bar: Force Re-screen & WRC Sync Status Pill -->
+        <div class="filter-footer-bar">
+          <div class="force-screen-toggle">
+            <Checkbox v-model="forceScreening" inputId="forceScreeningPrep" :binary="true" :disabled="isScreening" />
+            <label for="forceScreeningPrep" class="force-screen-label">
+              <i class="pi pi-bolt"></i>
+              <span class="force-title">Force Re-screen</span>
+              <span class="force-desc">— Lewati cache screening harian &amp; proses ulang seluruh data</span>
+            </label>
+          </div>
+
+          <!-- WRC Sync Status Inline Pill -->
+          <div v-if="filters.periode" class="wrc-sync-pill" :class="{ 'pill-error': wrcNotSynced, 'pill-warn': !wrcNotSynced && isWrcStale, 'pill-ok': !wrcNotSynced && !isWrcStale }">
+            <i :class="wrcNotSynced ? 'pi pi-times-circle' : (!isWrcStale ? 'pi pi-check-circle' : 'pi pi-exclamation-triangle')"></i>
+            <span class="pill-text">
+              <strong v-if="wrcNotSynced">WRC Belum Di-Sync</strong>
+              <strong v-else-if="isWrcStale">WRC Perlu Sync Ulang</strong>
+              <strong v-else>WRC Ter-sync</strong>
+              <small v-if="lastWrcSyncAt">({{ dayjs(lastWrcSyncAt).tz('Asia/Jakarta').format('DD/MM HH:mm') }})</small>
+            </span>
+            <button v-if="wrcNotSynced || isWrcStale" type="button" class="pill-sync-btn" @click="showWrcConfig = true">
+              <i class="pi pi-sync"></i> Sync WRC
+            </button>
+          </div>
         </div>
       </div>
 
@@ -124,12 +205,10 @@
 import { ref, reactive, onMounted, watch, computed } from 'vue';
 import { useToastService } from '@/utils/toast';
 import { useAuthStore } from '@/stores';
-import PageHeader from '@/components/PageHeader.vue';
 import Calendar from 'primevue/calendar';
 import Dropdown from 'primevue/dropdown';
 import Button from 'primevue/button';
 import Checkbox from 'primevue/checkbox';
-import RekonFormComponent from '@/components/common/RekonFormComponent.vue';
 import { useCabangStore } from '@/stores';
 import Dashboard from './components/Dashboard.vue';
 import StoreListTable from './components/StoreListTable.vue';

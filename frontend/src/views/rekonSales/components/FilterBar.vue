@@ -1,15 +1,5 @@
 <template>
   <div class="filter-bar">
-    <div class="filter-bar__header">
-      <div>
-        <h4 class="filter-bar__title">
-          <i class="pi pi-sliders-h mr-2 text-primary" />
-          Parameter Screening
-        </h4>
-        <p class="filter-bar__subtitle">Pilih cabang, periode, dan toko yang ingin discreening</p>
-      </div>
-    </div>
-
     <div class="filter-bar__fields">
       <div class="field">
         <label class="field-label">
@@ -29,7 +19,7 @@
           showIcon appendTo="body" class="w-full" @date-select="emitMonthYear" :disabled="loading" />
       </div>
 
-      <div class="field">
+      <div class="field field--shops">
         <label class="field-label">
           <i class="pi pi-tag mr-1" />
           Toko <span class="label-optional">(Opsional)</span>
@@ -49,26 +39,30 @@
           :showClear="true"
           :maxSelectedLabels="3"
         />
-        <small class="helper-text">Kosongkan untuk semua toko di cabang.</small>
       </div>
 
       <div class="field field--action">
         <label class="field-label field-label--spacer">&nbsp;</label>
         <div class="actions-row">
           <Button icon="pi pi-refresh" label="Refresh" class="p-button-outlined action-btn" @click="emitRefresh" :disabled="loading" />
-          <Button icon="pi pi-bolt" :label="loading ? 'Processing...' : 'Mulai Screening'" class="p-button-success action-btn action-btn--primary"
+          <Button icon="pi pi-bolt" :label="loading ? 'Processing...' : 'Mulai Screening'" class="p-button-primary action-btn action-btn--primary"
             :loading="loading" :disabled="loading" @click="emitStart" />
         </div>
       </div>
     </div>
 
     <div class="filter-bar__footer">
-      <div class="force-toggle">
+      <div class="force-screen-toggle">
         <Checkbox v-model="forceScreening" inputId="forceScreeningRekonSales" :binary="true" :disabled="loading" />
-        <label for="forceScreeningRekonSales" class="force-toggle__label">
-          <i class="pi pi-exclamation-triangle mr-1 text-yellow-500" />
-          Force Re-screen (ulang meskipun sudah sukses hari ini)
+        <label for="forceScreeningRekonSales" class="force-screen-label">
+          <i class="pi pi-bolt" />
+          <span class="force-title">Force Re-screen</span>
+          <span class="force-desc">— Lewati cache log harian &amp; proses ulang seluruh toko terpilih</span>
         </label>
+      </div>
+      <div class="filter-hint-text">
+        <i class="pi pi-info-circle"></i>
+        <span>Pilih cabang &amp; periode, lalu klik Mulai Screening</span>
       </div>
     </div>
   </div>

@@ -8,7 +8,7 @@
       <TabView>
         <TabPanel header="Ringkasan">
           <div class="detail-grid">
-            <div><strong>Toko</strong><div>{{ summary.KDTK }} - {{ summary.NAMA || '-' }}</div></div>
+            <div><strong>Toko</strong><div><span class="font-mono">{{ formatCode(summary.KDTK) }}</span> - {{ summary.NAMA || '-' }}</div></div>
             <div><strong>Periode</strong><div>{{ summary.year }}-{{ summary.month }}</div></div>
             <div><strong>UPDTIME Terakhir</strong><div>{{ summary.updatetime_latest || '-' }}</div></div>
             <div><strong>Total SEL NET GL</strong><div :class="amountClass(summary.total_sel_net_gl)">{{ formatNumber(summary.total_sel_net_gl) }}</div></div>
@@ -119,7 +119,11 @@
               <template #empty>
                 <div class="empty-tab"><i class="pi pi-check-circle mr-2"></i>Tidak ada SHOP asing</div>
               </template>
-              <Column field="SHOP" header="SHOP Asing" />
+              <Column field="SHOP" header="SHOP Asing">
+                <template #body="{ data }">
+                  <span class="font-mono">{{ formatCode(data.SHOP) }}</span>
+                </template>
+              </Column>
               <Column field="JUMLAH_TRX" header="Jumlah Transaksi" class="text-right">
                 <template #body="{ data }">{{ formatNumber(data.JUMLAH_TRX) }}</template>
               </Column>
@@ -153,7 +157,7 @@ import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import TabView from 'primevue/tabview';
 import TabPanel from 'primevue/tabpanel';
-import { formatNumber, formatDecimal, formatDateTime, getSelisihClass } from '../utils/formatters';
+import { formatNumber, formatDecimal, formatDateTime, getSelisihClass, formatCode } from '../utils/formatters';
 import Tag from 'primevue/tag';
 
 const props = defineProps({

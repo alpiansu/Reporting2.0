@@ -1,7 +1,39 @@
 <template>
   <div class="rekon-sales-view">
-    <PageHeader title="Rekonsiliasi Sales" subtitle="Analisis perbedaan penjualan"
-      description="Screening, ringkasan, resume per toko, detail harian, dan catatan." />
+    <!-- Compact Header Section -->
+    <header class="view-header">
+      <div class="header-main">
+        <div class="header-icon-box">
+          <i class="pi pi-chart-line"></i>
+        </div>
+        <div class="header-text">
+          <h1 class="header-title">Rekonsiliasi Sales</h1>
+          <p class="header-subtitle">
+            Analisis perbedaan penjualan, screening multi-shift/toko &amp; deteksi selisih GL/CD
+          </p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <!-- Active Filter Badge -->
+        <div v-if="filters.month && filters.year" class="active-filter-badge">
+          <i class="pi pi-calendar"></i>
+          <span>Periode: <strong>{{ filters.month }}/{{ filters.year }}</strong></span>
+          <span v-if="filters.cabang" class="cab-sub-badge">Cabang: {{ filters.cabang }}</span>
+        </div>
+
+        <!-- Refresh Button -->
+        <button
+          type="button"
+          class="btn-header-secondary"
+          :disabled="isReconciling"
+          @click="refreshAll"
+          title="Muat ulang hasil rekonsiliasi sales"
+        >
+          <i class="pi pi-refresh"></i>
+          <span>Refresh Hasil</span>
+        </button>
+      </div>
+    </header>
 
     <div class="content-container">
       <div class="filter-card">
@@ -58,7 +90,6 @@
 
 <script setup>
 import { ref, onMounted, watch, onUnmounted } from 'vue';
-import PageHeader from '@/components/PageHeader.vue';
 import { useCabangStore } from '@/stores';
 import { useToastService } from '@/utils/toast';
 import * as XLSX from 'xlsx';

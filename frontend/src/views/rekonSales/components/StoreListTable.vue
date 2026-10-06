@@ -52,9 +52,9 @@
 
         <Column field="KDTK" header="KDTK" sortable :style="{ minWidth: '120px' }">
           <template #body="slotProps">
-            <a href="#" class="link-kdtk" :class="{ 'link-kdtk--busy': isRowBusy(slotProps.data) }"
+            <a href="#" class="link-kdtk font-mono" :class="{ 'link-kdtk--busy': isRowBusy(slotProps.data) }"
               @click.prevent="onKdtkClick(slotProps.data)">
-              {{ slotProps.data.KDTK }}
+              {{ formatCode(slotProps.data.KDTK) }}
             </a>
           </template>
         </Column>
@@ -184,7 +184,7 @@ import Tag from 'primevue/tag';
 import Skeleton from 'primevue/skeleton';
 import Popover from 'primevue/popover';
 import Checkbox from 'primevue/checkbox';
-import { formatNumber, formatDateTime, formatRelativeTime, getSelisihClass } from '../utils/formatters';
+import { formatNumber, formatDateTime, formatRelativeTime, getSelisihClass, formatCode } from '../utils/formatters';
 
 const props = defineProps({
   data: { type: Array, required: true },

@@ -48,7 +48,7 @@
         </template>
         <Column field="SHOP" header="SHOP Asing" style="min-width:110px">
           <template #body="{ data }">
-            <Tag :value="data.SHOP" :severity="data.SHOP === '(KOSONG)' ? 'secondary' : 'warning'" rounded />
+            <Tag :value="formatCode(data.SHOP)" :severity="data.SHOP === '(KOSONG)' ? 'secondary' : 'warning'" rounded />
           </template>
         </Column>
         <Column field="JUMLAH_TRX" header="Jumlah Transaksi" class="text-right" style="width:140px">
@@ -95,14 +95,18 @@
           </template>
           <Column field="SHOP_MTRAN" header="SHOP" style="width:90px">
             <template #body="{ data }">
-              <Tag :value="data.SHOP_MTRAN" :severity="data.SHOP_MTRAN === '(KOSONG)' ? 'secondary' : 'warning'" rounded />
+              <Tag :value="formatCode(data.SHOP_MTRAN)" :severity="data.SHOP_MTRAN === '(KOSONG)' ? 'secondary' : 'warning'" rounded />
             </template>
           </Column>
           <Column field="TANGGAL" header="Tanggal" style="min-width:100px" />
           <Column field="DOCNO" header="DOCNO" style="min-width:110px" />
           <Column field="STATION" header="St" style="width:60px" />
           <Column field="SHIFT" header="Sft" style="width:60px" />
-          <Column field="PLU" header="PLU" style="min-width:90px" />
+          <Column field="PLU" header="PLU" style="min-width:90px">
+            <template #body="{ data }">
+              <span class="font-mono">{{ formatCode(data.PLU) }}</span>
+            </template>
+          </Column>
           <Column field="QTY" header="Qty" class="text-right" style="width:80px">
             <template #body="{ data }">{{ formatDecimal(data.QTY) }}</template>
           </Column>
@@ -128,8 +132,7 @@ import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
-import Tag from 'primevue/tag';
-import { formatNumber, formatDecimal, formatDateTime } from '../utils/formatters';
+import { formatNumber, formatDecimal, formatDateTime, formatCode } from '../utils/formatters';
 
 const props = defineProps({
   visible: { type: Boolean, default: false },

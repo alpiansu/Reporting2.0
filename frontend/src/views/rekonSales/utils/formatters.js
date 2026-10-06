@@ -44,3 +44,9 @@ export const formatPeriode = (periode) => {
   if (!month || !year) return String(periode);
   return `${month}/${String(year).slice(-2)}`;
 };
+
+export const formatCode = (val) => {
+  if (val === null || val === undefined) return '';
+  return String(val).replace(/^[#\s]+/, '').trim();
+};
+

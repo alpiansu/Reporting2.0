@@ -58,7 +58,7 @@
                 <!-- Store Code Column -->
                 <Column field="KDTK" header="KDTK" :sortable="true" style="min-width: 100px">
                     <template #body="{ data: item }">
-                        {{ item.KDTK }}
+                        <span class="font-mono">{{ formatCode(item.KDTK) }}</span>
                     </template>
                 </Column>
 
@@ -144,6 +144,11 @@ import utc from 'dayjs/plugin/utc';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
+
+const formatCode = (value) => {
+    if (value === null || value === undefined) return '-';
+    return String(value).replace(/^#+/, '').trim();
+};
 
 const props = defineProps({
     data: {

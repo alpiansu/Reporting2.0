@@ -145,14 +145,21 @@
         <div class="action-buttons">
           <Button :label="isItemAutoUpdating(item) ? 'Processing...' : 'Auto Note!'" @click="hitButtonAutoNote(item)"
             :disabled="isItemAutoUpdating(item)"
-            :icon="isItemAutoUpdating(item) ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'"
-            :class="{ 'btn-processing': isItemAutoUpdating(item) }" severity="secondary" outlined size="small" />
+            :icon="isItemAutoUpdating(item) ? 'pi pi-spin pi-spinner' : 'pi pi-code'"
+            :class="{ 'btn-processing': isItemAutoUpdating(item) }" severity="secondary" outlined size="small"
+            v-tooltip.top="'Lihat query pengecekan saldo virtual'" />
         </div>
       </td>
     </template>
   </DataTable>
 
-  <!-- Confirmation Dialog When note is already available -->
+  <!-- Query Pengecekan Modal -->
+  <RekonVirtualMrgQueryModal
+    v-model:visible="queryModalVisible"
+    :item="selectedQueryItem"
+    :queries="generatedQueries"
+    @close="handleCloseQueryModal"
+  />
 </template>
 
 <style src="./RekonVirtualMrgTable.css" scoped></style>
@@ -160,6 +167,7 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useToastService } from '../../utils/toast';
 import DataTable from '../common/DataTable.vue';
+import RekonVirtualMrgQueryModal from './RekonVirtualMrgQueryModal.vue';
 import * as XLSX from 'xlsx';
 import { noteCategoriesService, rekonVirtualMrgService } from '../../services/index.js';
 import Button from 'primevue/button';
@@ -210,6 +218,11 @@ const autoUpdatingItems = reactive(new Set());
 const highlightedItems = reactive(new Set());
 const savingNotes = ref(new Set());
 
+// Query modal state
+const queryModalVisible = ref(false);
+const selectedQueryItem = ref(null);
+const generatedQueries = ref([]);
+
 // Search functionality
 const searchQuery = ref('');
 const searchTimeout = ref(null);
@@ -230,7 +243,7 @@ const hitButtonAutoNote = async (item) => {
   const itemKey = `${item.CABANG}_${item.SHOP}_${item.TANGGAL}_${item.PRDCD}`;
   try {
     autoUpdatingItems.add(itemKey);
-    toast.showInfo('Proses', 'Sedang menyiapkan query untuk auto note...');
+    toast.showInfo('Proses', 'Sedang mengambil query pengecekan...');
     
     const hasilAutoNote = await rekonVirtualMrgService.autoUpdateNote(
       item.CABANG,
@@ -245,12 +258,9 @@ const hitButtonAutoNote = async (item) => {
       return;
     }
 
-    const queryText = queries
-      .map(q => `-- ${q.title}\n${q.sql}`)
-      .join('\n\n');
-
-    await navigator.clipboard.writeText(queryText);
-    toast.showSuccess('Berhasil', 'Query telah di-copy ke clipboard. Silakan paste dan jalankan di SQL client.');
+    selectedQueryItem.value = item;
+    generatedQueries.value = queries;
+    queryModalVisible.value = true;
     
     highlightedItems.add(itemKey);
     setTimeout(() => {
@@ -258,10 +268,14 @@ const hitButtonAutoNote = async (item) => {
     }, 2000);
   } catch (error) {
     console.error('Error generating auto note queries:', error);
-    toast.showError('Error', `Gagal menyiapkan query untuk kdtk ${item.SHOP}: ${error.response?.data?.message || error.message}`);
+    toast.showError('Error', `Gagal mengambil query untuk kdtk ${item.SHOP}: ${error.response?.data?.message || error.message}`);
   } finally {
     autoUpdatingItems.delete(itemKey);
   }
+};
+
+const handleCloseQueryModal = () => {
+  queryModalVisible.value = false;
 };
 
 // Helper function untuk cek apakah item sedang loading

@@ -1,18 +1,16 @@
 <template>
   <div class="filter-bar card">
-    <div class="filter-bar__header">
-      <div>
-        <h4 class="filter-bar__title">
-          <i class="pi pi-sliders-h mr-2 text-primary" />
-          Parameter Laporan
-        </h4>
-        <p class="filter-bar__subtitle">Pilih cabang dan periode sebelum mengekspor laporan</p>
+    <div class="filter-bar__top">
+      <div class="filter-bar__title-wrap">
+        <i class="pi pi-sliders-h text-primary" />
+        <span class="filter-bar__title">Parameter Ekspor</span>
+        <span class="filter-bar__hint">Tentukan cabang &amp; periode laporan</span>
       </div>
       <Button
         v-if="showManagerButton"
         label="Kelola Laporan"
         icon="pi pi-cog"
-        class="p-button-outlined p-button-secondary"
+        class="p-button-outlined p-button-secondary p-button-sm manager-btn"
         @click="$emit('open-manager')"
       />
     </div>
@@ -44,7 +42,7 @@
           :disabled="isExporting"
           @date-select="onDateSelect"
         />
-        <small class="helper-text">Format yang dikirim: YYMM (contoh: 2501 = Januari 2025)</small>
+        <small class="helper-text">Format: YYMM (contoh: 2501)</small>
       </div>
 
       <!-- Tombol Export -->
@@ -58,7 +56,7 @@
           @click="$emit('export-clicked')"
         />
         <small v-if="selectedCount === 0" class="helper-text text-orange-500">
-          Centang minimal 1 laporan terlebih dahulu
+          Centang min. 1 laporan
         </small>
       </div>
     </div>

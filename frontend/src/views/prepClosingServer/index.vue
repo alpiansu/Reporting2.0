@@ -1,34 +1,75 @@
 <template>
   <div class="ceklist-prep-closing-view">
-    <!-- Page Header — mengikuti pola prepClosing -->
-    <PageHeader
-      title="Ceklist Prepare Closing"
-      subtitle="Monitoring Space HDD, Import IDT, dan Rekap Screening Toko"
-      description="Halaman ini menampilkan checklist kesiapan closing server per periode, meliputi kondisi ruang HDD, status import IDT, dan rekap hasil screening toko." />
+    <!-- View Header (Modern Standard Single Source of Truth) -->
+    <div class="view-header">
+      <div class="view-header__left">
+        <div class="view-header__icon-badge">
+          <i class="pi pi-server"></i>
+        </div>
+        <div>
+          <h1 class="view-header__title">Ceklist Prepare Closing Server</h1>
+          <p class="view-header__subtitle">Monitoring Space HDD, Import IDT, dan Rekap Screening Toko per cabang</p>
+        </div>
+      </div>
+      <div class="view-header__actions">
+        <div class="active-filter-badge" v-if="filters.periode">
+          <i class="pi pi-filter"></i>
+          <span class="font-mono">Periode: {{ formattedPeriode }}</span>
+          <span class="badge-separator">&bull;</span>
+          <span>Cabang: {{ activeCabangName }}</span>
+        </div>
+        <Button
+          icon="pi pi-refresh"
+          label="Muat Data"
+          class="p-button-primary p-button-sm action-btn"
+          :loading="loading"
+          :disabled="!filters.periode"
+          @click="loadAll"
+        />
+        <Button
+          icon="pi pi-file-excel"
+          label="Export Excel"
+          class="p-button-success p-button-sm action-btn"
+          :loading="exporting"
+          :disabled="!filters.periode"
+          @click="handleExport"
+        />
+      </div>
+    </div>
 
     <div class="content-container">
-      <!-- Filter — menggunakan RekonFormComponent yang sama -->
-      <RekonFormComponent :formData="{ cab: filters.cabang, periode: filters.periode }">
-        <template #title>Filter Ceklist Prepare Closing</template>
-        <template #description>Pilih cabang dan periode untuk melihat data checklist server.</template>
-        <template #cab>
-          <Dropdown v-model="filters.cabang" :options="cabangOptions"
-            optionLabel="namacab" optionValue="kdcab"
-            placeholder="Pilih Cabang" class="w-full" />
-        </template>
-        <template #periode>
-          <Calendar v-model="periodeDate" view="month" dateFormat="mm/yy"
-            placeholder="Pilih Bulan/Tahun" :maxDate="today" showIcon class="w-full"
-            @date-select="handlePeriodeSelect" />
-        </template>
-        <template #actions>
-          <Button icon="pi pi-refresh" label="Muat Data" class="p-button-primary"
-            style="margin-right:4px" :loading="loading" :disabled="!filters.periode"
-            @click="loadAll" />
-          <Button icon="pi pi-file-excel" label="Export Excel" class="p-button-success"
-            :loading="exporting" :disabled="!filters.periode" @click="handleExport" />
-        </template>
-      </RekonFormComponent>
+      <!-- Filter Panel (Unified 1-Row Compact Form) -->
+      <div class="filter-panel card">
+        <div class="filter-row">
+          <div class="filter-group">
+            <label class="filter-label">Cabang</label>
+            <Dropdown
+              v-model="filters.cabang"
+              :options="cabangOptions"
+              optionLabel="namacab"
+              optionValue="kdcab"
+              placeholder="Pilih Cabang"
+              class="w-full filter-input"
+              filter
+              filter-placeholder="Cari cabang..."
+              @change="loadAll"
+            />
+          </div>
+          <div class="filter-group">
+            <label class="filter-label">Periode</label>
+            <Calendar
+              v-model="periodeDate"
+              view="month"
+              dateFormat="mm/yy"
+              placeholder="Pilih Bulan/Tahun"
+              :maxDate="today"
+              showIcon
+              class="w-full filter-input"
+              @date-select="onPeriodeChange"
+            />
+          </div>
+        </div>
+      </div>
 
       <!-- Summary chips -->
       <div v-if="summary && !loading" class="summary-chips-row">
@@ -144,11 +185,9 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { useCabangStore } from '@/stores';
-import PageHeader from '@/components/PageHeader.vue';
-import RekonFormComponent from '@/components/common/RekonFormComponent.vue';
 import Calendar from 'primevue/calendar';
 import Dropdown from 'primevue/dropdown';
 import Button from 'primevue/button';
@@ -182,6 +221,26 @@ const cabangStore = useCabangStore();
 const today = ref(new Date());
 const activeTab = ref(0);
 const cabangOptions = ref([]);
+
+// ─── Badges & Formatting ──────────────────────────────────────────────────────
+const formattedPeriode = computed(() => {
+  if (!filters.periode) return '-';
+  if (filters.periode.length === 4) {
+    return `${filters.periode.slice(2, 4)}/20${filters.periode.slice(0, 2)}`;
+  }
+  return filters.periode;
+});
+
+const activeCabangName = computed(() => {
+  if (!filters.cabang || filters.cabang === 'All') return 'Semua Cabang';
+  const found = cabangOptions.value.find(c => c.kdcab === filters.cabang);
+  return found ? `${found.kdcab} - ${found.namacab}` : filters.cabang;
+});
+
+function onPeriodeChange() {
+  handlePeriodeSelect();
+  loadAll();
+}
 
 // ─── Confirm Delete ───────────────────────────────────────────────────────────
 const confirmDlg = reactive({ visible: false, header: '', message: '', type: '', row: null });

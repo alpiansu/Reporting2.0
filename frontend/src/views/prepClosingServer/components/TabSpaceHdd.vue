@@ -17,8 +17,16 @@
         </div>
       </template>
 
-      <Column field="KDCAB" header="KDCAB" style="width:80px" />
-      <Column field="IP" header="IP Address" style="width:130px" />
+      <Column header="KDCAB" style="width:85px">
+        <template #body="{ data }">
+          <span class="font-mono font-medium">{{ formatCode(data.KDCAB) }}</span>
+        </template>
+      </Column>
+      <Column header="IP Address" style="width:130px">
+        <template #body="{ data }">
+          <span class="font-mono text-sm">{{ data.IP || '—' }}</span>
+        </template>
+      </Column>
       <Column field="FREE_SPACE" header="Free Space" style="width:110px">
         <template #body="{ data }">
           <span :class="['space-badge', spaceClass(data.freeSpaceGb)]">{{ data.FREE_SPACE || '—' }}</span>
@@ -288,6 +296,11 @@ async function save() {
   } catch (e) {
     toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 4000 });
   } finally { saving.value = false; }
+}
+
+function formatCode(val) {
+  if (val === null || val === undefined) return '';
+  return String(val).replace(/^#+/, '').trim();
 }
 
 function formatTgl(d) {

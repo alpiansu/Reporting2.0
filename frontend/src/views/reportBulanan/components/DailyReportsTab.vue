@@ -1,11 +1,5 @@
 <template>
   <div class="daily-reports-tab">
-    <PageHeader
-      title="Laporan Harian"
-      subtitle="Generate dan kelola laporan harian per cabang"
-      description="Klik judul laporan di bawah untuk meng-expand form parameter. Setiap laporan dapat diekspor langsung ke CSV."
-    />
-
     <div class="daily-reports-container">
       <!-- Search bar -->
       <div class="daily-reports__search">
@@ -80,7 +74,6 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue';
-import PageHeader from '@/components/PageHeader.vue';
 import Accordion from 'primevue/accordion';
 import AccordionTab from 'primevue/accordiontab';
 import IconField from 'primevue/iconfield';

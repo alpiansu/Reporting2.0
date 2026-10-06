@@ -15,7 +15,11 @@
           <span>Belum ada data. Klik "Init Semua Cabang" untuk generate.</span>
         </div>
       </template>
-      <Column field="KDCAB" header="KDCAB" style="width:100px" />
+      <Column header="KDCAB" style="width:100px">
+        <template #body="{ data }">
+          <span class="font-mono font-medium">{{ formatCode(data.KDCAB) }}</span>
+        </template>
+      </Column>
       <Column header="Status" style="width:120px">
         <template #body="{ data }">
           <Tag :value="data.CAPTURE ? 'Done' : 'Pending'"
@@ -201,6 +205,10 @@ async function doUpload() {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+function formatCode(val) {
+  if (val === null || val === undefined) return '';
+  return String(val).replace(/^#+/, '').trim();
+}
 function isImageUrl(str) { return /\.(jpg|jpeg|png|gif|webp)$/i.test(str); }
 function formatDate(v) {
   if (!v) return '—';

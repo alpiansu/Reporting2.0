@@ -1,11 +1,5 @@
 <template>
   <div class="monthly-reports-tab">
-    <PageHeader
-      title="Laporan Bulanan"
-      subtitle="Generate dan kelola laporan bulanan per cabang"
-      description="Pilih cabang, periode, dan laporan yang ingin diekspor. Laporan akan diunduh dalam format yang sesuai (Excel / PDF) langsung ke perangkat Anda."
-    />
-
     <div class="content-container">
       <ReportFilterBar
         v-model:cabang="cabang"
@@ -17,8 +11,6 @@
         @export-clicked="handleExport"
         @open-manager="showManager = true"
       />
-      
-      <br />
 
       <ReportList
         :reports="reportList"
@@ -144,7 +136,6 @@ import { useToastService } from '@/utils/toast';
 import { useExportsStore } from '@/stores';
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
-import PageHeader from '@/components/PageHeader.vue';
 import ReportFilterBar from './ReportFilterBar.vue';
 import ReportList from './ReportList.vue';
 import ReportManagerDialog from './ReportManagerDialog.vue';

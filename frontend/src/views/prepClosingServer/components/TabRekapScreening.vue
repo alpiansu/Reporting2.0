@@ -17,8 +17,16 @@
           <span>Semua toko sudah READY untuk periode ini 🎉</span>
         </div>
       </template>
-      <Column field="cab"   header="CAB"   style="width:70px"  frozen />
-      <Column field="kdtk"  header="KDTK"  style="width:75px"  frozen />
+      <Column header="CAB" style="width:75px" frozen>
+        <template #body="{ data: row }">
+          <span class="font-mono text-sm">{{ formatCode(row.cab) }}</span>
+        </template>
+      </Column>
+      <Column header="KDTK" style="width:85px" frozen>
+        <template #body="{ data: row }">
+          <span class="font-mono font-medium text-sm">{{ formatCode(row.kdtk) }}</span>
+        </template>
+      </Column>
       <Column header="Failed/Total" style="width:110px">
         <template #body="{ data: row }">
           <span class="text-sm">{{ row.failedRules }}/{{ row.totalRules }}</span>
@@ -56,6 +64,11 @@ defineProps({
   data:    { type: Object, default: () => ({ data: [], ruleKeys: [], total: 0 }) },
   loading: { type: Boolean, default: false },
 });
+
+function formatCode(val) {
+  if (val === null || val === undefined) return '';
+  return String(val).replace(/^#+/, '').trim();
+}
 
 function formatDate(v) {
   if (!v) return '—';

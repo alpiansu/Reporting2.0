@@ -12,7 +12,11 @@
       <template #empty>
         <div class="table-empty"><i class="pi pi-inbox"></i><span>Belum ada data</span></div>
       </template>
-      <Column field="CAB" header="CAB" style="width:80px" />
+      <Column header="CAB" style="width:85px">
+        <template #body="{ data }">
+          <span class="font-mono font-medium">{{ formatCode(data.CAB) }}</span>
+        </template>
+      </Column>
       <Column field="PATH" header="Path" style="min-width:200px" />
       <Column field="CAPACITY" header="Capacity" style="width:110px" />
       <Column field="FREE_SPACE" header="Free Space" style="width:110px">
@@ -225,6 +229,11 @@ async function save() {
   } catch (e) {
     toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 4000 });
   } finally { saving.value = false; }
+}
+
+function formatCode(val) {
+  if (val === null || val === undefined) return '';
+  return String(val).replace(/^#+/, '').trim();
 }
 
 function formatTgl(d) {

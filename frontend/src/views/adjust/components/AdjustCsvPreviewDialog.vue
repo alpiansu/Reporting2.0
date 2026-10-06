@@ -144,8 +144,16 @@
               :paginator="true" :rows="10" :rowsPerPageOptions="[10, 20, 50, 100]"
               paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
               currentPageReportTemplate="Showing {first} to {last} of {totalRecords} entries">
-              <Column field="KDTK" header="KDTK" />
-              <Column field="PRDCD" header="PRDCD" />
+              <Column field="KDTK" header="KDTK">
+                <template #body="{ data }">
+                  <span class="font-mono font-semibold">{{ formatCode(data.KDTK) }}</span>
+                </template>
+              </Column>
+              <Column field="PRDCD" header="PRDCD">
+                <template #body="{ data }">
+                  <span class="font-mono font-semibold">{{ formatCode(data.PRDCD) }}</span>
+                </template>
+              </Column>
               <Column field="QTY_ADJ" header="QTY_ADJ" style="width:100px" />
               <Column field="KETER" header="KETER" />
               <Column field="TGL_SELISIH" header="TGL_SELISIH" style="width:120px" />
@@ -243,6 +251,12 @@ const truncate = (text, max) => {
   if (!text) return '-';
   const s = String(text);
   return s.length > max ? s.substring(0, max) + '...' : s;
+};
+
+const formatCode = (val) => {
+  if (val === null || val === undefined) return '-';
+  const str = String(val).trim();
+  return str.startsWith('#') ? str.slice(1).trim() : str;
 };
 
 // Standalone function for live search

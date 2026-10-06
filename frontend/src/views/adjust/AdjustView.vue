@@ -1,7 +1,34 @@
 <template>
   <div class="adjust-view">
-    <PageHeader title="Upload Adjustment CSV" subtitle="Proses adjustment dengan menggunakan file csv"
-      description="Upload file CSV dengan format KDTK, PRDCD, QTY_ADJ, KETER, TGL_SELISIH untuk memproses penyesuaian item BJD di toko-toko yang ditentukan." />
+    <div class="view-header">
+      <div class="view-header__main">
+        <div class="view-header__icon-wrapper">
+          <i class="pi pi-file-edit"></i>
+        </div>
+        <div class="view-header__titles">
+          <div class="view-header__title-row">
+            <h1 class="view-header__title">Upload Adjustment CSV</h1>
+            <span class="active-badge">
+              <i class="pi pi-table"></i>
+              <span>Format: KDTK, PRDCD, QTY_ADJ, KETER, TGL_SELISIH</span>
+            </span>
+          </div>
+          <p class="view-header__subtitle">Proses penyesuaian stok BJD toko via file CSV dengan validasi format otomatis</p>
+        </div>
+      </div>
+      <div class="view-header__actions">
+        <Button
+          label="Download Template"
+          icon="pi pi-download"
+          severity="secondary"
+          outlined
+          size="small"
+          class="p-button-sm"
+          title="Download master CSV template"
+          @click="handleDownloadTemplate"
+        />
+      </div>
+    </div>
 
     <div class="content-container">
       <!-- Template Download Card -->
@@ -131,7 +158,7 @@
           <div v-if="!selectedFile" class="upload-hint">
             <i class="pi pi-info-circle"></i>
             <span v-if="!processResults">Pastikan file CSV sesuai dengan format template yang telah didownload</span>
-            <span v-else class="ready-for-next">✓ Siap untuk upload file adjustment berikutnya</span>
+            <span v-else class="ready-for-next">âœ“ Siap untuk upload file adjustment berikutnya</span>
           </div>
         </div>
       </div>
@@ -245,7 +272,7 @@
             paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
             currentPageReportTemplate="Showing {first} to {last} of {totalRecords} entries" class="modern-datatable"
             :scrollable="true" scrollHeight="400px" stripedRows :loading="isProcessing" responsiveLayout="scroll">
-            <Column field="" header="#" class="col-index">
+            <Column field="" header="No." class="col-index">
               <template #body="{ index }">
                 <span class="row-number">{{ index + 1 }}</span>
               </template>
@@ -254,7 +281,7 @@
             <Column field="kdtk" header="Store" class="col-store" sortable>
               <template #body="{ data }">
                 <div class="store-cell">
-                  <span class="store-code">{{ data.kdtk }}</span>
+                  <span class="font-mono font-semibold">{{ formatCode(data.kdtk) }}</span>
                 </div>
               </template>
             </Column>
@@ -262,7 +289,7 @@
             <Column field="prdcd" header="Product" class="col-product" sortable>
               <template #body="{ data }">
                 <div class="product-cell">
-                  <span class="product-code">{{ data.prdcd }}</span>
+                  <span class="font-mono font-semibold">{{ formatCode(data.prdcd) }}</span>
                 </div>
               </template>
             </Column>
@@ -357,13 +384,18 @@ import Tag from 'primevue/tag';
 import api from "../../services/api.js";
 import adjustService from "../../services/adjust.service.js";
 import progressService from "../../services/progress.service.js";
-import PageHeader from "../../components/PageHeader.vue";
 import DownloadButton from "../../components/common/DownloadButton.vue";
 import { exportAdjustmentHistory } from "./exportExcel.js";
 import ProgressBar from "../../components/common/ProgressBar.vue";
 import AdjustHistoryReportCard from "./components/AdjustHistoryReportCard.vue";
 import AdjustCsvPreviewDialog from "./components/AdjustCsvPreviewDialog.vue";
 import * as XLSX from "xlsx";
+
+const formatCode = (val) => {
+  if (val === null || val === undefined) return '-';
+  const str = String(val).trim();
+  return str.startsWith('#') ? str.slice(1).trim() : str;
+};
 
 const toast = useToast();
 const authStore = useAuthStore();
@@ -510,26 +542,26 @@ const startProgressTracking = async () => {
     const existingTask = allTasks[taskId];
 
     if (existingTask) {
-      console.log('✅ Matching task found:');
+      console.log('âœ… Matching task found:');
 
       // 2. Jika task ditemukan, mulai monitor progress
       startDirectProgressMonitoring(taskId);
     } else {
-      console.log('⚠️ No existing task found, waiting for task to be created...');
+      console.log('âš ï¸ No existing task found, waiting for task to be created...');
 
       // 3. Jika task belum ada, coba lagi setelah delay
       setTimeout(() => {
         if (isProcessing.value) {
-          console.log('🔄 Retrying progress tracking...');
+          console.log('ðŸ”„ Retrying progress tracking...');
           startProgressTracking();
         }
       }, 1000); // Coba lagi setelah 1 detik
     }
   } catch (error) {
-    console.error('❌ Error checking progress tasks:', error);
+    console.error('âŒ Error checking progress tasks:', error);
 
     // Fallback: langsung coba monitor progress meskipun cek gagal
-    console.log('🔄 Fallback: Starting progress monitoring directly...');
+    console.log('ðŸ”„ Fallback: Starting progress monitoring directly...');
     startDirectProgressMonitoring(taskId);
   }
 };
@@ -562,7 +594,7 @@ const startDirectProgressMonitoring = (taskId) => {
         status: "failed"
       };
 
-      console.error('❌ Progress error:', errorData);
+      console.error('âŒ Progress error:', errorData);
       isProcessing.value = false;
 
       toast.add({
@@ -574,7 +606,7 @@ const startDirectProgressMonitoring = (taskId) => {
     },
     // onCancel callback - user-initiated cancellation, no error display
     (cancelData) => {
-      console.log('ℹ️ Task cancelled by user:', cancelData);
+      console.log('â„¹ï¸ Task cancelled by user:', cancelData);
       progress.value = {
         percentage: 0,
         info: "Proses dibatalkan oleh pengguna",
@@ -587,7 +619,7 @@ const startDirectProgressMonitoring = (taskId) => {
 
 const stopProgressTracking = () => {
   if (eventSource) {
-    console.log('🛑 Stopping progress tracking...');
+    console.log('ðŸ›‘ Stopping progress tracking...');
     eventSource.close();
     eventSource = null;
   }
@@ -744,7 +776,7 @@ const validateAndSetFile = async (file) => {
       if (val === null || val === undefined || val === "") return "";
       const strVal = String(val).trim();
 
-      // Skip formatting for PRDCD column — show as-is
+      // Skip formatting for PRDCD column â€” show as-is
       if (key && String(key).trim().toUpperCase() === 'PRDCD') {
         return strVal;
       }

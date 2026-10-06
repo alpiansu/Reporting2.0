@@ -110,7 +110,7 @@
                 <div class="kdtk-suggestion-item">
                   <i class="pi pi-building"></i>
                   <div class="kdtk-info">
-                    <span class="kdtk-code">{{ slotProps.option.storeCode }}</span>
+                    <span class="kdtk-code font-mono font-semibold">{{ formatCode(slotProps.option.storeCode) }}</span>
                     <span class="kdtk-name" v-if="slotProps.option.storeName">{{ slotProps.option.storeName }}</span>
                   </div>
                 </div>
@@ -194,6 +194,12 @@ const picSuggestions = ref([]);
 // PrimeVue AutoComplete dengan showClear mengeset v-model ke null (bukan '')
 // saat user klik tombol clear, sehingga typeof null === 'object' akan crash
 // ---------------------------------------------------------------------------
+
+const formatCode = (val) => {
+  if (val === null || val === undefined) return '-';
+  const str = String(val).trim();
+  return str.startsWith('#') ? str.slice(1).trim() : str;
+};
 
 /** Kembalikan username string dari pic.value, apapun bentuknya (object/string/null) */
 const getPicValue = () => {

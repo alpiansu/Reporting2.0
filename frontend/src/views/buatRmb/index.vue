@@ -1,7 +1,42 @@
 <template>
   <div class="rmb-view">
-    <PageHeader title="Buat RMB via CSV" subtitle="Proses pembuatan RMB dengan menggunakan file csv"
-      description="Upload file CSV dengan format KDTK, TANGGAL, PRDCD, NOHP, TRXID untuk memproses pembuatan RMB di toko-toko yang ditentukan." />
+    <div class="view-header">
+      <div class="view-header__main">
+        <div class="view-header__icon-wrapper">
+          <i class="pi pi-file-excel"></i>
+        </div>
+        <div class="view-header__titles">
+          <div class="view-header__title-row">
+            <h1 class="view-header__title">Buat RMB via CSV</h1>
+            <span class="active-badge">
+              <i class="pi pi-tag"></i>
+              <span>Mode: {{ activeMode === 'csv' ? 'Upload CSV' : 'Input Manual' }}</span>
+            </span>
+          </div>
+          <p class="view-header__subtitle">Proses pembuatan RMB toko via file CSV atau form input manual</p>
+        </div>
+      </div>
+      <div class="view-header__actions">
+        <Button
+          label="Download Template"
+          icon="pi pi-download"
+          severity="secondary"
+          outlined
+          size="small"
+          class="p-button-sm"
+          title="Download master CSV template"
+          @click="handleDownloadTemplate"
+        />
+        <Button
+          label="Input Manual"
+          icon="pi pi-pencil"
+          severity="primary"
+          size="small"
+          class="p-button-sm"
+          @click="showManualDialog = true; activeMode = 'manual'"
+        />
+      </div>
+    </div>
 
     <div class="content-container">
       <!-- Mode Selection Cards -->
@@ -154,7 +189,7 @@
           <div v-if="!selectedFile" class="upload-hint">
             <i class="pi pi-info-circle"></i>
             <span v-if="!processResults">Pastikan file CSV sesuai dengan format template yang telah didownload</span>
-            <span v-else class="ready-for-next">✓ Siap untuk upload file RMB berikutnya</span>
+            <span v-else class="ready-for-next">âœ“ Siap untuk upload file RMB berikutnya</span>
           </div>
         </div>
       </div>
@@ -268,7 +303,7 @@
             paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
             currentPageReportTemplate="Showing {first} to {last} of {totalRecords} entries" class="modern-datatable"
             :scrollable="true" scrollHeight="400px" stripedRows :loading="isProcessing" responsiveLayout="scroll">
-            <Column field="" header="#" class="col-index">
+            <Column field="" header="No." class="col-index">
               <template #body="{ index }">
                 <span class="row-number">{{ index + 1 }}</span>
               </template>
@@ -277,7 +312,7 @@
             <Column field="kdtk" header="Store" class="col-store" sortable>
               <template #body="{ data }">
                 <div class="store-cell">
-                  <span class="store-code">{{ data.kdtk }}</span>
+                  <span class="font-mono font-semibold">{{ formatCode(data.kdtk) }}</span>
                 </div>
               </template>
             </Column>
@@ -291,20 +326,20 @@
             <Column field="prdcd" header="Product" class="col-product" sortable>
               <template #body="{ data }">
                 <div class="product-cell">
-                  <span class="product-code">{{ data.prdcd }}</span>
+                  <span class="font-mono font-semibold">{{ formatCode(data.prdcd) }}</span>
                 </div>
               </template>
             </Column>
 
             <Column field="nohp" header="No HP" sortable>
               <template #body="{ data }">
-                <span>{{ data.nohp }}</span>
+                <span class="font-mono">{{ data.nohp }}</span>
               </template>
             </Column>
 
             <Column field="trxid" header="Trx ID" sortable>
               <template #body="{ data }">
-                <span>{{ data.trxid }}</span>
+                <span class="font-mono font-semibold">{{ formatCode(data.trxid) }}</span>
               </template>
             </Column>
 
@@ -384,13 +419,18 @@ import Tag from 'primevue/tag';
 import api from "../../services/api.js";
 import buatRmbService from "../../services/buatRmb.service.js";
 import progressService from "../../services/progress.service.js";
-import PageHeader from "../../components/PageHeader.vue";
 import DownloadButton from "../../components/common/DownloadButton.vue";
 import ProgressBar from "../../components/common/ProgressBar.vue";
 import BuatRmbHistoryReportCard from "./components/BuatRmbHistoryReportCard.vue";
 import BuatRmbCsvPreviewDialog from "./components/BuatRmbCsvPreviewDialog.vue";
 import BuatRmbManualInputDialog from "./components/BuatRmbManualInputDialog.vue";
 import * as XLSX from "xlsx";
+
+const formatCode = (val) => {
+  if (val === null || val === undefined) return '-';
+  const str = String(val).trim();
+  return str.startsWith('#') ? str.slice(1).trim() : str;
+};
 
 const toast = useToast();
 const authStore = useAuthStore();
@@ -585,7 +625,7 @@ const startDirectProgressMonitoring = (taskId) => {
     },
     // onCancel callback - user-initiated cancellation, no error display
     (cancelData) => {
-      console.log('ℹ️ Task cancelled by user:', cancelData);
+      console.log('â„¹ï¸ Task cancelled by user:', cancelData);
       progress.value = {
         percentage: 0,
         info: "Proses dibatalkan oleh pengguna",

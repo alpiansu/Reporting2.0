@@ -46,12 +46,12 @@
           >
             <template #value="slotProps">
               <div v-if="slotProps.value">
-                {{ slotProps.value.storeCode }} - {{ slotProps.value.storeName }}
+                <span class="font-mono font-semibold">{{ formatCode(slotProps.value.storeCode) }}</span> - {{ slotProps.value.storeName }}
               </div>
               <span v-else>Pilih Toko</span>
             </template>
             <template #option="slotProps">
-              <div>{{ slotProps.option.storeCode }} - {{ slotProps.option.storeName }}</div>
+              <div><span class="font-mono font-semibold">{{ formatCode(slotProps.option.storeCode) }}</span> - {{ slotProps.option.storeName }}</div>
             </template>
           </Dropdown>
         </div>
@@ -84,14 +84,14 @@
       <!-- Step 2: Input Item -->
       <div v-if="currentStep === 2" class="step-content">
         <div class="step-header-info">
-          Toko: <strong>{{ form.kdtk }}</strong> | Tanggal: <strong>{{ formatDate(form.tanggal) }}</strong>
+          Toko: <strong class="font-mono font-semibold">{{ formatCode(form.kdtk) }}</strong> | Tanggal: <strong>{{ formatDate(form.tanggal) }}</strong>
         </div>
 
         <div class="table-responsive mt-3">
           <table class="items-table">
             <thead>
               <tr>
-                <th width="50">#</th>
+                <th width="50">No.</th>
                 <th width="350">PRDCD (Min. 3 Karakter)</th>
                 <th width="200">NOHP</th>
                 <th width="200">TRXID</th>
@@ -114,7 +114,7 @@
                   >
                     <template #option="slotProps">
                       <div class="product-item">
-                        <div class="product-code">{{ slotProps.option.prdcd }}</div>
+                        <div class="product-code font-mono font-semibold">{{ formatCode(slotProps.option.prdcd) }}</div>
                         <div class="product-desc">{{ slotProps.option.desc }}</div>
                         <Badge v-if="slotProps.option.merk === 'GAME ONLINE'" value="Game" severity="info" />
                         <Badge v-else value="Virtual" severity="success" />
@@ -172,7 +172,7 @@
       <div v-if="currentStep === 3" class="step-content">
         <div class="preview-header">
           <div class="info-badge">
-            <i class="pi pi-store"></i> {{ form.kdtk }} - {{ getStoreName(form.kdtk) }}
+            <i class="pi pi-store"></i> <span class="font-mono font-semibold">{{ formatCode(form.kdtk) }}</span> - {{ getStoreName(form.kdtk) }}
           </div>
           <div class="info-badge">
             <i class="pi pi-calendar"></i> {{ formatDate(form.tanggal) }}
@@ -186,7 +186,7 @@
           <table class="preview-table">
             <thead>
               <tr>
-                <th>#</th>
+                <th>No.</th>
                 <th>PRDCD</th>
                 <th>Deskripsi</th>
                 <th>NOHP</th>
@@ -197,13 +197,13 @@
             <tbody>
               <tr v-for="(item, index) in validItems" :key="index">
                 <td>{{ index + 1 }}</td>
-                <td class="font-mono">{{ item.selectedProduct?.prdcd }}</td>
+                <td class="font-mono font-semibold">{{ formatCode(item.selectedProduct?.prdcd) }}</td>
                 <td>
                   {{ item.selectedProduct?.desc }}
                   <Badge v-if="isGameOnline(item)" value="Game" severity="info" class="ml-2" />
                 </td>
-                <td>{{ item.nohp || '-' }}</td>
-                <td>{{ item.trxid || '-' }}</td>
+                <td><span class="font-mono">{{ item.nohp || '-' }}</span></td>
+                <td><span class="font-mono">{{ formatCode(item.trxid) }}</span></td>
                 <td>1</td>
               </tr>
             </tbody>
@@ -312,6 +312,12 @@ export default {
     const filteredProducts = ref([]);
     const filteredStores = ref([]);
     
+    const formatCode = (val) => {
+      if (val === null || val === undefined) return '-';
+      const str = String(val).trim();
+      return str.startsWith('#') ? str.slice(1).trim() : str;
+    };
+
     const defaultItem = () => ({
       selectedProduct: null,
       nohp: '',
@@ -593,6 +599,7 @@ export default {
       isStep2Valid,
       validItems,
       validItemsCount,
+      formatCode,
       
       closeDialog,
       submitManual

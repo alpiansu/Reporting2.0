@@ -1,10 +1,34 @@
 <template>
   <div class="notes-view">
-    <PageHeader 
-      title="Notes Management" 
-      subtitle="Manage application notes" 
-      description="View and manage notes used throughout the system."
-    />
+    <div class="view-header">
+      <div class="view-header__main">
+        <div class="view-header__icon-wrapper">
+          <i class="pi pi-book"></i>
+        </div>
+        <div class="view-header__titles">
+          <div class="view-header__title-row">
+            <h1 class="view-header__title">Notes Management</h1>
+            <span class="active-badge">
+              <i class="pi pi-list"></i>
+              <span>{{ totalItems }} Total Notes</span>
+            </span>
+          </div>
+          <p class="view-header__subtitle">Lihat dan kelola catatan rekonsiliasi lintas modul sistem</p>
+        </div>
+      </div>
+      <div class="view-header__actions">
+        <Button
+          label="Refresh"
+          icon="pi pi-refresh"
+          severity="secondary"
+          outlined
+          size="small"
+          class="p-button-sm"
+          :loading="loading"
+          @click="loadNotes"
+        />
+      </div>
+    </div>
     
     <div class="content-container">
       <DataTable 
@@ -123,9 +147,9 @@
 
         <!-- Table Row -->
         <template #table-row="{ item }">
-          <td>{{ item.Cabang }}</td>
+          <td><span class="font-mono font-semibold">{{ formatCode(item.Cabang) }}</span></td>
           <td>{{ item.tableName }}</td>
-          <td>{{ item.unixKey }}</td>
+          <td><span class="font-mono font-semibold">{{ formatCode(item.unixKey) }}</span></td>
           <td>{{ item.noteText }}</td>
           <td>{{ item.pic }}</td>
           <td>{{ item.categoryId || '-' }}</td>
@@ -165,9 +189,14 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useToast } from 'primevue/usetoast';
-import PageHeader from '../../components/PageHeader.vue';
 import DataTable from '../../components/common/DataTable.vue';
 import { notesService } from '../../services';
+
+const formatCode = (val) => {
+  if (val === null || val === undefined) return '-';
+  const str = String(val).trim();
+  return str.startsWith('#') ? str.slice(1).trim() : str;
+};
 
 // State
 const notes = ref([]);

@@ -68,11 +68,27 @@
               :paginator="true" :rows="10" :rowsPerPageOptions="[10, 20, 50, 100]"
               paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
               currentPageReportTemplate="Showing {first} to {last} of {totalRecords} entries">
-              <Column field="KDTK" header="KDTK" />
+              <Column field="KDTK" header="KDTK">
+                <template #body="{ data }">
+                  <span class="font-mono font-semibold">{{ formatCode(data.KDTK) }}</span>
+                </template>
+              </Column>
               <Column field="TANGGAL" header="TANGGAL" />
-              <Column field="PRDCD" header="PRDCD" />
-              <Column field="NOHP" header="NOHP" />
-              <Column field="TRXID" header="TRXID" />
+              <Column field="PRDCD" header="PRDCD">
+                <template #body="{ data }">
+                  <span class="font-mono font-semibold">{{ formatCode(data.PRDCD) }}</span>
+                </template>
+              </Column>
+              <Column field="NOHP" header="NOHP">
+                <template #body="{ data }">
+                  <span class="font-mono">{{ data.NOHP }}</span>
+                </template>
+              </Column>
+              <Column field="TRXID" header="TRXID">
+                <template #body="{ data }">
+                  <span class="font-mono font-semibold">{{ formatCode(data.TRXID) }}</span>
+                </template>
+              </Column>
               <template v-if="showAllColumns">
                 <Column v-for="col in extraHeaders" :key="col" :field="col" :header="col" />
               </template>
@@ -104,6 +120,12 @@
 import { computed, ref } from 'vue';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
+
+const formatCode = (val) => {
+  if (val === null || val === undefined) return '-';
+  const str = String(val).trim();
+  return str.startsWith('#') ? str.slice(1).trim() : str;
+};
 
 const props = defineProps({
   show: { type: Boolean, default: false },

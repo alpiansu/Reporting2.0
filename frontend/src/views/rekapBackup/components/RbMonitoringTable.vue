@@ -79,7 +79,7 @@
         <template #body="{ data: row }">
           <div class="cabang-info">
             <strong>{{ getCabangName(row.cabang) }}</strong>
-            <small>{{ row.cabang }}</small>
+            <small class="font-mono">{{ formatCode(row.cabang) }}</small>
           </div>
         </template>
       </Column>
@@ -174,6 +174,11 @@ defineEmits(['open-detail']);
 
 const cabangStore = useCabangStore();
 const getCabangName = (kdcab) => cabangStore.getCabangName(kdcab);
+
+const formatCode = (val) => {
+  if (val === null || val === undefined) return '';
+  return String(val).replace(/^#+/, '').trim();
+};
 
 // Format angka ribuan tanpa desimal (id-ID: pemisah titik)
 const formatNumber = (n) => {

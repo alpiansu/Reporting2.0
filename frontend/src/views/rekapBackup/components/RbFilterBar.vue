@@ -42,27 +42,6 @@
           @change="$emit('update:endYear', $event.value)"
         />
       </div>
-
-      <!-- Action Buttons -->
-      <div class="field field--action">
-        <label class="field-label field-label--spacer">&nbsp;</label>
-        <div class="action-row">
-          <Button
-            label="Export Excel"
-            icon="pi pi-file-excel"
-            class="p-button-success export-btn"
-            :loading="isExporting"
-            v-tooltip.bottom="'Unduh laporan dalam format Excel'"
-            @click="$emit('export-clicked')"
-          />
-          <Button
-            icon="pi pi-sync"
-            class="p-button-outlined p-button-info sync-btn"
-            v-tooltip.bottom="'Sinkronisasi data JSON ke database'"
-            @click="$emit('staging-sync-clicked')"
-          />
-        </div>
-      </div>
     </div>
   </div>
 </template>

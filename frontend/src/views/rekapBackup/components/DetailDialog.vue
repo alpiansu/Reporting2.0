@@ -18,7 +18,7 @@
           <div class="text-xl font-bold text-900 capitalize mb-1" style="line-height: 1.2;">Resume Data {{ type }}</div>
           <div class="text-sm text-600">
             <span class="font-bold text-700">{{ getCabangName(cabang) }}</span>
-            <span> — {{ cabang }}</span>
+            <span class="font-mono"> — {{ formatCode(cabang) }}</span>
           </div>
         </div>
       </div>
@@ -243,7 +243,7 @@
             <!-- KDTK -->
             <Column field="kdtk" header="KDTK" sortable style="width: 100px;">
               <template #body="{ data }">
-                <span class="cell-primary">{{ data.kdtk }}</span>
+                <span class="cell-primary font-mono font-medium">{{ formatCode(data.kdtk) }}</span>
               </template>
             </Column>
 
@@ -371,6 +371,11 @@ const toast = useToast();
 const cabangStore = useCabangStore();
 
 const getCabangName = (kdcab) => cabangStore.getCabangName(kdcab);
+
+const formatCode = (val) => {
+  if (val === null || val === undefined) return '';
+  return String(val).replace(/^#+/, '').trim();
+};
 
 // ── Helpers ──────────────────────────────────────────────────
 const formatNumber = (n) => {

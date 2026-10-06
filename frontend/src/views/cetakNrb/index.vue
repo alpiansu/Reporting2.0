@@ -1,11 +1,25 @@
 <template>
   <div class="cetak-nrb-view">
-    <PageHeader
-      title="Cetak NRB"
-      subtitle="Utility untuk cetak ulang Nota Retur Barang ke PDF"
-      description="Halaman ini memungkinkan Anda untuk melakukan cetak ulang dokumen NRB dari toko atau WRC secara remote. Anda dapat memilih sumber data (Toko atau WRC), cabang, dan toko untuk memproses nomor bukti yang diinginkan."
-    />
-    <div class="content-container mt-4">
+    <!-- View Header (Modern Single Source of Truth) -->
+    <div class="view-header">
+      <div class="view-header__left">
+        <div class="view-header__icon-badge">
+          <i class="pi pi-file-pdf"></i>
+        </div>
+        <div>
+          <h1 class="view-header__title">Cetak Nota Retur Barang (NRB)</h1>
+          <p class="view-header__subtitle">Utility cetak ulang dokumen NRB dari toko atau WRC ke format PDF</p>
+        </div>
+      </div>
+      <div class="view-header__actions">
+        <div class="active-badge">
+          <i class="pi pi-info-circle"></i>
+          <span>Format: Dokumen PDF Resmi</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="content-container">
       <CetakNrbForm
         :is-processing="isProcessing"
         @process="handleProcess"
@@ -16,7 +30,6 @@
 
 <script setup>
 import { ref } from 'vue';
-import PageHeader from '@/components/PageHeader.vue';
 import CetakNrbForm from './components/CetakNrbForm.vue';
 import cetakNrbService from '@/services/cetak-nrb.service';
 import { useToastService } from '@/utils/toast';

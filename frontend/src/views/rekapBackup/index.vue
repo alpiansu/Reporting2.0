@@ -1,10 +1,47 @@
 <template>
   <div class="rekap-backup-view">
-    <PageHeader
-      title="Rekap Status Backup Data"
-      subtitle="Harian & Bulanan"
-      description="Pantau status kelengkapan data backup harian dan bulanan per cabang secara cepat dengan visualisasi yang intuitif."
-    />
+    <!-- View Header (Modern Standard Single Source of Truth) -->
+    <div class="view-header">
+      <div class="view-header__left">
+        <div class="view-header__icon-badge">
+          <i class="pi pi-database"></i>
+        </div>
+        <div>
+          <h1 class="view-header__title">Rekap Status Backup Data</h1>
+          <p class="view-header__subtitle">Pantau status kelengkapan data backup harian &amp; bulanan per cabang</p>
+        </div>
+      </div>
+      <div class="view-header__actions">
+        <div class="active-filter-badge" v-if="selectedStartYear || selectedCabang">
+          <i class="pi pi-filter"></i>
+          <span>Tahun: {{ selectedStartYear }}{{ selectedEndYear && selectedEndYear !== selectedStartYear ? ` - ${selectedEndYear}` : '' }}</span>
+          <span class="badge-separator">&bull;</span>
+          <span>Cabang: {{ activeCabangName }}</span>
+        </div>
+        <Button
+          icon="pi pi-refresh"
+          label="Refresh"
+          class="p-button-primary p-button-sm action-btn"
+          :loading="loading"
+          @click="handleRefresh"
+        />
+        <Button
+          label="Export Excel"
+          icon="pi pi-file-excel"
+          class="p-button-success p-button-sm action-btn"
+          :loading="exporting"
+          @click="exportExcel"
+        />
+        <Button
+          icon="pi pi-sync"
+          label="Sync Staging"
+          class="p-button-outlined p-button-info p-button-sm action-btn"
+          :loading="stagingSyncing"
+          v-tooltip.bottom="'Sinkronisasi data JSON ke database'"
+          @click="showStagingSyncDialog = true"
+        />
+      </div>
+    </div>
 
     <div class="content-container">
       <!-- Stats Summary -->
@@ -53,7 +90,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useToast } from 'primevue/usetoast';
-import PageHeader from '@/components/PageHeader.vue';
+import Button from 'primevue/button';
+import { useCabangStore } from '@/stores';
 import { rekapBackupService } from '@/services';
 
 import RbStatsBar          from './components/RbStatsBar.vue';
@@ -75,10 +113,21 @@ const selectedEndYear   = ref('');
 const selectedCabang    = ref(null);
 const exporting         = ref(false);
 
+const cabangStore = useCabangStore();
+const activeCabangName = computed(() => {
+  if (!selectedCabang.value) return 'Semua Cabang';
+  const found = cabangStore.allCabang?.find(c => c.kdcab === selectedCabang.value);
+  return found ? `${found.kdcab} - ${found.namacab}` : selectedCabang.value;
+});
+
 const endYearOptions = computed(() => {
   if (selectedStartYear.value === 'All') return [];
   return startYearOptions.value.filter(y => y !== 'All' && y >= selectedStartYear.value);
 });
+
+const handleRefresh = async () => {
+  await Promise.all([fetchSummary(), fetchYears()]);
+};
 
 // ─── Stats ───────────────────────────────────────────────────────────
 const latestHarianInfo = computed(() => {

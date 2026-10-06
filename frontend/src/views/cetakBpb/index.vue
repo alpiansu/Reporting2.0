@@ -1,20 +1,39 @@
 <template>
   <div class="cetak-bpb-view">
-    <PageHeader
-      title="Cetak Dokumen"
-      subtitle="Utility untuk cetak ulang Bukti Penerimaan Barang (BPB) dan Nota Retur Barang (NRB) ke PDF"
-      description="Halaman ini memungkinkan Anda untuk melakukan cetak ulang dokumen BPB atau NRB dari toko secara remote. Pilih tab dokumen yang ingin dicetak, lalu isi form yang tersedia."
-    />
+    <!-- View Header (Modern Single Source of Truth) -->
+    <div class="view-header">
+      <div class="view-header__left">
+        <div class="view-header__icon-badge">
+          <i class="pi pi-print"></i>
+        </div>
+        <div>
+          <h1 class="view-header__title">Cetak Dokumen Toko</h1>
+          <p class="view-header__subtitle">Utility cetak ulang Bukti Penerimaan Barang (BPB) dan Nota Retur Barang (NRB) ke format PDF</p>
+        </div>
+      </div>
+      <div class="view-header__actions">
+        <div class="active-tab-badge">
+          <i :class="activeTab === 0 ? 'pi pi-file' : 'pi pi-file-export'"></i>
+          <span>Mode: {{ activeTab === 0 ? 'Cetak BPB' : 'Cetak NRB' }}</span>
+        </div>
+      </div>
+    </div>
 
-    <div class="content-container mt-4">
-      <TabView v-model:activeIndex="activeTab">
-        <TabPanel header="Cetak BPB">
+    <div class="content-container">
+      <TabView v-model:activeIndex="activeTab" class="cetak-tabs">
+        <TabPanel>
+          <template #header>
+            <span class="tab-label"><i class="pi pi-file mr-2"></i>Cetak BPB</span>
+          </template>
           <CetakBpbForm
             :is-processing="isProcessingBpb"
             @process="handleProcessBpb"
           />
         </TabPanel>
-        <TabPanel header="Cetak NRB">
+        <TabPanel>
+          <template #header>
+            <span class="tab-label"><i class="pi pi-file-export mr-2"></i>Cetak NRB</span>
+          </template>
           <CetakNrbForm
             :is-processing="isProcessingNrb"
             @process="handleProcessNrb"
@@ -27,7 +46,6 @@
 
 <script setup>
 import { ref } from 'vue';
-import PageHeader from '@/components/PageHeader.vue';
 import TabView from 'primevue/tabview';
 import TabPanel from 'primevue/tabpanel';
 import CetakBpbForm from './components/CetakBpbForm.vue';

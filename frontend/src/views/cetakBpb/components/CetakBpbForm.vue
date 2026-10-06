@@ -1,26 +1,16 @@
 <template>
   <div class="cetak-bpb-form-card card">
-    <div class="form-header">
-      <div class="title-section">
-        <i class="pi pi-file-pdf header-icon"></i>
-        <div class="title-text">
-          <h3 class="form-title">Cetak Bukti Penerimaan Barang (BPB)</h3>
-          <p class="form-subtitle">Proses cetak dokumen BPB dari toko ke format PDF</p>
-        </div>
-      </div>
-    </div>
-
     <div class="form-content">
       <div class="grid form-grid">
         <!-- Cabang Selection -->
         <div class="col-12 md:col-6 field">
-          <label for="cabang" class="font-bold block mb-2">Cabang <span class="text-red-500">*</span></label>
+          <label for="cabang" class="field-label">Cabang <span class="text-red-500">*</span></label>
           <Dropdown 
             id="cabang" 
             v-model="formData.cabang" 
             :options="cabangOptions" 
             optionLabel="namacab" 
-            optionValue="kdcab"
+            optionValue="kdcab" 
             placeholder="Pilih Cabang" 
             class="w-full"
             :class="{ 'p-invalid': errors.cabang }"
@@ -34,12 +24,12 @@
 
         <!-- Bukti No -->
         <div class="col-12 md:col-6 field">
-          <label for="bukti_no" class="font-bold block mb-2">No. Bukti BPB <span class="text-red-500">*</span></label>
+          <label for="bukti_no" class="field-label">No. Bukti BPB <span class="text-red-500">*</span></label>
           <InputText 
             id="bukti_no" 
             v-model="formData.bukti_no" 
             placeholder="Contoh: 0000001" 
-            class="w-full"
+            class="w-full font-mono"
             :class="{ 'p-invalid': errors.bukti_no }"
             :disabled="isProcessing"
           />
@@ -48,7 +38,7 @@
 
         <!-- Store Selection (Mandatory) -->
         <div class="col-12 field">
-          <label for="store" class="font-bold block mb-2">Toko <span class="text-red-500">*</span></label>
+          <label for="store" class="field-label">Toko <span class="text-red-500">*</span></label>
           <Dropdown 
             id="store" 
             v-model="formData.store" 
@@ -56,7 +46,7 @@
             optionLabel="label" 
             optionValue="kdtk"
             placeholder="Pilih Toko (Ketik untuk mencari)" 
-            class="w-full"
+            class="w-full font-mono"
             :class="{ 'p-invalid': errors.store }"
             :disabled="isProcessing || !formData.cabang"
             :loading="loadingStores"
@@ -66,16 +56,16 @@
             showClear
           />
           <small class="p-error" v-if="errors.store">{{ errors.store }}</small>
-          <small class="text-gray-500 block mt-1" v-else>Ketik kode atau nama toko untuk mencari.</small>
+          <small class="helper-text" v-else>Ketik kode atau nama toko untuk mencari.</small>
         </div>
       </div>
 
-      <div class="form-actions mt-4">
+      <div class="form-actions mt-3">
         <Button 
           type="button" 
           label="Mulai Proses Cetak" 
           icon="pi pi-print" 
-          class="p-button-primary p-button-lg w-full md:w-auto"
+          class="p-button-primary p-button-sm"
           @click="handleSubmit" 
           :loading="isProcessing" 
           :disabled="isProcessing"
@@ -84,7 +74,7 @@
           type="button" 
           label="Reset" 
           icon="pi pi-refresh" 
-          class="p-button-secondary p-button-lg p-button-text w-full md:w-auto ml-0 md:ml-3 mt-2 md:mt-0"
+          class="p-button-secondary p-button-outlined p-button-sm ml-2"
           @click="resetForm" 
           :disabled="isProcessing"
         />
@@ -161,6 +151,11 @@ const onStoreFilter = (event) => {
   }, 500);
 };
 
+function formatCode(val) {
+  if (val === null || val === undefined) return '';
+  return String(val).replace(/^#+/, '').trim();
+}
+
 const fetchStores = async (search = '') => {
   if (!formData.cabang) return;
 
@@ -174,10 +169,13 @@ const fetchStores = async (search = '') => {
     });
     
     const stores = response.data?.stores || [];
-    const newOptions = stores.map(s => ({
-      kdtk: s.storeCode,
-      label: `${s.storeCode} - ${s.storeName}`
-    }));
+    const newOptions = stores.map(s => {
+      const code = formatCode(s.storeCode);
+      return {
+        kdtk: code,
+        label: `${code} - ${s.storeName}`
+      };
+    });
 
     // For single selection, we can just replace or append if we want to keep current
     if (formData.store) {

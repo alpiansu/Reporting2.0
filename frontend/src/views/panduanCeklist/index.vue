@@ -1,39 +1,67 @@
 <template>
   <div class="panduan-ceklist-view">
-    <PageHeader
-      title="Panduan Ceklist Closing Bulanan"
-      subtitle="Kelola guide Before Closing Bulanan per cabang"
-      description="Data referensi akses server bulanan, database, dan server tampung per cabang. Informasi ini dipakai untuk auto-fill dan ditampilkan sebagai panduan di halaman Ceklist Prepare Closing." />
-
-    <div class="content-container">
-      <!-- ===== STATISTIK KELENGKAPAN ===== -->
-      <div class="stats-row">
-        <div class="stat-chip" v-tooltip.top="`${rows.length} panduan terdaftar`">
-          <i class="pi pi-list chip-icon"></i>
-          <span class="chip-count">{{ rows.length }}</span>
-          <span class="chip-label">Cabang</span>
+    <!-- Compact Header Section -->
+    <header class="view-header">
+      <div class="header-main">
+        <div class="header-icon-box">
+          <i class="pi pi-book"></i>
         </div>
-        <div class="stat-chip chip-ok" v-tooltip.top="'Semua field inti (IP, remote, DB, tampung) sudah terisi'">
-          <i class="pi pi-check-circle chip-icon"></i>
-          <span class="chip-count">{{ completeCount }}</span>
-          <span class="chip-label">Lengkap</span>
+        <div class="header-text">
+          <h1 class="header-title">Panduan Ceklist Closing Bulanan</h1>
+          <p class="header-subtitle">
+            Kelola guide Before Closing Bulanan, akses server &amp; database per cabang
+          </p>
         </div>
-        <button
-          type="button"
-          class="stat-chip chip-warn"
-          :class="{ 'chip-active': onlyIncomplete }"
-          :disabled="incompleteCount === 0"
-          v-tooltip.top="incompleteRowsHint"
-          @click="onlyIncomplete = !onlyIncomplete">
-          <i class="pi pi-exclamation-triangle chip-icon"></i>
-          <span class="chip-count">{{ incompleteCount }}</span>
-          <span class="chip-label">Perlu Dilengkapi</span>
-          <span v-if="onlyIncomplete" class="chip-filter-badge">filter aktif</span>
-        </button>
       </div>
 
-      <!-- ===== TOOLBAR: pencarian + filter + aksi ===== -->
-      <div class="toolbar">
+      <div class="header-actions">
+        <!-- Statistik Chips Integrated -->
+        <div class="stat-chips-group">
+          <div class="stat-chip" v-tooltip.top="`${rows.length} panduan cabang terdaftar`">
+            <i class="pi pi-building chip-icon"></i>
+            <span class="chip-count">{{ rows.length }}</span>
+            <span class="chip-label">Cabang</span>
+          </div>
+          <div class="stat-chip chip-ok" v-tooltip.top="'Semua field inti (IP, remote, DB, tampung) sudah terisi'">
+            <i class="pi pi-check-circle chip-icon"></i>
+            <span class="chip-count">{{ completeCount }}</span>
+            <span class="chip-label">Lengkap</span>
+          </div>
+          <button
+            type="button"
+            class="stat-chip chip-warn"
+            :class="{ 'chip-active': onlyIncomplete }"
+            :disabled="incompleteCount === 0"
+            v-tooltip.top="incompleteRowsHint"
+            @click="onlyIncomplete = !onlyIncomplete"
+          >
+            <i class="pi pi-exclamation-triangle chip-icon"></i>
+            <span class="chip-count">{{ incompleteCount }}</span>
+            <span class="chip-label">Perlu Dilengkapi</span>
+            <span v-if="onlyIncomplete" class="chip-filter-badge">filter aktif</span>
+          </button>
+        </div>
+
+        <!-- Action Buttons -->
+        <Button
+          icon="pi pi-refresh"
+          label="Muat Ulang"
+          class="p-button-secondary p-button-sm btn-header"
+          :loading="loading"
+          @click="loadData"
+        />
+        <Button
+          icon="pi pi-plus"
+          label="Tambah Panduan"
+          class="p-button-primary p-button-sm btn-header"
+          @click="openCreate"
+        />
+      </div>
+    </header>
+
+    <div class="content-container">
+      <!-- ===== TOOLBAR: pencarian + filter ===== -->
+      <div class="toolbar-panel">
         <div class="toolbar-filters">
           <IconField iconPosition="left" class="search-field">
             <InputIcon><i class="pi pi-search" /></InputIcon>
@@ -56,24 +84,10 @@
 
           <Button
             v-if="hasFilter"
-            label="Reset"
+            label="Reset Filter"
             icon="pi pi-times"
             class="p-button-text p-button-sm"
             @click="resetFilters" />
-        </div>
-
-        <div class="toolbar-actions">
-          <Button
-            icon="pi pi-refresh"
-            label="Muat Ulang"
-            class="p-button-secondary p-button-sm"
-            :loading="loading"
-            @click="loadData" />
-          <Button
-            icon="pi pi-plus"
-            label="Tambah Panduan"
-            class="p-button-primary p-button-sm"
-            @click="openCreate" />
         </div>
       </div>
 
@@ -119,7 +133,7 @@
               :class="{ active: row.KDCAB === selectedKdcab }"
               @click="selectedKdcab = row.KDCAB">
               <div class="mi-top">
-                <span class="mi-code">{{ row.KDCAB }}</span>
+                <span class="mi-code font-mono">{{ formatCode(row.KDCAB) }}</span>
                 <span class="mi-name">{{ row.NAMACAB || '—' }}</span>
                 <i
                   v-if="missingFields(row).length"
@@ -160,7 +174,7 @@
             <div class="detail-head">
               <div class="dh-info">
                 <div class="dh-title">
-                  <b>{{ selected.KDCAB }}</b>
+                  <b class="font-mono">{{ formatCode(selected.KDCAB) }}</b>
                   <span class="dh-name">{{ selected.NAMACAB || '—' }}</span>
                   <Tag :value="selected.OS || '—'" :severity="selected.OS === 'WINDOWS' ? 'info' : 'warning'" />
                 </div>
@@ -212,7 +226,7 @@
     <!-- ===== Form Dialog (bertab) ===== -->
     <Dialog
       v-model:visible="dlgVisible"
-      :header="isEdit ? 'Edit Panduan ' + form.kdcab : 'Tambah Panduan'"
+      :header="isEdit ? 'Edit Panduan ' + formatCode(form.kdcab) : 'Tambah Panduan'"
       modal
       :draggable="false"
       class="panduan-dialog"
@@ -408,7 +422,7 @@
       <div class="confirm-body">
         <i class="pi pi-exclamation-triangle confirm-icon"></i>
         <div>
-          <p class="confirm-msg">Hapus panduan untuk <b>{{ confirmDlg.row?.KDCAB }}</b> ({{ confirmDlg.row?.NAMACAB || '—' }})?</p>
+          <p class="confirm-msg">Hapus panduan untuk <b class="font-mono">{{ formatCode(confirmDlg.row?.KDCAB) }}</b> ({{ confirmDlg.row?.NAMACAB || '—' }})?</p>
           <p class="confirm-sub">Data yang dihapus tidak bisa dikembalikan.</p>
         </div>
       </div>
@@ -423,8 +437,12 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { useToast } from 'primevue/usetoast';
-import PageHeader from '@/components/PageHeader.vue';
 import Tag from 'primevue/tag';
+
+const formatCode = (val) => {
+  if (val === null || val === undefined) return '';
+  return String(val).replace(/^[#\s]+/, '').trim();
+};
 import Textarea from 'primevue/textarea';
 import Tabs from 'primevue/tabs';
 import TabList from 'primevue/tablist';
@@ -696,76 +714,218 @@ onMounted(loadData);
 </script>
 
 <style scoped>
-/* ── Layout ───────────────────────────────────────────────────────── */
+/* ── View Container ───────────────────────────────────────────────── */
+.panduan-ceklist-view {
+  padding: 1rem 1.25rem;
+  background-color: var(--surface-ground, #f8fafc);
+  min-height: calc(100vh - 65px);
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  box-sizing: border-box;
+}
+
 .content-container {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 0.85rem;
 }
 
-/* ── Statistik ────────────────────────────────────────────────────── */
-.stats-row {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.stat-chip {
+/* ── 1. Compact Header ────────────────────────────────────────────── */
+.view-header {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 7px 14px;
-  border-radius: 22px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  background: var(--surface-card, #ffffff);
+  padding: 0.75rem 1.25rem;
+  border-radius: 10px;
   border: 1px solid var(--surface-border, #e2e8f0);
-  background: var(--surface-card, #fff);
-  font-size: 0.82rem;
-  color: var(--text-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.header-main {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.header-icon-box {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  color: #ffffff;
+  font-size: 1.25rem;
+  box-shadow: 0 2px 6px rgba(14, 165, 233, 0.25);
+  flex-shrink: 0;
+}
+
+.header-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-color, #0f172a);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.header-subtitle {
+  font-size: 0.8rem;
+  color: var(--text-color-secondary, #64748b);
+  margin: 0.15rem 0 0 0;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.btn-header {
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.42rem 0.85rem;
+}
+
+/* ── Statistik Chips ──────────────────────────────────────────────── */
+.stat-chips-group {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid var(--surface-border, #e2e8f0);
+  background: var(--surface-card, #ffffff);
+  font-size: 0.785rem;
+  color: var(--text-color, #334155);
   cursor: default;
 }
-button.stat-chip { cursor: pointer; font-family: inherit; }
-button.stat-chip:disabled { opacity: 0.55; cursor: default; }
-.chip-icon { color: var(--primary-color, #4f46e5); }
-.chip-count { font-weight: 700; font-size: 0.92rem; }
-.chip-label { color: var(--text-color-secondary); }
-.chip-ok .chip-icon { color: var(--success-color, #10b981); }
-.chip-warn .chip-icon { color: var(--warning-color, #f59e0b); }
-.chip-warn.chip-active {
-  background: rgba(245, 158, 11, 0.12);
-  border-color: rgba(245, 158, 11, 0.55);
+
+button.stat-chip {
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s ease;
 }
-.chip-warn.chip-active .chip-label { color: #92400e; font-weight: 600; }
+
+button.stat-chip:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.chip-icon {
+  color: var(--primary-color, #0284c7);
+  font-size: 0.85rem;
+}
+
+.chip-count {
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.chip-label {
+  color: var(--text-color-secondary, #64748b);
+  font-size: 0.75rem;
+}
+
+.chip-ok {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.chip-ok .chip-icon {
+  color: #16a34a;
+}
+
+.chip-ok .chip-count {
+  color: #15803d;
+}
+
+.chip-warn {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.chip-warn .chip-icon {
+  color: #d97706;
+}
+
+.chip-warn .chip-count {
+  color: #b45309;
+}
+
+.chip-warn.chip-active {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: #f59e0b;
+}
+
+.chip-warn.chip-active .chip-label {
+  color: #92400e;
+  font-weight: 600;
+}
+
 .chip-filter-badge {
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.4px;
   background: var(--warning-color, #f59e0b);
   color: #fff;
-  border-radius: 10px;
-  padding: 1px 7px;
+  border-radius: 4px;
+  padding: 1px 5px;
 }
 
-/* ── Toolbar ──────────────────────────────────────────────────────── */
-.toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+/* ── 2. Toolbar Panel ─────────────────────────────────────────────── */
+.toolbar-panel {
+  background: var(--surface-card, #ffffff);
+  border: 1px solid var(--surface-border, #e2e8f0);
+  border-radius: 10px;
+  padding: 0.65rem 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
+
 .toolbar-filters {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.65rem;
   flex-wrap: wrap;
-  flex: 1;
-  min-width: 0;
 }
-.search-field { flex: 1; max-width: 340px; min-width: 200px; }
-.search-field :deep(.p-inputtext) { width: 100%; }
-.filter-dd { min-width: 150px; }
-.toolbar-actions {
-  display: flex;
-  gap: 8px;
+
+.search-field {
+  flex: 1;
+  max-width: 320px;
+  min-width: 180px;
+}
+
+.search-field :deep(.p-inputtext) {
+  width: 100%;
+  padding: 0.42rem 0.75rem 0.42rem 2.2rem;
+  font-size: 0.825rem;
+}
+
+.filter-dd {
+  min-width: 140px;
+}
+
+:deep(.filter-dd .p-inputtext) {
+  padding: 0.42rem 0.75rem;
+  font-size: 0.825rem;
+}
+
+.btn-reset {
+  font-size: 0.785rem;
+  padding: 0.42rem 0.65rem;
 }
 
 /* ── Panel master + detail ────────────────────────────────────────── */

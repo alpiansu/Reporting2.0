@@ -1,11 +1,39 @@
 <template>
   <div class="rekon-wt-harian-view">
-    <PageHeader 
-      title="Hasil Rekonsiliasi WT Harian" 
-      subtitle="Informasi selisih transaksi antara WRC dan toko" 
-      description="Halaman ini menampilkan hasil rekonsiliasi yang telah diproses oleh sistem. Rekonsiliasi dilakukan secara otomatis pada waktu tertentu untuk memastikan keakuratan data transaksi antara WRC dan toko."
-    />
-    
+    <!-- Compact Header Section -->
+    <header class="view-header">
+      <div class="header-main">
+        <div class="header-icon-box">
+          <i class="pi pi-history"></i>
+        </div>
+        <div class="header-text">
+          <h1 class="header-title">Rekonsiliasi WT Harian</h1>
+          <p class="header-subtitle">
+            Informasi selisih transaksi antara WRC dan toko harian
+          </p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <!-- Active Filter Badge -->
+        <div v-if="activePeriode" class="active-filter-badge">
+          <i class="pi pi-calendar"></i>
+          <span>Periode: <strong>{{ formatDisplayPeriode(activePeriode) }}</strong></span>
+          <span v-if="activeCab" class="cab-sub-badge">Cabang: {{ activeCab }}</span>
+        </div>
+
+        <!-- Refresh Button -->
+        <button
+          type="button"
+          class="btn-header-secondary"
+          @click="triggerRefresh"
+          title="Muat ulang hasil rekonsiliasi WT harian"
+        >
+          <i class="pi pi-refresh"></i>
+          <span>Refresh Data</span>
+        </button>
+      </div>
+    </header>
+
     <div class="content-container">
       <!-- Form Section -->
       <RekonWtHarianForm @view-results="handleViewResults" />
@@ -25,7 +53,6 @@
 
 <script setup>
 import { ref, computed } from 'vue';
-import PageHeader from '../../components/PageHeader.vue';
 import RekonWtHarianForm from '../../components/rekonWtHarian/RekonWtHarianForm.vue';
 import RekonWtHarianResults from '../../components/rekonWtHarian/RekonWtHarianResults.vue';
 
@@ -36,9 +63,16 @@ const resultsComponent = ref(null);
 
 // Computed
 const showResults = computed(() => {
-  // Hanya perlu memeriksa periode, karena cabang bisa kosong (untuk semua cabang)
-  return activePeriode.value;
+  return !!activePeriode.value;
 });
+
+const formatDisplayPeriode = (val) => {
+  if (!val) return '';
+  if (val.length === 4) {
+    return `${val.substring(2, 4)}/20${val.substring(0, 2)}`;
+  }
+  return val;
+};
 
 // Methods
 const handleViewResults = (data) => {
@@ -51,6 +85,12 @@ const handleViewResults = (data) => {
         resultsComponent.value.loadResults();
       }
     }, 200);
+  }
+};
+
+const triggerRefresh = () => {
+  if (resultsComponent.value && typeof resultsComponent.value.loadResults === 'function') {
+    resultsComponent.value.loadResults({}, true);
   }
 };
 </script>

@@ -87,7 +87,7 @@
     <!-- Table Row -->
     <template #table-row="{ item }">
       <td>{{ item.cab }}</td>
-      <td>{{ item.shop }}</td>
+      <td><span class="font-mono">{{ formatCode(item.shop) }}</span></td>
       <td class="store-name-cell" :title="item.store_name">{{ item.store_name || '-' }}</td>
       <td class="text-right" :class="getAmountClass(item.sum_sel_gross)">
         {{ formatCurrency(item.sum_sel_gross) }}
@@ -222,6 +222,11 @@ const props = defineProps({
 
 const emit = defineEmits(['refresh', 'page-change', 'items-per-page-change', 'sort-change', 'shop-updated', 'shop-removed']);
 const toast = useToastService();
+
+const formatCode = (val) => {
+  if (val === null || val === undefined) return '';
+  return String(val).replace(/^[#\s]+/, '').trim();
+};
 
 // Modal functionality
 const detailModalVisible = ref(false);

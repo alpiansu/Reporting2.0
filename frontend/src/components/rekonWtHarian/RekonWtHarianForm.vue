@@ -1,63 +1,98 @@
 <template>
   <div class="rekon-form-container">
-    <div class="card">
-      <h2 class="form-title">Hasil Rekonsiliasi WT Harian</h2>
-      <p class="form-description">
-        Lihat hasil rekonsiliasi data transaksi antara WRC dan toko per toko.
-      </p>
-
-      <form @submit.prevent="submitForm" class="rekon-form">
-        <div class="form-group">
-          <label for="cab">Cabang</label>
-          <Dropdown id="cab" v-model="formData.cab" :options="cabangOptions" optionLabel="namacab" optionValue="kdcab"
-            placeholder="Pilih Cabang" :disabled="loading" class="w-full" @change="handleCabChange" />
+    <div class="filter-panel">
+      <!-- Row 1: Primary Inputs & Screening Button -->
+      <form @submit.prevent="submitForm" class="filter-row-primary">
+        <div class="filter-field">
+          <label for="cab" class="filter-label">Cabang</label>
+          <Dropdown
+            id="cab"
+            v-model="formData.cab"
+            :options="cabangOptions"
+            optionLabel="namacab"
+            optionValue="kdcab"
+            placeholder="Pilih Cabang"
+            :disabled="loading || isReconciling"
+            class="filter-dropdown"
+            @change="handleCabChange"
+          />
           <small v-if="errors.cab" class="error-text">{{ errors.cab }}</small>
         </div>
 
-        <div class="form-group">
-          <label for="periode">Periode</label>
-          <Calendar id="periode" v-model="selectedDate" view="month" dateFormat="mm/yy" placeholder="Pilih Bulan/Tahun"
-            :disabled="loading" :maxDate="today" showIcon class="w-full" @date-select="updatePeriode" />
+        <div class="filter-field">
+          <label for="periode" class="filter-label">Periode</label>
+          <Calendar
+            id="periode"
+            v-model="selectedDate"
+            view="month"
+            dateFormat="mm/yy"
+            placeholder="Pilih Bulan/Tahun"
+            :disabled="loading || isReconciling"
+            :maxDate="today"
+            showIcon
+            class="filter-calendar"
+            @date-select="updatePeriode"
+          />
           <small v-if="errors.periode" class="error-text">{{ errors.periode }}</small>
         </div>
 
-        <div class="form-actions">
-          <div class="force-toggle">
-            <Checkbox v-model="forceReScreen" inputId="forceReScreenWtHarian" :binary="true"
-              :disabled="isReconciling" />
-            <label for="forceReScreenWtHarian" class="ml-2 text-sm text-color-secondary">
-              <i class="pi pi-exclamation-triangle mr-1" style="font-size: 0.85rem"></i>
-              Force Re-screen (ulang meskipun sudah sukses hari ini)
-            </label>
-          </div>
-          <Button type="button" label="Mulai Rekonsiliasi" icon="pi pi-refresh" class="p-button-primary"
-            @click="startReconciliation" :loading="isReconciling" :disabled="loading" />
+        <div class="filter-actions-col">
+          <Button
+            type="button"
+            label="Mulai Rekonsiliasi"
+            icon="pi pi-refresh"
+            class="p-button-primary btn-action"
+            @click="startReconciliation"
+            :loading="isReconciling"
+            :disabled="loading"
+          />
         </div>
       </form>
 
-      <!-- card info last screening -->
-      <LastScanInfo moduleName="rekon_wt_harian" :selectedCabang="formData.cab" v-if="!isReconciling"
-        style="margin-top: 15px;" />
-
-      <!-- Progress Bar Component -->
-      <ProgressBar v-if="isReconciling" :visible="isReconciling" :percentage="progressPercentage" :info="currentInfo">
-        <template #title>
-          Proses Rekonsiliasi WT Harian
-        </template>
-        <template #subtitle>
-          Menghubungkan ke toko/WRC dan membandingkan data transaksi.<br />
-          Proses ini mungkin memakan waktu tergantung jumlah toko dan hari.
-        </template>
-        <template #details>
-          <small><strong>{{ currentInfo }}</strong></small>
-        </template>
-      </ProgressBar>
-
-      <!-- Confirmation Dialog -->
-      <ConfirmDialog v-model="showConfirmDialog" :title="confirmDialogTitle" :message="confirmDialogMessage"
-        :confirm-text="confirmDialogConfirmText" :cancel-text="confirmDialogCancelText"
-        @confirm="handleConfirmDialogConfirm" />
+      <!-- Row 2: Slim Footer Bar (Force Re-screen + Operational Hint) -->
+      <div class="filter-footer-bar">
+        <div class="force-screen-pill">
+          <Checkbox
+            v-model="forceReScreen"
+            inputId="forceReScreenWtHarian"
+            :binary="true"
+            :disabled="isReconciling"
+          />
+          <label for="forceReScreenWtHarian" class="checkbox-label">
+            <i class="pi pi-exclamation-triangle text-warning"></i>
+            <span>Force Re-screen</span>
+          </label>
+          <small class="screen-hint">(Jalankan ulang rekonsiliasi meskipun sudah pernah diproses hari ini)</small>
+        </div>
+      </div>
     </div>
+
+    <!-- Standalone Slim LastScanInfo Status Strip -->
+    <LastScanInfo
+      moduleName="rekon_wt_harian"
+      :selectedCabang="formData.cab"
+      v-if="!isReconciling"
+      class="mt-2"
+    />
+
+    <!-- Progress Bar Component -->
+    <ProgressBar v-if="isReconciling" :visible="isReconciling" :percentage="progressPercentage" :info="currentInfo">
+      <template #title>
+        Proses Rekonsiliasi WT Harian
+      </template>
+      <template #subtitle>
+        Menghubungkan ke toko/WRC dan membandingkan data transaksi.<br />
+        Proses ini mungkin memakan waktu tergantung jumlah toko dan hari.
+      </template>
+      <template #details>
+        <small><strong>{{ currentInfo }}</strong></small>
+      </template>
+    </ProgressBar>
+
+    <!-- Confirmation Dialog -->
+    <ConfirmDialog v-model="showConfirmDialog" :title="confirmDialogTitle" :message="confirmDialogMessage"
+      :confirm-text="confirmDialogConfirmText" :cancel-text="confirmDialogCancelText"
+      @confirm="handleConfirmDialogConfirm" />
   </div>
 </template>
 

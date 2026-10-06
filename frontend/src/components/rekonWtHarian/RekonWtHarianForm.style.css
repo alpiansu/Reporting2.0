@@ -1,95 +1,114 @@
+/* ==========================================================================
+   Rekon WT Harian Form - Compact Filter Panel Styles
+   ========================================================================== */
 
 .rekon-form-container {
-  margin-bottom: 0;
-}
-
-.card {
-  background-color: var(--surface-card);
-  border-radius: 8px;
-  padding: 1.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.form-actions {
-  margin-top: 1.5rem;
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.filter-panel {
+  background: var(--surface-card, #ffffff);
+  border: 1px solid var(--surface-border, #e2e8f0);
+  border-radius: 10px;
+  padding: 0.85rem 1.15rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.filter-row-primary {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 0.85rem;
   align-items: flex-end;
 }
 
-.force-toggle {
+.filter-field {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.filter-label {
+  font-size: 0.785rem;
+  font-weight: 600;
+  color: var(--text-color-secondary, #64748b);
+  letter-spacing: 0.02em;
+}
+
+:deep(.filter-dropdown),
+:deep(.filter-calendar) {
+  width: 100%;
+}
+
+:deep(.filter-dropdown .p-inputtext),
+:deep(.filter-calendar .p-inputtext) {
+  padding: 0.45rem 0.75rem;
   font-size: 0.85rem;
 }
 
-.force-toggle label {
+.filter-actions-col {
+  display: flex;
+  align-items: center;
+}
+
+.btn-action {
+  font-size: 0.825rem;
+  font-weight: 600;
+  padding: 0.48rem 1rem;
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------------
+   Filter Footer Bar (Force Re-screen + Operational Hint)
+   -------------------------------------------------------------------------- */
+.filter-footer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--surface-border, #f1f5f9);
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.force-screen-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 600;
+  color: var(--text-color, #334155);
   cursor: pointer;
   user-select: none;
 }
 
-.form-title {
-  font-size: 1.5rem;
-  margin-top: 0;
-  margin-bottom: 0.5rem;
-  color: var(--primary-color);
+.text-warning {
+  color: #f59e0b;
 }
 
-.form-description {
-  color: var(--text-color-secondary);
-  margin-bottom: 1.5rem;
-}
-
-.rekon-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 1rem;
-}
-
-label {
-  font-weight: 500;
-  margin-bottom: 0.5rem;
-}
-
-/* PrimeVue components styling */
-:deep(.p-dropdown) {
-  width: 100%;
-}
-
-:deep(.p-calendar) {
-  width: 100%;
-}
-
-:deep(.p-button) {
-  width: auto;
+.screen-hint {
+  color: var(--text-color-secondary, #94a3b8);
+  font-size: 0.75rem;
 }
 
 .error-text {
-  color: var(--error-color);
-  font-size: 0.875rem;
-  margin-top: 0.25rem;
+  color: var(--error-color, #ef4444);
+  font-size: 0.75rem;
+  margin-top: 0.2rem;
 }
 
-@media (min-width: 768px) {
-  .rekon-form {
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
-  
-  .form-group {
-    flex: 1;
-    min-width: 200px;
-    margin-right: 1rem;
-  }
-  
-  .form-actions {
-    width: 100%;
+@media (max-width: 900px) {
+  .filter-row-primary {
+    grid-template-columns: 1fr;
   }
 }

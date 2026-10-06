@@ -13,7 +13,7 @@
         </div>
         <div class="dtl-info-item">
           <span class="detail-label">Toko </span>
-          <span class="detail-value">{{ toko }}{{ storeName ? ` - ${storeName}` : '' }}</span>
+          <span class="detail-value"><span class="font-mono">{{ formatCode(toko) }}</span>{{ storeName ? ` - ${storeName}` : '' }}</span>
         </div>
       </div>
     </template>
@@ -63,7 +63,7 @@
 
         <!-- Custom Cell: Toko -->
         <template #cell-toko="{ value }">
-          {{ value || '-' }}
+          <span class="font-mono">{{ formatCode(value) }}</span>
         </template>
 
         <!-- Custom Cell: Currency Fields -->
@@ -317,6 +317,11 @@ async function loadDetailData() {
   } finally {
     loading.value = false;
   }
+}
+
+function formatCode(val) {
+  if (val === null || val === undefined) return '';
+  return String(val).replace(/^[#\s]+/, '').trim();
 }
 
 function formatPeriode(periode) {

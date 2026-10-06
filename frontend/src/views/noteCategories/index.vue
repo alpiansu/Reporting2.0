@@ -1,11 +1,74 @@
 <template>
   <div class="note-categories-view">
-    <PageHeader 
-      title="Note Categories Management" 
-      subtitle="Manage note categories for the application" 
-      description="Add, edit, or remove note categories used throughout the system."
-    />
-    
+    <!-- Compact Header Section -->
+    <header class="view-header">
+      <div class="header-main">
+        <div class="header-icon-box">
+          <i class="pi pi-tags"></i>
+        </div>
+        <div class="header-text">
+          <h1 class="header-title">Note Categories Management</h1>
+          <p class="header-subtitle">Kelola kategori catatan dan pemetaan modul sistem secara terpusat</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button
+          type="button"
+          class="btn-header-secondary"
+          :disabled="loading"
+          @click="loadCategories()"
+          title="Muat ulang data"
+        >
+          <i class="pi pi-refresh" :class="{ 'pi-spin': loading }"></i>
+          <span>Refresh</span>
+        </button>
+
+        <button
+          type="button"
+          class="btn-header-primary"
+          @click="openCreateModal"
+          title="Tambah kategori baru"
+        >
+          <i class="pi pi-plus"></i>
+          <span>Tambah Kategori</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- KPI & Summary Strip (Compact) -->
+    <section class="kpi-summary-strip">
+      <div class="kpi-card">
+        <div class="kpi-icon-wrapper total">
+          <i class="pi pi-tags"></i>
+        </div>
+        <div class="kpi-content">
+          <span class="kpi-label">Total Kategori</span>
+          <span class="kpi-value">{{ totalItems || categories.length || 0 }}</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-icon-wrapper module">
+          <i class="pi pi-box"></i>
+        </div>
+        <div class="kpi-content">
+          <span class="kpi-label">Modul Terdaftar</span>
+          <span class="kpi-value">{{ availableModules.length || 0 }}</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-icon-wrapper active-page">
+          <i class="pi pi-file"></i>
+        </div>
+        <div class="kpi-content">
+          <span class="kpi-label">Halaman Aktif</span>
+          <span class="kpi-value">{{ currentPage }} <span class="kpi-subtext-inline">/ {{ pagination.totalPages || 1 }}</span></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Table Container -->
     <div class="content-container">
       <DataTable 
         :data="categories" 
@@ -23,30 +86,30 @@
         @items-per-page-change="handleItemsPerPageChange"
         @sort-change="handleSortChange">
         
-        <!-- Search Component -->
+        <!-- Search & Filter Controls Slot -->
         <template #filters>
-          <div class="search-container">
-            <div class="filters-row">
-              <form @submit.prevent="handleSearch" class="search-form">
-                <div class="search-box">
-                  <i class="pi pi-search search-icon"></i>
-                  <input 
-                    type="text" 
-                    v-model="searchQuery" 
-                    @input="handleSearch"
-                    placeholder="Cari kategori..." 
-                    class="search-input"
-                  />
-                  <button 
-                    type="button" 
-                    v-if="searchQuery" 
-                    @click="clearSearch" 
-                    class="clear-button">
-                    <i class="pi pi-times"></i>
-                  </button>
-                </div>
-              </form>
-              <Button severity="info"raised size="small" label="Create New" icon="pi pi-plus" class="create-button" @click="openCreateModal" />
+          <div class="toolbar-section">
+            <div class="search-box-compact">
+              <i class="pi pi-search search-icon"></i>
+              <input 
+                type="text" 
+                v-model="searchQuery" 
+                @input="handleSearch"
+                placeholder="Cari nama kategori, deskripsi, atau modul..." 
+                class="search-input-compact"
+              />
+              <button 
+                type="button" 
+                v-if="searchQuery" 
+                @click="clearSearch" 
+                class="clear-search-btn"
+                title="Hapus pencarian">
+                <i class="pi pi-times"></i>
+              </button>
+            </div>
+            <div class="table-meta-hint" v-if="searchQuery">
+              <i class="pi pi-filter"></i>
+              <span>Menampilkan hasil pencarian: <strong>"{{ searchQuery }}"</strong></span>
             </div>
           </div>
         </template>
@@ -54,10 +117,10 @@
         <!-- Table Header with Sorting -->
         <template #table-header-sortable="{ sortColumn, sortOrder, handleSort }">
           <th 
-            class="sortable" 
+            class="sortable col-id" 
             :class="{ 'sort-asc': sortColumn === 'id' && sortOrder === 'asc', 'sort-desc': sortColumn === 'id' && sortOrder === 'desc' }" 
             @click="handleSort('id')">
-            ID
+            <span>ID</span>
             <i 
               v-if="sortColumn === 'id'" 
               class="pi sort-icon" 
@@ -65,10 +128,10 @@
             </i>
           </th>
           <th 
-            class="sortable" 
+            class="sortable col-name" 
             :class="{ 'sort-asc': sortColumn === 'name' && sortOrder === 'asc', 'sort-desc': sortColumn === 'name' && sortOrder === 'desc' }" 
             @click="handleSort('name')">
-            Name
+            <span>Name</span>
             <i 
               v-if="sortColumn === 'name'" 
               class="pi sort-icon" 
@@ -76,10 +139,10 @@
             </i>
           </th>
           <th 
-            class="sortable" 
+            class="sortable col-desc" 
             :class="{ 'sort-asc': sortColumn === 'description' && sortOrder === 'asc', 'sort-desc': sortColumn === 'description' && sortOrder === 'desc' }" 
             @click="handleSort('description')">
-            Description
+            <span>Description</span>
             <i 
               v-if="sortColumn === 'description'" 
               class="pi sort-icon" 
@@ -87,33 +150,51 @@
             </i>
           </th>
           <th 
-            class="sortable" 
+            class="sortable col-module" 
             :class="{ 'sort-asc': sortColumn === 'moduleName' && sortOrder === 'asc', 'sort-desc': sortColumn === 'moduleName' && sortOrder === 'desc' }" 
             @click="handleSort('moduleName')">
-            Module Name
+            <span>Module Name</span>
             <i 
               v-if="sortColumn === 'moduleName'" 
               class="pi sort-icon" 
               :class="sortOrder === 'asc' ? 'pi-sort-amount-up-alt' : 'pi-sort-amount-down'">
             </i>
           </th>
-          <th class="text-center">Actions</th>
+          <th class="col-actions text-center">Actions</th>
         </template>
 
         <!-- Table Row -->
         <template #table-row="{ item }">
-          <td class="text-center">{{ item.id }}</td>
-          <td>{{ item.name }}</td>
-          <td>{{ item.description || '-' }}</td>
+          <td class="text-center">
+            <span class="badge-code">#{{ item.id }}</span>
+          </td>
           <td>
-            <span class="module-tag">{{ getModuleName(item.moduleName) }}</span>
+            <div class="name-cell">
+              <i class="pi pi-tag cell-icon"></i>
+              <span class="category-name-text">{{ item.name }}</span>
+            </div>
+          </td>
+          <td class="desc-cell">
+            <span :class="{ 'text-muted': !item.description }">{{ item.description || '-' }}</span>
+          </td>
+          <td>
+            <span class="module-tag">
+              <i class="pi pi-box"></i>
+              {{ getModuleName(item.moduleName) }}
+            </span>
           </td>
           <td class="text-center">
             <div class="action-buttons">
-              <button class="btn btn-icon btn-secondary" @click="openEditModal(item)" title="Edit">
+              <button 
+                class="btn-action-compact btn-edit" 
+                @click="openEditModal(item)" 
+                title="Edit Kategori">
                 <i class="pi pi-pencil"></i>
               </button>
-              <button class="btn btn-icon btn-danger" @click="confirmDelete(item)" title="Delete">
+              <button 
+                class="btn-action-compact btn-delete" 
+                @click="confirmDelete(item)" 
+                title="Hapus Kategori">
                 <i class="pi pi-trash"></i>
               </button>
             </div>
@@ -124,59 +205,124 @@
 
     <!-- Create/Edit Modal -->
     <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>{{ editingCategory ? 'Edit Note Category' : 'Create New Note Category' }}</h3>
-          <button class="modal-close" @click="closeModal">&times;</button>
+      <div class="modal note-category-modal">
+        <div class="dialog-header-modern" :class="{ 'edit-mode': !!editingCategory }">
+          <div class="dialog-header-left">
+            <div class="dialog-icon-badge" :class="editingCategory ? 'edit' : 'add'">
+              <i :class="editingCategory ? 'pi pi-pencil' : 'pi pi-plus'"></i>
+            </div>
+            <div>
+              <h3 class="dialog-title">
+                {{ editingCategory ? 'Edit Note Category' : 'Create New Note Category' }}
+              </h3>
+              <span class="dialog-subtitle" v-if="!editingCategory">
+                Tambahkan kategori catatan baru untuk sistem
+              </span>
+              <span class="dialog-subtitle-badge" v-else>
+                ID: #{{ editingCategory.id }} &bull; {{ editingCategory.name }}
+              </span>
+            </div>
+          </div>
+          <button type="button" class="dialog-close-btn" @click="closeModal" title="Tutup modal">
+            <i class="pi pi-times"></i>
+          </button>
         </div>
-        <div class="modal-body">
-          <form @submit.prevent="saveCategory">
-            <div class="form-group">
-              <label for="name">Name *</label>
-              <input 
-                type="text" 
-                id="name" 
-                v-model="form.name" 
-                :class="{ 'invalid': errors.name }"
-                required
+
+        <div class="dialog-body-modern">
+          <form @submit.prevent="saveCategory" class="category-form-redesign">
+            <div class="form-section-card">
+              <div class="section-card-title">
+                <i class="pi pi-info-circle"></i>
+                <span>Informasi Kategori</span>
+              </div>
+
+              <!-- Name -->
+              <div class="form-group-redesign">
+                <label for="cat-name" class="form-label-redesign">
+                  Name <span class="required-star">*</span>
+                </label>
+                <div class="input-with-icon">
+                  <i class="pi pi-tag input-icon"></i>
+                  <input 
+                    type="text" 
+                    id="cat-name" 
+                    v-model="form.name" 
+                    placeholder="Contoh: Selisih Kasir, Masalah Jaringan..."
+                    class="form-input-redesign"
+                    :class="{ 'invalid': errors.name }"
+                    required
+                  />
+                </div>
+                <div v-if="errors.name" class="error-text">{{ errors.name }}</div>
+              </div>
+
+              <!-- Module Name -->
+              <div class="form-group-redesign">
+                <label for="cat-module" class="form-label-redesign">
+                  Module Name <span class="required-star">*</span>
+                </label>
+                <div class="input-with-icon">
+                  <i class="pi pi-box input-icon"></i>
+                  <select 
+                    id="cat-module" 
+                    v-model="form.moduleName" 
+                    class="form-select-redesign"
+                    :class="{ 'invalid': errors.moduleName }"
+                    required
+                  >
+                    <option value="">-- Pilih Modul Terkait --</option>
+                    <option 
+                      v-for="module in availableModules" 
+                      :key="module" 
+                      :value="module"
+                    >
+                      {{ getModuleName(module) }} ({{ module }})
+                    </option>
+                  </select>
+                </div>
+                <div v-if="errors.moduleName" class="error-text">{{ errors.moduleName }}</div>
+              </div>
+
+              <!-- Description -->
+              <div class="form-group-redesign">
+                <label for="cat-desc" class="form-label-redesign">
+                  Description
+                </label>
+                <div class="input-with-icon textarea-wrap">
+                  <i class="pi pi-align-left input-icon textarea-icon"></i>
+                  <textarea 
+                    id="cat-desc" 
+                    v-model="form.description" 
+                    rows="3"
+                    placeholder="Deskripsi fungsi kategori ini dalam laporan..."
+                    class="form-textarea-redesign"
+                    :class="{ 'invalid': errors.description }"
+                  ></textarea>
+                </div>
+                <div v-if="errors.description" class="error-text">{{ errors.description }}</div>
+              </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="form-actions-redesign">
+              <button 
+                type="button" 
+                class="btn-form-cancel" 
+                @click="closeModal" 
+                :disabled="saving"
               >
-              <div v-if="errors.name" class="error-text">{{ errors.name }}</div>
-            </div>
-            
-            <div class="form-group">
-              <label for="description">Description</label>
-              <textarea 
-                id="description" 
-                v-model="form.description" 
-                rows="3"
-                :class="{ 'invalid': errors.description }"
-              ></textarea>
-              <div v-if="errors.description" class="error-text">{{ errors.description }}</div>
-            </div>
-            
-            <div class="form-group">
-              <label for="moduleName">Module Name *</label>
-              <select 
-                id="moduleName" 
-                v-model="form.moduleName" 
-                :class="{ 'invalid': errors.moduleName }"
-                required
+                <i class="pi pi-times"></i>
+                <span>Batal</span>
+              </button>
+              <button 
+                type="submit" 
+                class="btn-form-submit" 
+                :disabled="saving"
               >
-                <option value="">Select a module</option>
-                <option 
-                  v-for="module in availableModules" 
-                  :key="module" 
-                  :value="module"
-                >
-                  {{ getModuleName(module) }}
-                </option>
-              </select>
-              <div v-if="errors.moduleName" class="error-text">{{ errors.moduleName }}</div>
-            </div>
-            
-            <div class="form-actions">
-              <Button severity="secondary" label="Cancel" size="small" raised @click="closeModal" />
-              <Button severity="info" raised type="submit" :icon="saving ? `pi pi-spin pi-spinner` : ``" :disabled="saving" :label="editingCategory ? `Update Category` : `Create Category`" size="small" />
+                <i v-if="saving" class="pi pi-spin pi-spinner"></i>
+                <i v-else :class="editingCategory ? 'pi pi-check' : 'pi pi-plus'"></i>
+                <span>{{ editingCategory ? 'Update Category' : 'Create Category' }}</span>
+              </button>
             </div>
           </form>
         </div>
@@ -185,18 +331,59 @@
 
     <!-- Delete Confirmation Dialog -->
     <div v-if="showDeleteDialog" class="modal-overlay" @click.self="closeDeleteDialog">
-      <div class="modal confirm-dialog">
-        <div class="modal-header">
-          <h3>Confirm Deletion</h3>
+      <div class="modal confirm-delete-modal">
+        <div class="dialog-header-modern delete-mode">
+          <div class="dialog-header-left">
+            <div class="dialog-icon-badge danger">
+              <i class="pi pi-exclamation-triangle"></i>
+            </div>
+            <div>
+              <h3 class="dialog-title">Konfirmasi Hapus</h3>
+              <span class="dialog-subtitle">Tindakan ini tidak dapat dibatalkan</span>
+            </div>
+          </div>
+          <button type="button" class="dialog-close-btn" @click="closeDeleteDialog" title="Tutup modal">
+            <i class="pi pi-times"></i>
+          </button>
         </div>
-        <div class="modal-body">
-          <p>Are you sure you want to delete the note category "{{ categoryToDelete?.name }}"?</p>
-          <p class="warning-text">This action cannot be undone.</p>
-          <div class="form-actions">
-            <button type="button" class="btn btn-secondary" @click="closeDeleteDialog">Cancel</button>
-            <button type="button" class="btn btn-danger" @click="deleteCategory" :disabled="deleting">
+        <div class="dialog-body-modern">
+          <div class="delete-confirmation-content">
+            <p class="delete-msg">
+              Apakah Anda yakin ingin menghapus kategori berikut?
+            </p>
+            <div class="delete-target-card">
+              <div class="target-title">
+                <i class="pi pi-tag"></i>
+                <strong>{{ categoryToDelete?.name }}</strong>
+              </div>
+              <div class="target-meta">
+                <span>ID: #{{ categoryToDelete?.id }}</span> &bull; 
+                <span>Modul: {{ getModuleName(categoryToDelete?.moduleName) }}</span>
+              </div>
+            </div>
+            <p class="delete-warning-sub">
+              Catatan yang sudah terhubung dengan kategori ini mungkin akan kehilangan referensinya.
+            </p>
+          </div>
+          <div class="form-actions-redesign">
+            <button 
+              type="button" 
+              class="btn-form-cancel" 
+              @click="closeDeleteDialog" 
+              :disabled="deleting"
+            >
+              <i class="pi pi-times"></i>
+              <span>Batal</span>
+            </button>
+            <button 
+              type="button" 
+              class="btn-danger-confirm" 
+              @click="deleteCategory" 
+              :disabled="deleting"
+            >
               <i v-if="deleting" class="pi pi-spin pi-spinner"></i>
-              Delete
+              <i v-else class="pi pi-trash"></i>
+              <span>{{ deleting ? 'Menghapus...' : 'Ya, Hapus Kategori' }}</span>
             </button>
           </div>
         </div>
@@ -208,9 +395,9 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useToast } from 'primevue/usetoast';
-import PageHeader from '../../components/PageHeader.vue';
 import DataTable from '../../components/common/DataTable.vue';
 import { noteCategoriesService } from '../../services';
+import modulesService from '../../services/modules.service.js';
 
 // State
 const categories = ref([]);
@@ -242,19 +429,16 @@ const errors = ref({});
 // Toast for notifications
 const toast = useToast();
 
-// Add module-related state and functions
-import modulesService from '../../services/modules.service.js';
-
-// Add to the state section:
+// Module state
 const availableModules = ref([]);
 const moduleNames = ref({});
 
-// Add helper function:
+// Helper function
 const getModuleName = (moduleKey) => {
-  return moduleNames.value[moduleKey] || moduleKey;
+  return moduleNames.value[moduleKey] || moduleKey || '-';
 };
 
-// Add to the methods section:
+// Methods
 const loadModules = async () => {
   try {
     const response = await modulesService.getAll();
@@ -286,7 +470,7 @@ const pagination = computed(() => ({
   totalPages: Math.ceil(totalItems.value / itemsPerPage.value)
 }));
 
-// Computed property for filtered data (following the pattern from RekonVirtualMrgTable.vue)
+// Computed property for filtered data
 const filteredCategories = computed(() => {
   if (Array.isArray(categories.value)) {
     return categories.value;
@@ -294,7 +478,6 @@ const filteredCategories = computed(() => {
   return [];
 });
 
-// Methods
 const loadCategories = async (params = {}) => {
   loading.value = true;
   error.value = '';
@@ -312,11 +495,9 @@ const loadCategories = async (params = {}) => {
     
     // Handle the response format from backend
     if (response.data && response.data.success) {
-      // Backend returned data in the format { success: true, data: [...], total: 50, page: 1, limit: 10, totalPages: 5 }
       categories.value = response.data.data;
       totalItems.value = response.data.total;
     } else if (response.data && Array.isArray(response.data)) {
-      // Backend returned simple array (fallback)
       categories.value = response.data;
       totalItems.value = response.data.length;
     } else {
@@ -362,7 +543,7 @@ const handleSearch = () => {
   window.searchTimeout = setTimeout(() => {
     currentPage.value = 1; // Reset to first page
     loadCategories({ searchQuery: searchQuery.value, page: 1 });
-  }, 500);
+  }, 400);
 };
 
 const clearSearch = () => {

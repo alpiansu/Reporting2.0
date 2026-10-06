@@ -1,222 +1,375 @@
-.search-container {
-    margin-bottom: 1.5rem;
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
+/* ==========================================================================
+   Master Dept Table Modern High-Density Styles
+   ========================================================================== */
+
+.master-dept-table-wrapper {
+  width: 100%;
 }
 
-.filters-row {
-    display: flex;
-    flex-direction: row;
-    align-items: stretch;
-    gap: 1.5rem;
-    width: 100%;
-    padding: 1.25rem;
-    background: var(--surface-card);
-    border: 1px solid var(--surface-border);
-    border-radius: 10px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+/* --------------------------------------------------------------------------
+   1. Toolbar Section in DataTable Filter Slot
+   -------------------------------------------------------------------------- */
+.toolbar-section {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  width: 100%;
 }
 
-.search-form {
-    flex: 1;
-    display: flex;
-    align-items: center;
+.search-box-compact {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 320px;
+  max-width: 100%;
 }
 
-.create-button {
-    height: fit-content;
-    align-self: center;
-    white-space: nowrap;
+.search-box-compact .search-icon {
+  position: absolute;
+  left: 0.75rem;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  pointer-events: none;
 }
 
-.search-box {
-    position: relative;
-    width: 100%;
-    max-width: 400px;
+.search-input-compact {
+  width: 100%;
+  padding: 0.45rem 2rem 0.45rem 2.2rem;
+  border: 1px solid var(--surface-border, #cbd5e1);
+  border-radius: 6px;
+  font-size: 0.825rem;
+  color: var(--text-color, #0f172a);
+  background: var(--surface-card, #ffffff);
+  transition: all 0.15s ease;
 }
 
-.search-input {
-    width: 100%;
-    padding: 0.875rem 2.75rem 0.875rem 2.75rem;
-    border: 1px solid var(--surface-border);
-    border-radius: 8px;
-    font-size: 0.875rem;
-    color: var(--text-color);
-    background: var(--surface-card);
-    transition: all 0.2s ease;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+.search-input-compact:focus {
+  outline: none;
+  border-color: #0284c7;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
 }
 
-.search-input:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-    background: var(--surface-card);
+.clear-search-btn {
+  position: absolute;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
 }
 
-.search-input::placeholder {
-    color: var(--text-color-secondary);
+.clear-search-btn:hover {
+  color: #dc2626;
+  background: #fee2e2;
 }
 
-.search-icon {
-    position: absolute;
-    left: 0.875rem;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--text-color-secondary);
-    font-size: 1rem;
-    transition: all 0.2s ease;
+.table-meta-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.775rem;
+  color: #0284c7;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
 }
 
-.search-input:focus~.search-icon {
-    color: #3b82f6;
+.btn-toolbar-create {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+  color: #ffffff;
+  border: none;
+  padding: 0.42rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(2, 132, 199, 0.2);
 }
 
-.clear-button {
-    position: absolute;
-    right: 0.875rem;
-    top: 50%;
-    transform: translateY(-50%);
-    background: var(--surface-ground);
-    border: 1px solid var(--surface-border);
-    color: var(--text-color-secondary);
-    cursor: pointer;
-    padding: 0.375rem;
-    border-radius: 6px;
-    transition: all 0.2s ease;
-    width: 28px;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+.btn-toolbar-create:hover {
+  background: linear-gradient(135deg, #0369a1, #075985);
+  transform: translateY(-1px);
 }
 
-.clear-button:hover {
-    color: #dc2626;
-    background: rgba(239, 68, 68, 0.1);
-    border-color: rgba(239, 68, 68, 0.4);
+/* --------------------------------------------------------------------------
+   2. DataTable Overrides (High-Density)
+   -------------------------------------------------------------------------- */
+:deep(.data-table-container) {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  margin-bottom: 0 !important;
 }
 
-.action-buttons {
-    display: flex;
-    gap: 0.375rem;
-    justify-content: center;
+:deep(.filters-container) {
+  background: var(--surface-card, #ffffff) !important;
+  border: 1px solid var(--surface-border, #e2e8f0) !important;
+  border-radius: 8px !important;
+  padding: 0.65rem 0.9rem !important;
+  margin-bottom: 0.75rem !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02) !important;
 }
 
-.text-center {
-    text-align: center;
+:deep(.filters-header) {
+  display: none !important;
 }
 
-/* ✅ GANTI DENGAN — :deep() syntax Vue 3, nth-child mapping yang benar */
+:deep(.filters-body) {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-wrap: wrap !important;
+  gap: 0.5rem !important;
+}
+
+:deep(.filter-stats) {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  margin: 0 !important;
+}
+
+:deep(.filter-stat-item) {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.25rem !important;
+  background: var(--surface-ground, #f1f5f9) !important;
+  padding: 0.25rem 0.5rem !important;
+  border-radius: 5px !important;
+  font-size: 0.75rem !important;
+}
+
+:deep(.table-container) {
+  background: var(--surface-card, #ffffff) !important;
+  border: 1px solid var(--surface-border, #e2e8f0) !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+:deep(.table-header.elegant-header) {
+  display: none !important;
+}
 
 :deep(.table-responsive) {
-    overflow-x: auto;
-    max-height: 70vh;
-    border: 1px solid var(--surface-border);
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  max-height: calc(100vh - 280px) !important;
+  overflow-y: auto !important;
+  overflow-x: auto !important;
 }
 
 :deep(.results-table) {
-    width: 100%;
-    border-collapse: separate;
-    border-spacing: 0;
-    font-size: 0.875rem;
-    border-radius: 8px;
-    overflow: hidden;
-    margin-bottom: 0;
-    table-layout: fixed;
-    min-width: 680px;
-    /* pastikan scroll horizontal terpicu di layar kecil */
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.8rem !important;
+  table-layout: fixed;
+  min-width: 680px;
 }
 
-:deep(.results-table) th,
-:deep(.results-table) td {
-    padding: 0.875rem 1rem;
-    border-bottom: 1px solid var(--surface-border);
-    vertical-align: middle;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+:deep(.results-table th) {
+  background: #f8fafc !important;
+  color: #475569 !important;
+  font-weight: 700 !important;
+  font-size: 0.725rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  padding: 0.6rem 0.85rem !important;
+  border-bottom: 1.5px solid var(--surface-border, #e2e8f0) !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 10 !important;
+  white-space: nowrap !important;
 }
 
-:deep(.results-table) th {
-    background: linear-gradient(to bottom, var(--surface-ground), var(--surface-section));
-    color: var(--text-color);
-    font-weight: 600;
-    text-align: left;
-    border-bottom: 2px solid var(--surface-border);
-    text-transform: uppercase;
-    font-size: 0.75rem;
-    letter-spacing: 0.5px;
-    position: sticky;
-    top: 0;
-    z-index: 10;
+:deep(.results-table td) {
+  padding: 0.55rem 0.85rem !important;
+  border-bottom: 1px solid var(--surface-border, #f1f5f9) !important;
+  vertical-align: middle !important;
+  color: var(--text-color, #1e293b);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-:deep(.results-table) tr:last-child td {
-    border-bottom: none;
+:deep(.results-table tbody tr:hover) {
+  background-color: #f0f9ff !important;
 }
 
-:deep(.results-table) tr:hover {
-    background-color: var(--surface-ground);
+:deep(.results-table tbody tr:nth-child(even)) {
+  background-color: #fafbfc;
 }
 
-:deep(.results-table) tr:nth-child(even) {
-    background-color: var(--surface-card);
+:deep(.results-table tbody tr:nth-child(even):hover) {
+  background-color: #f0f9ff !important;
 }
 
-:deep(.results-table) tr:nth-child(even):hover {
-    background-color: var(--surface-ground);
+/* Column Width Specifications */
+:deep(.col-dept-kd),
+.col-dept-kd {
+  width: 12%;
+  text-align: center;
 }
 
-/* ── Kolom widths — 6 kolom, total 100% ── */
-
-/* nth-child(2) = Dept Code */
-:deep(.results-table) th:nth-child(1),
-:deep(.results-table) td:nth-child(1) {
-    width: 12%;
-    text-align: center;
-    font-weight: 500;
+:deep(.col-dept-nm),
+.col-dept-nm {
+  width: 36%;
 }
 
-/* nth-child(3) = Department Name — kolom terpanjang */
-:deep(.results-table) th:nth-child(2),
-:deep(.results-table) td:nth-child(2) {
-    width: 38%;
-    font-weight: 500;
+:deep(.col-div-kd),
+.col-div-kd {
+  width: 16%;
 }
 
-/* nth-child(4) = Div Code */
-:deep(.results-table) th:nth-child(3),
-:deep(.results-table) td:nth-child(3) {
-    width: 12%;
+:deep(.col-dep-mgr),
+.col-dep-mgr {
+  width: 24%;
 }
 
-/* nth-child(5) = Manager */
-:deep(.results-table) th:nth-child(4),
-:deep(.results-table) td:nth-child(4) {
-    width: 20%;
+:deep(.col-actions),
+.col-actions {
+  width: 12%;
+  text-align: center;
 }
 
-/* nth-child(6) = Actions — sebelumnya tidak ada, ini penyebab tombol hilang */
-:deep(.results-table) th:nth-child(5),
-:deep(.results-table) td:nth-child(5) {
-    width: 13%;
-    text-align: center;
+/* --------------------------------------------------------------------------
+   3. Cell Elements & Badges
+   -------------------------------------------------------------------------- */
+.badge-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #f1f5f9;
+  color: #475569;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
 }
 
+.dept-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.cell-icon {
+  color: #0284c7;
+  font-size: 0.8rem;
+}
+
+.dept-name-text {
+  font-weight: 600;
+  color: var(--text-color, #0f172a);
+}
+
+.division-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #f0fdf4;
+  color: #15803d;
+  font-weight: 600;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  border: 1px solid #bbf7d0;
+}
+
+.division-pill i {
+  font-size: 0.725rem;
+}
+
+.manager-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.785rem;
+  color: #334155;
+  font-weight: 500;
+}
+
+.manager-cell i {
+  color: #64748b;
+  font-size: 0.75rem;
+}
+
+.text-muted {
+  color: #94a3b8;
+  font-style: italic;
+}
+
+/* Action Buttons */
+.action-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.btn-action-compact {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 0.8rem;
+}
+
+.btn-edit {
+  background: #fef3c7;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.btn-edit:hover {
+  background: #fde68a;
+  color: #92400e;
+  transform: translateY(-1px);
+}
+
+.btn-delete {
+  background: #fee2e2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.btn-delete:hover {
+  background: #fecaca;
+  color: #991b1b;
+  transform: translateY(-1px);
+}
+
+/* --------------------------------------------------------------------------
+   4. Responsive Breakpoints
+   -------------------------------------------------------------------------- */
 @media (max-width: 768px) {
-    .filters-row {
-        flex-direction: column;
-        gap: 1rem;
-        padding: 1rem;
-    }
+  .toolbar-section {
+    flex-direction: column;
+    align-items: stretch;
+  }
 
-    .create-button {
-        width: 100%;
-        justify-content: center;
-    }
+  .search-box-compact {
+    width: 100%;
+  }
+
+  .btn-toolbar-create {
+    margin-left: 0;
+    width: 100%;
+    justify-content: center;
+  }
 }

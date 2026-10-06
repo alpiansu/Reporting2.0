@@ -1,17 +1,61 @@
 <template>
   <div v-if="show" class="modal-overlay" @click.self="$emit('close')">
-    <div class="modal confirm-dialog">
-      <div class="modal-header">
-        <h3>Confirm Deletion</h3>
+    <div class="modal confirm-delete-modal">
+      <div class="dialog-header-modern delete-mode">
+        <div class="dialog-header-left">
+          <div class="dialog-icon-badge danger">
+            <i class="pi pi-exclamation-triangle"></i>
+          </div>
+          <div>
+            <h3 class="dialog-title">Konfirmasi Hapus</h3>
+            <span class="dialog-subtitle">Tindakan ini tidak dapat dibatalkan</span>
+          </div>
+        </div>
+        <button type="button" class="dialog-close-btn" @click="$emit('close')" title="Tutup modal">
+          <i class="pi pi-times"></i>
+        </button>
       </div>
-      <div class="modal-body">
-        <p>Are you sure you want to delete the department "{{ dept?.dep_nm }}" ({{ dept?.dep_kd }})?</p>
-        <p class="warning-text">This action cannot be undone.</p>
-        <div class="form-actions">
-          <button class="btn btn-secondary" type="button" @click="$emit('close')">Cancel</button>
-          <button class="btn btn-danger" type="button" @click="$emit('confirm')" :disabled="deleting">
+
+      <div class="dialog-body-modern">
+        <div class="delete-confirmation-content">
+          <p class="delete-msg">
+            Apakah Anda yakin ingin menghapus departemen berikut?
+          </p>
+          <div class="delete-target-card">
+            <div class="target-title">
+              <i class="pi pi-building"></i>
+              <strong>{{ dept?.dep_nm }}</strong>
+            </div>
+            <div class="target-meta">
+              <span>Kode Dept: #{{ dept?.dep_kd }}</span> &bull; 
+              <span>Divisi: {{ dept?.div_kd || '-' }}</span>
+              <span v-if="dept?.dep_mgr"> &bull; Mgr: {{ dept?.dep_mgr }}</span>
+            </div>
+          </div>
+          <p class="delete-warning-sub">
+            Departemen yang dihapus dapat mempengaruhi data master produk dan mapping modul terkait.
+          </p>
+        </div>
+
+        <div class="form-actions-redesign">
+          <button 
+            type="button" 
+            class="btn-form-cancel" 
+            @click="$emit('close')" 
+            :disabled="deleting"
+          >
+            <i class="pi pi-times"></i>
+            <span>Batal</span>
+          </button>
+          <button 
+            type="button" 
+            class="btn-danger-confirm" 
+            @click="$emit('confirm')" 
+            :disabled="deleting"
+          >
             <i v-if="deleting" class="pi pi-spin pi-spinner"></i>
-            Delete
+            <i v-else class="pi pi-trash"></i>
+            <span>{{ deleting ? 'Menghapus...' : 'Ya, Hapus Departemen' }}</span>
           </button>
         </div>
       </div>
@@ -20,7 +64,6 @@
 </template>
 
 <script setup>
-
 defineProps({
   show: {
     type: Boolean,
@@ -40,4 +83,3 @@ defineEmits(['close', 'confirm']);
 </script>
 
 <style src="./MasterDeptConfirmDialog.css" scoped />
-<style src="@/views/common-button.css" scoped />

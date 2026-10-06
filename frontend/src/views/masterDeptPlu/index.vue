@@ -1,11 +1,74 @@
 <template>
   <div class="master-dept-view">
-    <PageHeader 
-      title="Master Dept Management" 
-      subtitle="Manage department master data" 
-      description="Add, edit, or remove departments used throughout the system."
-    />
-    
+    <!-- Compact Header Section -->
+    <header class="view-header">
+      <div class="header-main">
+        <div class="header-icon-box">
+          <i class="pi pi-sitemap"></i>
+        </div>
+        <div class="header-text">
+          <h1 class="header-title">Master Dept Management</h1>
+          <p class="header-subtitle">Kelola master data departemen, pembagian divisi, dan kepala departemen</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button
+          type="button"
+          class="btn-header-secondary"
+          :disabled="loading"
+          @click="loadDepartments"
+          title="Muat ulang data"
+        >
+          <i class="pi pi-refresh" :class="{ 'pi-spin': loading }"></i>
+          <span>Refresh</span>
+        </button>
+
+        <button
+          type="button"
+          class="btn-header-primary"
+          @click="openCreateModal"
+          title="Tambah departemen baru"
+        >
+          <i class="pi pi-plus"></i>
+          <span>Tambah Departemen</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- KPI Summary Strip (Compact) -->
+    <section class="kpi-summary-strip">
+      <div class="kpi-card">
+        <div class="kpi-icon-wrapper total">
+          <i class="pi pi-building"></i>
+        </div>
+        <div class="kpi-content">
+          <span class="kpi-label">Total Departemen</span>
+          <span class="kpi-value">{{ totalItems || departments.length || 0 }}</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-icon-wrapper division">
+          <i class="pi pi-folder"></i>
+        </div>
+        <div class="kpi-content">
+          <span class="kpi-label">Total Divisi</span>
+          <span class="kpi-value">{{ totalDivisions }}</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-icon-wrapper manager">
+          <i class="pi pi-users"></i>
+        </div>
+        <div class="kpi-content">
+          <span class="kpi-label">Dept dg Manager</span>
+          <span class="kpi-value">{{ totalWithManager }}</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Table Container -->
     <div class="content-container">
       <MasterDeptTable
         :data="filteredDepartments"
@@ -24,6 +87,7 @@
       />
     </div>
 
+    <!-- Add / Edit Dialog -->
     <MasterDeptDialog
       :show="showModal"
       :initial-data="editingDept"
@@ -33,6 +97,7 @@
       @save="saveDepartment"
     />
 
+    <!-- Delete Confirmation Dialog -->
     <MasterDeptConfirmDialog
       :show="showDeleteDialog"
       :dept="deptToDelete"
@@ -46,7 +111,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useToast } from 'primevue/usetoast';
-import PageHeader from '@/components/PageHeader.vue';
 import MasterDeptTable from './components/MasterDeptTable.vue';
 import MasterDeptDialog from './components/MasterDeptDialog.vue';
 import MasterDeptConfirmDialog from './components/MasterDeptConfirmDialog.vue';
@@ -75,7 +139,19 @@ const errors = ref({});
 // Toast for notifications
 const toast = useToast();
 
-// Computed properties
+// Computed KPI Stats
+const totalDivisions = computed(() => {
+  if (!Array.isArray(departments.value)) return 0;
+  const divs = new Set(departments.value.map(d => d.div_kd).filter(Boolean));
+  return divs.size;
+});
+
+const totalWithManager = computed(() => {
+  if (!Array.isArray(departments.value)) return 0;
+  return departments.value.filter(d => d.dep_mgr && d.dep_mgr.trim()).length;
+});
+
+// Computed pagination
 const pagination = computed(() => ({
   currentPage: currentPage.value,
   itemsPerPage: itemsPerPage.value,
@@ -157,7 +233,6 @@ const handleSortChange = (data) => {
 };
 
 const handleSearch = (query) => {
-  // If query is an Event object, we take the default value or ignore it
   if (typeof query === 'string') {
     searchQuery.value = query;
   }
@@ -214,8 +289,8 @@ const saveDepartment = async (formValue) => {
     };
     
     // Note: Backend expects kddept, namadept
-    if(payload.dep_kd) { payload.kddept = payload.dep_kd; }
-    if(payload.dep_nm) { payload.namadept = payload.dep_nm; }
+    if (payload.dep_kd) { payload.kddept = payload.dep_kd; }
+    if (payload.dep_nm) { payload.namadept = payload.dep_nm; }
 
     if (editingDept.value) {
       await mDeptService.update(editingDept.value.dep_kd, payload);

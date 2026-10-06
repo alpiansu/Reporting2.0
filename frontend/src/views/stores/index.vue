@@ -1,169 +1,432 @@
 <template>
-  <div class="store-list-modern">
-    <!-- Page Header -->
-    <div class="page-header-modern">
-      <div class="header-content-modern">
-        <div class="header-title-section">
-          <i class="pi pi-building header-icon-modern"></i>
-          <div class="header-title-content">
-            <h1 class="page-title-modern">Store Management</h1>
-            <p class="page-description-modern">Manage store data and branch information</p>
-          </div>
+  <div class="store-management-view">
+    <!-- Compact Header Section -->
+    <header class="view-header">
+      <div class="header-main">
+        <div class="header-icon-box">
+          <i class="pi pi-building"></i>
         </div>
-        <div class="header-actions-modern" v-if="isSuperAdmin">
-          <button class="action-button-primary" @click="openAddStoreDialog">
-            <i class="pi pi-plus"></i>
-            <span>Add Store</span>
-          </button>
+        <div class="header-text">
+          <h1 class="header-title">Store Management</h1>
+          <p class="header-subtitle">Kelola data master toko, server IP, dan konfigurasi cabang</p>
         </div>
       </div>
-    </div>
+      <div class="header-actions">
+        <button
+          type="button"
+          class="btn-header-secondary"
+          :disabled="loading"
+          @click="refreshStores"
+          title="Muat ulang data"
+        >
+          <i class="pi pi-refresh" :class="{ 'pi-spin': loading }"></i>
+          <span>Refresh</span>
+        </button>
 
-    <!-- Master Store Sync Bar -->
-    <div v-if="canEdit" class="sync-bar-modern">
-      <div class="sync-info-modern">
-        <div class="sync-info-item">
-          <i class="pi pi-sync sync-icon-modern"></i>
-          <div>
-            <span class="sync-label">Last Sync</span>
-            <span class="sync-value">{{ lastSyncText }}</span>
-          </div>
+        <button
+          v-if="canEdit"
+          type="button"
+          class="btn-header-secondary"
+          @click="openCsvUploadDialog"
+          :title="csvSnapshotReady ? 'Upload CSV lainnya' : 'Upload master CSV'"
+        >
+          <i class="pi pi-upload"></i>
+          <span>{{ csvSnapshotReady ? 'Upload CSV Lainnya' : 'Upload Master CSV' }}</span>
+        </button>
+
+        <button
+          v-if="isSuperAdmin"
+          type="button"
+          class="btn-header-primary"
+          @click="openAddStoreDialog"
+        >
+          <i class="pi pi-plus"></i>
+          <span>Tambah Toko</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- KPI & Sync Summary Bar (Compact) -->
+    <section class="kpi-summary-strip">
+      <div class="kpi-card">
+        <div class="kpi-icon-wrapper total">
+          <i class="pi pi-shopping-bag"></i>
         </div>
-        <div class="sync-info-item">
-          <i class="pi pi-file-import sync-icon-modern"></i>
-          <div>
-            <span class="sync-label">Snapshot CSV</span>
-            <span class="sync-value">{{ csvSnapshotText }}</span>
-          </div>
+        <div class="kpi-content">
+          <span class="kpi-label">Total Toko</span>
+          <span class="kpi-value">{{ pagination?.totalItems || 0 }}</span>
         </div>
       </div>
-      <button class="upload-csv-btn-modern" @click="openCsvUploadDialog" :title="csvSnapshotReady ? 'Upload CSV lainnya' : 'Upload master CSV'">
-        <i class="pi pi-upload"></i>
-        {{ csvSnapshotReady ? 'Upload CSV Lainnya' : 'Upload Master CSV' }}
-      </button>
-    </div>
 
-    <!-- Search and Filter Section -->
-    <div class="controls-section">
-      <div class="search-controls">
-        <div class="search-box-modern">
+      <div class="kpi-card">
+        <div class="kpi-icon-wrapper induk">
+          <i class="pi pi-server"></i>
+        </div>
+        <div class="kpi-content">
+          <span class="kpi-label">Snapshot INDUK</span>
+          <span class="kpi-value">{{ syncStatus?.snapshot?.stats?.induk ?? '-' }}</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-icon-wrapper stb">
+          <i class="pi pi-desktop"></i>
+        </div>
+        <div class="kpi-content">
+          <span class="kpi-label">Snapshot STB</span>
+          <span class="kpi-value">{{ syncStatus?.snapshot?.stats?.stb ?? '-' }}</span>
+        </div>
+      </div>
+
+      <div class="kpi-card kpi-sync-info" v-if="canEdit">
+        <div class="kpi-icon-wrapper sync">
+          <i class="pi pi-sync"></i>
+        </div>
+        <div class="kpi-content">
+          <span class="kpi-label">Status Sinkronisasi</span>
+          <span class="kpi-subtext" :title="lastSyncText">
+            {{ lastSyncText }}
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Controls Toolbar (Search, Filter, View Mode) -->
+    <section class="toolbar-section">
+      <div class="toolbar-left">
+        <!-- Search Input -->
+        <div class="search-box-compact">
           <i class="pi pi-search search-icon"></i>
-          <input type="text" v-model="searchQuery" placeholder="Search stores, codes, regions..." @input="handleSearch"
-            class="search-input" />
-          <button v-if="searchQuery" class="clear-search-btn" @click="clearSearch">
+          <input
+            type="text"
+            v-model="searchQuery"
+            placeholder="Cari kode, nama toko, cabang, IP host..."
+            @input="handleSearch"
+            class="search-input-compact"
+          />
+          <button v-if="searchQuery" class="clear-search-btn" @click="clearSearch" title="Hapus pencarian">
             <i class="pi pi-times"></i>
           </button>
         </div>
 
-        <div class="filter-section">
-          <button class="filter-button-modern" @click="toggleFilterMenu">
+        <!-- Quick Type Filter -->
+        <div class="quick-filter-group">
+          <button
+            type="button"
+            class="quick-filter-btn"
+            :class="{ active: !selectedNotesType }"
+            @click="setQuickType('')"
+          >
+            Semua
+          </button>
+          <button
+            type="button"
+            class="quick-filter-btn"
+            :class="{ active: selectedNotesType === 'INDUK' }"
+            @click="setQuickType('INDUK')"
+          >
+            INDUK
+          </button>
+          <button
+            type="button"
+            class="quick-filter-btn"
+            :class="{ active: selectedNotesType === 'STB' }"
+            @click="setQuickType('STB')"
+          >
+            STB
+          </button>
+        </div>
+
+        <!-- Advanced Filter Dropdown Toggle -->
+        <div class="filter-dropdown-wrapper">
+          <button
+            type="button"
+            class="filter-toggle-btn"
+            :class="{ 'filter-active': hasAdvancedFilter, 'is-open': showFilterMenu }"
+            @click="toggleFilterMenu"
+          >
             <i class="pi pi-filter"></i>
-            <span>Filters</span>
-            <i class="pi pi-chevron-down" :class="{ 'rotated': showFilterMenu }"></i>
+            <span>Filter Lanjutan</span>
+            <span v-if="activeFilterCount > 0" class="filter-count-badge">{{ activeFilterCount }}</span>
+            <i class="pi pi-chevron-down caret-icon" :class="{ 'rotated': showFilterMenu }"></i>
           </button>
 
-          <!-- Modern Filter Panel -->
-          <div v-if="showFilterMenu" class="filter-panel-modern">
-            <div class="filter-content">
-              <div class="filter-group-modern">
-                <h4 class="filter-title-modern">Region</h4>
-                <div class="filter-options-modern">
-                  <label v-for="region in regions" :key="region.id" class="filter-option-modern">
+          <!-- Filter Popup Menu -->
+          <div v-if="showFilterMenu" class="filter-popover" @click.stop>
+            <div class="filter-popover-header">
+              <span class="popover-title">Filter Parameter</span>
+              <button class="popover-close" @click="showFilterMenu = false">
+                <i class="pi pi-times"></i>
+              </button>
+            </div>
+
+            <div class="filter-popover-body">
+              <div class="filter-category">
+                <span class="category-title">Region</span>
+                <div class="checkbox-list">
+                  <label v-for="region in regions" :key="region.id" class="custom-checkbox-label">
                     <input type="checkbox" :value="region.id" v-model="selectedRegions" @change="applyFilters" />
-                    <span class="checkmark"></span>
+                    <span class="checkbox-indicator"></span>
                     <span>{{ region.name }}</span>
                   </label>
                 </div>
               </div>
 
-              <div class="filter-group-modern">
-                <h4 class="filter-title-modern">City</h4>
-                <div class="filter-options-modern">
-                  <label v-for="city in cities" :key="city.id" class="filter-option-modern">
+              <div class="filter-category">
+                <span class="category-title">Kota (City)</span>
+                <div class="checkbox-list">
+                  <label v-for="city in cities" :key="city.id" class="custom-checkbox-label">
                     <input type="checkbox" :value="city.id" v-model="selectedCities" @change="applyFilters" />
-                    <span class="checkmark"></span>
+                    <span class="checkbox-indicator"></span>
                     <span>{{ city.name }}</span>
                   </label>
                 </div>
               </div>
 
-              <div class="filter-group-modern">
-                <h4 class="filter-title-modern">Status</h4>
-                <div class="filter-options-modern">
-                  <label v-for="status in statuses" :key="status.id" class="filter-option-modern">
+              <div class="filter-category">
+                <span class="category-title">Status</span>
+                <div class="checkbox-list">
+                  <label v-for="status in statuses" :key="status.id" class="custom-checkbox-label">
                     <input type="checkbox" :value="status.id" v-model="selectedStatuses" @change="applyFilters" />
-                    <span class="checkmark"></span>
+                    <span class="checkbox-indicator"></span>
                     <span>{{ status.name }}</span>
                   </label>
                 </div>
               </div>
+            </div>
 
-              <div class="filter-actions-modern">
-                <button class="filter-clear-btn" @click="clearFilters">Clear All</button>
-                <button class="filter-apply-btn" @click="applyFilters">Apply Filters</button>
-              </div>
+            <div class="filter-popover-footer">
+              <button type="button" class="btn-clear-filters" @click="clearFilters">Reset Filter</button>
+              <button type="button" class="btn-apply-filters" @click="applyFilters">Terapkan</button>
             </div>
           </div>
         </div>
-      </div>
-    </div>
 
-    <!-- Store Content -->
-    <div class="store-content-modern">
+        <!-- Reset All Filter Button if Active -->
+        <button
+          v-if="hasAnyFilter"
+          type="button"
+          class="btn-reset-compact"
+          @click="resetAllFilters"
+          title="Reset semua filter dan pencarian"
+        >
+          <i class="pi pi-times-circle"></i>
+          <span>Reset</span>
+        </button>
+      </div>
+
+      <!-- Right: View Mode Toggle -->
+      <div class="toolbar-right">
+        <div class="view-mode-toggle">
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ active: viewMode === 'table' }"
+            @click="viewMode = 'table'"
+            title="Tampilan Tabel (Rekomendasi - Ringkas)"
+          >
+            <i class="pi pi-table"></i>
+            <span>Tabel</span>
+          </button>
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ active: viewMode === 'cards' }"
+            @click="viewMode = 'cards'"
+            title="Tampilan Kartu Ringkas"
+          >
+            <i class="pi pi-th-large"></i>
+            <span>Kartu</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Content Area -->
+    <main class="store-data-container">
       <!-- Loading State -->
-      <div v-if="loading" class="loading-state-modern">
-        <div class="loading-content">
-          <i class="pi pi-spin pi-spinner loading-icon"></i>
-          <h3 class="loading-title">Loading Stores</h3>
-          <p class="loading-text">Please wait while we fetch your store data...</p>
+      <div v-if="loading" class="data-loading-state">
+        <i class="pi pi-spin pi-spinner loading-spinner-icon"></i>
+        <div class="loading-text-group">
+          <h4>Memuat Data Toko...</h4>
+          <p>Mengambil data master toko dari server</p>
         </div>
       </div>
 
-      <!-- Store Grid -->
-      <div v-else-if="!loading && filteredStores.length > 0" class="store-grid-modern">
-        <div v-for="store in filteredStores" :key="store.id" class="store-card-modern"
-          @click="viewStoreDetail(store)">
-          <div class="store-card-header">
-            <div class="store-identity">
-              <h3 class="store-name">{{ store.storeName }}</h3>
-              <span class="store-code">{{ store.storeCode }} - {{ store.station }}</span>
+      <!-- Data View: Table Mode (Default, High Density & Zero-Scroll) -->
+      <div v-else-if="!loading && filteredStores.length > 0 && viewMode === 'table'" class="table-card-wrapper">
+        <div class="table-responsive-box">
+          <table class="store-table-compact">
+            <thead>
+              <tr>
+                <th class="th-code">Kode Toko</th>
+                <th class="th-station">Station</th>
+                <th class="th-name">Nama Toko</th>
+                <th class="th-branch">Cabang</th>
+                <th class="th-host">DB Host IP</th>
+                <th class="th-type">Tipe</th>
+                <th class="th-address">Alamat</th>
+                <th class="th-updated">Terakhir Update</th>
+                <th class="th-actions text-center">Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="store in filteredStores"
+                :key="store.id"
+                class="store-row-item"
+                @click="viewStoreDetail(store)"
+              >
+                <!-- Kode Toko -->
+                <td class="td-code">
+                  <span class="store-code-badge">{{ store.storeCode }}</span>
+                </td>
+
+                <!-- Station -->
+                <td class="td-station">
+                  <span class="station-badge">{{ store.station || '01' }}</span>
+                </td>
+
+                <!-- Nama Toko -->
+                <td class="td-name">
+                  <div class="store-name-text" :title="store.storeName">
+                    {{ store.storeName }}
+                  </div>
+                </td>
+
+                <!-- Cabang -->
+                <td class="td-branch">
+                  <span class="branch-pill">{{ store.branch }}</span>
+                </td>
+
+                <!-- DB Host IP -->
+                <td class="td-host">
+                  <div class="host-ip-wrapper">
+                    <i class="pi pi-server host-icon"></i>
+                    <span class="host-ip-text">{{ store.dbHost }}</span>
+                  </div>
+                </td>
+
+                <!-- Tipe / Notes -->
+                <td class="td-type">
+                  <span class="type-pill" :class="getTypeBadgeClass(store.notes)">
+                    {{ store.notes || 'INDUK' }}
+                  </span>
+                </td>
+
+                <!-- Alamat -->
+                <td class="td-address">
+                  <span class="address-text" :title="store.address || '-'">
+                    {{ store.address || '-' }}
+                  </span>
+                </td>
+
+                <!-- Terakhir Update -->
+                <td class="td-updated">
+                  <span class="updated-timestamp" :title="formatDate(store.updatedAt)">
+                    {{ formatCompactDate(store.updatedAt) }}
+                  </span>
+                </td>
+
+                <!-- Actions -->
+                <td class="td-actions text-center" @click.stop>
+                  <div class="row-action-buttons">
+                    <button
+                      type="button"
+                      class="row-action-btn view"
+                      title="Lihat Detail Lengkap"
+                      @click="viewStoreDetail(store)"
+                    >
+                      <i class="pi pi-eye"></i>
+                    </button>
+                    <button
+                      v-if="canEdit"
+                      type="button"
+                      class="row-action-btn edit"
+                      title="Edit Toko"
+                      @click="openEditStoreDialog(store)"
+                    >
+                      <i class="pi pi-pencil"></i>
+                    </button>
+                    <button
+                      v-if="isSuperAdmin"
+                      type="button"
+                      class="row-action-btn delete"
+                      title="Hapus Toko"
+                      @click="confirmDelete(store)"
+                    >
+                      <i class="pi pi-trash"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Data View: Compact Cards Mode (Alternative Grid) -->
+      <div v-else-if="!loading && filteredStores.length > 0 && viewMode === 'cards'" class="cards-grid-compact">
+        <div
+          v-for="store in filteredStores"
+          :key="store.id"
+          class="compact-store-card"
+          @click="viewStoreDetail(store)"
+        >
+          <div class="card-header-compact">
+            <div class="card-identity">
+              <span class="card-code">{{ store.storeCode }}</span>
+              <span class="card-station">{{ store.station }}</span>
+              <h3 class="card-title" :title="store.storeName">{{ store.storeName }}</h3>
             </div>
-            <div class="store-status">
-              <span class="status-badge" :class="getStatusClass(store.notes === 'INDUK' ? 'Active' : 'Pending')">
-                {{ store.notes }}
-              </span>
+            <span class="type-pill" :class="getTypeBadgeClass(store.notes)">
+              {{ store.notes }}
+            </span>
+          </div>
+
+          <div class="card-body-compact">
+            <div class="card-detail-row">
+              <span class="detail-label"><i class="pi pi-sitemap"></i> Cabang:</span>
+              <span class="detail-val font-semibold">{{ store.branch }}</span>
+            </div>
+            <div class="card-detail-row">
+              <span class="detail-label"><i class="pi pi-server"></i> DB Host:</span>
+              <span class="detail-val font-mono">{{ store.dbHost }}</span>
+            </div>
+            <div class="card-detail-row" v-if="store.address">
+              <span class="detail-label"><i class="pi pi-map-marker"></i> Alamat:</span>
+              <span class="detail-val text-truncate" :title="store.address">{{ store.address }}</span>
             </div>
           </div>
 
-          <div class="store-details">
-            <div class="detail-item">
-              <i class="pi pi-server detail-icon"></i>
-              <span class="detail-text">{{ store.dbHost }}</span>
-            </div>
-            <div class="detail-item">
-              <i class="pi pi-sitemap detail-icon"></i>
-              <span class="detail-text">Branch: {{ store.branch }}</span>
-            </div>
-            <div class="detail-item" v-if="store.address">
-              <i class="pi pi-map-marker detail-icon"></i>
-              <span class="detail-text">{{ store.address }}</span>
-            </div>
-          </div>
-
-          <div class="store-footer">
-            <div class="update-info">
-              <i class="pi pi-clock update-icon"></i>
-              <span class="update-text">Updated {{ formatDate(store.updatedAt) }}</span>
-            </div>
-            <div class="store-actions" @click.stop>
-              <button v-if="canEdit" class="action-btn edit-btn" title="Edit Store" @click="openEditStoreDialog(store)">
+          <div class="card-footer-compact" @click.stop>
+            <span class="footer-time">{{ formatCompactDate(store.updatedAt) }}</span>
+            <div class="footer-actions">
+              <button
+                type="button"
+                class="row-action-btn view"
+                title="Lihat Detail"
+                @click="viewStoreDetail(store)"
+              >
+                <i class="pi pi-eye"></i>
+              </button>
+              <button
+                v-if="canEdit"
+                type="button"
+                class="row-action-btn edit"
+                title="Edit Toko"
+                @click="openEditStoreDialog(store)"
+              >
                 <i class="pi pi-pencil"></i>
               </button>
-              <button v-if="isSuperAdmin" class="action-btn delete-btn" title="Delete Store" @click="confirmDelete(store)">
+              <button
+                v-if="isSuperAdmin"
+                type="button"
+                class="row-action-btn delete"
+                title="Hapus Toko"
+                @click="confirmDelete(store)"
+              >
                 <i class="pi pi-trash"></i>
-              </button>
-              <button class="action-btn view-btn" title="View Details" @click="viewStoreDetail(store)">
-                <i class="pi pi-arrow-right"></i>
               </button>
             </div>
           </div>
@@ -171,116 +434,311 @@
       </div>
 
       <!-- Empty State -->
-      <div v-else class="empty-state-modern">
-        <div class="empty-content">
-          <i class="pi pi-inbox empty-icon"></i>
-          <h3 class="empty-title">{{ searchQuery ? 'No Stores Found' : 'No Stores Available' }}</h3>
-          <p class="empty-text">
-            {{ searchQuery ? 'Try adjusting your search terms or filters' : 'Get started by adding your first store' }}
-          </p>
-          <button v-if="isSuperAdmin" class="action-button-primary" @click="openAddStoreDialog">
+      <div v-else class="empty-state-card">
+        <i class="pi pi-inbox empty-state-icon"></i>
+        <h3 class="empty-state-title">
+          {{ searchQuery || hasAdvancedFilter ? 'Toko Tidak Ditemukan' : 'Belum Ada Data Toko' }}
+        </h3>
+        <p class="empty-state-desc">
+          {{
+            searchQuery || hasAdvancedFilter
+              ? 'Tidak ada toko yang sesuai dengan parameter pencarian atau filter yang aktif.'
+              : 'Belum ada data toko yang tersimpan. Silakan upload master CSV atau tambahkan toko secara manual.'
+          }}
+        </p>
+        <div class="empty-state-actions">
+          <button
+            v-if="searchQuery || hasAdvancedFilter"
+            type="button"
+            class="btn-header-secondary"
+            @click="resetAllFilters"
+          >
+            <i class="pi pi-filter-slash"></i>
+            <span>Reset Pencarian</span>
+          </button>
+          <button
+            v-if="isSuperAdmin"
+            type="button"
+            class="btn-header-primary"
+            @click="openAddStoreDialog"
+          >
             <i class="pi pi-plus"></i>
-            <span>Add Store</span>
+            <span>Tambah Toko Baru</span>
           </button>
         </div>
       </div>
-    </div>
+    </main>
 
-    <!-- Modern Pagination -->
-    <div v-if="stores.length > 0 && pagination" class="pagination-modern">
-      <div class="pagination-info-modern">
-        <span>Showing {{ startItem }} to {{ endItem }}
-          of {{ pagination.totalItems }} stores</span>
+    <!-- Compact Pagination Footer -->
+    <footer v-if="stores.length > 0 && pagination" class="view-footer-pagination">
+      <div class="pagination-summary">
+        <span>Menampilkan <strong>{{ startItem }}</strong> - <strong>{{ endItem }}</strong> dari <strong>{{ pagination.totalItems }}</strong> toko</span>
       </div>
-      <div class="pagination-controls-modern">
-        <button class="pagination-btn pagination-btn-prev" :disabled="pagination.currentPage === 1"
-          @click="handlePageChange(pagination.currentPage - 1)">
+
+      <div class="pagination-nav-group">
+        <button
+          type="button"
+          class="nav-btn"
+          :disabled="pagination.currentPage <= 1 || loading"
+          @click="handlePageChange(pagination.currentPage - 1)"
+        >
           <i class="pi pi-chevron-left"></i>
-          <span>Previous</span>
+          <span>Sebelumnya</span>
         </button>
 
-        <div class="pagination-numbers">
-          <span class="page-info">Page {{ pagination.currentPage }} of {{ pagination.totalPages }}</span>
+        <div class="nav-pages-indicator">
+          <span>Halaman <strong>{{ pagination.currentPage }}</strong> / {{ pagination.totalPages }}</span>
         </div>
 
-        <button class="pagination-btn pagination-btn-next" :disabled="pagination.currentPage === pagination.totalPages"
-          @click="handlePageChange(pagination.currentPage + 1)">
-          <span>Next</span>
+        <button
+          type="button"
+          class="nav-btn"
+          :disabled="pagination.currentPage >= pagination.totalPages || loading"
+          @click="handlePageChange(pagination.currentPage + 1)"
+        >
+          <span>Berikutnya</span>
           <i class="pi pi-chevron-right"></i>
         </button>
       </div>
-    </div>
+    </footer>
 
-    <!-- Modern Add Store Dialog -->
+    <!-- Add/Edit Store Dialog (Redesigned) -->
     <div v-if="showAddStoreDialog" class="dialog-overlay-modern" @click="closeStoreDialog">
-      <div class="dialog-content-modern" @click.stop>
-        <div class="dialog-header-modern">
+      <div class="dialog-content-modern store-form-modal" @click.stop>
+        <!-- Modal Header -->
+        <div class="dialog-header-modern" :class="{ 'edit-mode': isEditing }">
           <div class="dialog-title-section">
-            <i class="pi dialog-icon" :class="isEditing ? 'pi-pencil' : 'pi-plus'"></i>
-            <h2 class="dialog-title">{{ isEditing ? 'Edit Store' : 'Add New Store' }}</h2>
+            <div class="dialog-icon-badge" :class="isEditing ? 'edit' : 'add'">
+              <i class="pi" :class="isEditing ? 'pi-pencil' : 'pi-plus'"></i>
+            </div>
+            <div>
+              <h2 class="dialog-title">{{ isEditing ? 'Edit Data Toko' : 'Tambah Toko Baru' }}</h2>
+              <span class="dialog-subtitle-badge" v-if="isEditing">
+                Kode Toko: <strong>{{ formStore.storeCode }}</strong>
+              </span>
+              <span class="dialog-subtitle" v-else>
+                Lengkapi konfigurasi server dan informasi toko
+              </span>
+            </div>
           </div>
-          <button class="dialog-close-btn" @click="closeStoreDialog">
+          <button class="dialog-close-btn" @click="closeStoreDialog" title="Tutup">
             <i class="pi pi-times"></i>
           </button>
         </div>
 
+        <!-- Modal Body -->
         <div class="dialog-body-modern">
-          <form @submit.prevent="handleSubmit" class="store-form-modern">
-            <div class="form-grid">
-              <div class="form-group-modern">
-                <label for="storeCode" class="form-label">Store Code</label>
-                <input id="storeCode" v-model="formStore.storeCode" type="text" placeholder="e.g. F001" required
-                  class="form-input" />
+          <form @submit.prevent="handleSubmit" class="store-form-redesign">
+            <!-- Section 1: Identitas Toko -->
+            <div class="form-section-card">
+              <div class="section-card-title">
+                <i class="pi pi-id-card"></i>
+                <span>Identitas Toko</span>
               </div>
+              <div class="form-grid-inner">
+                <div class="form-group-redesign">
+                  <label for="storeCode" class="form-label-redesign">
+                    Kode Toko <span class="required-star">*</span>
+                  </label>
+                  <div class="input-with-icon">
+                    <i class="pi pi-tag input-icon"></i>
+                    <input
+                      id="storeCode"
+                      v-model="formStore.storeCode"
+                      type="text"
+                      placeholder="e.g. F001"
+                      required
+                      class="form-input-redesign font-mono"
+                    />
+                  </div>
+                  <span class="field-hint">Kode unik 4 karakter</span>
+                </div>
 
-              <div class="form-group-modern">
-                <label for="station" class="form-label">Station</label>
-                <input id="station" v-model="formStore.station" type="text" placeholder="e.g. 01 or STB" required
-                  class="form-input" />
-              </div>
+                <div class="form-group-redesign">
+                  <label for="station" class="form-label-redesign">
+                    Station / Kasir <span class="required-star">*</span>
+                  </label>
+                  <div class="input-with-icon">
+                    <i class="pi pi-desktop input-icon"></i>
+                    <input
+                      id="station"
+                      v-model="formStore.station"
+                      type="text"
+                      placeholder="e.g. 01 atau STB"
+                      required
+                      class="form-input-redesign"
+                    />
+                  </div>
+                  <span class="field-hint">Nomor station atau peran</span>
+                </div>
 
-              <div class="form-group-modern full-width">
-                <label for="storeName" class="form-label">Store Name</label>
-                <input id="storeName" v-model="formStore.storeName" type="text" placeholder="Enter store name" required
-                  class="form-input" />
-              </div>
-
-              <div class="form-group-modern">
-                <label for="branch" class="form-label">Branch Code</label>
-                <input id="branch" v-model="formStore.branch" type="text" placeholder="e.g. G001" required
-                  class="form-input" />
-              </div>
-
-              <div class="form-group-modern">
-                <label for="dbHost" class="form-label">DB Host IP</label>
-                <input id="dbHost" v-model="formStore.dbHost" type="text" placeholder="e.g. 10.x.x.x" required
-                  class="form-input" />
-              </div>
-
-              <div class="form-group-modern full-width">
-                <label for="notes" class="form-label">Store Type / Notes</label>
-                <select id="notes" v-model="formStore.notes" required class="form-select">
-                  <option value="INDUK">INDUK (Main Server)</option>
-                  <option value="STB">STB (Standby Server)</option>
-                  <option value="OTHER">OTHER</option>
-                </select>
-              </div>
-
-              <div class="form-group-modern full-width">
-                <label for="storeAddress" class="form-label">Address (Optional)</label>
-                <input id="storeAddress" v-model="formStore.address" type="text" placeholder="Enter store address"
-                  class="form-input" />
+                <div class="form-group-redesign full-width">
+                  <label for="storeName" class="form-label-redesign">
+                    Nama Toko <span class="required-star">*</span>
+                  </label>
+                  <div class="input-with-icon">
+                    <i class="pi pi-building input-icon"></i>
+                    <input
+                      id="storeName"
+                      v-model="formStore.storeName"
+                      type="text"
+                      placeholder="Masukkan nama lengkap toko"
+                      required
+                      class="form-input-redesign font-semibold"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div class="form-actions-modern">
-              <button type="button" class="btn-secondary" @click="closeStoreDialog">Cancel</button>
-              <button type="submit" class="btn-primary" :disabled="formLoading">
-                <span v-if="!formLoading">{{ isEditing ? 'Update Store' : 'Add Store' }}</span>
-                <div v-else class="loading-spinner">
-                  <i class="pi pi-spin pi-spinner"></i>
-                  <span>{{ isEditing ? 'Updating...' : 'Adding...' }}</span>
+            <!-- Section 2: Jaringan & Tipe Server -->
+            <div class="form-section-card">
+              <div class="section-card-title">
+                <i class="pi pi-server"></i>
+                <span>Koneksi & Tipe Server</span>
+              </div>
+              <div class="form-grid-inner">
+                <div class="form-group-redesign">
+                  <label for="branch" class="form-label-redesign">
+                    Kode Cabang <span class="required-star">*</span>
+                  </label>
+                  <div class="input-with-icon">
+                    <i class="pi pi-sitemap input-icon"></i>
+                    <input
+                      id="branch"
+                      v-model="formStore.branch"
+                      type="text"
+                      placeholder="e.g. G001"
+                      required
+                      class="form-input-redesign font-mono"
+                    />
+                  </div>
                 </div>
+
+                <div class="form-group-redesign">
+                  <label for="dbHost" class="form-label-redesign">
+                    Database Host IP <span class="required-star">*</span>
+                  </label>
+                  <div class="input-with-icon">
+                    <i class="pi pi-database input-icon"></i>
+                    <input
+                      id="dbHost"
+                      v-model="formStore.dbHost"
+                      type="text"
+                      placeholder="e.g. 10.12.x.x"
+                      required
+                      class="form-input-redesign font-mono"
+                    />
+                  </div>
+                  <span class="field-hint">IP server MySQL POS toko</span>
+                </div>
+
+                <!-- Tipe Server (Segmented Cards) -->
+                <div class="form-group-redesign full-width">
+                  <label class="form-label-redesign">
+                    Tipe Server Toko <span class="required-star">*</span>
+                  </label>
+                  <div class="segmented-type-selector">
+                    <label
+                      class="type-choice-card"
+                      :class="{ 'is-selected': formStore.notes === 'INDUK' }"
+                    >
+                      <input
+                        type="radio"
+                        value="INDUK"
+                        v-model="formStore.notes"
+                        name="storeNotesType"
+                        class="sr-only"
+                      />
+                      <i class="pi pi-server choice-icon induk"></i>
+                      <div class="choice-text">
+                        <span class="choice-name">INDUK</span>
+                        <span class="choice-desc">Main Server POS</span>
+                      </div>
+                    </label>
+
+                    <label
+                      class="type-choice-card"
+                      :class="{ 'is-selected': formStore.notes === 'STB' }"
+                    >
+                      <input
+                        type="radio"
+                        value="STB"
+                        v-model="formStore.notes"
+                        name="storeNotesType"
+                        class="sr-only"
+                      />
+                      <i class="pi pi-desktop choice-icon stb"></i>
+                      <div class="choice-text">
+                        <span class="choice-name">STB</span>
+                        <span class="choice-desc">Standby Server</span>
+                      </div>
+                    </label>
+
+                    <label
+                      class="type-choice-card"
+                      :class="{ 'is-selected': formStore.notes === 'OTHER' }"
+                    >
+                      <input
+                        type="radio"
+                        value="OTHER"
+                        v-model="formStore.notes"
+                        name="storeNotesType"
+                        class="sr-only"
+                      />
+                      <i class="pi pi-cog choice-icon other"></i>
+                      <div class="choice-text">
+                        <span class="choice-name">OTHER</span>
+                        <span class="choice-desc">Server Lainnya</span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Section 3: Lokasi & Alamat -->
+            <div class="form-section-card">
+              <div class="section-card-title">
+                <i class="pi pi-map-marker"></i>
+                <span>Lokasi & Alamat</span>
+              </div>
+              <div class="form-group-redesign full-width">
+                <label for="storeAddress" class="form-label-redesign">
+                  Alamat Lengkap (Opsional)
+                </label>
+                <div class="input-with-icon">
+                  <i class="pi pi-map-marker input-icon"></i>
+                  <input
+                    id="storeAddress"
+                    v-model="formStore.address"
+                    type="text"
+                    placeholder="Masukkan alamat atau lokasi toko..."
+                    class="form-input-redesign"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- Form Action Buttons -->
+            <div class="form-actions-redesign">
+              <button
+                type="button"
+                class="btn-form-cancel"
+                @click="closeStoreDialog"
+                :disabled="formLoading"
+              >
+                <i class="pi pi-times"></i>
+                <span>Batal</span>
+              </button>
+              <button
+                type="submit"
+                class="btn-form-submit"
+                :disabled="formLoading"
+              >
+                <i v-if="!formLoading" class="pi" :class="isEditing ? 'pi-check' : 'pi-plus'"></i>
+                <i v-else class="pi pi-spin pi-spinner"></i>
+                <span>{{ formLoading ? (isEditing ? 'Memperbarui...' : 'Menyimpan...') : (isEditing ? 'Simpan Perubahan' : 'Tambah Toko') }}</span>
               </button>
             </div>
           </form>
@@ -288,7 +746,7 @@
       </div>
     </div>
 
-    <!-- Delete Confirmation Dialog -->
+    <!-- Delete Confirmation Dialog (100% Intact) -->
     <div v-if="showDeleteDialog" class="dialog-overlay-modern" @click="closeDeleteDialog">
       <div class="dialog-content-modern sm" @click.stop>
         <div class="dialog-header-modern danger">
@@ -303,7 +761,7 @@
         <div class="dialog-body-modern text-center">
           <p class="delete-msg">Are you sure you want to delete <strong>{{ storeToDelete?.storeName }}</strong>?</p>
           <p class="delete-sub-msg">This action cannot be undone and will remove all associated store record.</p>
-          
+
           <div class="form-actions-modern mt-6">
             <button class="btn-secondary" @click="closeDeleteDialog" :disabled="formLoading">Cancel</button>
             <button class="btn-danger" @click="handleDeleteStore" :disabled="formLoading">
@@ -318,7 +776,7 @@
       </div>
     </div>
 
-    <!-- Sync Confirmation Dialog (24h guard) -->
+    <!-- Sync Confirmation Dialog (24h guard) (100% Intact) -->
     <div v-if="showSyncConfirmDialog" class="dialog-overlay-modern" @click.self="closeSyncConfirmDialog">
       <div class="dialog-content-modern sm" @click.stop>
         <div class="dialog-header-modern warning">
@@ -354,14 +812,14 @@
       </div>
     </div>
 
-    <!-- Store Detail Dialog Component -->
-    <StoreDetails 
-      :is-open="showDetailDialog" 
-      :store="selectedStore" 
-      @close="closeDetailDialog" 
+    <!-- Store Detail Dialog Component (100% Intact) -->
+    <StoreDetails
+      :is-open="showDetailDialog"
+      :store="selectedStore"
+      @close="closeDetailDialog"
     />
 
-    <!-- CSV Upload Dialog -->
+    <!-- CSV Upload Dialog (100% Intact) -->
     <div v-if="showCsvUploadDialog" class="dialog-overlay-modern" @click.self="closeCsvUploadDialog">
       <div class="dialog-content-modern sm" @click.stop>
         <div class="dialog-header-modern">
@@ -464,8 +922,12 @@ const isSuperAdmin = computed(() => userRole.value === 'superadmin');
 const isAdmin = computed(() => userRole.value === 'admin');
 const canEdit = computed(() => isSuperAdmin.value || isAdmin.value);
 
+// View Mode: 'table' (default zero-scroll) vs 'cards'
+const viewMode = ref('table');
+
 // State
 const searchQuery = ref('');
+const selectedNotesType = ref(''); // Quick filter for INDUK / STB / OTHER
 const showFilterMenu = ref(false);
 const selectedRegions = ref([]);
 const selectedCities = ref([]);
@@ -512,7 +974,6 @@ const pagination = computed(() => storeStore.getPagination);
 const startItem = computed(() => storeStore.getPagination.startItem);
 const endItem = computed(() => storeStore.getPagination.endItem);
 
-
 // Mock data for regions until we have a proper region service
 const regions = ref([
   { id: 'North', name: 'North' },
@@ -537,10 +998,36 @@ const statuses = ref([
   { id: 'pending', name: 'Pending' }
 ]);
 
-// Fetch stores
+// Filter count badge
+const activeFilterCount = computed(() => {
+  return selectedRegions.value.length + selectedCities.value.length + selectedStatuses.value.length;
+});
+
+const hasAdvancedFilter = computed(() => activeFilterCount.value > 0);
+const hasAnyFilter = computed(() => {
+  return !!searchQuery.value || !!selectedNotesType.value || hasAdvancedFilter.value;
+});
+
+// Client-side quick filter for notes type (INDUK / STB / OTHER) on current page
+const filteredStores = computed(() => {
+  const list = stores.value || [];
+  if (!selectedNotesType.value) {
+    return list;
+  }
+  return list.filter(s => {
+    const note = (s.notes || '').toUpperCase();
+    if (selectedNotesType.value === 'INDUK') return note === 'INDUK';
+    if (selectedNotesType.value === 'STB') return note === 'STB';
+    return note !== 'INDUK' && note !== 'STB';
+  });
+});
+
+// Search timeout for debouncing
+let searchTimeout = null;
+
+// Fetch stores on mount
 onMounted(async () => {
   try {
-    // Fetch stores from the API using the store
     await storeStore.fetchStores({
       page: 1,
       limit: 10
@@ -555,6 +1042,22 @@ onMounted(async () => {
   }
 });
 
+const refreshStores = async () => {
+  try {
+    await storeStore.fetchStores({
+      page: pagination.value?.currentPage || 1,
+      limit: 10,
+      search: searchQuery.value || ''
+    });
+    if (canEdit.value) {
+      await loadSyncStatus();
+    }
+    toast.showSuccess('Refresh', 'Data toko berhasil diperbarui');
+  } catch (err) {
+    toast.showError('Error', 'Gagal memuat ulang data toko');
+  }
+};
+
 const loadSyncStatus = async () => {
   try {
     const data = await storeService.getSyncStatus();
@@ -567,13 +1070,7 @@ const loadSyncStatus = async () => {
 const lastSyncText = computed(() => {
   const lastSync = syncStatus.value?.lastSync;
   if (!lastSync) return 'Belum pernah sync';
-  return `${formatDate(lastSync.lastSyncedAt)} · oleh ${lastSync.syncedBy}`;
-});
-
-const snapshotText = computed(() => {
-  const snapshot = syncStatus.value?.snapshot;
-  if (!snapshot) return 'Belum ada upload';
-  return `${snapshot.stats?.induk ?? 0} induk, ${snapshot.stats?.stb ?? 0} stb · ${formatDate(snapshot.updatedAt)}`;
+  return `${formatCompactDate(lastSync.lastSyncedAt)} · oleh ${lastSync.syncedBy}`;
 });
 
 const csvSnapshotText = computed(() => {
@@ -600,7 +1097,6 @@ const runSyncAfterUploadWithForce = async () => {
       return;
     }
 
-    // Selesai -> dialog hasil sinkronisasi
     syncResult.value = result;
     await loadSyncStatus();
   } catch (error) {
@@ -617,17 +1113,39 @@ const closeSyncConfirmDialog = () => {
   syncConfirmLastSync.value = null;
 };
 
-const closeSyncResult = () => {
-  syncResult.value = null;
-};
-
 const formatDateTime = (value) => {
   if (!value) return '-';
   return new Date(value).toLocaleString('id-ID', {
     dateStyle: 'medium',
     timeStyle: 'short',
   });
-};const openCsvUploadDialog = () => {
+};
+
+const formatDate = (dateString) => {
+  if (!dateString) return 'Never';
+  const options = {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  };
+  return new Date(dateString).toLocaleString(undefined, options);
+};
+
+const formatCompactDate = (dateString) => {
+  if (!dateString) return '-';
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return dateString;
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  const hours = String(d.getHours()).padStart(2, '0');
+  const mins = String(d.getMinutes()).padStart(2, '0');
+  return `${day}/${month}/${year} ${hours}:${mins}`;
+};
+
+const openCsvUploadDialog = () => {
   csvFile.value = null;
   csvUploadMessage.value = '';
   uploadStage.value = 'select';
@@ -635,7 +1153,7 @@ const formatDateTime = (value) => {
 };
 
 const closeCsvUploadDialog = () => {
-  if (uploadStage.value === 'uploading' || uploadStage.value === 'syncing') return; // jangan tutup saat proses
+  if (uploadStage.value === 'uploading' || uploadStage.value === 'syncing') return;
   showCsvUploadDialog.value = false;
 };
 
@@ -658,14 +1176,9 @@ const clearCsvFile = () => {
   csvUploadMessage.value = '';
 };
 
-/**
- * Satu alur: upload CSV → langsung proses update store.json.
- * Stage: select -> uploading -> syncing -> selesai (dialog hasil sync) / error.
- */
 const uploadCsv = async () => {
   if (!csvFile.value || uploadStage.value === 'uploading' || uploadStage.value === 'syncing') return;
 
-  // 1) Upload & simpan snapshot CSV
   uploadStage.value = 'uploading';
   csvUploadMessage.value = '';
   try {
@@ -682,7 +1195,6 @@ const uploadCsv = async () => {
     return;
   }
 
-  // 2) Proses update store.json (fase IP/nama + fase kode cabang)
   uploadStage.value = 'syncing';
   isSyncingAfterUpload.value = true;
   try {
@@ -695,7 +1207,6 @@ const uploadCsv = async () => {
     }
 
     if (sync.needsConfirmation) {
-      // Belum 24 jam sejak sync terakhir -> minta konfirmasi dulu
       syncConfirmLastSync.value = sync.lastSync || null;
       showSyncConfirmDialog.value = true;
       showCsvUploadDialog.value = false;
@@ -703,11 +1214,11 @@ const uploadCsv = async () => {
       return;
     }
 
-    // Selesai -> tampilkan dialog hasil sinkronisasi
     syncResult.value = sync;
     await loadSyncStatus();
     showCsvUploadDialog.value = false;
     uploadStage.value = 'select';
+    toast.showSuccess('Sukses', 'Data master toko berhasil disinkronisasi.');
   } catch (error) {
     uploadStage.value = 'error';
     csvUploadMessage.value = error?.response?.data?.message || 'Gagal melakukan sinkronisasi master toko.';
@@ -716,27 +1227,21 @@ const uploadCsv = async () => {
   }
 };
 
-// Watch for search and filter changes to update the store list
-watch([searchQuery, selectedRegions, selectedCities, selectedStatuses], () => {
-  // Debounce the search to avoid too many API calls
+// Quick Type Filter
+const setQuickType = (type) => {
+  selectedNotesType.value = type;
+};
+
+// Search handling
+watch(searchQuery, () => {
   if (searchTimeout) clearTimeout(searchTimeout);
   searchTimeout = setTimeout(() => {
     applyFilters();
-  }, 300);
-}, { deep: true });
-
-// Search timeout for debouncing
-let searchTimeout = null;
-
-// Computed properties
-const filteredStores = computed(() => {
-  return stores.value;
+  }, 350);
 });
 
-// Methods
 const handleSearch = () => {
-  // Debouncing is handled by the watch
-  console.log('Searching for:', searchQuery.value);
+  // Handled by debounced watcher
 };
 
 const clearSearch = () => {
@@ -750,29 +1255,22 @@ const toggleFilterMenu = () => {
 
 const applyFilters = async () => {
   try {
-    // Build filter options
     const options = {
       page: 1,
       limit: 10,
       search: searchQuery.value || ''
     };
-    
-    // Add region filter if selected
+
     if (selectedRegions.value.length > 0) {
       options.region = selectedRegions.value.join(',');
     }
-    
-    // Add city filter if selected
     if (selectedCities.value.length > 0) {
       options.city = selectedCities.value.join(',');
     }
-    
-    // Add status filter if selected
     if (selectedStatuses.value.length > 0) {
       options.status = selectedStatuses.value.join(',');
     }
-    
-    // Fetch filtered stores
+
     await storeStore.fetchStores(options);
     showFilterMenu.value = false;
   } catch (error) {
@@ -785,36 +1283,23 @@ const clearFilters = () => {
   selectedRegions.value = [];
   selectedCities.value = [];
   selectedStatuses.value = [];
-  searchQuery.value = '';
   applyFilters();
 };
 
-const getStatusClass = (status) => {
-  if (!status) return '';
-  
-  switch (status.toLowerCase()) {
-    case 'active':
-      return 'status-active';
-    case 'inactive':
-      return 'status-inactive';
-    case 'pending':
-      return 'status-pending';
-    default:
-      return '';
-  }
+const resetAllFilters = () => {
+  searchQuery.value = '';
+  selectedNotesType.value = '';
+  selectedRegions.value = [];
+  selectedCities.value = [];
+  selectedStatuses.value = [];
+  applyFilters();
 };
 
-const formatDate = (dateString) => {
-  if (!dateString) return 'Never';
-  const options = {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  };
-  return new Date(dateString).toLocaleString(undefined, options);
+const getTypeBadgeClass = (notes) => {
+  const n = (notes || '').toUpperCase();
+  if (n === 'INDUK') return 'pill-induk';
+  if (n === 'STB') return 'pill-stb';
+  return 'pill-other';
 };
 
 const viewStoreDetail = (store) => {
@@ -873,10 +1358,8 @@ const closeDeleteDialog = () => {
 
 const handleSubmit = async () => {
   formLoading.value = true;
-  
   try {
     const storeData = { ...formStore.value };
-    
     if (isEditing.value) {
       await storeStore.updateStore(storeData.id, storeData);
       toast.showSuccess('Success', 'Store updated successfully');
@@ -884,7 +1367,6 @@ const handleSubmit = async () => {
       await storeStore.createStore(storeData);
       toast.showSuccess('Success', 'Store created successfully');
     }
-    
     closeStoreDialog();
   } catch (error) {
     console.error('Error submitting store:', error);
@@ -896,7 +1378,6 @@ const handleSubmit = async () => {
 
 const handleDeleteStore = async () => {
   if (!storeToDelete.value) return;
-  
   formLoading.value = true;
   try {
     await storeStore.deleteStore(storeToDelete.value.id);
@@ -910,27 +1391,19 @@ const handleDeleteStore = async () => {
   }
 };
 
-// Handle pagination page change
 const handlePageChange = async (page) => {
   try {
-    // Build filter options with current search and filters
     const options = {
       page,
       limit: 10,
       search: searchQuery.value || ''
     };
-    
-    // Add region filter if selected
     if (selectedRegions.value.length > 0) {
       options.region = selectedRegions.value.join(',');
     }
-    
-    // Add status filter if selected
     if (selectedStatuses.value.length > 0) {
       options.status = selectedStatuses.value.join(',');
     }
-    
-    // Fetch stores for the selected page
     await storeStore.fetchStores(options);
   } catch (error) {
     console.error('Error changing page:', error);

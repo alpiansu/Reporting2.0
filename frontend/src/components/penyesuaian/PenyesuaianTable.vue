@@ -8,18 +8,28 @@
     @items-per-page-change="handleItemsPerPageChange" @sort-change="handleSortChange">
     <!-- Search Component -->
     <template #filters>
-      <div class="search-container">
-        <div class="filters-row">
-          <form @submit.prevent="handleSearch" class="search-form">
-            <div class="search-box">
-              <i class="pi pi-search search-icon"></i>
-              <input type="text" v-model="searchQuery" @input="handleSearch" placeholder="Cari Data ..."
-                class="search-input" />
-              <button type="button" v-if="searchQuery" @click="clearSearch" class="clear-button">
-                <i class="pi pi-times"></i>
-              </button>
-            </div>
-          </form>
+      <div class="toolbar-section">
+        <div class="search-box-compact">
+          <i class="pi pi-search search-icon"></i>
+          <input 
+            type="text" 
+            v-model="searchQuery" 
+            @input="handleSearch" 
+            placeholder="Cari kode toko, nama toko, cabang..."
+            class="search-input-compact" 
+          />
+          <button 
+            type="button" 
+            v-if="searchQuery" 
+            @click="clearSearch" 
+            class="clear-search-btn"
+            title="Hapus pencarian">
+            <i class="pi pi-times"></i>
+          </button>
+        </div>
+        <div class="table-meta-hint" v-if="searchQuery">
+          <i class="pi pi-filter"></i>
+          <span>Pencarian: <strong>"{{ searchQuery }}"</strong></span>
         </div>
       </div>
     </template>
@@ -68,13 +78,20 @@
     <!-- Table Row -->
     <template #table-row="{ item }">
       <!-- CABANG -->
-      <td class="text-center">{{ item.CABANG }}</td>
+      <td class="text-center">
+        <span class="badge-cabang">{{ item.CABANG }}</span>
+      </td>
 
       <!-- KDTK -->
-      <td class="text-center">{{ item.KDTK }}</td>
+      <td class="text-center font-mono">{{ formatCode(item.KDTK) }}</td>
 
       <!-- NAMA TOKO -->
-      <td>{{ item.NAMA || '-' }}</td>
+      <td>
+        <div class="store-name-cell">
+          <i class="pi pi-shopping-bag cell-icon"></i>
+          <span class="store-name-text">{{ item.NAMA || '-' }}</span>
+        </div>
+      </td>
 
       <!-- NILAI SESUAI -->
       <td class="text-right" :class="getAmountClass(item.SESUAI)">
@@ -278,6 +295,11 @@ const formatCurrency = (value) => {
 const formatNumber = (value) => {
   if (value === null || value === undefined) return '0';
   return new Intl.NumberFormat('id-ID').format(value);
+};
+
+const formatCode = (value) => {
+  if (value === null || value === undefined) return '-';
+  return String(value).replace(/^#+/, '').trim();
 };
 
 const formatDate = (date) => {

@@ -1,11 +1,40 @@
 <template>
   <div class="rekon-virtual-mrg-view">
-    <PageHeader 
-      title="Hasil Rekonsiliasi Saldo Virtual Margin Based" 
-      subtitle="Informasi saldo virtual berdasarkan margin per toko" 
-      description="Halaman ini menampilkan hasil rekonsiliasi saldo virtual yang dihitung berdasarkan margin produk. Data diambil dari sistem toko dan dibandingkan untuk memastikan keakuratan stok dan nilai margin."
-    />
-    
+    <!-- Compact Header Section -->
+    <header class="view-header">
+      <div class="header-main">
+        <div class="header-icon-box">
+          <i class="pi pi-calculator"></i>
+        </div>
+        <div class="header-text">
+          <h1 class="header-title">Hasil Rekonsiliasi Saldo Virtual Margin Based</h1>
+          <p class="header-subtitle">
+            Informasi saldo virtual berdasarkan margin produk per toko &amp; deteksi selisih stok secara otomatis
+          </p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <!-- Active Filter Badge -->
+        <div v-if="activePeriode" class="active-filter-badge">
+          <i class="pi pi-calendar"></i>
+          <span>Periode: <strong>{{ activePeriode }}</strong></span>
+          <span v-if="activeCab" class="cab-sub-badge">Cabang: {{ activeCab }}</span>
+        </div>
+
+        <!-- Refresh Button -->
+        <button
+          v-if="showResults"
+          type="button"
+          class="btn-header-secondary"
+          @click="refreshResults"
+          title="Muat ulang hasil rekonsiliasi"
+        >
+          <i class="pi pi-refresh"></i>
+          <span>Refresh Hasil</span>
+        </button>
+      </div>
+    </header>
+
     <div class="content-container">
       <!-- Form Section -->
       <RekonVirtualMrgForm @view-results="handleViewResults" />
@@ -25,7 +54,6 @@
 
 <script setup>
 import { ref, computed } from 'vue';
-import PageHeader from '../../components/PageHeader.vue';
 import RekonVirtualMrgForm from '../../components/rekonVirtualMrg/RekonVirtualMrgForm.vue';
 import RekonVirtualMrgResults from '../../components/rekonVirtualMrg/RekonVirtualMrgResults.vue';
 
@@ -36,21 +64,15 @@ const resultsComponent = ref(null);
 
 // Computed
 const showResults = computed(() => {
-  // Hanya perlu memeriksa periode, karena cabang bisa kosong (untuk semua cabang)
-  return activePeriode.value;
+  return !!activePeriode.value;
 });
 
 // Methods
 const handleViewResults = (data) => {
-  // console.log('handleViewResults called with data:', data);
   activeCab.value = data.cab;
   activePeriode.value = data.periode;
   
-  // Force refresh of results component if it exists
-  // Gunakan nextTick untuk memastikan komponen sudah dirender
   if (resultsComponent.value) {
-    console.log('Calling loadResults on resultsComponent');
-    // Pastikan komponen sudah dirender dan fungsi loadResults tersedia
     setTimeout(() => {
       if (resultsComponent.value && typeof resultsComponent.value.loadResults === 'function') {
         resultsComponent.value.loadResults();
@@ -58,6 +80,12 @@ const handleViewResults = (data) => {
         console.warn('loadResults function not available on resultsComponent');
       }
     }, 200);
+  }
+};
+
+const refreshResults = () => {
+  if (resultsComponent.value && typeof resultsComponent.value.loadResults === 'function') {
+    resultsComponent.value.loadResults();
   }
 };
 </script>

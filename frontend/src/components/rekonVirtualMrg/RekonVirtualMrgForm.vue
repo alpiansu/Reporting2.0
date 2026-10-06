@@ -1,26 +1,56 @@
 <template>
-  <RekonFormComponent :errors="errors" @submit="submitForm">
-    <template #title>
-      Hasil Rekonsiliasi Saldo Virtual Margin Based
-    </template>
+  <div class="rekon-filter-panel">
+    <!-- Filter Controls Bar -->
+    <div class="filter-main-bar">
+      <!-- Cabang -->
+      <div class="filter-item">
+        <label for="cab" class="filter-label">
+          <i class="pi pi-building"></i>
+          <span>Cabang</span>
+          <span class="required-star">*</span>
+        </label>
+        <Dropdown 
+          id="cab" 
+          v-model="formData.cab" 
+          :options="cabangOptions" 
+          optionLabel="namacab" 
+          optionValue="kdcab"
+          placeholder="Pilih Cabang" 
+          :disabled="isReconciling || isSingleLoading" 
+          class="filter-dropdown" 
+          @change="handleCabChange" 
+        />
+        <small v-if="errors?.cab" class="filter-error-text">{{ errors.cab }}</small>
+      </div>
 
-    <template #description>
-      Lihat hasil rekonsiliasi saldo virtual margin based per toko
-    </template>
+      <!-- Periode -->
+      <div class="filter-item">
+        <label for="periode" class="filter-label">
+          <i class="pi pi-calendar"></i>
+          <span>Periode</span>
+          <span class="required-star">*</span>
+        </label>
+        <Calendar 
+          id="periode" 
+          v-model="selectedDate" 
+          view="month" 
+          dateFormat="mm/yy" 
+          placeholder="Pilih Bulan/Tahun"
+          :disabled="isReconciling || isSingleLoading" 
+          :maxDate="today" 
+          showIcon 
+          class="filter-calendar" 
+          @date-select="updatePeriode" 
+        />
+        <small v-if="errors?.periode" class="filter-error-text">{{ errors.periode }}</small>
+      </div>
 
-    <template #cab>
-      <Dropdown id="cab" v-model="formData.cab" :options="cabangOptions" optionLabel="namacab" optionValue="kdcab"
-        placeholder="Pilih Cabang" :disabled="isReconciling || isSingleLoading" class="w-full" @change="handleCabChange" />
-    </template>
-
-    <template #periode>
-      <Calendar id="periode" v-model="selectedDate" view="month" dateFormat="mm/yy" placeholder="Pilih Bulan/Tahun"
-        :disabled="isReconciling || isSingleLoading" :maxDate="today" showIcon class="w-full" @date-select="updatePeriode" />
-    </template>
-
-    <template #additional-fields>
-      <div class="col-12 field">
-        <label for="shops" class="font-bold block mb-2">Toko (Opsional)</label>
+      <!-- Toko (Opsional) -->
+      <div class="filter-item filter-item-shops">
+        <label for="shops" class="filter-label">
+          <i class="pi pi-shopping-bag"></i>
+          <span>Toko (Opsional)</span>
+        </label>
         <MultiSelect 
           id="shops" 
           ref="storeSelect"
@@ -28,8 +58,8 @@
           :options="storeOptions" 
           optionLabel="label" 
           optionValue="kdtk"
-          placeholder="Ketik untuk mencari toko..." 
-          class="w-full"
+          placeholder="Semua toko di cabang..." 
+          class="filter-multiselect"
           :disabled="isReconciling || isSingleLoading || !formData.cab || formData.cab === 'All'"
           :loading="loadingStores"
           filter
@@ -37,47 +67,70 @@
           @filter="onStoreFilter"
           @show="focusStoreFilter"
           :showClear="true"
-          :maxSelectedLabels="3"
+          :maxSelectedLabels="2"
         />
-        <small class="text-gray-500 block mt-1">Cari berdasarkan kode atau nama toko. Kosongkan untuk semua toko di cabang.</small>
       </div>
-    </template>
 
-    <template #actions>
-      <Button type="button" label="Mulai Rekonsiliasi" icon="pi pi-refresh" class="p-button-primary"
-        @click="startReconciliation" :loading="isReconciling || isSingleLoading" :disabled="isReconciling || isSingleLoading" />
-    </template>
-  </RekonFormComponent>
+      <!-- Action Button -->
+      <div class="filter-item filter-item-action">
+        <label class="filter-label filter-label-hidden">&nbsp;</label>
+        <button 
+          type="button" 
+          class="btn-screening-primary"
+          @click="startReconciliation" 
+          :disabled="isReconciling || isSingleLoading"
+          title="Mulai proses screening rekonsiliasi"
+        >
+          <i class="pi" :class="isReconciling || isSingleLoading ? 'pi-spin pi-spinner' : 'pi-refresh'"></i>
+          <span>{{ isReconciling || isSingleLoading ? 'Memproses...' : 'Mulai Rekonsiliasi' }}</span>
+        </button>
+      </div>
+    </div>
 
-  <!-- Force Re-screen Toggle -->
-  <div class="flex align-items-center mb-3 mt-2" style="padding-left: 1rem;">
-    <Checkbox v-model="forceScreening" inputId="forceScreeningRekonVirtualMrg" :binary="true" :disabled="isReconciling || isSingleLoading" />
-    <label for="forceScreeningRekonVirtualMrg" class="ml-2 text-sm text-color-secondary">
-      <i class="pi pi-exclamation-triangle mr-1 text-yellow-500"></i>
-      Force Re-screen (ulang meskipun sudah sukses hari ini)
-    </label>
+    <!-- Filter Options Footer Bar (Force Re-screen) -->
+    <div class="filter-footer-bar">
+      <div class="force-screen-toggle">
+        <Checkbox 
+          v-model="forceScreening" 
+          inputId="forceScreeningRekonVirtualMrg" 
+          :binary="true" 
+          :disabled="isReconciling || isSingleLoading" 
+        />
+        <label for="forceScreeningRekonVirtualMrg" class="force-screen-label">
+          <i class="pi pi-bolt"></i>
+          <span class="force-title">Force Re-screen</span>
+          <span class="force-desc">— Lewati cache log harian &amp; proses ulang seluruh toko terpilih</span>
+        </label>
+      </div>
+      <div class="filter-hint-text">
+        <i class="pi pi-info-circle"></i>
+        <span>Pilih cabang &amp; periode, lalu klik Mulai Rekonsiliasi</span>
+      </div>
+    </div>
   </div>
 
-  <!-- card info last screening -->
-  <LastScanInfo moduleName="rekon_virtual_mrg" :selectedCabang="formData.cab" v-if="!isReconciling && !isSingleLoading" />
+  <!-- Standalone Sleek Status Strip: LastScanInfo -->
+  <div class="last-scan-wrapper" v-if="!isReconciling && !isSingleLoading">
+    <LastScanInfo moduleName="rekon_virtual_mrg" :selectedCabang="formData.cab" />
+  </div>
 
-  <!-- Processing Loading State -->
-  <ProgressBar v-if="isReconciling" :visible="isReconciling" :percentage="progress.percentage" :info="progress.info">
-    <template #title>
-      Processing Screening...
-    </template>
+    <!-- Processing Loading State -->
+    <ProgressBar v-if="isReconciling" :visible="isReconciling" :percentage="progress.percentage" :info="progress.info">
+      <template #title>
+        Processing Screening...
+      </template>
 
-    <template #subtitle>
-      Connecting to stores and processing screening query.<br />
-      Please wait patiently...
-    </template>
+      <template #subtitle>
+        Connecting to stores and processing screening query.<br />
+        Please wait patiently...
+      </template>
 
-    <template #details>
-      <small>
-        <strong>{{ progress.info }}</strong>
-      </small>
-    </template>
-  </ProgressBar>
+      <template #details>
+        <small>
+          <strong>{{ progress.info }}</strong>
+        </small>
+      </template>
+    </ProgressBar>
 </template>
 
 <script setup>
@@ -86,12 +139,10 @@ import { useToastService } from '../../utils/toast';
 import { useCabangStore } from '../../stores';
 import Dropdown from 'primevue/dropdown';
 import Calendar from 'primevue/calendar';
-import Button from 'primevue/button';
 import MultiSelect from 'primevue/multiselect';
 import Checkbox from 'primevue/checkbox';
 import rekonVirtualMrgService from '../../services/rekonVirtualMrg.service';
 import ProgressBar from "../../components/common/ProgressBar.vue";
-import RekonFormComponent from "../../components/common/RekonFormComponent.vue";
 import progressService from "../../services/progress.service.js";
 import { useAuthStore } from '../../stores';
 import api from "../../services/api.js";

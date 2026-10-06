@@ -111,11 +111,11 @@
                     </td>
                     <td class="text-center">
                       <span v-if="branch.maxPositive" class="item-code" v-tooltip.top="branch.maxPositive.name">
-                        {{ branch.maxPositive.prdcd }}
+                        {{ formatCode(branch.maxPositive.prdcd) }}
                       </span>
                     </td>
                     <td class="text-center">
-                      <span v-if="branch.maxPositive" class="store-code">{{ branch.maxPositive.kdtk }}</span>
+                      <span v-if="branch.maxPositive" class="store-code">{{ formatCode(branch.maxPositive.kdtk) }}</span>
                     </td>
                     <td class="text-right">
                       <span v-if="branch.maxNegative" class="value-negative">
@@ -125,11 +125,11 @@
                     </td>
                     <td class="text-center">
                       <span v-if="branch.maxNegative" class="item-code" v-tooltip.top="branch.maxNegative.name">
-                        {{ branch.maxNegative.prdcd }}
+                        {{ formatCode(branch.maxNegative.prdcd) }}
                       </span>
                     </td>
                     <td class="text-center">
-                      <span v-if="branch.maxNegative" class="store-code">{{ branch.maxNegative.kdtk }}</span>
+                      <span v-if="branch.maxNegative" class="store-code">{{ formatCode(branch.maxNegative.kdtk) }}</span>
                     </td>
                     <td class="text-center">
                       <Button icon="pi pi-list" size="small" severity="info" text
@@ -304,6 +304,11 @@ const chartOptionsNegative = {
       ticks: { font: { size: 11, weight: '600' } },
     },
   },
+}
+
+function formatCode(value) {
+  if (value === null || value === undefined) return '-';
+  return String(value).replace(/^#+/, '').trim();
 }
 
 function formatCurrency(value) {

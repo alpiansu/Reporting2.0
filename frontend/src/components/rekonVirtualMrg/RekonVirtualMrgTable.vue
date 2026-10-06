@@ -8,18 +8,28 @@
     @sort-change="handleSortChange">
     <!-- Search Component -->
     <template #filters>
-      <div class="search-container">
-        <div class="filters-row">
-          <form @submit.prevent="handleSearch" class="search-form">
-            <div class="search-box">
-              <i class="pi pi-search search-icon"></i>
-              <input type="text" v-model="searchQuery" @input="handleSearch" placeholder="Cari Data ..."
-                class="search-input" />
-              <button type="button" v-if="searchQuery" @click="clearSearch" class="clear-button">
-                <i class="pi pi-times"></i>
-              </button>
-            </div>
-          </form>
+      <div class="toolbar-section">
+        <div class="search-box-compact">
+          <i class="pi pi-search search-icon"></i>
+          <input 
+            type="text" 
+            v-model="searchQuery" 
+            @input="handleSearch" 
+            placeholder="Cari toko, PRDCD, nama produk..."
+            class="search-input-compact" 
+          />
+          <button 
+            type="button" 
+            v-if="searchQuery" 
+            @click="clearSearch" 
+            class="clear-search-btn"
+            title="Hapus pencarian">
+            <i class="pi pi-times"></i>
+          </button>
+        </div>
+        <div class="table-meta-hint" v-if="searchQuery">
+          <i class="pi pi-filter"></i>
+          <span>Pencarian: <strong>"{{ searchQuery }}"</strong></span>
         </div>
       </div>
     </template>
@@ -91,10 +101,15 @@
         </span>
         {{ item.CABANG }}
       </td>
-      <td class="text-center">{{ item.SHOP }}</td>
+      <td class="text-center font-mono">{{ formatCode(item.SHOP) }}</td>
       <td class="text-center">{{ formatDate(item.TANGGAL) }}</td>
-      <td class="text-center">{{ item.PRDCD }}</td>
-      <td>{{ item.SINGKATAN || '-' }}</td>
+      <td class="text-center font-mono">{{ formatCode(item.PRDCD) }}</td>
+      <td>
+        <div class="product-name-cell">
+          <i class="pi pi-box cell-icon"></i>
+          <span class="product-name-text">{{ item.SINGKATAN || '-' }}</span>
+        </div>
+      </td>
       <td class="text-right">{{ formatCurrency(item.ACOST) }}</td>
       <td class="text-right">{{ formatCurrency(item.PRICE) }}</td>
       <td class="text-right">{{ formatNumber(item.QTY_MSTRAN) }}</td>
@@ -342,6 +357,11 @@ const getRowClass = (item) => {
 };
 
 // Formatting methods
+const formatCode = (value) => {
+  if (value === null || value === undefined) return '-';
+  return String(value).replace(/^#+/, '').trim();
+};
+
 const formatCurrency = (value) => {
   if (value === null || value === undefined) return '-';
   return new Intl.NumberFormat('id-ID', {

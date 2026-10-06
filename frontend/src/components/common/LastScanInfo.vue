@@ -64,8 +64,11 @@
             <span class="summary-count">{{ scanInfo.cabangs?.length ?? 0 }}</span>
             <span class="summary-label">Branches</span>
           </div>
+          <button class="scan-header-btn refresh-btn" @click="fetchLastScan" :disabled="loading" v-if="showRefresh" title="Muat ulang info scan">
+            <i class="pi pi-refresh" :class="{ 'pi-spin': loading }"></i>
+          </button>
           <button class="expand-btn" @click="!singleCabMode && (expanded = !expanded)" :disabled="singleCabMode"
-            v-if="!singleCabMode">
+            v-if="!singleCabMode" title="Lihat detail cabang">
             <i :class="expanded ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"></i>
           </button>
 
@@ -98,12 +101,6 @@
             </div>
           </div>
         </transition>
-        <!-- Footer -->
-        <div class="scan-footer" v-if="showRefresh">
-          <button @click="fetchLastScan" class="refresh-button" :disabled="loading">
-            <i class="pi pi-refresh" :class="{ 'pi-spin': loading }"></i> Refresh
-          </button>
-        </div>
       </div>
     </template>
 

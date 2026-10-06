@@ -19,7 +19,11 @@
       </template>
 
       <Column field="CABANG" header="CAB" sortable></Column>
-      <Column field="SHOP" header="SHOP" sortable></Column>
+      <Column field="SHOP" header="SHOP" sortable>
+        <template #body="slotProps">
+          <span class="font-mono">{{ formatCode(slotProps.data.SHOP) }}</span>
+        </template>
+      </Column>
       <Column field="TANGGAL" header="TGL" sortable>
         <template #body="slotProps">
           {{ formatDate(slotProps.data.TANGGAL) }}
@@ -172,6 +176,11 @@ const refresh = (filters) => {
 defineExpose({ refresh });
 
 // Formatters
+const formatCode = (val) => {
+  if (val === null || val === undefined) return '';
+  return String(val).replace(/^[#\s]+/, '').trim();
+};
+
 const formatCurrency = (value) => {
   if (value === null || value === undefined) return '0';
   return new Intl.NumberFormat('id-ID').format(value);

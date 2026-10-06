@@ -1,41 +1,79 @@
 <template>
   <div class="rekon-persediaan-form">
-    <RekonFormComponent :errors="errors" @submit="submitForm">
-      <template #title>
-        Parameter Rekonsiliasi Persediaan
-      </template>
+    <div class="filter-panel">
+      <!-- Row 1: Primary Inputs & Screening Button -->
+      <form @submit.prevent="submitForm" class="filter-row-primary">
+        <div class="filter-field">
+          <label for="cab" class="filter-label">Cabang</label>
+          <Dropdown
+            id="cab"
+            v-model="formData.cab"
+            :options="cabangOptions"
+            optionLabel="namacab"
+            optionValue="kdcab"
+            placeholder="Pilih Cabang"
+            :disabled="isReconciling"
+            class="filter-dropdown"
+            @change="handleCabChange"
+          />
+          <small v-if="errors.cab" class="error-text">{{ errors.cab }}</small>
+        </div>
 
-      <template #description>
-        Pilih cabang dan periode untuk melakukan rekonsiliasi HPP Store vs WRC
-      </template>
+        <div class="filter-field">
+          <label for="periode" class="filter-label">Periode</label>
+          <Calendar
+            id="periode"
+            v-model="selectedDate"
+            view="month"
+            dateFormat="mm/yy"
+            placeholder="Pilih Bulan/Tahun"
+            :disabled="isReconciling"
+            :maxDate="maxDate"
+            showIcon
+            class="filter-calendar"
+            @date-select="updatePeriode"
+          />
+          <small v-if="errors.periode" class="error-text">{{ errors.periode }}</small>
+        </div>
 
-      <template #cab>
-        <Dropdown id="cab" v-model="formData.cab" :options="cabangOptions" optionLabel="namacab" optionValue="kdcab"
-          placeholder="Pilih Cabang" :disabled="isReconciling" class="w-full" @change="handleCabChange" />
-      </template>
+        <div class="filter-actions-col">
+          <Button
+            type="button"
+            label="Mulai Screening"
+            icon="pi pi-refresh"
+            class="p-button-primary btn-action"
+            @click="startScreening"
+            :loading="isReconciling"
+            :disabled="isReconciling"
+          />
+        </div>
+      </form>
 
-      <template #periode>
-        <Calendar id="periode" v-model="selectedDate" view="month" dateFormat="mm/yy" placeholder="Pilih Bulan/Tahun"
-          :disabled="isReconciling" :maxDate="maxDate" showIcon class="w-full" @date-select="updatePeriode" />
-      </template>
-
-      <template #actions>
-        <Button type="button" label="Mulai Screening" icon="pi pi-refresh" class="p-button-primary"
-          @click="startScreening" :loading="isReconciling" :disabled="isReconciling" />
-      </template>
-    </RekonFormComponent>
-
-    <!-- Force Re-screen Toggle -->
-    <div class="flex align-items-center mb-3 mt-2" style="padding-left: 1rem;">
-      <Checkbox v-model="forceScreening" inputId="forceScreeningRekonPersediaan" :binary="true" :disabled="isReconciling" />
-      <label for="forceScreeningRekonPersediaan" class="ml-2 text-sm text-color-secondary">
-        <i class="pi pi-exclamation-triangle mr-1 text-yellow-500"></i>
-        Force Re-screen (ulang meskipun sudah sukses hari ini)
-      </label>
+      <!-- Row 2: Slim Footer Bar (Force Re-screen + Operational Hint) -->
+      <div class="filter-footer-bar">
+        <div class="force-screen-pill">
+          <Checkbox
+            v-model="forceScreening"
+            inputId="forceScreeningRekonPersediaan"
+            :binary="true"
+            :disabled="isReconciling"
+          />
+          <label for="forceScreeningRekonPersediaan" class="checkbox-label">
+            <i class="pi pi-exclamation-triangle text-warning"></i>
+            <span>Force Re-screen</span>
+          </label>
+          <small class="screen-hint">(Jalankan ulang rekonsiliasi meskipun sudah sukses hari ini)</small>
+        </div>
+      </div>
     </div>
 
-    <!-- card info last screening -->
-    <LastScanInfo moduleName="rekon_persediaan" :selectedCabang="formData.cab" v-if="!isReconciling" />
+    <!-- Standalone Slim LastScanInfo Status Strip -->
+    <LastScanInfo
+      moduleName="rekon_persediaan"
+      :selectedCabang="formData.cab"
+      v-if="!isReconciling"
+      class="mt-2"
+    />
 
     <!-- Processing Loading State -->
     <ProgressBar v-if="isReconciling" :visible="isReconciling" :percentage="progress.percentage" :info="progress.info">
@@ -66,7 +104,6 @@ import Calendar from 'primevue/calendar';
 import Button from 'primevue/button';
 import Checkbox from 'primevue/checkbox';
 import ProgressBar from "@/components/common/ProgressBar.vue";
-import RekonFormComponent from "@/components/common/RekonFormComponent.vue";
 import progressService from "@/services/progress.service.js";
 import rekonPersediaanService from '@/services/rekonPersediaan.service';
 import api from "@/services/api.js";
@@ -221,3 +258,114 @@ const submitForm = () => {
     emitViewResults();
 };
 </script>
+
+<style scoped>
+.rekon-persediaan-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.filter-panel {
+  background: var(--surface-card, #ffffff);
+  border: 1px solid var(--surface-border, #e2e8f0);
+  border-radius: 10px;
+  padding: 0.85rem 1.15rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.filter-row-primary {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 0.85rem;
+  align-items: flex-end;
+}
+
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.filter-label {
+  font-size: 0.785rem;
+  font-weight: 600;
+  color: var(--text-color-secondary, #64748b);
+  letter-spacing: 0.02em;
+}
+
+:deep(.filter-dropdown),
+:deep(.filter-calendar) {
+  width: 100%;
+}
+
+:deep(.filter-dropdown .p-inputtext),
+:deep(.filter-calendar .p-inputtext) {
+  padding: 0.45rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.filter-actions-col {
+  display: flex;
+  align-items: center;
+}
+
+.btn-action {
+  font-size: 0.825rem;
+  font-weight: 600;
+  padding: 0.48rem 1rem;
+  white-space: nowrap;
+}
+
+.filter-footer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--surface-border, #f1f5f9);
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.force-screen-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 600;
+  color: var(--text-color, #334155);
+  cursor: pointer;
+  user-select: none;
+}
+
+.text-warning {
+  color: #f59e0b;
+}
+
+.screen-hint {
+  color: var(--text-color-secondary, #94a3b8);
+  font-size: 0.75rem;
+}
+
+.error-text {
+  color: var(--error-color, #ef4444);
+  font-size: 0.75rem;
+  margin-top: 0.2rem;
+}
+
+@media (max-width: 900px) {
+  .filter-row-primary {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+

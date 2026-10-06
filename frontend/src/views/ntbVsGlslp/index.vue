@@ -1,51 +1,85 @@
 <template>
   <div class="ntb-vs-glslp-view">
-    <PageHeader title="Rekonsiliasi NTB vs GLSLP"
-      subtitle="Perbandingan nilai transaksi antara NTB dan GLSLP"
-      description="Halaman ini menampilkan data rekonsiliasi selisih antara nilai NTB dan GLSLP per promo-gudang-toko-tanggal." />
+    <!-- Compact Header Section -->
+    <header class="view-header">
+      <div class="header-main">
+        <div class="header-icon-box">
+          <i class="pi pi-sliders-h"></i>
+        </div>
+        <div class="header-text">
+          <h1 class="header-title">Rekonsiliasi NTB vs GLSLP</h1>
+          <p class="header-subtitle">
+            Perbandingan nilai transaksi antara NTB dan GLSLP per promo-gudang-toko-tanggal
+          </p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <!-- Active Filter Badge -->
+        <div v-if="currentPeriode" class="active-filter-badge">
+          <i class="pi pi-calendar"></i>
+          <span>Periode: <strong>{{ formatDisplayPeriode(currentPeriode) }}</strong></span>
+          <span v-if="activeCabang && activeCabang !== 'All'" class="cab-sub-badge">Cabang: {{ activeCabang }}</span>
+        </div>
+
+        <!-- Refresh Button -->
+        <button
+          type="button"
+          class="btn-header-secondary"
+          :disabled="loading"
+          @click="loadData"
+          title="Muat ulang data NTB vs GLSLP"
+        >
+          <i class="pi pi-refresh" :class="{ 'pi-spin': loading }"></i>
+          <span>Refresh</span>
+        </button>
+
+        <!-- Export Excel Button -->
+        <Button
+          icon="pi pi-file-excel"
+          label="Export Excel"
+          severity="success"
+          class="p-button-sm btn-header-export"
+          :disabled="!data.length || exporting"
+          :loading="exporting"
+          @click="exportExcel"
+        />
+      </div>
+    </header>
 
     <div class="content-container">
-      <Card class="filter-card">
-        <template #content>
-          <div class="filter-container">
-            <div class="filter-group">
-              <label class="filter-label"><i class="pi pi-calendar"></i> Periode</label>
-              <Calendar v-model="periodeDate" view="month" dateFormat="mm/yy" placeholder="Pilih Bulan/Tahun"
-                :maxDate="today" showIcon class="w-full" @date-select="handlePeriodeSelect" />
-            </div>
+      <div class="filter-panel">
+        <div class="filter-container">
+          <div class="filter-group">
+            <label class="filter-label"><i class="pi pi-calendar"></i> Periode</label>
+            <Calendar v-model="periodeDate" view="month" dateFormat="mm/yy" placeholder="Pilih Bulan/Tahun"
+              :maxDate="today" showIcon class="filter-calendar" @date-select="handlePeriodeSelect" />
+          </div>
 
-            <div class="filter-group">
-              <label class="filter-label"><i class="pi pi-building"></i> Cabang</label>
-              <Dropdown v-model="activeCabang" :options="cabangOptions" optionLabel="namacab" optionValue="kdcab"
-                placeholder="Semua Cabang" class="w-full" @change="loadData" />
-            </div>
+          <div class="filter-group">
+            <label class="filter-label"><i class="pi pi-building"></i> Cabang</label>
+            <Dropdown v-model="activeCabang" :options="cabangOptions" optionLabel="namacab" optionValue="kdcab"
+              placeholder="Semua Cabang" class="filter-dropdown" @change="loadData" />
+          </div>
 
-            <div class="filter-group">
-              <label class="filter-label"><i class="pi pi-filter"></i> Tampilkan</label>
-              <div class="recid-toggle">
-                <SelectButton v-model="recidFilter" :options="recidOptions" optionLabel="label" optionValue="value"
-                  @change="loadData" />
-              </div>
-            </div>
-
-            <div class="filter-group flex-grow">
-              <label class="filter-label"><i class="pi pi-search"></i> Pencarian</label>
-              <div class="search-box">
-                <InputText v-model="searchQuery" placeholder="Cari promo, toko, file..." class="w-full"
-                  @input="onSearchInput" />
-                <Button v-if="searchQuery" icon="pi pi-times" class="p-button-text p-button-sm clear-btn"
-                  @click="clearSearch" />
-              </div>
-            </div>
-
-            <div class="filter-actions">
-              <Button icon="pi pi-refresh" label="Refresh" class="p-button-outlined" @click="loadData" />
-              <Button icon="pi pi-file-excel" label="Export Excel" class="p-button-success" :disabled="!data.length || exporting"
-  :loading="exporting" @click="exportExcel" />
+          <div class="filter-group">
+            <label class="filter-label"><i class="pi pi-filter"></i> Tampilkan</label>
+            <div class="recid-toggle">
+              <SelectButton v-model="recidFilter" :options="recidOptions" optionLabel="label" optionValue="value"
+                @change="loadData" />
             </div>
           </div>
-        </template>
-      </Card>
+
+          <div class="filter-group flex-grow">
+            <label class="filter-label"><i class="pi pi-search"></i> Pencarian</label>
+            <div class="search-box">
+              <InputText v-model="searchQuery" placeholder="Cari promo, toko, file..." class="search-input"
+                @input="onSearchInput" />
+              <Button v-if="searchQuery" icon="pi pi-times" class="p-button-text p-button-sm clear-btn"
+                @click="clearSearch" />
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- Chart Section -->
       <RekonsiliasiChart
@@ -168,7 +202,11 @@
               {{ index + 1 }}
             </template>
           </Column>
-          <Column field="kdtk" header="KDTK" style="width:80px" />
+          <Column field="kdtk" header="KDTK" style="width:80px">
+            <template #body="{ data: row }">
+              <span class="font-mono">{{ formatCode(row.kdtk) }}</span>
+            </template>
+          </Column>
           <Column field="namaToko" header="Nama Toko" style="min-width:150px" />
           <Column field="tglTransaksi" header="Tanggal" style="width:110px">
             <template #body="{ data: row }">
@@ -212,10 +250,22 @@
               </Tag>
             </template>
           </Column>
-          <Column field="KODE_PROMO" header="Kode Promo" :sortable="true" style="min-width:120px" />
-          <Column field="KODE_GUDANG" header="Gudang" :sortable="true" style="width:80px" />
+          <Column field="KODE_PROMO" header="Kode Promo" :sortable="true" style="min-width:120px">
+            <template #body="{ data: row }">
+              <span class="font-mono">{{ formatCode(row.KODE_PROMO) }}</span>
+            </template>
+          </Column>
+          <Column field="KODE_GUDANG" header="Gudang" :sortable="true" style="width:80px">
+            <template #body="{ data: row }">
+              <span class="font-mono">{{ formatCode(row.KODE_GUDANG) }}</span>
+            </template>
+          </Column>
           <Column field="JENIS_TOKO" header="Jenis Toko" :sortable="true" style="min-width:120px" />
-          <Column field="KODE_TOKO" header="Toko" :sortable="true" style="width:80px" />
+          <Column field="KODE_TOKO" header="Toko" :sortable="true" style="width:80px">
+            <template #body="{ data: row }">
+              <span class="font-mono">{{ formatCode(row.KODE_TOKO) }}</span>
+            </template>
+          </Column>
           <Column field="TGL_TRANSAKSI" header="Tanggal" :sortable="true" style="width:110px">
             <template #body="{ data: row }">
               {{ formatDate(row.TGL_TRANSAKSI) }}
@@ -353,11 +403,11 @@
         <div class="field-group">
           <div class="field-row">
             <label>Kode Promo:</label>
-            <span>{{ cekRecord.KODE_PROMO }}</span>
+            <span class="font-mono">{{ formatCode(cekRecord.KODE_PROMO) }}</span>
           </div>
           <div class="field-row">
             <label>Kode Toko:</label>
-            <span>{{ cekRecord.KODE_TOKO }}</span>
+            <span class="font-mono">{{ formatCode(cekRecord.KODE_TOKO) }}</span>
           </div>
           <div class="field-row">
             <label>Jenis Toko:</label>
@@ -413,7 +463,6 @@
 
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue';
-import PageHeader from '../../components/PageHeader.vue';
 import Card from 'primevue/card';
 import Calendar from 'primevue/calendar';
 import Dropdown from 'primevue/dropdown';
@@ -435,10 +484,24 @@ import progressApi from '@/services/progress.service.js';
 import RekonsiliasiChart from './components/RekonsiliasiChart.vue';
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue';
 
+const formatCode = (val) => {
+  if (val === null || val === undefined) return '';
+  return String(val).replace(/^[#\s]+/, '').trim();
+};
+
+const formatDisplayPeriode = (val) => {
+  if (!val) return '';
+  if (val.length === 4) {
+    return `${val.substring(2, 4)}/20${val.substring(0, 2)}`;
+  }
+  return val;
+};
+
 const cabangStore = useCabangStore();
 
 const today = ref(new Date());
 const periodeDate = ref(null);
+const currentPeriode = computed(() => getPeriode());
 const activeCabang = ref('All');
 const cabangOptions = ref([]);
 const recidFilter = ref('1');

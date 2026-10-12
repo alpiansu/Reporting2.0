@@ -9,9 +9,10 @@ class AdjustService {
    * @param {File} file - The CSV file to upload
    * @returns {Promise<Object>} Upload and processing results
    */
-  async uploadCsv(file) {
+  async uploadCsv(file, directIntervention = false) {
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("directIntervention", directIntervention ? "true" : "false");
 
     const response = await api.post("/adjust/upload", formData, {
       headers: {

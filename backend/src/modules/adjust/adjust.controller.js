@@ -16,31 +16,48 @@ export const uploadAdjustCsv = async (req, res) => {
       return apiResponse.badRequest(res, "No file uploaded");
     }
 
-    // Get username from authenticated user
+    // Get username and role from authenticated user
     const username = req.user?.username || "unknown";
     const fullName = req.user?.fullName || username;
+    const userRole = req.user?.role || "user";
+
+    // Mode determination: "direct" | "generate" (default: "generate")
+    let mode = req.body?.mode || "generate";
+    if (req.body?.directIntervention === "true" || req.body?.directIntervention === true) {
+      mode = "direct";
+    }
+
+    // Security guard: Hanya role superadmin yang boleh direct intervention
+    if (mode === "direct" && userRole !== "superadmin") {
+      logger.warn(
+        `[adjust] User ${username} (${userRole}) mencoba direct intervention tanpa izin superadmin. Otomatis dialihkan ke mode generate.`
+      );
+      mode = "generate";
+    }
 
     // Log the adjustment attempt
-    logger.info(`User ${username} initiated adjustment generation with file: ${req.file.originalname}`);
+    logger.info(`User ${username} (${userRole}) initiated adjustment with mode=${mode}, file: ${req.file.originalname}`);
 
-    // Process the file and generate BC Khusus CSV
-    const results = await adjustService.processCsvAdjust(req.file.buffer, username, fullName);
+    // Process the file
+    const results = await adjustService.processCsvAdjust(req.file.buffer, username, fullName, mode);
 
     // Log completion
     logger.info(
-      `Adjustment generation completed for user ${username}. Total stores: ${results.totalStores}, Success: ${results.successStores}, Failed: ${results.failedStores.length}`,
+      `Adjustment (${mode}) completed for user ${username}. Total stores: ${results.totalStores}, Success: ${results.successStores}, Failed: ${results.failedStores.length}`,
     );
 
     // Return response based on results
     if (results.failedStores.length > 0 && results.successStores === 0) {
-      return apiResponse.error(res, "Semua toko dalam file gagal diproses (tidak ditemukan di master)", 400, results);
+      return apiResponse.error(res, "Semua toko dalam file gagal diproses", 400, results);
     }
 
     if (results.failedStores.length > 0) {
       return apiResponse.success(
         res,
         {
-          message: "File BC Khusus berhasil digenerate dengan beberapa catatan toko tidak valid",
+          message: mode === "direct"
+            ? "Proses intervensi langsung selesai dengan beberapa catatan toko gagal"
+            : "File BC Khusus berhasil digenerate dengan beberapa catatan toko tidak valid",
           data: results,
         },
         207,
@@ -48,7 +65,9 @@ export const uploadAdjustCsv = async (req, res) => {
     }
 
     return apiResponse.success(res, {
-      message: "File BC Khusus berhasil digenerate",
+      message: mode === "direct"
+        ? "Proses intervensi toko langsung berhasil"
+        : "File BC Khusus berhasil digenerate",
       data: results,
     });
   } catch (error) {

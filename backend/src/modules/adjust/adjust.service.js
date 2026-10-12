@@ -45,29 +45,29 @@ class AdjustService {
   buildBcKhususQuery(kdtk, tblFilet, items) {
     const tpl = config.queries.bcKhusus;
 
-    // 1. Init tables & BCKMSTRANADJ
+    // 1. Init tables
     const initPart = tpl.init;
 
     // 2. Insert into mstadj for each item
     const insertMstadjParts = items
-      .map(item => tpl.insertMstadj(item.prdcd, item.qty_adj, item.keter))
+      .map(item => tpl.insertMstadj(item.prdcd, item.qty_adj, item.keter, item.tgl_selisih))
       .join("");
 
     // 3. Safety check (adjcek) joining monthly filet table
     const safetyCekPart = tpl.safetyCek(tblFilet);
 
-    // 4. Update mstadj if sisa < 0 and saldo * qty < 0
-    const updateMstadjPart = tpl.updateMstadj;
+    // 4. Finalize const docno & update mstadj
+    const finalizePart = tpl.finalize;
 
-    // 5. Insert into BCKMSTRANADJ for each item
-    const insertBckParts = items
-      .map(item => tpl.insertBckTran(item.prdcd))
+    // 5. Insert into mstran for each item
+    const insertTranParts = items
+      .map(item => tpl.insertTran(item.prdcd))
       .join("");
 
     // 6. Response SELECT query
     const finalSelectPart = tpl.finalSelect;
 
-    return initPart + insertMstadjParts + safetyCekPart + updateMstadjPart + insertBckParts + finalSelectPart;
+    return initPart + insertMstadjParts + safetyCekPart + finalizePart + insertTranParts + finalSelectPart;
   }
 
   /**
@@ -78,13 +78,13 @@ class AdjustService {
    * @param {string} fullName - Full name of the user
    * @returns {Promise<Object>} Processing results with generated CSV
    */
-  async processCsvAdjust(fileBuffer, username, fullName) {
+  async processCsvAdjustGenerate(fileBuffer, username, fullName) {
     const taskId = `${config.taskProgressName}_${username}`;
 
     try {
       // Parse CSV to array of objects
       const records = await this.parseCsvBuffer(fileBuffer);
-      logger.info(`[adjust] Parsed ${records.length} records from uploaded CSV`);
+      logger.info(`[adjust:generate] Parsed ${records.length} records from uploaded CSV`);
 
       if (records.length === 0) {
         throw new Error("File CSV tidak memiliki data");
@@ -110,7 +110,7 @@ class AdjustService {
       }
 
       const storeCodes = Array.from(storeMap.keys());
-      logger.info(`[adjust] Found ${storeCodes.length} unique stores in CSV`);
+      logger.info(`[adjust:generate] Found ${storeCodes.length} unique stores in CSV`);
 
       // Start progress tracking
       try {
@@ -124,7 +124,7 @@ class AdjustService {
           createdAt: timeStart,
         });
       } catch (err) {
-        logger.warn(`[adjust] Could not start progress task: ${err.message}`);
+        logger.warn(`[adjust:generate] Could not start progress task: ${err.message}`);
       }
 
       // Lookup INDUK stores from storeService
@@ -148,6 +148,7 @@ class AdjustService {
         historyRecords: [], // used for UI DataTable
         csvContent: "",
         fileName: `FILE_BC_KHUSUS_${moment().tz("Asia/Jakarta").format("YYYYMMDD_HHmmss")}.csv`,
+        mode: "generate",
       };
 
       const csvLines = [config.queries.bcKhusus.header]; // "KDCAB|KDTK|STATION|QUERY "
@@ -158,7 +159,7 @@ class AdjustService {
         const store = storeInfoMap.get(kdtk);
 
         if (!store) {
-          logger.warn(`[adjust] Store ${kdtk} not found in master INDUK`);
+          logger.warn(`[adjust:generate] Store ${kdtk} not found in master INDUK`);
           results.failedStores.push({
             storeCode: kdtk,
             error: `Store ${kdtk} tidak ditemukan di master store INDUK`,
@@ -213,12 +214,12 @@ class AdjustService {
           completedAt: moment().format("YYYY-MM-DD HH:mm:ss"),
         });
       } catch (err) {
-        logger.warn(`[adjust] Could not complete progress task: ${err.message}`);
+        logger.warn(`[adjust:generate] Could not complete progress task: ${err.message}`);
       }
 
       return results;
     } catch (error) {
-      logger.error(`[adjust] Failed to process CSV adjust: ${error.message}`);
+      logger.error(`[adjust:generate] Failed to process CSV adjust: ${error.message}`);
       try {
         await progressService.failProgress(taskId, {
           description: `Task failed: ${error.message}`,
@@ -229,6 +230,291 @@ class AdjustService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Process CSV file for item adjustment by directly connecting to store POS DB
+   * (Superadmin direct intervention mode)
+   */
+  async processCsvAdjustDirect(fileBuffer, username, fullName) {
+    const taskId = `${config.taskProgressName}_${username}`;
+    const tempFilePath = path.join(os.tmpdir(), `adjust_history_${Date.now()}.json`);
+
+    try {
+      await fs.mkdir(path.dirname(tempFilePath), { recursive: true });
+
+      const records = await this.parseCsvBuffer(fileBuffer);
+      logger.info(`[adjust:direct] Parsed ${records.length} records from CSV`);
+
+      const storeCodes = [...new Set(records.map(record => record.KDTK))];
+      logger.info(`[adjust:direct] Found ${storeCodes.length} unique stores in CSV`);
+
+      const selectedStores = await storeService.getStoresByCodes(storeCodes);
+      logger.info(`[adjust:direct] Found ${selectedStores.length} valid INDUK stores`);
+
+      try {
+        const timeStart = moment().format("YYYY-MM-DD HH:mm:ss");
+        await progressService.startProgress(taskId, selectedStores.length, {
+          module: "adjust",
+          title: "Adjustment Process (Direct Intervention)",
+          description: "Connecting directly to store databases",
+          startedBy: fullName || username,
+          status: "registering",
+          createdAt: timeStart,
+        });
+
+        logger.info(`Progress task registered for user ${username}, taskId: ${taskId}`);
+      } catch (error) {
+        logger.error(`Error registering progress task: ${error.message}`);
+        if (
+          error.code === "TASK_BUSY" ||
+          error.message.includes("Maximum concurrent") ||
+          error.message.includes("Sistem sedang memproses")
+        ) {
+          const busyErr = new Error(error.message);
+          busyErr.statusCode = 409;
+          busyErr.details = {
+            canProceed: false,
+            activeTasks: error.activeTasks || [],
+            suggestion: "Cek halaman progress untuk melihat proses yang sedang berjalan, atau tunggu hingga selesai.",
+          };
+          throw busyErr;
+        }
+
+        const regErr = new Error(`Gagal mendaftarkan progress task: ${error.message}`);
+        regErr.statusCode = 500;
+        throw regErr;
+      }
+
+      const tempHistoryRecords = [];
+
+      const results = {
+        totalStores: selectedStores.length,
+        processedStores: 0,
+        successStores: 0,
+        failedStores: [],
+        storeResults: [],
+        historyRecords: [],
+        mode: "direct",
+      };
+
+      const limit = pLimit(config.parallelProcessing.concurrencyLimit);
+      let processedCount = 0;
+
+      const storePromises = selectedStores.map(store =>
+        limit(async () => {
+          if (progressService.isAborted(taskId)) {
+            logger.info(`[adjust:direct] Skipping store ${store.storeCode} — task aborted`);
+            return {
+              type: "cancelled",
+              storeCode: store.storeCode,
+              historyRecords: [],
+            };
+          }
+
+          const currentCount = ++processedCount;
+          await progressService.updateProgress(taskId, currentCount, {
+            description: `Processing store ${store.storeCode} (${currentCount} of ${selectedStores.length})`,
+            status: "Screening to Stores",
+          });
+
+          progressService.addProcessingStore(taskId, store.storeCode);
+
+          try {
+            logger.info(`[adjust:direct] Processing store: ${store.storeCode}`);
+            const storeRecords = records.filter(record => record.KDTK === store.storeCode);
+
+            const perRecordMs = config.parallelProcessing.perRecordTimeoutMs;
+            const rawBudgetMs = config.parallelProcessing.storeTimeoutMs + storeRecords.length * perRecordMs;
+            const storeBudgetMs = Math.min(rawBudgetMs, config.parallelProcessing.maxStoreTimeoutMs);
+
+            const controller = new AbortController();
+
+            const processingTask = this.processStoreWithHistory(store, storeRecords, username, controller.signal).catch(err => {
+              if (!controller.signal.aborted) {
+                logger.error(`[adjust:direct][${store.storeCode}] background processing failed: ${err.message}`);
+              }
+            });
+
+            let storeTimer = null;
+            const storeResult = await Promise.race([
+              processingTask,
+              new Promise((resolve) => {
+                storeTimer = setTimeout(() => {
+                  controller.abort();
+                  logger.error(`[adjust:direct][${store.storeCode}] Store timeout after ${storeBudgetMs}ms`);
+                  resolve({
+                    success: false,
+                    processed: 0,
+                    error: `Store timeout after ${storeBudgetMs}ms`,
+                    historyRecords: storeRecords.map(record => ({
+                      kdtk: record.KDTK,
+                      prdcd: record.PRDCD,
+                      qty_adj: parseInt(record.QTY_ADJ) || 0,
+                      keter: record.KETER || "",
+                      note: `Store timeout after ${storeBudgetMs}ms`,
+                      pic: username,
+                      updtime: new Date(),
+                      status: "FAILED",
+                    })),
+                  });
+                }, storeBudgetMs);
+              }),
+            ]).finally(() => {
+              if (storeTimer) clearTimeout(storeTimer);
+            });
+
+            return {
+              type: storeResult.success ? "success" : "error",
+              storeCode: store.storeCode,
+              storeResult,
+              historyRecords: storeResult.historyRecords,
+            };
+          } catch (error) {
+            logger.error(`[adjust:direct] Error processing store ${store.storeCode}: ${error.message}`);
+            const storeRecords = records.filter(record => record.KDTK === store.storeCode);
+            const failedHistoryRecords = storeRecords.map(record => ({
+              kdtk: record.KDTK,
+              prdcd: record.PRDCD,
+              qty_adj: parseInt(record.QTY_ADJ) || 0,
+              keter: record.KETER || "",
+              note: error.message,
+              pic: username,
+              updtime: new Date(),
+              status: "FAILED",
+            }));
+
+            return {
+              type: "error",
+              storeCode: store.storeCode,
+              error: error.message,
+              historyRecords: failedHistoryRecords,
+            };
+          } finally {
+            progressService.removeProcessingStore(taskId, store.storeCode);
+          }
+        }),
+      );
+
+      const storeResultsArray = await Promise.all(storePromises);
+
+      if (progressService.isAborted(taskId)) {
+        logger.info(`[adjust:direct] Task ${taskId} was cancelled — skipping finalization`);
+        throw new Error("Proses dibatalkan oleh pengguna");
+      }
+
+      for (const result of storeResultsArray) {
+        results.processedStores++;
+
+        if (result.type === "success") {
+          if (result.storeResult.success) {
+            results.successStores++;
+          } else {
+            results.failedStores.push({
+              storeCode: result.storeCode,
+              error: result.storeResult.error,
+            });
+          }
+
+          results.storeResults.push({
+            storeCode: result.storeCode,
+            processed: result.storeResult.processed,
+            success: result.storeResult.success,
+            error: result.storeResult.error,
+            executedAt: result.storeResult.executedAt,
+          });
+        } else {
+          results.failedStores.push({
+            storeCode: result.storeCode,
+            error: result.error,
+          });
+
+          results.storeResults.push({
+            storeCode: result.storeCode,
+            processed: 0,
+            success: false,
+            error: result.error,
+            executedAt: new Date(),
+          });
+        }
+
+        tempHistoryRecords.push(...result.historyRecords);
+      }
+
+      await fs.writeFile(tempFilePath, JSON.stringify(tempHistoryRecords, null, 2));
+      await progressService.updateProgress(taskId, processedCount, {
+        description: "Writing temporary history file",
+        status: "finalizing",
+      });
+
+      try {
+        const bulkResult = await histAdjustStagingService.bulkInsert(tempHistoryRecords);
+        logger.info(`[adjust:direct] Successfully bulk inserted ${bulkResult.insertedCount} history records`);
+
+        await progressService.updateProgress(taskId, processedCount, {
+          description: "Inserting history records to database",
+          status: "finalizing",
+        });
+
+        results.historyRecords = bulkResult.records || tempHistoryRecords;
+      } catch (historyError) {
+        logger.error(`[adjust:direct] Failed to save history records: ${historyError.message}`);
+        results.historyRecords = tempHistoryRecords;
+      }
+
+      try {
+        await fs.unlink(tempFilePath);
+        await progressService.updateProgress(taskId, processedCount, {
+          description: "Temporary history file cleaned up",
+          status: "finalizing",
+        });
+      } catch (cleanupError) {
+        // ignore
+      }
+
+      const timeCompleted = moment().format("YYYY-MM-DD HH:mm:ss");
+      await progressService.completeProgress(taskId, {
+        description: "All stores processed directly",
+        status: "completed",
+        completedAt: timeCompleted,
+      });
+
+      return results;
+    } catch (error) {
+      try {
+        await fs.unlink(tempFilePath);
+      } catch (cleanupError) {
+        // ignore
+      }
+
+      if (progressService.isAborted(taskId)) {
+        logger.info(`[adjust:direct] Task ${taskId} was cancelled — skipping failProgress`);
+        return { success: false, message: "Proses dibatalkan oleh pengguna", cancelled: true };
+      }
+
+      logger.error(`[adjust:direct] Failed to process CSV adjust: ${error.message}`);
+      await progressService.failProgress(taskId, {
+        description: `Task failed: ${error.message}`,
+        status: "failed",
+      });
+      throw error;
+    } finally {
+      progressService.clearProcessingStores(taskId);
+    }
+  }
+
+  /**
+   * Main dispatcher for CSV adjustment
+   * @param {Buffer} fileBuffer
+   * @param {string} username
+   * @param {string} fullName
+   * @param {"generate"|"direct"} mode
+   */
+  async processCsvAdjust(fileBuffer, username, fullName, mode = "generate") {
+    if (mode === "direct") {
+      return this.processCsvAdjustDirect(fileBuffer, username, fullName);
+    }
+    return this.processCsvAdjustGenerate(fileBuffer, username, fullName);
   }
   async parseCsvBuffer(buffer) {
     return new Promise((resolve, reject) => {

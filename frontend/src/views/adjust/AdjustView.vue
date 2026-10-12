@@ -107,6 +107,32 @@
             </div>
           </div>
 
+          <!-- Superadmin Direct Intervention Toggle Banner -->
+          <div v-if="isSuperAdmin" class="superadmin-mode-banner" :class="{ 'direct-active': isDirectIntervention }">
+            <div class="mode-info">
+              <div class="mode-icon-wrapper" :class="{ 'direct': isDirectIntervention }">
+                <i :class="isDirectIntervention ? 'pi pi-bolt' : 'pi pi-file-export'"></i>
+              </div>
+              <div class="mode-text">
+                <div class="mode-title-row">
+                  <span class="mode-title">Mode Intervensi Toko Langsung</span>
+                  <Tag :severity="isDirectIntervention ? 'danger' : 'info'" size="small">
+                    {{ isDirectIntervention ? 'Direct POS Connection' : 'Generate File (Default)' }}
+                  </Tag>
+                </div>
+                <p class="mode-desc">
+                  {{ isDirectIntervention 
+                    ? '⚠️ Mode Intervensi aktif: Query akan dieksekusi langsung ke database POS toko via jaringan.' 
+                    : 'Mode standar: Generate file broadcast CSV untuk dieksekusi melalui platform kantor.' 
+                  }}
+                </p>
+              </div>
+            </div>
+            <div class="mode-switch-wrapper">
+              <ToggleSwitch v-model="isDirectIntervention" :disabled="isProcessing" />
+            </div>
+          </div>
+
           <div class="file-input-section" v-if="!isProcessing">
             <div class="drag-drop-area"
               :class="{ 'drag-over': isDragOver, 'has-file': selectedFile, 'disabled': isProcessing }"
@@ -144,9 +170,9 @@
           <div class="upload-actions" v-if="selectedFile">
             <div class="action-buttons">
               <button class="process-btn" @click="handleUpload" :disabled="!selectedFile || isProcessing || !isFileApproved"
-                :class="{ 'processing': isProcessing }">
-                <i class="pi" :class="isProcessing ? 'pi-spin pi-spinner' : 'pi-cog'"></i>
-                <span>{{ isProcessing ? 'Processing...' : 'Process File' }}</span>
+                :class="{ 'processing': isProcessing, 'direct-action': isSuperAdmin && isDirectIntervention }">
+                <i class="pi" :class="isProcessing ? 'pi-spin pi-spinner' : (isSuperAdmin && isDirectIntervention ? 'pi-bolt' : 'pi-cog')"></i>
+                <span>{{ isProcessing ? 'Processing...' : (isSuperAdmin && isDirectIntervention ? 'Eksekusi Intervensi Toko' : 'Process File') }}</span>
               </button>
               <button class="reset-btn" @click="resetForm" :disabled="isProcessing">
                 <i class="pi pi-refresh"></i>
@@ -166,12 +192,18 @@
       <!-- Processing Loading State -->
       <ProgressBar v-if="isProcessing" :visible="isProcessing" :percentage="progress.percentage" :info="progress.info">
         <template #title>
-          Generating File BC Khusus...
+          {{ (isSuperAdmin && isDirectIntervention) ? 'Mengeksekusi Penyesuaian ke Toko Langsung...' : 'Generating File BC Khusus...' }}
         </template>
 
         <template #subtitle>
-          Memproses data toko dan menyusun query batch broadcast.<br />
-          Mohon tunggu sebentar...
+          <span v-if="isSuperAdmin && isDirectIntervention">
+            Menghubungkan ke database POS toko dan mengeksekusi batch penyesuaian stok.<br />
+            Mohon tunggu, proses membutuhkan waktu beberapa saat...
+          </span>
+          <span v-else>
+            Memproses data toko dan menyusun query batch broadcast.<br />
+            Mohon tunggu sebentar...
+          </span>
         </template>
 
         <template #details>
@@ -187,14 +219,21 @@
           <div class="results-title-section">
             <i class="pi pi-check-circle results-icon"></i>
             <div class="results-title-content">
-              <h3 class="results-title">File BC Khusus Berhasil Digenerate</h3>
-              <p class="results-subtitle">File CSV broadcast telah terunduh otomatis. Siap dieksekusi di platform kantor.</p>
+              <h3 class="results-title">
+                {{ processResults?.csvContent ? 'File BC Khusus Berhasil Digenerate' : 'Penyesuaian Stok Toko Selesai' }}
+              </h3>
+              <p class="results-subtitle">
+                {{ processResults?.csvContent 
+                  ? 'File CSV broadcast telah terunduh otomatis. Siap dieksekusi di platform kantor.' 
+                  : 'Hasil eksekusi langsung ke toko telah tercatat ke riwayat staging.' 
+                }}
+              </p>
             </div>
           </div>
           <div class="results-badge">
-            <span class="success-indicator">
-              <i class="pi pi-verified"></i>
-              Ready for Broadcast
+            <span class="success-indicator" :class="{ 'direct': !processResults?.csvContent }">
+              <i :class="processResults?.csvContent ? 'pi pi-verified' : 'pi pi-bolt'"></i>
+              {{ processResults?.csvContent ? 'Ready for Broadcast' : 'Direct Executed' }}
             </span>
           </div>
         </div>
@@ -381,12 +420,13 @@
 
 <style src="./AdjustView.style.css" scoped></style>
 <script setup>
-import { ref, onBeforeUnmount, watch } from "vue";
+import { ref, computed, onBeforeUnmount, watch } from "vue";
 import { useToast } from "primevue/usetoast";
 import { useAuthStore } from '../../stores';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Tag from 'primevue/tag';
+import ToggleSwitch from 'primevue/toggleswitch';
 import api from "../../services/api.js";
 import adjustService from "../../services/adjust.service.js";
 import progressService from "../../services/progress.service.js";
@@ -405,9 +445,16 @@ const formatCode = (val) => {
 
 const toast = useToast();
 const authStore = useAuthStore();
-const strUsername = authStore.user.username;
+const strUsername = computed(() => authStore.user?.username || "");
+const isSuperAdmin = computed(() => {
+  const role = authStore.user?.role;
+  return typeof role === "string" && role.toLowerCase() === "superadmin";
+});
+const isDirectIntervention = ref(false);
 
-// console.log(`user dari store auth: ${authStore.user.username}`);
+watch(isSuperAdmin, (val) => {
+  if (!val) isDirectIntervention.value = false;
+});
 
 // State
 const selectedFile = ref(null);
@@ -538,7 +585,7 @@ watch(isProcessing, (newVal) => {
 // Methods
 const startProgressTracking = async () => {
 
-  const taskId = `adjustmentTask_${strUsername}`; // Sesuai dengan config.taskProgressName di backend
+  const taskId = `adjustmentTask_${strUsername.value}`; // Sesuai dengan config.taskProgressName di backend
 
   // Hentikan tracking sebelumnya jika ada
   stopProgressTracking();
@@ -678,25 +725,30 @@ const handleUpload = async () => {
   try {
     isProcessing.value = true;
 
+    const direct = isSuperAdmin.value && isDirectIntervention.value;
+
     progress.value = {
-      percentage: 20,
-      info: "Mengunggah dan mengenerate file BC Khusus...",
+      percentage: direct ? 0 : 20,
+      info: direct ? "Menghubungi database toko..." : "Mengunggah dan mengenerate file BC Khusus...",
       status: "starting"
     };
 
     // Extract the data structure correctly - response.data.data contains the actual results
-    const resultData = await adjustService.uploadCsv(selectedFile.value);
+    const resultData = await adjustService.uploadCsv(selectedFile.value, direct);
     const actualData = resultData?.data?.data || resultData?.data;
     processResults.value = actualData;
 
     if (resultData.success === true && actualData) {
-      // Simpan file hasil untuk unduh ulang
-      lastGeneratedCsvContent.value = actualData.csvContent || "";
-      lastGeneratedFileName.value = actualData.fileName || "FILE_BC_KHUSUS.csv";
+      if (!direct && actualData.csvContent) {
+        // Simpan file hasil untuk unduh ulang
+        lastGeneratedCsvContent.value = actualData.csvContent || "";
+        lastGeneratedFileName.value = actualData.fileName || "FILE_BC_KHUSUS.csv";
 
-      // Otomatis download file BC Khusus
-      if (actualData.csvContent) {
+        // Otomatis download file BC Khusus
         triggerDownloadCsv(actualData.csvContent, actualData.fileName);
+      } else {
+        lastGeneratedCsvContent.value = "";
+        lastGeneratedFileName.value = "";
       }
 
       // Reset upload form after successful processing
@@ -707,10 +759,18 @@ const handleUpload = async () => {
       const successCount = actualData.successStores || 0;
       const totalStores = actualData.totalStores || 0;
 
+      const summaryTitle = direct
+        ? (failedCount > 0 ? "Intervensi Selesai dengan Catatan" : "Intervensi Berhasil")
+        : (failedCount > 0 ? "Generate Selesai dengan Catatan" : "Generate Berhasil");
+
+      const detailMsg = direct
+        ? `Eksekusi langsung ke toko selesai. ${successCount}/${totalStores} toko berhasil diproses.`
+        : `File BC Khusus telah didownload otomatis. ${successCount}/${totalStores} toko valid digenerate.`;
+
       toast.add({
         severity: failedCount > 0 ? "warn" : "success",
-        summary: failedCount > 0 ? "Generate Selesai dengan Catatan" : "Generate Berhasil",
-        detail: `File BC Khusus telah didownload otomatis. ${successCount}/${totalStores} toko valid digenerate.`,
+        summary: summaryTitle,
+        detail: detailMsg,
         life: 5000,
       });
 

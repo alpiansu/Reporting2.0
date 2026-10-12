@@ -5,20 +5,20 @@
 export default {
   // Query templates
   queries: {
-    // BC Khusus broadcast CSV query templates
+    // BC Khusus broadcast CSV query templates (mengikuti alur query asli ke mstran toko)
     bcKhusus: {
       header: "KDCAB|KDTK|STATION|QUERY ",
-      init: `DROP TABLE IF EXISTS mstadj;         CREATE TABLE IF NOT EXISTS mstadj LIKE mstran;         DROP TABLE IF EXISTS simul_mst;         DROP TABLE IF EXISTS adjcek; CREATE TABLE BCKMSTRANADJ LIKE MSTRAN; TRUNCATE TABLE BCKMSTRANADJ;          `,
-      insertMstadj: (prdcd, qty, keter) =>
-        `INSERT INTO mstadj(lokasi,rtype,bukti_no,bukti_tgl,supco,inv_date,prdcd,plu_nas,istype,bkp,sub_bkp,price,gross,qty,jam,keter,price_jual,gross_jual,invno)         SELECT            '01', 'X',            (SELECT docno FROM const WHERE rkey = 'NKL')+1,           CURRENT_DATE(),           IFNULL(pm.supco,''),           CURRENT_DATE(),           ${prdcd},            ${prdcd},            'SO',           pm.bkp,           pm.sub_bkp,           pm.acost,           pm.acost*(${qty}),             ${qty},                       CURTIME(),           "${keter}",                        pm.price,           pm.price*(${qty}),              (SELECT docno FROM const WHERE rkey = 'NKL')+1         FROM prodmast pm         WHERE pm.prdcd = ${prdcd}  ;   `,
+      init: `DROP TABLE IF EXISTS mstadj;         CREATE TABLE IF NOT EXISTS mstadj LIKE mstran;         DROP TABLE IF EXISTS simul_mst;         DROP TABLE IF EXISTS adjcek;          `,
+      insertMstadj: (prdcd, qty, keter, tglSelisih) =>
+        `INSERT INTO mstadj(lokasi,rtype,bukti_no,bukti_tgl,supco,inv_date,prdcd,plu_nas,istype,bkp,sub_bkp,price,gross,qty,jam,keter,price_jual,gross_jual,invno)         SELECT            '01', 'X',            (SELECT docno FROM const WHERE rkey = 'NKL')+1,           CURRENT_DATE(),           IFNULL(pm.supco,''),           ${tglSelisih ? `'${tglSelisih}'` : "CURRENT_DATE()"},           ${prdcd},            ${prdcd},            'SO',           pm.bkp,           pm.sub_bkp,           pm.acost,           pm.acost*(${qty}),             ${qty},                       CURTIME(),           "${keter}",                        pm.price,           pm.price*(${qty}),              (SELECT docno FROM const WHERE rkey = 'NKL')+1         FROM prodmast pm         WHERE pm.prdcd = ${prdcd}  ;   `,
       safetyCek: (tblFilet) =>
         `CREATE TABLE adjcek          SELECT              a.prdcd,              a.qty,              b.qty_ms,              b.qty_mt,              b.begbal,              b.saldo,              b.saldo + a.qty AS sisa         FROM mstadj a          INNER JOIN (             SELECT                  pr.prdcd,                  IFNULL(qty_ms, 0) AS qty_ms,                  IFNULL(qty_mt, 0) AS qty_mt,                  IFNULL(begbal,0) as begbal,                  (IFNULL(begbal,0) + IFNULL(qty_ms, 0) + IFNULL(qty_mt, 0)) AS saldo             FROM prodmast pr              LEFT JOIN (                 SELECT                      prdcd,                      ifnull(SUM(IF(RTYPE IN ('O','K'), QTY * -1, QTY)),0) AS qty_ms                  FROM mstran                  WHERE (                     (MONTH(bukti_tgl) = MONTH(CURRENT_DATE()) AND DATE(bukti_tgl) < CURRENT_DATE)                     OR (DAY(CURRENT_DATE()) = 1 AND MONTH(bukti_tgl) = MONTH(CURRENT_DATE() - INTERVAL 1 MONTH))                 )                 GROUP BY prdcd             ) ms USING (prdcd)             LEFT JOIN (                 SELECT                      plu AS prdcd,                      ifnull(SUM(IF(rtype = 'J', qty * -1, qty)),0) AS qty_mt                  FROM mtran                  WHERE (                     (MONTH(tanggal) = MONTH(CURRENT_DATE()) AND DATE(tanggal) < CURRENT_DATE)                     OR (DAY(CURRENT_DATE()) = 1 AND MONTH(tanggal) = MONTH(CURRENT_DATE() - INTERVAL 1 MONTH))                 )                 GROUP BY prdcd             ) mt USING (prdcd)             LEFT JOIN (                 SELECT prdcd, ifnull(saldo_akh,0) AS begbal FROM ${tblFilet}              ) flt USING (prdcd)             WHERE pr.prdcd IN (SELECT prdcd FROM mstadj)         ) b USING (prdcd);                  `,
-      updateMstadj:
-        `UPDATE mstadj m JOIN adjcek a USING(prdcd) SET m.qty = m.qty - a.sisa WHERE a.sisa < 0 AND a.saldo * m.qty < 0;                  `,
-      insertBckTran: (prdcd) =>
-        `INSERT IGNORE INTO BCKMSTRANADJ SELECT * FROM mstadj where prdcd in (SELECT prdcd from adjcek a inner join mstadj b using(prdcd) WHERE a.saldo != 0) AND PRDCD = ${prdcd};   `,
+      finalize:
+        `UPDATE const SET docno=docno+2 WHERE rkey='nkl';   `,
+      insertTran: (prdcd) =>
+        `INSERT IGNORE INTO mstran SELECT * FROM mstadj where prdcd in (SELECT prdcd from adjcek a inner join mstadj b using(prdcd) WHERE a.saldo != 0) AND PRDCD = ${prdcd};   `,
       finalSelect:
-        `SELECT rtype, bukti_no, bukti_tgl, prdcd, qty, price, gross, gross_jual, keter FROM BCKMSTRANADJ;`,
+        `SELECT rtype, bukti_no, bukti_tgl, prdcd, qty, price, gross, gross_jual, keter FROM mstadj;`,
     },
 
     // WRC query template

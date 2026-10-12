@@ -21,7 +21,7 @@ class AdjustService {
       const start = Date.now();
       const [rows] = await connection.query({ sql, timeout }, params);
       const ms = Date.now() - start;
-      logger.info(`[adjust][${context}] query done in ${ms}ms, rows=${Array.isArray(rows) ? rows.length : 'n/a'}`);
+      logger.info(`[adjust][${context}] query done in ${ms}ms, rows=${Array.isArray(rows) ? rows.length : "n/a"}`);
       return rows;
     } catch (err) {
       logger.error(`[adjust][${context}] query failed: ${err.message}`);
@@ -149,7 +149,7 @@ class AdjustService {
   /**
    * Build single-line batch SQL query for a store (supporting single & multi items)
    * @param {string} kdtk - Store code
-   * @param {string} tblFilet - Closing balance table name (e.g. TB7O2609NEW)
+   * @param {string} tblFilet - Closing balance table name (e.g. TB7O2609)
    * @param {Array<Object>} items - Array of adjustment items for this store
    * @returns {string} Single line SQL batch query
    */
@@ -171,9 +171,7 @@ class AdjustService {
     const finalizePart = tpl.finalize;
 
     // 5. Insert into mstran for each item
-    const insertTranParts = items
-      .map(item => tpl.insertTran(item.prdcd))
-      .join("");
+    const insertTranParts = items.map(item => tpl.insertTran(item.prdcd)).join("");
 
     // 6. Response SELECT query
     const finalSelectPart = tpl.finalSelect;
@@ -293,7 +291,7 @@ class AdjustService {
 
         const kdcab = (store.branch || store.cab || "").trim().toUpperCase();
         const station = (store.station || "01").trim();
-        const tblFilet = `${kdtk}${yy}${mm}NEW`;
+        const tblFilet = `${kdtk}${yy}${mm}`;
 
         // Build single-line batch query
         const query = this.buildBcKhususQuery(kdtk, tblFilet, items);
@@ -441,16 +439,18 @@ class AdjustService {
 
             const controller = new AbortController();
 
-            const processingTask = this.processStoreWithHistory(store, storeRecords, username, controller.signal).catch(err => {
-              if (!controller.signal.aborted) {
-                logger.error(`[adjust:direct][${store.storeCode}] background processing failed: ${err.message}`);
-              }
-            });
+            const processingTask = this.processStoreWithHistory(store, storeRecords, username, controller.signal).catch(
+              err => {
+                if (!controller.signal.aborted) {
+                  logger.error(`[adjust:direct][${store.storeCode}] background processing failed: ${err.message}`);
+                }
+              },
+            );
 
             let storeTimer = null;
             const storeResult = await Promise.race([
               processingTask,
-              new Promise((resolve) => {
+              new Promise(resolve => {
                 storeTimer = setTimeout(() => {
                   controller.abort();
                   logger.error(`[adjust:direct][${store.storeCode}] Store timeout after ${storeBudgetMs}ms`);
@@ -684,8 +684,8 @@ class AdjustService {
       if (!storeConnection) {
         throw new Error(
           `Gagal terhubung ke database toko ${store.storeCode} (${storeInfo.dbHost}). ` +
-          `Toko sedang offline atau tidak dapat dijangkau. ` +
-          `Silakan periksa koneksi toko dan coba lagi.`
+            `Toko sedang offline atau tidak dapat dijangkau. ` +
+            `Silakan periksa koneksi toko dan coba lagi.`,
         );
       }
 
@@ -737,13 +737,13 @@ class AdjustService {
               record.PRDCD, // prdcd for WHERE clause
             ];
 
-             await this.executeQuery(
-               storeConnection,
-               config.queries.store.insertPlu,
-               params,
-               `insertPlu|${store.storeCode}|${record.PRDCD}`,
-               config.parallelProcessing.queryTimeoutMs,
-             );
+            await this.executeQuery(
+              storeConnection,
+              config.queries.store.insertPlu,
+              params,
+              `insertPlu|${store.storeCode}|${record.PRDCD}`,
+              config.parallelProcessing.queryTimeoutMs,
+            );
           } catch (recordError) {
             logger.error(
               `Error processing record ${record.PRDCD} for store ${store.storeCode}: ${recordError.message}`,
@@ -783,29 +783,29 @@ class AdjustService {
               record.PRDCD, // prdcd
             ];
 
-             const result = await this.executeQuery(
-               storeConnection,
-               config.queries.store.insertTran,
-               params,
-               `insertTran|${store.storeCode}|${record.PRDCD}`,
-               config.parallelProcessing.queryTimeoutMs,
-             );
+            const result = await this.executeQuery(
+              storeConnection,
+              config.queries.store.insertTran,
+              params,
+              `insertTran|${store.storeCode}|${record.PRDCD}`,
+              config.parallelProcessing.queryTimeoutMs,
+            );
 
             if (result.affectedRows > 0) {
               result.processed++;
 
               // Query untuk mendapatkan detail row yang baru diinsert
-               const insertedRows = await this.executeQuery(
-                 storeConnection,
-                 `SELECT rtype, bukti_no, prdcd, qty, price, gross, gross_jual
+              const insertedRows = await this.executeQuery(
+                storeConnection,
+                `SELECT rtype, bukti_no, prdcd, qty, price, gross, gross_jual
                  FROM mstadj
                  WHERE prdcd = ?
                  ORDER BY recid DESC
                  LIMIT ?`,
-                 [record.PRDCD, result.affectedRows],
-                 `insertedRows|${store.storeCode}|${record.PRDCD}`,
-                 config.parallelProcessing.queryTimeoutMs,
-               );
+                [record.PRDCD, result.affectedRows],
+                `insertedRows|${store.storeCode}|${record.PRDCD}`,
+                config.parallelProcessing.queryTimeoutMs,
+              );
 
               // Format detail informasi
               let detailInfo = "";

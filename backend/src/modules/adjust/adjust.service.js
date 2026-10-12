@@ -30,6 +30,117 @@ class AdjustService {
   }
 
   /**
+   * Helper to determine if an IP address is considered a local simulation IP
+   * @param {string} ip
+   * @returns {boolean}
+   */
+  isLocalIp(ip) {
+    if (!ip || typeof ip !== "string") return false;
+    const cleanIp = ip.trim();
+    return /^192\.168\./.test(cleanIp) || /^127\./.test(cleanIp) || cleanIp === "localhost";
+  }
+
+  /**
+   * Check if a set of store codes qualifies for local simulation direct intervention
+   * @param {string[]} storeCodes
+   * @returns {Promise<Object>}
+   */
+  async checkTargetStores(storeCodes) {
+    if (!Array.isArray(storeCodes) || storeCodes.length === 0) {
+      return { singleStore: false, totalStores: 0, isLocal: false, canDirect: false };
+    }
+
+    const uniqueStores = [...new Set(storeCodes.map(s => String(s).trim().toUpperCase()).filter(Boolean))];
+
+    if (uniqueStores.length !== 1) {
+      return {
+        singleStore: false,
+        totalStores: uniqueStores.length,
+        isLocal: false,
+        canDirect: false,
+      };
+    }
+
+    const storeCode = uniqueStores[0];
+    const storeInfo = await storeService.getStoreIPHost(storeCode);
+
+    if (!storeInfo) {
+      return {
+        singleStore: true,
+        totalStores: 1,
+        storeCode,
+        storeName: "",
+        dbHost: "",
+        isLocal: false,
+        canDirect: false,
+        reason: `Toko ${storeCode} tidak ditemukan di master toko`,
+      };
+    }
+
+    const isLocal = this.isLocalIp(storeInfo.dbHost);
+
+    return {
+      singleStore: true,
+      totalStores: 1,
+      storeCode,
+      storeName: storeInfo.storeName || "",
+      dbHost: storeInfo.dbHost || "",
+      isLocal,
+      canDirect: isLocal,
+    };
+  }
+
+  /**
+   * Validates CSV buffer for non-superadmin direct intervention bypass
+   * Must have exactly 1 unique store and that store's IP must be local
+   * @param {Buffer} fileBuffer
+   * @returns {Promise<{ allowed: boolean, reason?: string, storeCode?: string, dbHost?: string }>}
+   */
+  async canBypassDirectIntervention(fileBuffer) {
+    try {
+      const records = await this.parseCsvBuffer(fileBuffer);
+      if (!records || records.length === 0) {
+        return { allowed: false, reason: "File CSV kosong" };
+      }
+
+      const storeCodes = [...new Set(records.map(r => (r.KDTK || r.kdtk || "").trim().toUpperCase()).filter(Boolean))];
+
+      if (storeCodes.length !== 1) {
+        return {
+          allowed: false,
+          reason: `Target file CSV berisi ${storeCodes.length} toko. Non-superadmin hanya diizinkan intervensi langsung untuk 1 toko simulasi.`,
+        };
+      }
+
+      const storeCode = storeCodes[0];
+      const storeInfo = await storeService.getStoreIPHost(storeCode);
+      if (!storeInfo) {
+        return {
+          allowed: false,
+          reason: `Toko ${storeCode} tidak ditemukan di master toko.`,
+        };
+      }
+
+      if (!this.isLocalIp(storeInfo.dbHost)) {
+        return {
+          allowed: false,
+          reason: `IP toko ${storeCode} (${storeInfo.dbHost}) bukan IP lokal/simulasi (192.168.x.x).`,
+          storeCode,
+          dbHost: storeInfo.dbHost,
+        };
+      }
+
+      return {
+        allowed: true,
+        storeCode,
+        dbHost: storeInfo.dbHost,
+      };
+    } catch (err) {
+      return { allowed: false, reason: `Gagal memvalidasi file: ${err.message}` };
+    }
+  }
+
+  /**
    * Process CSV file for item adjustment with history logging (simple version without progress tracking)
    * @param {Buffer} fileBuffer - CSV file buffer
    * @param {string} username - Username of the user performing adjustment

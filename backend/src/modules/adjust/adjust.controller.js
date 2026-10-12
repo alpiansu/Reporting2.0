@@ -27,12 +27,21 @@ export const uploadAdjustCsv = async (req, res) => {
       mode = "direct";
     }
 
-    // Security guard: Hanya role superadmin yang boleh direct intervention
+    // Security guard:
+    // 1. Superadmin selalu diizinkan direct intervention
+    // 2. Non-superadmin hanya diizinkan direct intervention jika target HANYA 1 toko dan IP toko tersebut adalah IP lokal (192.168.x.x / localhost)
     if (mode === "direct" && userRole !== "superadmin") {
-      logger.warn(
-        `[adjust] User ${username} (${userRole}) mencoba direct intervention tanpa izin superadmin. Otomatis dialihkan ke mode generate.`
-      );
-      mode = "generate";
+      const canBypass = await adjustService.canBypassDirectIntervention(req.file.buffer);
+      if (!canBypass.allowed) {
+        logger.warn(
+          `[adjust] User ${username} (${userRole}) mencoba direct intervention tetapi ditolak: ${canBypass.reason}. Otomatis dialihkan ke mode generate.`
+        );
+        mode = "generate";
+      } else {
+        logger.info(
+          `[adjust] User ${username} (${userRole}) diizinkan direct intervention untuk toko simulasi lokal: ${canBypass.storeCode} (${canBypass.dbHost})`
+        );
+      }
     }
 
     // Log the adjustment attempt
@@ -308,3 +317,24 @@ export const syncHistory = async (req, res) => {
     return apiResponse.error(res, error.message, 500);
   }
 };
+
+/**
+ * Check target stores from CSV to detect single local simulation store
+ * @param {Request} req
+ * @param {Response} res
+ */
+export const checkAdjustTarget = async (req, res) => {
+  try {
+    const { storeCodes } = req.body;
+    if (!storeCodes || !Array.isArray(storeCodes)) {
+      return apiResponse.badRequest(res, "Parameter storeCodes (array) diperlukan");
+    }
+
+    const checkResult = await adjustService.checkTargetStores(storeCodes);
+    return apiResponse.success(res, checkResult);
+  } catch (error) {
+    logger.error(`Error checking adjust target: ${error.message}`);
+    return apiResponse.error(res, error.message, 500);
+  }
+};
+

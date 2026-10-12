@@ -23,6 +23,16 @@ class AdjustService {
   }
 
   /**
+   * Check target stores to auto-detect single local simulation store
+   * @param {string[]} storeCodes - Array of unique store codes from CSV
+   * @returns {Promise<Object>} Detection results
+   */
+  async checkTarget(storeCodes) {
+    const response = await api.post("/adjust/check-target", { storeCodes });
+    return response.data;
+  }
+
+  /**
    * Download CSV master template
    * @returns {Promise<void>} Triggers file download
    */

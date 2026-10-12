@@ -2762,6 +2762,18 @@
   border-color: #fecaca;
 }
 
+.superadmin-mode-banner.local-sim:not(.direct-active) {
+  background: #fffbeb;
+  border-color: #fde68a;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.08);
+}
+
+.mode-icon-wrapper.local {
+  background: #fef3c7;
+  color: #d97706;
+  border-color: #fde68a;
+}
+
 @media (max-width: 640px) {
   .superadmin-mode-banner {
     flex-direction: column;

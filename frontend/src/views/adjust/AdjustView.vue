@@ -107,24 +107,37 @@
             </div>
           </div>
 
-          <!-- Superadmin Direct Intervention Toggle Banner -->
-          <div v-if="isSuperAdmin" class="superadmin-mode-banner" :class="{ 'direct-active': isDirectIntervention }">
+          <!-- Direct Intervention Mode Toggle Banner (Superadmin or Single Local Simulation Store) -->
+          <div v-if="canIntervene" class="superadmin-mode-banner" :class="{ 'direct-active': isDirectIntervention, 'local-sim': detectedLocalStore?.isLocal }">
             <div class="mode-info">
-              <div class="mode-icon-wrapper" :class="{ 'direct': isDirectIntervention }">
-                <i :class="isDirectIntervention ? 'pi pi-bolt' : 'pi pi-file-export'"></i>
+              <div class="mode-icon-wrapper" :class="{ 'direct': isDirectIntervention, 'local': detectedLocalStore?.isLocal && !isDirectIntervention }">
+                <i :class="isDirectIntervention ? 'pi pi-bolt' : (detectedLocalStore?.isLocal ? 'pi pi-desktop' : 'pi pi-file-export')"></i>
               </div>
               <div class="mode-text">
                 <div class="mode-title-row">
-                  <span class="mode-title">Mode Intervensi Toko Langsung</span>
-                  <Tag :severity="isDirectIntervention ? 'danger' : 'info'" size="small">
-                    {{ isDirectIntervention ? 'Direct POS Connection' : 'Generate File (Default)' }}
+                  <span class="mode-title">
+                    {{ detectedLocalStore?.isLocal && !isSuperAdmin ? 'Mode Intervensi Simulasi Lokal' : 'Mode Intervensi Toko Langsung' }}
+                  </span>
+                  <Tag :severity="isDirectIntervention ? 'danger' : (detectedLocalStore?.isLocal ? 'warning' : 'info')" size="small">
+                    {{ isDirectIntervention 
+                      ? (detectedLocalStore?.isLocal ? `Direct: ${detectedLocalStore.storeCode} (${detectedLocalStore.dbHost})` : 'Direct POS Connection')
+                      : (detectedLocalStore?.isLocal ? `PC Simulasi (${detectedLocalStore.storeCode} - ${detectedLocalStore.dbHost})` : 'Generate File (Default)') 
+                    }}
                   </Tag>
                 </div>
                 <p class="mode-desc">
-                  {{ isDirectIntervention 
-                    ? '⚠️ Mode Intervensi aktif: Query akan dieksekusi langsung ke database POS toko via jaringan.' 
-                    : 'Mode standar: Generate file broadcast CSV untuk dieksekusi melalui platform kantor.' 
-                  }}
+                  <template v-if="detectedLocalStore?.isLocal && !isSuperAdmin">
+                    {{ isDirectIntervention 
+                      ? `⚠️ Intervensi aktif ke PC Simulasi Lokal (${detectedLocalStore.storeCode} - ${detectedLocalStore.dbHost}). Query penyesuaian akan dieksekusi langsung ke toko.` 
+                      : `Terdeteksi 1 toko simulasi lokal (${detectedLocalStore.storeCode} - IP: ${detectedLocalStore.dbHost}). Aktifkan toggle jika ingin langsung mengeksekusi ke PC simulasi ini.` 
+                    }}
+                  </template>
+                  <template v-else>
+                    {{ isDirectIntervention 
+                      ? '⚠️ Mode Intervensi aktif: Query akan dieksekusi langsung ke database POS toko via jaringan.' 
+                      : 'Mode standar: Generate file broadcast CSV untuk dieksekusi melalui platform kantor.' 
+                    }}
+                  </template>
                 </p>
               </div>
             </div>
@@ -170,9 +183,9 @@
           <div class="upload-actions" v-if="selectedFile">
             <div class="action-buttons">
               <button class="process-btn" @click="handleUpload" :disabled="!selectedFile || isProcessing || !isFileApproved"
-                :class="{ 'processing': isProcessing, 'direct-action': isSuperAdmin && isDirectIntervention }">
-                <i class="pi" :class="isProcessing ? 'pi-spin pi-spinner' : (isSuperAdmin && isDirectIntervention ? 'pi-bolt' : 'pi-cog')"></i>
-                <span>{{ isProcessing ? 'Processing...' : (isSuperAdmin && isDirectIntervention ? 'Eksekusi Intervensi Toko' : 'Process File') }}</span>
+                :class="{ 'processing': isProcessing, 'direct-action': canIntervene && isDirectIntervention }">
+                <i class="pi" :class="isProcessing ? 'pi-spin pi-spinner' : (canIntervene && isDirectIntervention ? 'pi-bolt' : 'pi-cog')"></i>
+                <span>{{ isProcessing ? 'Processing...' : (canIntervene && isDirectIntervention ? 'Eksekusi Intervensi Toko' : 'Process File') }}</span>
               </button>
               <button class="reset-btn" @click="resetForm" :disabled="isProcessing">
                 <i class="pi pi-refresh"></i>
@@ -184,7 +197,7 @@
           <div v-if="!selectedFile" class="upload-hint">
             <i class="pi pi-info-circle"></i>
             <span v-if="!processResults">Pastikan file CSV sesuai dengan format template yang telah didownload</span>
-            <span v-else class="ready-for-next">âœ“ Siap untuk upload file adjustment berikutnya</span>
+            <span v-else class="ready-for-next">✓ Siap untuk upload file adjustment berikutnya</span>
           </div>
         </div>
       </div>
@@ -192,11 +205,11 @@
       <!-- Processing Loading State -->
       <ProgressBar v-if="isProcessing" :visible="isProcessing" :percentage="progress.percentage" :info="progress.info">
         <template #title>
-          {{ (isSuperAdmin && isDirectIntervention) ? 'Mengeksekusi Penyesuaian ke Toko Langsung...' : 'Generating File BC Khusus...' }}
+          {{ (canIntervene && isDirectIntervention) ? 'Mengeksekusi Penyesuaian ke Toko Langsung...' : 'Generating File BC Khusus...' }}
         </template>
 
         <template #subtitle>
-          <span v-if="isSuperAdmin && isDirectIntervention">
+          <span v-if="canIntervene && isDirectIntervention">
             Menghubungkan ke database POS toko dan mengeksekusi batch penyesuaian stok.<br />
             Mohon tunggu, proses membutuhkan waktu beberapa saat...
           </span>
@@ -450,9 +463,15 @@ const isSuperAdmin = computed(() => {
   const role = authStore.user?.role;
   return typeof role === "string" && role.toLowerCase() === "superadmin";
 });
+const detectedLocalStore = ref(null);
+const isCheckingTarget = ref(false);
 const isDirectIntervention = ref(false);
 
-watch(isSuperAdmin, (val) => {
+const canIntervene = computed(() => {
+  return isSuperAdmin.value || (detectedLocalStore.value && detectedLocalStore.value.isLocal === true);
+});
+
+watch(canIntervene, (val) => {
   if (!val) isDirectIntervention.value = false;
 });
 
@@ -725,7 +744,7 @@ const handleUpload = async () => {
   try {
     isProcessing.value = true;
 
-    const direct = isSuperAdmin.value && isDirectIntervention.value;
+    const direct = canIntervene.value && isDirectIntervention.value;
 
     progress.value = {
       percentage: direct ? 0 : 20,
@@ -819,6 +838,11 @@ const resetForm = () => {
   csvHeaders.value = [];
   csvRows.value = [];
   csvTotalRows.value = 0;
+  detectedLocalStore.value = null;
+  isCheckingTarget.value = false;
+  if (!isSuperAdmin.value) {
+    isDirectIntervention.value = false;
+  }
   clearFileInputDom();
 };
 
@@ -911,6 +935,38 @@ const validateAndSetFile = async (file) => {
       }
       dataRows.push(obj);
     }
+
+    // Extract unique store codes from parsed dataRows
+    const uniqueStoreCodes = [
+      ...new Set(
+        dataRows
+          .map(r => (r.KDTK || r.kdtk || "").trim().toUpperCase())
+          .filter(Boolean)
+      )
+    ];
+
+    // Auto-detect target store (check if single store with local IP)
+    if (uniqueStoreCodes.length === 1) {
+      try {
+        isCheckingTarget.value = true;
+        const checkRes = await adjustService.checkTarget(uniqueStoreCodes);
+        const data = checkRes?.data || checkRes;
+        if (data && data.singleStore && data.isLocal) {
+          detectedLocalStore.value = data;
+          console.log(`[adjust] Auto-detected local simulation store: ${data.storeCode} (${data.dbHost})`);
+        } else {
+          detectedLocalStore.value = null;
+        }
+      } catch (err) {
+        console.warn("[adjust] Failed to check target store:", err);
+        detectedLocalStore.value = null;
+      } finally {
+        isCheckingTarget.value = false;
+      }
+    } else {
+      detectedLocalStore.value = null;
+    }
+
     pendingSelectedFile.value = file;
     pendingSelectedFileName.value = file.name;
     csvHeaders.value = headerRow;
@@ -950,6 +1006,11 @@ const handlePreviewCancel = () => {
   csvHeaders.value = [];
   csvRows.value = [];
   csvTotalRows.value = 0;
+  detectedLocalStore.value = null;
+  isCheckingTarget.value = false;
+  if (!isSuperAdmin.value) {
+    isDirectIntervention.value = false;
+  }
   clearFileInputDom();
   toast.add({ severity: "info", summary: "Dibatalkan", detail: "Upload dibatalkan", life: 2500 });
 };

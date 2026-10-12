@@ -13,5 +13,6 @@ router.get("/statistics", authenticateJWT, adjustController.getAdjustStatistics)
 router.get("/history/filters", authenticateJWT, adjustController.getAdjustFilters);
 router.get("/history/export", authenticateJWT, adjustController.exportAdjustHistoryCsv);
 router.get("/sync-history", authenticateJWT, adjustController.syncHistory);
+router.post("/check-target", authenticateJWT, adjustController.checkAdjustTarget);
 
 export default router;

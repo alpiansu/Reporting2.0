@@ -35,310 +35,199 @@ class AdjustService {
    * @param {string} username - Username of the user performing adjustment
    * @returns {Promise<Object>} Processing results with history
    */
+  /**
+   * Build single-line batch SQL query for a store (supporting single & multi items)
+   * @param {string} kdtk - Store code
+   * @param {string} tblFilet - Closing balance table name (e.g. TB7O2609NEW)
+   * @param {Array<Object>} items - Array of adjustment items for this store
+   * @returns {string} Single line SQL batch query
+   */
+  buildBcKhususQuery(kdtk, tblFilet, items) {
+    const tpl = config.queries.bcKhusus;
+
+    // 1. Init tables & BCKMSTRANADJ
+    const initPart = tpl.init;
+
+    // 2. Insert into mstadj for each item
+    const insertMstadjParts = items
+      .map(item => tpl.insertMstadj(item.prdcd, item.qty_adj, item.keter))
+      .join("");
+
+    // 3. Safety check (adjcek) joining monthly filet table
+    const safetyCekPart = tpl.safetyCek(tblFilet);
+
+    // 4. Update mstadj if sisa < 0 and saldo * qty < 0
+    const updateMstadjPart = tpl.updateMstadj;
+
+    // 5. Insert into BCKMSTRANADJ for each item
+    const insertBckParts = items
+      .map(item => tpl.insertBckTran(item.prdcd))
+      .join("");
+
+    // 6. Response SELECT query
+    const finalSelectPart = tpl.finalSelect;
+
+    return initPart + insertMstadjParts + safetyCekPart + updateMstadjPart + insertBckParts + finalSelectPart;
+  }
+
+  /**
+   * Process CSV file for item adjustment by generating BC Khusus broadcast CSV
+   * (Direct store queries are bypassed due to security regulations)
+   * @param {Buffer} fileBuffer - CSV file buffer
+   * @param {string} username - Username of the user performing adjustment
+   * @param {string} fullName - Full name of the user
+   * @returns {Promise<Object>} Processing results with generated CSV
+   */
   async processCsvAdjust(fileBuffer, username, fullName) {
     const taskId = `${config.taskProgressName}_${username}`;
-    const tempFilePath = path.join(os.tmpdir(), `adjust_history_${Date.now()}.json`);
 
     try {
-      // Ensure temp directory exists
-      await fs.mkdir(path.dirname(tempFilePath), { recursive: true });
-
       // Parse CSV to array of objects
       const records = await this.parseCsvBuffer(fileBuffer);
-      logger.info(`Parsed ${records.length} records from CSV`);
+      logger.info(`[adjust] Parsed ${records.length} records from uploaded CSV`);
 
-      // Get unique store codes
-      const storeCodes = [...new Set(records.map(record => record.KDTK))];
-      logger.info(`Found ${storeCodes.length} unique stores in CSV`);
-
-      // Get valid INDUK stores
-      const selectedStores = await storeService.getStoresByCodes(storeCodes);
-      logger.info(`Found ${selectedStores.length} valid INDUK stores`);
-
-      // Register progress task
-      try {
-        const timeStart = moment().format("YYYY-MM-DD HH:mm:ss");
-        await progressService.startProgress(taskId, selectedStores.length, {
-          module: "adjust",
-          title: "Adjustment Process",
-          description: "registering task & file csv adjust being uploaded",
-          startedBy: fullName || username,
-          status: "registering",
-          createdAt: timeStart,
-        });
-
-        logger.info(`Progress task registered for user ${username}, taskId: ${taskId}`);
-      } catch (error) {
-        logger.error(`Error registering progress task: ${error.message}`);
-
-        // Throw a typed error so the controller can return the correct HTTP status.
-        // (Service layer has no access to `res`, so never call apiResponse here.)
-        if (
-          error.code === "TASK_BUSY" ||
-          error.message.includes("Maximum concurrent") ||
-          error.message.includes("Sistem sedang memproses")
-        ) {
-          const busyErr = new Error(error.message);
-          busyErr.statusCode = 409; // 409 Conflict — resource occupied
-          busyErr.details = {
-            canProceed: false,
-            activeTasks: error.activeTasks || [],
-            suggestion: "Cek halaman progress untuk melihat proses yang sedang berjalan, atau tunggu hingga selesai.",
-          };
-          throw busyErr;
-        }
-
-        const regErr = new Error(`Gagal mendaftarkan progress task: ${error.message}`);
-        regErr.statusCode = 500;
-        throw regErr;
+      if (records.length === 0) {
+        throw new Error("File CSV tidak memiliki data");
       }
 
-      // Initialize temporary history array
-      const tempHistoryRecords = [];
+      // Group records by store code (KDTK)
+      const storeMap = new Map();
+      for (const record of records) {
+        const kdtk = (record.KDTK || record.kdtk || "").trim().toUpperCase();
+        if (!kdtk) continue;
 
-      // Initialize results
+        if (!storeMap.has(kdtk)) {
+          storeMap.set(kdtk, []);
+        }
+
+        storeMap.get(kdtk).push({
+          kdtk,
+          prdcd: (record.PRDCD || record.prdcd || "").trim(),
+          qty_adj: parseInt(record.QTY_ADJ || record.qty_adj, 10) || 0,
+          keter: (record.KETER || record.keter || "").trim(),
+          tgl_selisih: (record.TGL_SELISIH || record.tgl_selisih || "").trim(),
+        });
+      }
+
+      const storeCodes = Array.from(storeMap.keys());
+      logger.info(`[adjust] Found ${storeCodes.length} unique stores in CSV`);
+
+      // Start progress tracking
+      try {
+        const timeStart = moment().format("YYYY-MM-DD HH:mm:ss");
+        await progressService.startProgress(taskId, storeCodes.length, {
+          module: "adjust",
+          title: "Adjustment Process",
+          description: "Generating BC Khusus broadcast file",
+          startedBy: fullName || username,
+          status: "processing",
+          createdAt: timeStart,
+        });
+      } catch (err) {
+        logger.warn(`[adjust] Could not start progress task: ${err.message}`);
+      }
+
+      // Lookup INDUK stores from storeService
+      const selectedStores = await storeService.getStoresByCodes(storeCodes);
+      const storeInfoMap = new Map();
+      for (const s of selectedStores) {
+        storeInfoMap.set(s.storeCode, s);
+      }
+
+      // Extract last month YY and MM for filet table
+      const lastMonth = moment().tz("Asia/Jakarta").subtract(1, "months");
+      const yy = lastMonth.format("YY");
+      const mm = lastMonth.format("MM");
+
       const results = {
-        totalStores: selectedStores.length,
+        totalStores: storeCodes.length,
         processedStores: 0,
         successStores: 0,
         failedStores: [],
-        storeResults: [],
-        historyRecords: [], // Will contain the actual history data
+        totalRecords: records.length,
+        historyRecords: [], // used for UI DataTable
+        csvContent: "",
+        fileName: `FILE_BC_KHUSUS_${moment().tz("Asia/Jakarta").format("YYYYMMDD_HHmmss")}.csv`,
       };
 
-      // Process each store
-      const limit = pLimit(config.parallelProcessing.concurrencyLimit);
-      let processedCount = 0;
-      // Process all stores asynchronously using Promise.all
-      const storePromises = selectedStores.map(store =>
-        limit(async () => {
-          // Check if task was cancelled before starting this store
-          if (progressService.isAborted(taskId)) {
-            logger.info(`[adjust] Skipping store ${store.storeCode} — task aborted`);
-            return {
-              type: "cancelled",
-              storeCode: store.storeCode,
-              historyRecords: [],
-            };
-          }
+      const csvLines = [config.queries.bcKhusus.header]; // "KDCAB|KDTK|STATION|QUERY "
+      const executedAt = new Date();
 
-          const currentCount = ++processedCount;
-          //update progress
-          await progressService.updateProgress(taskId, currentCount, {
-            description: `Processing store ${store.storeCode} (${currentCount} of ${selectedStores.length})`,
-            status: "Screening to Stores",
-          });
-
-          progressService.addProcessingStore(taskId, store.storeCode);
-
-          try {
-            logger.info(`Processing store: ${store.storeCode}`);
-            const storeRecords = records.filter(record => record.KDTK === store.storeCode);
-
-            // Budget timeout per store: base + allowance per record, dibatasi cap.
-            // Record dalam satu store diproses sekuensial, jadi budget statis 40s
-            // terlalu ketat untuk store dengan banyak record dan memicu timeout palsu
-            // padahal prosesnya sehat. Cap (maxStoreTimeoutMs) mencegah budget membengkak
-            // tak terkendali untuk store yang benar-benar hang.
-            const perRecordMs = config.parallelProcessing.perRecordTimeoutMs;
-            const rawBudgetMs = config.parallelProcessing.storeTimeoutMs + storeRecords.length * perRecordMs;
-            const storeBudgetMs = Math.min(rawBudgetMs, config.parallelProcessing.maxStoreTimeoutMs);
-
-            // AbortController: saat timeout, proses store benar-benar dihentikan
-            // (tidak ada query lanjutan yang menulis data setelah status timeout
-            // dilaporkan) — mencegah status tidak konsisten: FAILED tapi data masuk.
-            const controller = new AbortController();
-
-            const processingTask = this.processStoreWithHistory(store, storeRecords, username, controller.signal).catch(err => {
-              if (!controller.signal.aborted) {
-                logger.error(`[adjust][${store.storeCode}] background processing failed: ${err.message}`);
-              }
-            });
-
-            let storeTimer = null;
-            const storeResult = await Promise.race([
-              processingTask,
-              new Promise((resolve) => {
-                storeTimer = setTimeout(() => {
-                  controller.abort();
-                  logger.error(`[adjust][${store.storeCode}] Store timeout after ${storeBudgetMs}ms`);
-                  resolve({
-                    success: false,
-                    processed: 0,
-                    error: `Store timeout after ${storeBudgetMs}ms`,
-                    historyRecords: storeRecords.map(record => ({
-                      kdtk: record.KDTK,
-                      prdcd: record.PRDCD,
-                      qty_adj: parseInt(record.QTY_ADJ) || 0,
-                      keter: record.KETER || "",
-                      note: `Store timeout after ${storeBudgetMs}ms`,
-                      pic: username,
-                      updtime: new Date(),
-                      status: "FAILED",
-                    })),
-                  });
-                }, storeBudgetMs);
-              }),
-            ]).finally(() => {
-              // Selalu bersihkan timer agar tidak ada log timeout palsu untuk
-              // store yang selesai tepat waktu (bug: timer tidak pernah di-clear).
-              if (storeTimer) clearTimeout(storeTimer);
-            });
-
-            return {
-              type: storeResult.success ? "success" : "error",
-              storeCode: store.storeCode,
-              storeResult,
-              historyRecords: storeResult.historyRecords,
-            };
-          } catch (error) {
-            logger.error(`Error processing store ${store.storeCode}: ${error.message}`);
-
-            // Siapkan record gagal untuk histori
-            const storeRecords = records.filter(record => record.KDTK === store.storeCode);
-            const failedHistoryRecords = storeRecords.map(record => ({
-              kdtk: record.KDTK,
-              prdcd: record.PRDCD,
-              qty_adj: parseInt(record.QTY_ADJ) || 0,
-              keter: record.KETER || "",
-              note: error.message,
-              pic: username,
-              updtime: new Date(),
-              status: "FAILED",
-            }));
-
-            return {
-              type: "error",
-              storeCode: store.storeCode,
-              error: error.message,
-              historyRecords: failedHistoryRecords,
-            };
-          } finally {
-            progressService.removeProcessingStore(taskId, store.storeCode);
-          }
-        }),
-      );
-
-      // Wait for all store processing to complete
-      const storeResultsArray = await Promise.all(storePromises);
-
-      // If task was cancelled during processing, stop here
-      if (progressService.isAborted(taskId)) {
-        logger.info(`[adjust] Task ${taskId} was cancelled — skipping finalization`);
-        throw new Error("Proses dibatalkan oleh pengguna");
-      }
-
-      // Process results
-      for (const result of storeResultsArray) {
+      for (const [kdtk, items] of storeMap.entries()) {
         results.processedStores++;
+        const store = storeInfoMap.get(kdtk);
 
-        if (result.type === "success") {
-          if (result.storeResult.success) {
-            results.successStores++;
-          } else {
-            results.failedStores.push({
-              storeCode: result.storeCode,
-              error: result.storeResult.error,
+        if (!store) {
+          logger.warn(`[adjust] Store ${kdtk} not found in master INDUK`);
+          results.failedStores.push({
+            storeCode: kdtk,
+            error: `Store ${kdtk} tidak ditemukan di master store INDUK`,
+          });
+
+          for (const item of items) {
+            results.historyRecords.push({
+              kdtk: item.kdtk,
+              prdcd: item.prdcd,
+              qty_adj: item.qty_adj,
+              keter: item.keter,
+              note: `Store ${kdtk} tidak ditemukan di master store INDUK`,
+              pic: username,
+              updtime: executedAt,
+              status: "FAILED",
             });
           }
-
-          results.storeResults.push({
-            storeCode: result.storeCode,
-            processed: result.storeResult.processed,
-            success: result.storeResult.success,
-            error: result.storeResult.error,
-            executedAt: result.storeResult.executedAt,
-          });
-        } else {
-          results.failedStores.push({
-            storeCode: result.storeCode,
-            error: result.error,
-          });
-
-          results.storeResults.push({
-            storeCode: result.storeCode,
-            processed: 0,
-            success: false,
-            error: result.error,
-            executedAt: new Date(),
-          });
+          continue;
         }
 
-        // Add history records to temporary storage
-        tempHistoryRecords.push(...result.historyRecords);
+        const kdcab = (store.branch || store.cab || "").trim().toUpperCase();
+        const station = (store.station || "01").trim();
+        const tblFilet = `${kdtk}${yy}${mm}NEW`;
+
+        // Build single-line batch query
+        const query = this.buildBcKhususQuery(kdtk, tblFilet, items);
+
+        csvLines.push(`${kdcab}|${kdtk}|${station}|${query}`);
+        results.successStores++;
+
+        for (const item of items) {
+          results.historyRecords.push({
+            kdtk: item.kdtk,
+            prdcd: item.prdcd,
+            qty_adj: item.qty_adj,
+            keter: item.keter,
+            note: `Generated for BC Khusus (${kdcab}|${kdtk}|${station})`,
+            pic: username,
+            updtime: executedAt,
+            status: "SUCCESS",
+          });
+        }
       }
 
-      // Write temporary history to file
-      await fs.writeFile(tempFilePath, JSON.stringify(tempHistoryRecords, null, 2));
-      await progressService.updateProgress(taskId, processedCount, {
-        description: "Writing temporary history file",
-        status: "finalizing",
-      });
-      logger.info(`Wrote ${tempHistoryRecords.length} history records to temporary file`);
+      results.csvContent = csvLines.join("\r\n") + "\r\n";
 
-      // Bulk insert history records to database
+      // Complete progress task
       try {
-        const bulkResult = await histAdjustStagingService.bulkInsert(tempHistoryRecords);
-        logger.info(`Successfully bulk inserted ${bulkResult.insertedCount} history records`);
-
-        await progressService.updateProgress(taskId, processedCount, {
-          description: "Inserting history records to database",
-          status: "finalizing",
+        await progressService.completeProgress(taskId, {
+          description: `Generated BC Khusus CSV for ${results.successStores}/${results.totalStores} stores`,
+          status: "completed",
+          completedAt: moment().format("YYYY-MM-DD HH:mm:ss"),
         });
-
-        // Add history records to results for frontend response
-        results.historyRecords = bulkResult.records || tempHistoryRecords;
-      } catch (historyError) {
-        logger.error(`Failed to save history records: ${historyError.message}`);
-        // Don't fail the main process if history saving fails
-        results.historyRecords = tempHistoryRecords;
+      } catch (err) {
+        logger.warn(`[adjust] Could not complete progress task: ${err.message}`);
       }
-
-      // Clean up temporary file
-      try {
-        await fs.unlink(tempFilePath);
-        logger.info("Cleaned up temporary history file");
-        //update progressbar status
-        await progressService.updateProgress(taskId, processedCount, {
-          description: "Temporary history file cleaned up",
-          status: "finalizing",
-        });
-      } catch (cleanupError) {
-        logger.warn(`Failed to cleanup temporary file: ${cleanupError.message}`);
-      }
-
-      const timeCompleted = moment().format("YYYY-MM-DD HH:mm:ss");
-      await progressService.completeProgress(taskId, {
-        description: "All stores processed",
-        status: "completed",
-        completedAt: timeCompleted,
-      });
 
       return results;
     } catch (error) {
-      // Clean up temporary file in case of error
+      logger.error(`[adjust] Failed to process CSV adjust: ${error.message}`);
       try {
-        await fs.unlink(tempFilePath);
-      } catch (cleanupError) {
-        // Ignore cleanup errors
+        await progressService.failProgress(taskId, {
+          description: `Task failed: ${error.message}`,
+          status: "failed",
+        });
+      } catch (err) {
+        // ignore
       }
-
-      // If task was cancelled by user, don't call failProgress (already handled by cancelTask)
-      if (progressService.isAborted(taskId)) {
-        logger.info(`[adjust] Task ${taskId} was cancelled — skipping failProgress`);
-        return { success: false, message: "Proses dibatalkan oleh pengguna", cancelled: true };
-      }
-
-      logger.error(`Failed to process CSV adjust: ${error.message}`);
-
-      await progressService.failProgress(taskId, {
-        description: `Task failed: ${error.message}`,
-        status: "failed",
-      });
-
       throw error;
-    } finally {
-      progressService.clearProcessingStores(taskId);
     }
   }
   async parseCsvBuffer(buffer) {

@@ -166,12 +166,12 @@
       <!-- Processing Loading State -->
       <ProgressBar v-if="isProcessing" :visible="isProcessing" :percentage="progress.percentage" :info="progress.info">
         <template #title>
-          Processing Adjustment...
+          Generating File BC Khusus...
         </template>
 
         <template #subtitle>
-          Connecting to stores and processing adjustments.<br />
-          Please wait patiently...
+          Memproses data toko dan menyusun query batch broadcast.<br />
+          Mohon tunggu sebentar...
         </template>
 
         <template #details>
@@ -187,14 +187,14 @@
           <div class="results-title-section">
             <i class="pi pi-check-circle results-icon"></i>
             <div class="results-title-content">
-              <h3 class="results-title">Adjustment Completed</h3>
-              <p class="results-subtitle">Processing results and detailed history</p>
+              <h3 class="results-title">File BC Khusus Berhasil Digenerate</h3>
+              <p class="results-subtitle">File CSV broadcast telah terunduh otomatis. Siap dieksekusi di platform kantor.</p>
             </div>
           </div>
           <div class="results-badge">
             <span class="success-indicator">
               <i class="pi pi-verified"></i>
-              Success
+              Ready for Broadcast
             </span>
           </div>
         </div>
@@ -207,7 +207,7 @@
             </div>
             <div class="summary-content">
               <span class="summary-value">{{ processResults?.totalStores || 0 }}</span>
-              <span class="summary-label">Stores</span>
+              <span class="summary-label">Total Toko</span>
             </div>
           </div>
           <div class="summary-card success">
@@ -216,7 +216,7 @@
             </div>
             <div class="summary-content">
               <span class="summary-value">{{ processResults?.successStores || 0 }}</span>
-              <span class="summary-label">Success</span>
+              <span class="summary-label">Toko Valid</span>
             </div>
           </div>
           <div class="summary-card failed">
@@ -225,7 +225,7 @@
             </div>
             <div class="summary-content">
               <span class="summary-value">{{ processResults?.failedStores?.length || 0 }}</span>
-              <span class="summary-label">Disconnect</span>
+              <span class="summary-label">Toko Tidak Ada</span>
             </div>
           </div>
           <div class="summary-card records">
@@ -256,6 +256,12 @@
                   <span>Clear</span>
                 </button>
               </div>
+              <button class="export-btn" @click="downloadBcKhususCsv"
+                :disabled="!lastGeneratedCsvContent"
+                title="Download file BC Khusus CSV">
+                <i class="pi pi-download"></i>
+                <span>Download BC Khusus</span>
+              </button>
               <button class="export-btn" @click="exportToExcel"
                 :disabled="!processResults?.historyRecords || processResults.historyRecords.length === 0"
                 title="Export to Excel">
@@ -415,6 +421,8 @@ const isDragOver = ref(false);
 const fileInput = ref(null);
 const showCsvPreviewDialog = ref(false);
 const isFileApproved = ref(false);
+const lastGeneratedCsvContent = ref("");
+const lastGeneratedFileName = ref("");
 const csvHeaders = ref([]);
 const csvRows = ref([]);
 const csvTotalRows = ref(0);
@@ -639,6 +647,31 @@ const handleFileSelect = event => {
   }
 };
 
+const triggerDownloadCsv = (content, fileName) => {
+  if (!content) return;
+  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", fileName || "FILE_BC_KHUSUS.csv");
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+const downloadBcKhususCsv = () => {
+  if (lastGeneratedCsvContent.value) {
+    triggerDownloadCsv(lastGeneratedCsvContent.value, lastGeneratedFileName.value);
+    toast.add({
+      severity: "success",
+      summary: "Download",
+      detail: "File BC Khusus berhasil didownload ulang",
+      life: 3000,
+    });
+  }
+};
+
 const handleUpload = async () => {
   if (!selectedFile.value || !isFileApproved.value) return;
 
@@ -646,28 +679,38 @@ const handleUpload = async () => {
     isProcessing.value = true;
 
     progress.value = {
-      percentage: 0,
-      info: "Starting upload...",
+      percentage: 20,
+      info: "Mengunggah dan mengenerate file BC Khusus...",
       status: "starting"
     };
 
-    // Extract the data structure correctly - response.data.data.data contains the actual results
+    // Extract the data structure correctly - response.data.data contains the actual results
     const resultData = await adjustService.uploadCsv(selectedFile.value);
-    processResults.value = resultData.data.data;
+    const actualData = resultData?.data?.data || resultData?.data;
+    processResults.value = actualData;
 
-    if (resultData.success === true) {
+    if (resultData.success === true && actualData) {
+      // Simpan file hasil untuk unduh ulang
+      lastGeneratedCsvContent.value = actualData.csvContent || "";
+      lastGeneratedFileName.value = actualData.fileName || "FILE_BC_KHUSUS.csv";
+
+      // Otomatis download file BC Khusus
+      if (actualData.csvContent) {
+        triggerDownloadCsv(actualData.csvContent, actualData.fileName);
+      }
+
       // Reset upload form after successful processing
       resetForm();
 
       // Safely check for failedStores
-      const failedCount = processResults.value?.failedStores?.length || 0;
-      const successCount = processResults.value?.successStores || 0;
-      const totalStores = processResults.value?.totalStores || 0;
+      const failedCount = actualData.failedStores?.length || 0;
+      const successCount = actualData.successStores || 0;
+      const totalStores = actualData.totalStores || 0;
 
       toast.add({
         severity: failedCount > 0 ? "warn" : "success",
-        summary: failedCount > 0 ? "Completed with Issues" : "Success",
-        detail: `Processing completed. ${successCount}/${totalStores} stores processed successfully.`,
+        summary: failedCount > 0 ? "Generate Selesai dengan Catatan" : "Generate Berhasil",
+        detail: `File BC Khusus telah didownload otomatis. ${successCount}/${totalStores} toko valid digenerate.`,
         life: 5000,
       });
 
@@ -676,7 +719,7 @@ const handleUpload = async () => {
         total: totalStores,
         success: successCount,
         failed: failedCount,
-        historyRecords: processResults.value?.historyRecords?.length || 0
+        historyRecords: actualData.historyRecords?.length || 0
       });
     } else {
       toast.add({

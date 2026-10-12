@@ -21,22 +21,26 @@ export const uploadAdjustCsv = async (req, res) => {
     const fullName = req.user?.fullName || username;
 
     // Log the adjustment attempt
-    logger.info(`User ${username} initiated adjustment process with file: ${req.file.originalname}`);
+    logger.info(`User ${username} initiated adjustment generation with file: ${req.file.originalname}`);
 
-    // Process the file synchronously and wait for completion
+    // Process the file and generate BC Khusus CSV
     const results = await adjustService.processCsvAdjust(req.file.buffer, username, fullName);
 
     // Log completion
     logger.info(
-      `Adjustment process completed for user ${username}. Total stores: ${results.totalStores}, Success: ${results.successStores}, Failed: ${results.failedStores.length}`,
+      `Adjustment generation completed for user ${username}. Total stores: ${results.totalStores}, Success: ${results.successStores}, Failed: ${results.failedStores.length}`,
     );
 
     // Return response based on results
+    if (results.failedStores.length > 0 && results.successStores === 0) {
+      return apiResponse.error(res, "Semua toko dalam file gagal diproses (tidak ditemukan di master)", 400, results);
+    }
+
     if (results.failedStores.length > 0) {
       return apiResponse.success(
         res,
         {
-          message: "Process completed with some failures",
+          message: "File BC Khusus berhasil digenerate dengan beberapa catatan toko tidak valid",
           data: results,
         },
         207,
@@ -44,7 +48,7 @@ export const uploadAdjustCsv = async (req, res) => {
     }
 
     return apiResponse.success(res, {
-      message: "CSV processed successfully",
+      message: "File BC Khusus berhasil digenerate",
       data: results,
     });
   } catch (error) {

@@ -105,7 +105,7 @@
       <td class="text-center">{{ formatDate(item.TANGGAL) }}</td>
       <td class="text-center font-mono">{{ formatCode(item.PRDCD) }}</td>
       <td>
-        <div class="product-name-cell">
+        <div class="product-name-cell" :title="item.SINGKATAN || '-'">
           <i class="pi pi-box cell-icon"></i>
           <span class="product-name-text">{{ item.SINGKATAN || '-' }}</span>
         </div>

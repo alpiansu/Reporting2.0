@@ -5,6 +5,20 @@
 export default {
   // Query templates
   queries: {
+    // BC Khusus broadcast CSV query templates (mengikuti alur query asli ke mstran toko)
+    bcKhusus: {
+      header: "KDCAB|KDTK|STATION|QUERY ",
+      prep: `DROP TABLE IF EXISTS mstrmb; CREATE TABLE IF NOT EXISTS mstrmb LIKE mstran; `,
+      safetyCek: (prdcd, tanggal) =>
+        `DROP TABLE IF EXISTS rmbcek; CREATE TABLE rmbcek SELECT pr.PRDCD, IFNULL(QTY_MTR,0) AS QTY_MTR, IFNULL(QTY_MSTR,0) AS QTY_MSTR, IFNULL(QTY_MSTR_X,0) AS QTY_MSTR_X, IFNULL(QTY_MSTR,0) - IFNULL(QTY_MTR,0) + IFNULL(QTY_MSTR_X,0) AS SALDO FROM prodmast pr LEFT JOIN (SELECT PLU, SUM(IF(RTYPE = 'J', QTY, QTY*-1)) AS QTY_MTR FROM MTRAN WHERE TANGGAL = '${tanggal}' GROUP BY PLU) mt ON pr.PRDCD = mt.PLU LEFT JOIN (SELECT PRDCD, SUM(QTY) AS QTY_MSTR FROM MSTRAN WHERE BUKTI_TGL RLIKE '${tanggal}' AND RTYPE = 'BPB' AND ISTYPE = 'RMB' GROUP BY PRDCD) ms ON pr.PRDCD = ms.PRDCD LEFT JOIN (SELECT PRDCD, SUM(QTY) AS QTY_MSTR_X FROM MSTRAN WHERE INV_DATE RLIKE '${tanggal}' AND RTYPE = 'X' AND ISTYPE = 'SO' AND KETER RLIKE 'BA VIR') msx ON pr.PRDCD = msx.PRDCD WHERE pr.PRDCD = '${prdcd}'; `,
+      init: (kdtk, prdcd, qty, tanggal, nohp) =>
+        `INSERT INTO mstrmb(lokasi,rtype,bukti_no,bukti_tgl,supco,inv_date,prdcd,plu_nas,istype,bkp,sub_bkp,price,gross,ppn,qty,jam,keter) SELECT '01', 'BPB', (SELECT docno FROM const WHERE rkey = 'BPB'), COALESCE(NULLIF('${tanggal}', ''), CURRENT_DATE()), IFNULL(pm.supco,''), COALESCE(NULLIF('${tanggal}', ''), CURRENT_DATE()), '${prdcd}', '${prdcd}', 'RMB', pm.bkp, pm.sub_bkp, pm.acost, pm.acost * ${qty}, CASE WHEN CAST(tp.PPN AS CHAR) = '1' THEN pm.acost * ${qty} * (CASE WHEN CAST(tp.PPN_RATE AS CHAR) = '1' THEN 0.11 ELSE 0 END) ELSE 0 END, ${qty}, CURTIME(), '${(nohp || "").replace(/'/g, "''")}' FROM prodmast pm LEFT JOIN supmast sm ON pm.supco = sm.supco LEFT JOIN toko tk ON tk.kdtk = '${kdtk}' LEFT JOIN table_ppn tp ON CAST(tp.TOKO_REG AS CHAR) = IF(LEFT(tk.kdtk,1) = 'T', 'Y', 'N') AND CAST(tp.TOKO_PKP AS CHAR) = IFNULL(tk.pkp, 'N') AND CAST(tp.SUP_PKP AS CHAR) = IFNULL(sm.pkp, 'N') AND CAST(tp.PROD_BKP AS CHAR) = IFNULL(pm.bkp, 'N') AND CAST(tp.REGION_BATAM AS CHAR) = 'N' WHERE pm.prdcd = '${prdcd}'; `,
+      updateConstBPB: `UPDATE const SET docno=docno+1 WHERE rkey='BPB'; `,
+      insertTran: prdcd =>
+        `INSERT IGNORE INTO mstran SELECT * FROM mstrmb WHERE prdcd IN (SELECT a.prdcd FROM rmbcek a INNER JOIN mstrmb b USING(prdcd) WHERE a.SALDO != 0) AND PRDCD = '${prdcd}'; `,
+      finalSelect: `SELECT rtype, bukti_no, bukti_tgl, prdcd, qty, price, gross, keter FROM mstrmb;`,
+    },
+
     store: {
       prep: [
         `DROP TABLE IF EXISTS mstrmb`,

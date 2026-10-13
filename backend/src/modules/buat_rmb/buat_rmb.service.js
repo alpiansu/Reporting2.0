@@ -11,9 +11,322 @@ import histBuatRmbStagingService from "./hist_buat_rmb_staging.service.js";
 import os from "os";
 import pLimit from "p-limit";
 import progressService from "../progress/progress.service.js";
+import { isLocalIp } from "../../utils/storeConnection.utils.js";
 
 class BuatRmbService {
-  async processCsvBuatRmb(fileBuffer, username, fullName) {
+  /**
+   * Helper to determine if an IP address is considered a local simulation IP
+   * @param {string} ip
+   * @returns {boolean}
+   */
+  isLocalIp(ip) {
+    return isLocalIp(ip);
+  }
+
+  /**
+   * Check if a set of store codes qualifies for local simulation direct intervention
+   * @param {string[]} storeCodes
+   * @returns {Promise<Object>}
+   */
+  async checkTargetStores(storeCodes) {
+    if (!Array.isArray(storeCodes) || storeCodes.length === 0) {
+      return { singleStore: false, totalStores: 0, isLocal: false, canDirect: false };
+    }
+
+    const uniqueStores = [...new Set(storeCodes.map(s => String(s).trim().toUpperCase()).filter(Boolean))];
+
+    if (uniqueStores.length !== 1) {
+      return {
+        singleStore: false,
+        totalStores: uniqueStores.length,
+        isLocal: false,
+        canDirect: false,
+      };
+    }
+
+    const storeCode = uniqueStores[0];
+    const storeInfo = await storeService.getStoreIPHost(storeCode);
+
+    if (!storeInfo) {
+      return {
+        singleStore: true,
+        totalStores: 1,
+        storeCode,
+        storeName: "",
+        dbHost: "",
+        isLocal: false,
+        canDirect: false,
+        reason: `Toko ${storeCode} tidak ditemukan di master toko`,
+      };
+    }
+
+    const isLocal = isLocalIp(storeInfo.dbHost);
+
+    return {
+      singleStore: true,
+      totalStores: 1,
+      storeCode,
+      storeName: storeInfo.storeName || "",
+      dbHost: storeInfo.dbHost || "",
+      isLocal,
+      canDirect: isLocal,
+    };
+  }
+
+  /**
+   * Validates CSV buffer for non-superadmin direct intervention bypass
+   * Must have exactly 1 unique store and that store's IP must be local
+   * @param {Buffer} fileBuffer
+   * @returns {Promise<{ allowed: boolean, reason?: string, storeCode?: string, dbHost?: string }>}
+   */
+  async canBypassDirectIntervention(fileBuffer) {
+    try {
+      const records = await this.parseCsvBuffer(fileBuffer);
+      if (!records || records.length === 0) {
+        return { allowed: false, reason: "File CSV kosong" };
+      }
+
+      const storeCodes = [...new Set(records.map(r => (r.KDTK || r.kdtk || "").trim().toUpperCase()).filter(Boolean))];
+
+      if (storeCodes.length !== 1) {
+        return {
+          allowed: false,
+          reason: `Target file CSV berisi ${storeCodes.length} toko. Non-superadmin hanya diizinkan intervensi langsung untuk 1 toko simulasi.`,
+        };
+      }
+
+      const storeCode = storeCodes[0];
+      const storeInfo = await storeService.getStoreIPHost(storeCode);
+      if (!storeInfo) {
+        return {
+          allowed: false,
+          reason: `Toko ${storeCode} tidak ditemukan di master toko.`,
+        };
+      }
+
+      if (!isLocalIp(storeInfo.dbHost)) {
+        return {
+          allowed: false,
+          reason: `IP toko ${storeCode} (${storeInfo.dbHost}) bukan IP lokal/simulasi (192.168.x.x).`,
+          storeCode,
+          dbHost: storeInfo.dbHost,
+        };
+      }
+
+      return {
+        allowed: true,
+        storeCode,
+        dbHost: storeInfo.dbHost,
+      };
+    } catch (err) {
+      return { allowed: false, reason: `Gagal memvalidasi file: ${err.message}` };
+    }
+  }
+
+  /**
+   * Build single-line batch SQL query for a store for Buat RMB
+   * @param {string} kdtk - Store code
+   * @param {Array<Object>} items - Array of RMB items for this store
+   * @returns {string} Single line SQL batch query
+   */
+  buildBcKhususQuery(kdtk, items) {
+    const tpl = config.queries.bcKhusus;
+    const prepPart = tpl.prep;
+
+    const itemsParts = items
+      .map(item => {
+        const qty = parseInt(item.qty, 10) || 1;
+        const tanggal = item.tanggal || "";
+        const nohp = item.nohp || "";
+        const prdcd = item.prdcd;
+
+        const safetyCek = tpl.safetyCek(prdcd, tanggal);
+        const init = tpl.init(kdtk, prdcd, qty, tanggal, nohp);
+        const updateConst = tpl.updateConstBPB;
+        const insertTran = tpl.insertTran(prdcd);
+
+        return safetyCek + init + updateConst + insertTran;
+      })
+      .join("");
+
+    const finalSelectPart = tpl.finalSelect;
+
+    return prepPart + itemsParts + finalSelectPart;
+  }
+
+  /**
+   * Process CSV file for Buat RMB by generating BC Khusus broadcast CSV
+   * (Direct store queries are bypassed due to security regulations)
+   * @param {Buffer} fileBuffer - CSV file buffer
+   * @param {string} username - Username of the user
+   * @param {string} fullName - Full name of the user
+   * @returns {Promise<Object>} Processing results with generated CSV
+   */
+  async processCsvBuatRmbGenerate(fileBuffer, username, fullName) {
+    const taskId = `${config.taskProgressName}_${username}`;
+
+    try {
+      const records = await this.parseCsvBuffer(fileBuffer);
+      logger.info(`[buat_rmb:generate] Parsed ${records.length} records from uploaded CSV`);
+
+      if (records.length === 0) {
+        throw new Error("File CSV tidak memiliki data");
+      }
+
+      // Group records by store code (KDTK)
+      const storeMap = new Map();
+      for (const record of records) {
+        const kdtk = (record.KDTK || record.kdtk || "").trim().toUpperCase();
+        if (!kdtk) continue;
+
+        if (!storeMap.has(kdtk)) {
+          storeMap.set(kdtk, []);
+        }
+
+        storeMap.get(kdtk).push({
+          kdtk,
+          tanggal: (record.TANGGAL || record.tanggal || "").trim(),
+          prdcd: (record.PRDCD || record.prdcd || "").trim(),
+          nohp: (record.NOHP || record.nohp || "").trim(),
+          trxid: (record.TRXID || record.trxid || "").trim(),
+          qty: parseInt(record.QTY || record.qty, 10) || 1,
+        });
+      }
+
+      const storeCodes = Array.from(storeMap.keys());
+      logger.info(`[buat_rmb:generate] Found ${storeCodes.length} unique stores in CSV`);
+
+      try {
+        const timeStart = moment().format("YYYY-MM-DD HH:mm:ss");
+        await progressService.startProgress(taskId, storeCodes.length, {
+          module: "buat_rmb",
+          title: "Buat RMB Process",
+          description: "Generating BC Khusus broadcast file",
+          startedBy: fullName || username,
+          status: "processing",
+          createdAt: timeStart,
+        });
+      } catch (err) {
+        logger.warn(`[buat_rmb:generate] Could not start progress task: ${err.message}`);
+      }
+
+      // Lookup INDUK stores from storeService
+      const selectedStores = await storeService.getStoresByCodes(storeCodes);
+      const storeInfoMap = new Map();
+      for (const s of selectedStores) {
+        storeInfoMap.set(s.storeCode, s);
+      }
+
+      const results = {
+        totalStores: storeCodes.length,
+        processedStores: 0,
+        successStores: 0,
+        failedStores: [],
+        totalRecords: records.length,
+        historyRecords: [],
+        csvContent: "",
+        fileName: `FILE_BC_KHUSUS_RMB_${moment().tz("Asia/Jakarta").format("YYYYMMDD_HHmmss")}.csv`,
+        mode: "generate",
+      };
+
+      const csvLines = [config.queries.bcKhusus.header];
+      const executedAt = new Date();
+
+      for (const [kdtk, items] of storeMap.entries()) {
+        results.processedStores++;
+        const store = storeInfoMap.get(kdtk);
+
+        if (!store) {
+          logger.warn(`[buat_rmb:generate] Store ${kdtk} not found in master INDUK`);
+          results.failedStores.push({
+            storeCode: kdtk,
+            error: `Store ${kdtk} tidak ditemukan di master store INDUK`,
+          });
+
+          for (const item of items) {
+            results.historyRecords.push({
+              kdtk: item.kdtk,
+              tgl: item.tanggal,
+              prdcd: item.prdcd,
+              qty: item.qty,
+              trxid: item.trxid,
+              keter: item.nohp,
+              note: `Store ${kdtk} tidak ditemukan di master store INDUK`,
+              pic: username,
+              updtime: executedAt,
+              status: "FAILED",
+            });
+          }
+          continue;
+        }
+
+        const kdcab = (store.branch || store.cab || "").trim().toUpperCase();
+        const station = (store.station || "01").trim();
+
+        // Build single-line batch query
+        const query = this.buildBcKhususQuery(kdtk, items);
+
+        csvLines.push(`${kdcab}|${kdtk}|${station}|${query}`);
+        results.successStores++;
+
+        for (const item of items) {
+          results.historyRecords.push({
+            kdtk: item.kdtk,
+            tgl: item.tanggal,
+            prdcd: item.prdcd,
+            qty: item.qty,
+            trxid: item.trxid,
+            keter: item.nohp,
+            note: `Generated for BC Khusus (${kdcab}|${kdtk}|${station})`,
+            pic: username,
+            updtime: executedAt,
+            status: "SUCCESS",
+          });
+        }
+      }
+
+      results.csvContent = csvLines.join("\r\n") + "\r\n";
+
+      try {
+        await progressService.completeProgress(taskId, {
+          description: `Generated BC Khusus CSV for ${results.successStores}/${results.totalStores} stores`,
+          status: "completed",
+          completedAt: moment().format("YYYY-MM-DD HH:mm:ss"),
+        });
+      } catch (err) {
+        logger.warn(`[buat_rmb:generate] Could not complete progress task: ${err.message}`);
+      }
+
+      return results;
+    } catch (error) {
+      logger.error(`[buat_rmb:generate] Failed to process CSV buat_rmb: ${error.message}`);
+      try {
+        await progressService.failProgress(taskId, {
+          description: `Task failed: ${error.message}`,
+          status: "failed",
+        });
+      } catch (err) {
+        // ignore
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Main dispatcher for CSV Buat RMB
+   * @param {Buffer} fileBuffer
+   * @param {string} username
+   * @param {string} fullName
+   * @param {"generate"|"direct"} mode
+   */
+  async processCsvBuatRmb(fileBuffer, username, fullName, mode = "generate") {
+    if (mode === "direct") {
+      return this.processCsvBuatRmbDirect(fileBuffer, username, fullName);
+    }
+    return this.processCsvBuatRmbGenerate(fileBuffer, username, fullName);
+  }
+
+  async processCsvBuatRmbDirect(fileBuffer, username, fullName) {
     const taskId = `${config.taskProgressName}_${username}`;
     const tempFilePath = path.join(os.tmpdir(), `buat_rmb_history_${Date.now()}.json`);
 

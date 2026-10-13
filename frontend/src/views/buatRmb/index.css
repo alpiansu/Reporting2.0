@@ -1369,3 +1369,124 @@
     align-self: flex-end;
   }
 }
+
+/* Superadmin & Local Simulation Direct Intervention Banner */
+.superadmin-mode-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 1rem 1.25rem;
+  border-radius: 0.75rem;
+  background: var(--surface-50, #f8fafc);
+  border: 1.5px solid var(--surface-200, #e2e8f0);
+  transition: all 0.25s ease;
+  margin-bottom: 0.5rem;
+}
+
+.superadmin-mode-banner.direct-active {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.08);
+}
+
+.superadmin-mode-banner.local-sim:not(.direct-active) {
+  background: #fffbeb;
+  border-color: #fde68a;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.08);
+}
+
+.mode-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+}
+
+.mode-icon-wrapper {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.625rem;
+  background: var(--primary-50, #eff6ff);
+  color: var(--primary-color, #2563eb);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  flex-shrink: 0;
+  transition: all 0.25s ease;
+}
+
+.mode-icon-wrapper.direct {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.mode-icon-wrapper.local {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.mode-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.mode-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.mode-title {
+  font-weight: 600;
+  font-size: 0.9375rem;
+  color: var(--surface-900, #0f172a);
+}
+
+.mode-desc {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--surface-600, #475569);
+  line-height: 1.4;
+}
+
+.superadmin-mode-banner.direct-active .mode-desc {
+  color: #991b1b;
+  font-weight: 500;
+}
+
+.mode-switch-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding-left: 0.5rem;
+}
+
+.process-btn.direct-action {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%) !important;
+  border-color: #b91c1c !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3) !important;
+}
+
+.process-btn.direct-action:hover:not(:disabled) {
+  background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%) !important;
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4) !important;
+}
+
+@media (max-width: 640px) {
+  .superadmin-mode-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .mode-switch-wrapper {
+    align-self: flex-end;
+    padding-left: 0;
+  }
+}

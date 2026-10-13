@@ -138,6 +138,45 @@
             </div>
           </div>
 
+          <!-- Direct Intervention Mode Toggle Banner (Superadmin or Single Local Simulation Store) -->
+          <div v-if="canIntervene" class="superadmin-mode-banner" :class="{ 'direct-active': isDirectIntervention, 'local-sim': detectedLocalStore?.isLocal }">
+            <div class="mode-info">
+              <div class="mode-icon-wrapper" :class="{ 'direct': isDirectIntervention, 'local': detectedLocalStore?.isLocal && !isDirectIntervention }">
+                <i :class="isDirectIntervention ? 'pi pi-bolt' : (detectedLocalStore?.isLocal ? 'pi pi-desktop' : 'pi pi-file-export')"></i>
+              </div>
+              <div class="mode-text">
+                <div class="mode-title-row">
+                  <span class="mode-title">
+                    {{ detectedLocalStore?.isLocal && !isSuperAdmin ? 'Mode Intervensi Simulasi Lokal' : 'Mode Intervensi Toko Langsung' }}
+                  </span>
+                  <Tag :severity="isDirectIntervention ? 'danger' : (detectedLocalStore?.isLocal ? 'warning' : 'info')" size="small">
+                    {{ isDirectIntervention 
+                      ? (detectedLocalStore?.isLocal ? `Direct: ${detectedLocalStore.storeCode} (${detectedLocalStore.dbHost})` : 'Direct POS Connection')
+                      : (detectedLocalStore?.isLocal ? `PC Simulasi (${detectedLocalStore.storeCode} - ${detectedLocalStore.dbHost})` : 'Generate File (Default)') 
+                    }}
+                  </Tag>
+                </div>
+                <p class="mode-desc">
+                  <template v-if="detectedLocalStore?.isLocal && !isSuperAdmin">
+                    {{ isDirectIntervention 
+                      ? `⚠️ Intervensi aktif ke PC Simulasi Lokal (${detectedLocalStore.storeCode} - ${detectedLocalStore.dbHost}). Query penyesuaian akan dieksekusi langsung ke toko.` 
+                      : `Terdeteksi 1 toko simulasi lokal (${detectedLocalStore.storeCode} - IP: ${detectedLocalStore.dbHost}). Aktifkan toggle jika ingin langsung mengeksekusi ke PC simulasi ini.` 
+                    }}
+                  </template>
+                  <template v-else>
+                    {{ isDirectIntervention 
+                      ? '⚠️ Mode Intervensi aktif: Query akan dieksekusi langsung ke database POS toko via jaringan.' 
+                      : 'Mode standar: Generate file broadcast CSV untuk dieksekusi melalui platform kantor.' 
+                    }}
+                  </template>
+                </p>
+              </div>
+            </div>
+            <div class="mode-switch-wrapper">
+              <ToggleSwitch v-model="isDirectIntervention" :disabled="isProcessing" />
+            </div>
+          </div>
+
           <div class="file-input-section" v-if="!isProcessing">
             <div class="drag-drop-area"
               :class="{ 'drag-over': isDragOver, 'has-file': selectedFile, 'disabled': isProcessing }"
@@ -174,10 +213,10 @@
 
           <div class="upload-actions" v-if="selectedFile">
             <div class="action-buttons">
-              <button class="process-btn" @click="handleUpload" :disabled="!selectedFile || isProcessing || !isFileApproved"
-                :class="{ 'processing': isProcessing }">
-                <i class="pi" :class="isProcessing ? 'pi-spin pi-spinner' : 'pi-cog'"></i>
-                <span>{{ isProcessing ? 'Processing...' : 'Process File' }}</span>
+              <button class="process-btn" :class="{ 'processing': isProcessing, 'direct-action': isDirectIntervention }"
+                @click="handleUpload" :disabled="!selectedFile || isProcessing || !isFileApproved">
+                <i class="pi" :class="isProcessing ? 'pi-spin pi-spinner' : (isDirectIntervention ? 'pi-bolt' : 'pi-cog')"></i>
+                <span>{{ isProcessing ? 'Processing...' : (isDirectIntervention ? 'Eksekusi Direct ke Toko' : 'Generate File BC Khusus') }}</span>
               </button>
               <button class="reset-btn" @click="resetForm" :disabled="isProcessing">
                 <i class="pi pi-refresh"></i>
@@ -287,6 +326,12 @@
                   <span>Clear</span>
                 </button>
               </div>
+              <button class="export-btn" @click="downloadBcKhususCsv"
+                :disabled="!lastGeneratedCsvContent"
+                title="Download file BC Khusus CSV">
+                <i class="pi pi-download"></i>
+                <span>Download BC Khusus</span>
+              </button>
               <button class="export-btn" @click="exportToExcel"
                 :disabled="!processResults?.historyRecords || processResults.historyRecords.length === 0"
                 title="Export to Excel">
@@ -410,12 +455,13 @@
 
 <style src="./index.css" scoped></style>
 <script setup>
-import { ref, onBeforeUnmount, watch, onMounted } from "vue";
+import { ref, computed, onBeforeUnmount, watch, onMounted } from "vue";
 import { useToast } from "primevue/usetoast";
 import { useAuthStore } from '../../stores';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Tag from 'primevue/tag';
+import ToggleSwitch from 'primevue/toggleswitch';
 import api from "../../services/api.js";
 import buatRmbService from "../../services/buatRmb.service.js";
 import progressService from "../../services/progress.service.js";
@@ -434,7 +480,51 @@ const formatCode = (val) => {
 
 const toast = useToast();
 const authStore = useAuthStore();
-const strUsername = authStore.user.username;
+const strUsername = computed(() => authStore.user?.username || "");
+const isSuperAdmin = computed(() => {
+  const role = authStore.user?.role;
+  return typeof role === "string" && role.toLowerCase() === "superadmin";
+});
+const detectedLocalStore = ref(null);
+const isCheckingTarget = ref(false);
+const isDirectIntervention = ref(false);
+
+const canIntervene = computed(() => {
+  return isSuperAdmin.value || (detectedLocalStore.value && detectedLocalStore.value.isLocal === true);
+});
+
+watch(canIntervene, (val) => {
+  if (!val) isDirectIntervention.value = false;
+});
+
+const lastGeneratedCsvContent = ref("");
+const lastGeneratedFileName = ref("");
+
+const triggerDownloadCsv = (content, fileName) => {
+  if (!content) return;
+  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  link.setAttribute("href", url);
+  link.setAttribute("download", fileName || `FILE_BC_KHUSUS_RMB_${Date.now()}.csv`);
+  link.style.visibility = "hidden";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+const downloadBcKhususCsv = () => {
+  if (lastGeneratedCsvContent.value) {
+    triggerDownloadCsv(lastGeneratedCsvContent.value, lastGeneratedFileName.value);
+    toast.add({
+      severity: "success",
+      summary: "Download",
+      detail: "File BC Khusus berhasil didownload ulang",
+      life: 3000,
+    });
+  }
+};
 
 // State
 const selectedFile = ref(null);
@@ -654,14 +744,30 @@ const handleFileSelect = event => {
 const handleUpload = async () => {
   if (!selectedFile.value || !isFileApproved.value) return;
 
+  const direct = isDirectIntervention.value;
+
   try {
     isProcessing.value = true;
     progress.value = { percentage: 0, info: "Starting upload...", status: "starting" };
 
-    const resultData = await buatRmbService.uploadCsv(selectedFile.value);
-    processResults.value = resultData?.data?.data || resultData?.data || {};
+    if (direct) {
+      startProgressTracking();
+    }
+
+    const resultData = await buatRmbService.uploadCsv(selectedFile.value, direct);
+    const actualData = resultData?.data?.data || resultData?.data || {};
+    processResults.value = actualData;
 
     if (resultData.success === true || (resultData.data && resultData.data.success)) {
+      if (!direct && actualData.csvContent) {
+        lastGeneratedCsvContent.value = actualData.csvContent || "";
+        lastGeneratedFileName.value = actualData.fileName || "FILE_BC_KHUSUS_RMB.csv";
+        triggerDownloadCsv(actualData.csvContent, actualData.fileName);
+      } else {
+        lastGeneratedCsvContent.value = "";
+        lastGeneratedFileName.value = "";
+      }
+
       resetForm();
       const failedCount = processResults.value?.failedStores?.length || 0;
       const successCount = processResults.value?.successStores || 0;
@@ -670,7 +776,9 @@ const handleUpload = async () => {
       toast.add({
         severity: failedCount > 0 ? "warn" : "success",
         summary: failedCount > 0 ? "Completed with Issues" : "Success",
-        detail: `Processing completed. ${successCount}/${totalStores} stores processed successfully.`,
+        detail: direct
+          ? `Direct processing completed. ${successCount}/${totalStores} stores processed successfully.`
+          : `File BC Khusus broadcast berhasil digenerate (${successCount}/${totalStores} stores). File otomatis didownload.`,
         life: 5000,
       });
     } else {
@@ -707,6 +815,8 @@ const resetForm = () => {
   csvHeaders.value = [];
   csvRows.value = [];
   csvTotalRows.value = 0;
+  detectedLocalStore.value = null;
+  isDirectIntervention.value = false;
   clearFileInputDom();
 };
 
@@ -786,6 +896,37 @@ const validateAndSetFile = async (file) => {
       }
       dataRows.push(obj);
     }
+
+    const uniqueStoreCodes = [
+      ...new Set(
+        dataRows
+          .map(r => (r.KDTK || r.kdtk || "").trim().toUpperCase())
+          .filter(Boolean)
+      )
+    ];
+
+    // Auto-detect target store (check if single store with local IP)
+    if (uniqueStoreCodes.length === 1) {
+      try {
+        isCheckingTarget.value = true;
+        const checkRes = await buatRmbService.checkTarget(uniqueStoreCodes);
+        const data = checkRes?.data?.data || checkRes?.data || checkRes;
+        if (data && data.singleStore && data.isLocal) {
+          detectedLocalStore.value = data;
+          console.log(`[buat_rmb] Auto-detected local simulation store: ${data.storeCode} (${data.dbHost})`);
+        } else {
+          detectedLocalStore.value = null;
+        }
+      } catch (err) {
+        console.warn("[buat_rmb] Failed to check target store:", err);
+        detectedLocalStore.value = null;
+      } finally {
+        isCheckingTarget.value = false;
+      }
+    } else {
+      detectedLocalStore.value = null;
+    }
+
     pendingSelectedFile.value = file;
     pendingSelectedFileName.value = file.name;
     csvHeaders.value = headerRow;
@@ -825,6 +966,8 @@ const handlePreviewCancel = () => {
   csvHeaders.value = [];
   csvRows.value = [];
   csvTotalRows.value = 0;
+  detectedLocalStore.value = null;
+  isDirectIntervention.value = false;
   clearFileInputDom();
   toast.add({ severity: "info", summary: "Dibatalkan", detail: "Upload dibatalkan", life: 2500 });
 };

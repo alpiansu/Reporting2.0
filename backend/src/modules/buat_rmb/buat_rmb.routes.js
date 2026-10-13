@@ -25,6 +25,7 @@ router.use(authenticateJWT);
 
 // API Endpoints
 router.post("/upload", upload.single("file"), buatRmbController.uploadCsv);
+router.post("/check-target", buatRmbController.checkTargetStores);
 router.get("/history", buatRmbController.getHistory);
 router.get("/history/export", buatRmbController.exportHistory);
 router.get("/filters", buatRmbController.getFilters);

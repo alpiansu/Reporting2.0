@@ -1,14 +1,24 @@
 import api from "./api.js";
 
 const buatRmbService = {
-  uploadCsv(file) {
+  uploadCsv(file, directIntervention = false) {
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("directIntervention", directIntervention ? "true" : "false");
+    formData.append("mode", directIntervention ? "direct" : "generate");
     return api.post("/buat-rmb/upload", formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },
     });
+  },
+
+  /**
+   * Check target stores to auto-detect single store with local IP simulation
+   * @param {string[]} storeCodes
+   */
+  checkTarget(storeCodes) {
+    return api.post("/buat-rmb/check-target", { storeCodes });
   },
 
   getFilters() {

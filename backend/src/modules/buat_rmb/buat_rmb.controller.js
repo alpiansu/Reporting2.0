@@ -17,13 +17,46 @@ class BuatRmbController {
 
       const username = req.user?.username || "system";
       const fullName = req.user?.fullName || username;
-      const results = await buatRmbService.processCsvBuatRmb(req.file.buffer, username, fullName);
+      const userRole = req.user?.role || "user";
+
+      // Mode determination: "direct" | "generate" (default: "generate")
+      let mode = req.body?.mode || "generate";
+      if (req.body?.directIntervention === "true" || req.body?.directIntervention === true) {
+        mode = "direct";
+      }
+
+      // Security guard:
+      // 1. Superadmin selalu diizinkan direct intervention
+      // 2. Non-superadmin hanya diizinkan direct intervention jika target HANYA 1 toko dan IP toko tersebut adalah IP lokal (192.168.x.x / localhost)
+      if (mode === "direct" && userRole !== "superadmin") {
+        const canBypass = await buatRmbService.canBypassDirectIntervention(req.file.buffer);
+        if (!canBypass.allowed) {
+          logger.warn(
+            `[buat_rmb] User ${username} (${userRole}) mencoba direct intervention tetapi ditolak: ${canBypass.reason}. Otomatis dialihkan ke mode generate.`
+          );
+          mode = "generate";
+        } else {
+          logger.info(
+            `[buat_rmb] User ${username} (${userRole}) diizinkan direct intervention untuk toko simulasi lokal: ${canBypass.storeCode} (${canBypass.dbHost})`
+          );
+        }
+      }
+
+      logger.info(`User ${username} (${userRole}) initiated buat_rmb with mode=${mode}, file: ${req.file.originalname}`);
+
+      const results = await buatRmbService.processCsvBuatRmb(req.file.buffer, username, fullName, mode);
+
+      if (results.failedStores && results.failedStores.length > 0 && results.successStores === 0) {
+        return apiResponse.error(res, "Semua toko dalam file gagal diproses", 400, results);
+      }
 
       if (results.failedStores && results.failedStores.length > 0) {
         return apiResponse.success(
           res,
           {
-            message: "Process completed with some failures",
+            message: mode === "direct"
+              ? "Proses intervensi langsung selesai dengan beberapa catatan toko gagal"
+              : "File BC Khusus berhasil digenerate dengan beberapa catatan toko tidak valid",
             data: results,
           },
           207,
@@ -31,12 +64,29 @@ class BuatRmbController {
       }
 
       return apiResponse.success(res, {
-        message: "CSV processed successfully",
+        message: mode === "direct"
+          ? "Proses intervensi langsung ke toko berhasil"
+          : "File BC Khusus broadcast berhasil digenerate",
         data: results,
       });
     } catch (error) {
       logger.error(`Error in uploadCsv (BuatRmb): ${error.message}`);
       return apiResponse.error(res, error.message || "Failed to process Buat RMB CSV", 500);
+    }
+  }
+
+  async checkTargetStores(req, res) {
+    try {
+      const { storeCodes } = req.body;
+      if (!storeCodes || !Array.isArray(storeCodes)) {
+        return apiResponse.badRequest(res, "storeCodes must be an array");
+      }
+
+      const checkResult = await buatRmbService.checkTargetStores(storeCodes);
+      return apiResponse.success(res, checkResult);
+    } catch (error) {
+      logger.error(`Error checking buat_rmb target: ${error.message}`);
+      return apiResponse.error(res, error.message, 500);
     }
   }
 

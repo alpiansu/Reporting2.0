@@ -264,9 +264,10 @@ class RekonPersediaanService {
         .filter(s => shops.some(code => code.toUpperCase() === (s.storeCode || s.kdtk || "").toUpperCase()))
         .map(s => ({ ...s, cab: s.branch || s.cab }));
     } else {
+      // Hanya cabang terdaftar di m_cabang yang di-screening (mode "All")
       const branches =
         cabang === "All" || cabang === "ALL"
-          ? [...new Set(storeService.stores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))]
+          ? await storeService.getRegisteredBranches()
           : [cabang];
 
       const groups = await Promise.all(

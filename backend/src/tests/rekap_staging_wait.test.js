@@ -36,6 +36,19 @@ jest.mock("fs/promises", () => ({
   },
 }));
 
+// getLastMassScan kini membaca cabang terdaftar dari storeService; test ini hanya
+// menguji timing ensureDataLoaded, jadi storeService di-mock agar efek samping
+// load-modul store (baca stores.json/m_cabang.json via fs) tidak ikut terjalankan.
+jest.mock("../modules/store/storeService.js", () => ({
+  __esModule: true,
+  default: {
+    ensureInitialized: jest.fn(async () => {}),
+    getRegisteredCabangSet: jest.fn(async () => new Set(["G033"])),
+    getRegisteredBranches: jest.fn(async () => ["G033"]),
+    stores: [],
+  },
+}));
+
 import { fileUtils } from "../utils/index.js";
 import rekapRemoteStagingService from "../modules/rekap_remote/rekap_remote_staging.service.js";
 

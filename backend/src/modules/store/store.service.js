@@ -6,9 +6,14 @@ import path from "path";
 import logger from "../../config/logger.js";
 import syncConfig from "../../config/sync.config.js";
 import wrcUtils from "../../utils/wrc.utils.js";
+import MCabangService from "../m_cabang/m_cabang.service.js";
 
 const TOKOMAIN_SNAPSHOT_PATH = path.join(process.cwd(), "data/tokomain-snapshot.json");
 const MASTER_CSV_SNAPSHOT_PATH = path.join(process.cwd(), "data/master-tokomain-csv-snapshot.json");
+
+// Master cabang (m_cabang.json) = SATU-SATUNYA sumber kebenaran cabang valid.
+// Sync & screening hanya boleh memakai cabang yang terdaftar di sini.
+const mCabangService = new MCabangService();
 
 class StoreService {
   constructor() {
@@ -89,6 +94,94 @@ class StoreService {
   async getAllStoresRaw() {
     await this.ensureInitialized();
     return [...this.stores];
+  }
+
+  /**
+   * Ambil daftar kode cabang yang terdaftar di m_cabang (master cabang).
+   * Inilah sumber kebenaran tunggal untuk "cabang valid" — sync dan screening
+   * tidak boleh memakai cabang di luar daftar ini.
+   * @returns {Promise<Set<string>>} Set kdcab (uppercase, trimmed)
+   */
+  async getRegisteredCabangSet() {
+    const list = await mCabangService.getAllCabang();
+    return new Set(
+      (list || [])
+        .map(c => String(c?.kdcab || "").trim().toUpperCase())
+        .filter(Boolean),
+    );
+  }
+
+  /**
+   * Apakah sebuah kode cabang terdaftar di m_cabang?
+   * @param {string} cab - Kode cabang
+   * @returns {Promise<boolean>}
+   */
+  async isBranchRegistered(cab) {
+    const key = String(cab || "").trim().toUpperCase();
+    if (!key) return false;
+    const registered = await this.getRegisteredCabangSet();
+    return registered.has(key);
+  }
+
+  /**
+   * Daftar cabang yang valid untuk mass screening mode "All":
+   * distinct branch dari toko INDUK di stores.json yang terdaftar di m_cabang.
+   * Cabang kosong / karangan / tak terdaftar otomatis TIDAK ikut, sehingga
+   * mass screening "All" dan riwayat mass scan tetap akurat.
+   * @returns {Promise<string[]>} Kode cabang terurut
+   */
+  async getRegisteredBranches() {
+    await this.ensureInitialized();
+    const registered = await this.getRegisteredCabangSet();
+    const branches = new Set();
+    for (const s of this.stores) {
+      if (s.notes !== "INDUK") continue;
+      const b = String(s.branch || s.cab || "").trim().toUpperCase();
+      if (b && registered.has(b)) branches.add(b);
+    }
+    return [...branches].sort((a, b) => a.localeCompare(b));
+  }
+
+  /**
+   * Hapus dari stores.json semua toko INDUK yang branch-nya punya nilai NYATA
+   * tapi TIDAK terdaftar di m_cabang (cabang karangan hasil fallback lama).
+   * Toko dengan branch kosong tidak disentuh di sini (tidak ikut screening
+   * "All" lewat getRegisteredBranches()).
+   *
+   * Tujuan: stores.json tidak boleh menyimpan cabang di luar m_cabang agar
+   * mass screening "All" dan riwayat mass scan hanya memuat cabang terdaftar.
+   * @returns {Promise<{removed:number, removedStores:Array, before:number, after:number}>}
+   */
+  async cleanupUnregisteredBranchStores() {
+    await this.ensureInitialized();
+    const registered = await this.getRegisteredCabangSet();
+    const before = this.stores.length;
+    const removedStores = [];
+    const kept = [];
+
+    for (const s of this.stores) {
+      const b = String(s.branch || s.cab || "").trim().toUpperCase();
+      if (b && !registered.has(b)) {
+        removedStores.push({
+          storeCode: s.storeCode,
+          station: s.station,
+          branch: s.branch,
+          storeName: s.storeName,
+        });
+      } else {
+        kept.push(s);
+      }
+    }
+
+    if (removedStores.length > 0) {
+      this.stores = kept;
+      await this.saveToFile();
+      logger.warn(
+        `[store] Cleanup: menghapus ${removedStores.length} toko dengan cabang tak terdaftar di m_cabang: ${removedStores.map(r => `${r.storeCode}(${r.branch})`).join(", ")}`,
+      );
+    }
+
+    return { removed: removedStores.length, removedStores, before, after: this.stores.length };
   }
 
   /**
@@ -482,8 +575,11 @@ class StoreService {
         dbHost: storeData.dbHost,
         notes: storeData.notes.toUpperCase(),
         storeName: storeData.storeName,
-        // Ensure branch is set from storeCode first character or from provided branch
-        branch: storeData.branch || (storeData.storeCode ? storeData.storeCode.substring(0, 1) : ""),
+        // Branch HANYA dari nilai eksplisit yang diberikan pemanggil (divalidasi
+        // terhadap m_cabang oleh layer sync). JANGAN memalsukan cabang dari huruf
+        // pertama kode toko — fallback lama menghasilkan cabang karangan (P/R/X/Z)
+        // yang mencemari mass screening "All" dan riwayat mass scan.
+        branch: String(storeData.branch || "").trim().toUpperCase(),
         updtime: storeData.updtime || now,
         createdAt: now,
         updatedAt: now,
@@ -756,6 +852,7 @@ class StoreService {
         continue;
       }
 
+      const cabang = cols[0]; // kolom CABANG dari TOKOMAIN.ini (sumber utama kode cabang)
       const toko = cols[1];
       const station = cols[3];
       const ip = cols[4];
@@ -789,6 +886,7 @@ class StoreService {
         station,
         ip,
         type,
+        cabang: String(cabang || "").trim().toUpperCase(),
       });
     }
 
@@ -911,6 +1009,7 @@ class StoreService {
         storeName: nama || toko,
         ip,
         type,
+        cabang: String(kdcab || "").trim().toUpperCase(), // kolom kdcab dari CSV (sumber utama kode cabang)
       });
     }
 

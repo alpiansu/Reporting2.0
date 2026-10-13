@@ -1,12 +1,19 @@
 /**
- * Store master synchronization - merges TOKOMAIN.ini snapshot (kode toko + IP + tipe)
+ * Store master synchronization - merges TOKOMAIN.ini / master-tokomain.csv snapshot
  * with WRC master toko (kode cabang + nama toko) from all cabang.
  *
- * Flow:
- *  1. getAllCabangWrc() -> connect each cabang WRC, read poscabang.mstr_toko_all
- *  2. Build kodeToko -> { cab, nama } map
- *  3. Merge with TOKOMAIN snapshot records -> upsert stores.json
- *  4. Persist last-sync meta (waktu, user, ringkasan) + 24-jam guard
+ * ATURAN CABANG (kebijakan baru):
+ *  - m_cabang (master cabang) adalah SATU-SATUNYA sumber kebenaran cabang valid.
+ *  - Resolusi cabang per toko berprioritas:
+ *      1) kolom cabang dari sumber (TOKOMAIN.ini CABANG / master-tokomain.csv kdcab)
+ *      2) peta WRC (mstr_toko_all) — hanya untuk cabang yang terdaftar di m_cabang
+ *      3) cabang existing toko di stores.json
+ *    Hanya kode yang terdaftar di m_cabang yang dipakai. Jika tidak ada satupun
+ *    yang terdaftar, toko TIDAK boleh masuk / diperbarui di stores.json.
+ *  - Cabang WRC yang tidak terdaftar di m_cabang tidak pernah dipakai (hanya dilapor).
+ *  - Toko yang branch-nya punya nilai nyata tapi tak terdaftar dibersihkan dari
+ *    stores.json (cleanupUnregisteredBranchStores) agar mass screening "All" dan
+ *    riwayat mass scan hanya memuat cabang terdaftar.
  */
 import fs from "fs/promises";
 import path from "path";
@@ -96,7 +103,31 @@ class StoreSyncService {
   }
 
   /**
-   * Execute the master store sync.
+   * Resolusi cabang terdaftar untuk satu toko, dengan urutan prioritas:
+   *   1) kolom cabang dari sumber snapshot (TOKOMAIN.ini / master CSV)
+   *   2) peta WRC (mstr_toko_all)
+   *   3) cabang existing toko di stores.json
+   * Hanya kode yang terdaftar di m_cabang yang dikembalikan. Jika tidak ada
+   * satupun yang terdaftar -> null (toko tidak boleh masuk stores.json).
+   *
+   * @param {Object} p
+   * @param {string} [p.sourceCab] - Kode cabang dari kolom sumber
+   * @param {string} [p.wrcCab] - Kode cabang dari peta WRC
+   * @param {string} [p.existingCab] - Cabang existing toko di stores.json
+   * @param {Set<string>} p.registered - Set kdcab terdaftar di m_cabang
+   * @returns {string|null}
+   */
+  _resolveRegisteredBranch({ sourceCab, wrcCab, existingCab, registered }) {
+    const norm = v => String(v || "").trim().toUpperCase();
+    const candidates = [norm(sourceCab), norm(wrcCab), norm(existingCab)];
+    for (const cab of candidates) {
+      if (cab && registered.has(cab)) return cab;
+    }
+    return null;
+  }
+
+  /**
+   * Execute the master store sync (TOKOMAIN.ini + WRC).
    * @param {Object} user - Current user (req.user)
    * @param {boolean} force - Skip the 24-hour guard
    * @returns {Promise<Object>}
@@ -126,6 +157,9 @@ class StoreSyncService {
 
     logger.info(`[store-sync] Memulai sync master toko oleh ${user?.username || "system"} (force=${force})`);
 
+    // Daftar cabang yang boleh masuk stores.json (master cabang)
+    const registered = await storeService.getRegisteredCabangSet();
+
     // 1. Fetch WRC master toko dari semua cabang (paralel)
     let cabangs = [];
     try {
@@ -135,17 +169,23 @@ class StoreSyncService {
       throw new Error(`Gagal mengambil daftar cabang WRC: ${error.message}`);
     }
 
+    const unregisteredWrcCabangs = cabangs
+      .map(c => String(c || "").trim().toUpperCase())
+      .filter(c => c && !registered.has(c));
+
     const results = await Promise.all(cabangs.map(cab => this.fetchWrcStores(cab)));
 
     // Urutkan cabang agar urutan pemrosesan deterministik
     results.sort((a, b) => String(a.cab).localeCompare(String(b.cab)));
 
-    // 2. Build map kodeToko -> { cab, nama }
+    // 2. Build map kodeToko -> { cab, nama }, HANYA untuk cabang terdaftar di m_cabang.
     //    Jika satu kode toko muncul di >1 cabang (anomali data), kode tsb
     //    dianggap ambigu dan di-skip (tidak mengubah branch yang mungkin sudah benar).
     const wrcMap = new Map();
     const duplicateCodes = [];
     for (const result of results) {
+      const cabKey = String(result.cab || "").trim().toUpperCase();
+      const cabRegistered = registered.has(cabKey);
       for (const row of result.rows) {
         const key = String(row.kodeToko).trim().toUpperCase();
         if (!key) continue;
@@ -154,9 +194,14 @@ class StoreSyncService {
           wrcMap.delete(key); // ambiguous: milik lebih dari 1 cabang -> jangan sentuh
           continue;
         }
-        wrcMap.set(key, { cab: result.cab, nama: row.namaToko });
+        if (!cabRegistered) continue; // cabang tak terdaftar -> tidak dipakai (hanya dilapor)
+        wrcMap.set(key, { cab: cabKey, nama: row.namaToko });
       }
     }
+
+    logger.info(
+      `[store-sync] Cabang terdaftar di m_cabang: ${registered.size}; cabang WRC tak terdaftar (diabaikan): ${unregisteredWrcCabangs.join(", ") || "-"}`,
+    );
 
     // 3. Merge snapshot -> stores.json
     let created = 0;
@@ -165,8 +210,23 @@ class StoreSyncService {
     const skippedWrc = [];
 
     for (const record of snapshot.records) {
-      const info = wrcMap.get(record.storeCode.toUpperCase());
-      if (!info) {
+      const code = String(record.storeCode).toUpperCase();
+      const info = wrcMap.get(code);
+      const existing =
+        record.type === "INDUK"
+          ? await storeService.getStoreByCode(record.storeCode)
+          : await storeService.getStoreByCodeAndStation(record.storeCode, record.station);
+
+      const branch = this._resolveRegisteredBranch({
+        sourceCab: record.cabang,
+        wrcCab: info?.cab,
+        existingCab: existing?.branch || existing?.cab,
+        registered,
+      });
+
+      if (branch === null) {
+        // Cabang tak terdaftar -> toko tidak boleh masuk / diperbarui di stores.json.
+        // Existing ber-cabang karangan akan dibersihkan cleanupUnregisteredBranchStores().
         skippedWrc.push(record.storeCode);
         continue;
       }
@@ -176,21 +236,16 @@ class StoreSyncService {
         station: record.station,
         dbHost: record.ip,
         notes: record.type,
-        storeName: info.nama || record.storeCode,
-        branch: info.cab,
+        storeName: info?.nama || record.storeCode,
+        branch,
       };
 
       try {
-        const existing =
-          record.type === "INDUK"
-            ? await storeService.getStoreByCode(record.storeCode)
-            : await storeService.getStoreByCodeAndStation(record.storeCode, record.station);
-
         if (existing) {
           const isChanged =
             existing.dbHost !== storeData.dbHost ||
             existing.storeName !== storeData.storeName ||
-            existing.branch !== storeData.branch ||
+            String(existing.branch || "").trim().toUpperCase() !== branch ||
             existing.notes !== storeData.notes;
 
           if (isChanged) {
@@ -208,7 +263,10 @@ class StoreSyncService {
       }
     }
 
-    // 4. Persist meta
+    // 4. Bersihkan sisa toko ber-cabang tak terdaftar dari stores.json
+    const cleanup = await storeService.cleanupUnregisteredBranchStores();
+
+    // 5. Persist meta
     const syncMeta = {
       lastSyncedAt: now.toISOString(),
       syncedBy: user?.username || "system",
@@ -218,6 +276,8 @@ class StoreSyncService {
         snapshotCount: snapshot.records.length,
         induk: snapshot.stats?.induk || 0,
         stb: snapshot.stats?.stb || 0,
+        registeredCabangs: registered.size,
+        unregisteredWrcCabangs,
         wrcCabangs: cabangs.length,
         wrcToko: wrcMap.size,
         created,
@@ -225,13 +285,15 @@ class StoreSyncService {
         unchanged,
         skippedWrcCount: skippedWrc.length,
         skippedWrc: skippedWrc,
+        removedUnregistered: cleanup.removed,
+        removedStores: cleanup.removedStores,
         duplicateWrcCodes: duplicateCodes,
       },
     };
     await this.writeLastSync(syncMeta);
 
     logger.info(
-      `[store-sync] Selesai TOKOMAIN.ini: ${updated} updated, ${created} created, ${unchanged} unchanged, ${skippedWrc.length} skip (tanpa WRC)`,
+      `[store-sync] Selesai TOKOMAIN.ini: ${updated} updated, ${created} created, ${unchanged} unchanged, ${skippedWrc.length} skip (cabang tak terdaftar/tanpa WRC), ${cleanup.removed} dibersihkan`,
     );
 
     return { success: true, ...syncMeta };
@@ -239,13 +301,13 @@ class StoreSyncService {
 
   /**
    * Execute master store sync from uploaded master-tokomain.csv.
-   * Fasa 1: insert ignore / on duplicate key update nama + IP.
-   * Fasa 2: update kode cab dari semua server WRC yang tersedia (update saja, bukan insert).
-   * Proses berurutan: Fasa 1 selesai + stores.json tersimpan, baru Fasa 2 jalan.
+   * Fasa 1: resolusi cabang (sumber kdcab -> WRC -> existing) + insert/update nama + IP.
+   * Fasa 2: pastikan seluruh stores.json hanya berisi cabang terdaftar di m_cabang.
+   * Fasa 3: bersihkan sisa toko ber-cabang tak terdaftar.
    *
    * Catatan:
    *   - Bagian yang mengandalkan db_edp.rekap_ip sengaja tidak dipakai di alur ini.
-   *     Implementasi lama dikomen di bawah untuk referensi / re-enable nanti.
+   *   - Cabang WRC yang tidak terdaftar di m_cabang tidak pernah dipakai (hanya dilapor).
    * @param {Object} user - Current user (req.user)
    * @param {boolean} force - Skip the 24-hour guard
    * @returns {Promise<Object>}
@@ -277,34 +339,103 @@ class StoreSyncService {
       `[store-sync] Memulai sync master toko dari CSV oleh ${user?.fullName || user?.username || "system"} (force=${force})`,
     );
 
-    // Fasa 1: insert ignore / on duplicate key update nama + IP
+    // Daftar cabang yang boleh masuk stores.json (master cabang)
+    const registered = await storeService.getRegisteredCabangSet();
+
+    // Fasa 0: Fetch WRC master toko dari semua cabang (paralel) — untuk resolusi cabang
+    let cabangs = [];
+    try {
+      cabangs = await this.wrcService.getAllCabangWrc();
+    } catch (error) {
+      logger.error(`[store-sync] getAllCabangWrc gagal: ${error.message}`);
+      throw new Error(`Gagal mengambil daftar cabang WRC: ${error.message}`);
+    }
+
+    const unregisteredWrcCabangs = cabangs
+      .map(c => String(c || "").trim().toUpperCase())
+      .filter(c => c && !registered.has(c));
+
+    const results = await Promise.all(cabangs.map(cab => this.fetchWrcStores(cab)));
+
+    // Urutkan cabang agar urutan pemrosesan deterministik
+    results.sort((a, b) => String(a.cab).localeCompare(String(b.cab)));
+
+    // Build map kodeToko -> cab (HANYA untuk cabang terdaftar di m_cabang)
+    const wrcMap = new Map();
+    const duplicateCodes = [];
+    for (const result of results) {
+      const cabKey = String(result.cab || "").trim().toUpperCase();
+      const cabRegistered = registered.has(cabKey);
+      for (const row of result.rows) {
+        const key = String(row.kodeToko).trim().toUpperCase();
+        if (!key) continue;
+        if (wrcMap.has(key)) {
+          duplicateCodes.push(key);
+          wrcMap.delete(key); // ambiguous: milik lebih dari 1 cabang -> jangan sentuh
+          continue;
+        }
+        if (!cabRegistered) continue; // cabang tak terdaftar -> tidak dipakai (hanya dilapor)
+        wrcMap.set(key, cabKey);
+      }
+    }
+
+    logger.info(
+      `[store-sync] Cabang terdaftar di m_cabang: ${registered.size}; cabang WRC tak terdaftar (diabaikan): ${unregisteredWrcCabangs.join(", ") || "-"}`,
+    );
+
+    // Peta cepat record snapshot per kode toko (untuk kolom kdcab sumber pada Fasa 2)
+    const snapshotByCode = new Map();
+    for (const record of snapshot.records) {
+      snapshotByCode.set(String(record.storeCode).toUpperCase(), record);
+    }
+
+    // Fasa 1: resolusi cabang + insert/update nama + IP
     let created = 0;
     let updatedIp = 0;
     let unchangedIp = 0;
+    let branchAssigned = 0;
+    const skippedUnregistered = [];
 
     for (const record of snapshot.records) {
+      const code = String(record.storeCode).toUpperCase();
+      const existing =
+        record.type === "INDUK"
+          ? await storeService.getStoreByCode(record.storeCode)
+          : await storeService.getStoreByCodeAndStation(record.storeCode, record.station);
+
+      const branch = this._resolveRegisteredBranch({
+        sourceCab: record.cabang,
+        wrcCab: wrcMap.get(code),
+        existingCab: existing?.branch || existing?.cab,
+        registered,
+      });
+
+      if (branch === null) {
+        // Cabang tak terdaftar -> toko tidak boleh masuk / diperbarui di stores.json.
+        // Existing ber-cabang karangan akan dibersihkan cleanupUnregisteredBranchStores().
+        skippedUnregistered.push(record.storeCode);
+        continue;
+      }
+
       const storeData = {
         storeCode: record.storeCode,
         station: record.station,
         dbHost: record.ip,
         notes: record.type,
         storeName: record.storeName,
-        branch: undefined, // kode cabang tidak di-update di Fasa 1
+        branch,
       };
 
       try {
-        const existing =
-          record.type === "INDUK"
-            ? await storeService.getStoreByCode(record.storeCode)
-            : await storeService.getStoreByCodeAndStation(record.storeCode, record.station);
-
         if (existing) {
           const isIpOrNameChanged =
             existing.dbHost !== storeData.dbHost || existing.storeName !== storeData.storeName;
+          const isBranchChanged = String(existing.branch || "").trim().toUpperCase() !== branch;
 
-          if (isIpOrNameChanged) {
+          if (isIpOrNameChanged || isBranchChanged) {
             await storeService.updateStore(existing.id, storeData);
-            updatedIp++;
+            if (isIpOrNameChanged) updatedIp++;
+            else branchAssigned++;
           } else {
             unchangedIp++;
           }
@@ -319,69 +450,47 @@ class StoreSyncService {
       }
     }
 
-    // Fasa 2: update kode cab dari semua server WRC yang tersedia (update saja)
-    let cabangs = [];
-    try {
-      cabangs = await this.wrcService.getAllCabangWrc();
-    } catch (error) {
-      logger.error(`[store-sync] getAllCabangWrc gagal: ${error.message}`);
-      throw new Error(`Gagal mengambil daftar cabang WRC: ${error.message}`);
-    }
-
-    const results = await Promise.all(cabangs.map(cab => this.fetchWrcStores(cab)));
-
-    // Urutkan cabang agar urutan pemrosesan deterministik
-    results.sort((a, b) => String(a.cab).localeCompare(String(b.cab)));
-
-    // Build map kodeToko -> cab (update saja, bukan insert)
-    const wrcMap = new Map();
-    const duplicateCodes = [];
-    for (const result of results) {
-      for (const row of result.rows) {
-        const key = String(row.kodeToko).trim().toUpperCase();
-        if (!key) continue;
-        if (wrcMap.has(key)) {
-          duplicateCodes.push(key);
-          wrcMap.delete(key); // ambiguous: milik lebih dari 1 cabang -> jangan sentuh
-          continue;
-        }
-        wrcMap.set(key, result.cab);
-      }
-    }
-
-    let branchUpdated = 0;
-    let branchUnchanged = 0;
-    let branchSkipped = 0;
-
-    // Ambil seluruh store dari storeService (INDUK + STB, tanpa filter)
+    // Fasa 2: pastikan seluruh stores.json hanya berisi cabang terdaftar
     const storeList = await storeService.getAllStoresRaw();
     logger.info(
       `[store-sync] Fase 2: cek kode cabang untuk ${storeList.length} store dari stores.json`,
     );
 
+    let branchUpdated = 0;
+    let branchUnchanged = 0;
+    let branchSkipped = 0;
+
     for (const store of storeList) {
-      const wrcCab = wrcMap.get(String(store.storeCode || "").toUpperCase());
-      if (!wrcCab) {
+      const code = String(store.storeCode || "").toUpperCase();
+      const rec = snapshotByCode.get(code);
+      const branch = this._resolveRegisteredBranch({
+        sourceCab: rec?.cabang,
+        wrcCab: wrcMap.get(code),
+        existingCab: store.branch || store.cab,
+        registered,
+      });
+
+      if (branch === null) {
+        // Tak terpecahkan jadi cabang terdaftar -> akan dibersihkan di Fasa 3
         branchSkipped++;
         continue;
       }
 
-      if (store.branch !== wrcCab) {
+      if (String(store.branch || "").trim().toUpperCase() !== branch) {
         try {
-          await storeService.updateStore(store.id, { branch: wrcCab });
+          await storeService.updateStore(store.id, { branch });
           branchUpdated++;
-          logger.debug(
-            `[store-sync] Update cabang toko ${store.storeCode} -> ${wrcCab}`,
-          );
+          logger.debug(`[store-sync] Update cabang toko ${store.storeCode} -> ${branch}`);
         } catch (error) {
-          logger.warn(
-            `[store-sync] Gagal update cabang toko ${store.storeCode}: ${error.message}`,
-          );
+          logger.warn(`[store-sync] Gagal update cabang toko ${store.storeCode}: ${error.message}`);
         }
       } else {
         branchUnchanged++;
       }
     }
+
+    // Fasa 3: bersihkan sisa toko ber-cabang tak terdaftar dari stores.json
+    const cleanup = await storeService.cleanupUnregisteredBranchStores();
 
     // Persist meta rumah (1 paket log history untuk frontend)
     const syncMeta = {
@@ -394,21 +503,28 @@ class StoreSyncService {
         induk: snapshot.stats?.induk || 0,
         stb: snapshot.stats?.stb || 0,
         invalidCsv: snapshot.stats?.invalid || 0,
+        registeredCabangs: registered.size,
+        unregisteredWrcCabangs,
         wrcCabangs: cabangs.length,
         wrcToko: wrcMap.size,
         created,
         updatedIp,
         unchangedIp,
+        branchAssigned,
         branchUpdated,
         branchUnchanged,
         branchSkipped,
+        skippedUnregisteredCount: skippedUnregistered.length,
+        skippedUnregistered: skippedUnregistered.slice(0, 100),
+        removedUnregistered: cleanup.removed,
+        removedStores: cleanup.removedStores,
         duplicateWrcCodes: duplicateCodes,
       },
     };
     await this.writeLastSync(syncMeta);
 
     logger.info(
-      `[store-sync] Selesai master-csv: ${created} created, ${updatedIp} ip/nama updated, ${unchangedIp} ip/nama unchanged, ${branchUpdated} cabang updated, ${branchUnchanged} cabang unchanged, ${branchSkipped} cabang skip (tanpa WRC)`,
+      `[store-sync] Selesai master-csv: ${created} created, ${updatedIp} ip/nama updated, ${branchAssigned} cabang ditetapkan, ${branchUpdated} cabang updated, ${cleanup.removed} toko cabang tak terdaftar dibersihkan, ${skippedUnregistered.length} skip (cabang tak terdaftar)`,
     );
 
     return { success: true, ...syncMeta };

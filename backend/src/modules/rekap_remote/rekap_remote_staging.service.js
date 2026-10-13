@@ -8,6 +8,7 @@ import logger from "../../config/logger.js";
 import RekapRemote from "../../models/rekap_remote.model.js";
 import moment from "moment-timezone";
 import { fileUtils } from "../../utils/index.js";
+import storeService from "../store/storeService.js";
 
 // Path untuk direktori data rekap_remote
 const REKAP_REMOTE_DATA_DIR = path.join(process.cwd(), "data/rekap_remote");
@@ -470,8 +471,14 @@ class RekapRemoteStagingService {
       await this.ensureDataLoaded();
       const allData = this._getCombinedData();
 
+      // Hanya tampilkan cabang yang terdaftar di m_cabang agar riwayat mass scan
+      // akurat — cabang tak terdaftar (data lama / karangan) disembunyikan.
+      const registered = await storeService.getRegisteredCabangSet();
+      const normCab = c => String(c || "").trim().toUpperCase();
+
       const grouped = {};
       allData.forEach(item => {
+        if (!registered.has(normCab(item.cab))) return; // cabang tak terdaftar -> sembunyikan
         const key = `${item.module_name}_${item.cab}`;
         if (!grouped[key]) {
           grouped[key] = { module_name: item.module_name, cab: item.cab, records: [] };

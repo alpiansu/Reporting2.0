@@ -885,8 +885,8 @@ class PrepClosingService {
       // === STEP 1: Determine branches ===
       let branches = [];
       if (cabang === "All" || cabang === "ALL") {
-        const allStores = storeService.stores;
-        branches = [...new Set(allStores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))];
+        // Hanya cabang terdaftar di m_cabang yang di-screening (mode "All")
+        branches = await storeService.getRegisteredBranches();
       } else {
         branches = [cabang];
       }
@@ -1741,7 +1741,8 @@ class PrepClosingService {
     await wrcExtractorService.loadCache();
     await storeService.ensureInitialized();
     const cacheData = wrcExtractorService.cacheData;
-    const allBranches = [...new Set(storeService.stores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))];
+    // Hanya cabang terdaftar di m_cabang yang ditampilkan (konsisten dengan screening)
+    const allBranches = await storeService.getRegisteredBranches();
     const lastExtractedAt = cacheData.last_extracted_at || null;
 
     const result = allBranches.map(cab => {

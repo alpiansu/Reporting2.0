@@ -100,8 +100,8 @@ class CombinedScreeningService {
     // ── 3. Collect stores ────────────────────────────────────────────────
     let branches = [];
     if (cabang === "All" || cabang === "ALL") {
-      const allStores = storeService.stores;
-      branches = [...new Set(allStores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))];
+      // Hanya cabang terdaftar di m_cabang yang di-screening (mode "All")
+      branches = await storeService.getRegisteredBranches();
     } else {
       branches = [cabang];
     }

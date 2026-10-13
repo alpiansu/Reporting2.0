@@ -50,34 +50,6 @@ class ExternalDbService {
   }
 
   /**
-   * Fetch store data from external database
-   * @returns {Promise<Array>} Array of store data
-   */
-  async fetchStoreData() {
-    try {
-      const conn = await this.connect();
-
-      // Use the new query that joins with store name information
-      const query = `SELECT * FROM db_edp.rekap_ip a INNER JOIN ( 
-                      SELECT * FROM ( 
-                        SELECT KodeGudang as Cab, KodeToko AS KDTK, NamaToko AS NAMATK FROM tb_toko UNION ALL 
-                        SELECT KDCAB as Cab, Toko AS KDTK, Nama AS NAMATK FROM m_toko 
-                      ) AS toko GROUP BY KDTK 
-                    ) b ON a.kdtk = b.KDTK WHERE a.jenis IN ('INDUK','STB');`;
-
-      const [rows] = await conn.execute(query);
-      // logger.info(`Fetched ${rows.length} records from external database`);
-
-      return rows;
-    } catch (error) {
-      logger.error(`Failed to fetch store data: ${error.message}`);
-      throw error;
-    } finally {
-      await this.disconnect();
-    }
-  }
-
-  /**
    * Fetch department data from external database
    * @returns {Promise<Array>} Array of department data
    */

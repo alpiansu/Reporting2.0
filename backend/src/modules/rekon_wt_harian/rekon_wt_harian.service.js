@@ -351,8 +351,8 @@ class RekonWtHarianService {
     try {
       await storeService.ensureInitialized();
 
-      const allStores = storeService.stores;
-      const branches = [...new Set(allStores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))];
+      // Hanya cabang terdaftar di m_cabang yang di-screening (mode "All")
+      const branches = await storeService.getRegisteredBranches();
 
       logger.info(`Found ${branches.length} branches to process`);
 

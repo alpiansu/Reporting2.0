@@ -76,8 +76,12 @@ export const startReconciliation = async (req, res, next) => {
 
     if (cabParam === "All") {
       const allStores = storeService.stores;
-      const branches = [...new Set(allStores.filter(s => s.notes === "INDUK").map(s => s.branch || s.cab))];
-      const totalStores = allStores.filter(s => s.notes === "INDUK").length;
+      // Hanya cabang terdaftar di m_cabang yang di-screening (mode "All")
+      const branches = await storeService.getRegisteredBranches();
+      const branchSet = new Set(branches);
+      const totalStores = allStores.filter(
+        s => s.notes === "INDUK" && branchSet.has(String(s.branch || s.cab || "").trim().toUpperCase()),
+      ).length;
 
       const taskId = `rekon_wt_harian_All_${periode}_${Date.now()}`;
       await progressService.startProgress(taskId, totalStores, {

@@ -330,3 +330,188 @@ tr:hover .note-pencil {
     width: 100%;
   }
 }
+
+/* ── Audit Kelengkapan WRC Styles ──────────────────────────── */
+.audit-scorecards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.audit-card {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.875rem 1rem;
+  border-radius: 8px;
+  background: var(--surface-card, #ffffff);
+  border: 1px solid var(--surface-border, #e2e8f0);
+}
+
+.audit-card__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+.audit-card--total .audit-card__icon {
+  background: rgba(30, 58, 138, 0.1);
+  color: #1e3a8a;
+}
+
+.audit-card--lengkap .audit-card__icon {
+  background: rgba(22, 163, 74, 0.12);
+  color: #16a34a;
+}
+
+.audit-card--kurang .audit-card__icon {
+  background: rgba(217, 119, 6, 0.12);
+  color: #d97706;
+}
+
+.audit-card--tidakada .audit-card__icon {
+  background: rgba(220, 38, 38, 0.12);
+  color: #dc2626;
+}
+
+.audit-card__body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.audit-card__label {
+  font-size: 0.725rem;
+  color: var(--text-color-secondary, #64748b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.audit-card__val {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-color, #1e293b);
+  line-height: 1.2;
+}
+
+.audit-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.audit-defect-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.725rem;
+  font-weight: 600;
+}
+
+.audit-defect-badge--missing {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.audit-defect-badge--corrupt {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+/* ── Row Expansion Detail ──────────────────────────────────── */
+.audit-expansion-panel {
+  padding: 1rem 1.25rem;
+  background: var(--surface-50, #f8fafc);
+  border: 1px solid var(--surface-200, #e2e8f0);
+  border-radius: 8px;
+  margin: 0.5rem 0;
+}
+
+.audit-expansion-panel__header {
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--surface-200, #e2e8f0);
+  padding-bottom: 0.5rem;
+}
+
+.expansion-alert {
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  font-size: 0.825rem;
+  line-height: 1.5;
+}
+
+.expansion-alert--success {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+}
+
+.expansion-alert--danger {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.expansion-section__title {
+  font-size: 0.785rem;
+  font-weight: 700;
+  margin-bottom: 0.4rem;
+}
+
+.date-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.date-chip {
+  font-family: monospace;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+}
+
+.date-chip--missing {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+  font-weight: 600;
+}
+
+.audit-defect-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.785rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.audit-defect-table th {
+  background: #f1f5f9;
+  padding: 0.45rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+  font-weight: 600;
+  color: #475569;
+}
+
+.audit-defect-table td {
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}

@@ -1,9 +1,15 @@
 import ExcelJS from "exceljs";
+import fs from "fs/promises";
+import path from "path";
+import dayjs from "dayjs";
+import mysql from "mysql2/promise";
 import logger from "../../../config/logger.js";
 import stagingService from "./rekap_backup_staging.service.js";
 import config from "../../../config/index.js";
+import WrcService from "../../../services/wrc.service.js";
 
 const { resilientDb } = config;
+const wrcService = new WrcService();
 
 class RekapBackupService {
   async getSummary() {
@@ -443,6 +449,716 @@ class RekapBackupService {
     await stagingService.syncToJson('bulanan', cabang);
 
     return meta?.affectedRows ?? 0;
+  }
+
+  _parsePeriode(periode) {
+    let strYear = "";
+    let strMonth = "";
+    let yymm = "";
+    let formattedPeriode = "";
+
+    const cleaned = String(periode || "").trim().replace(/[^\d-]/g, "");
+    if (cleaned.length === 4) {
+      // Format YYMM e.g. '2608'
+      yymm = cleaned;
+      strYear = `20${cleaned.substring(0, 2)}`;
+      strMonth = cleaned.substring(2, 4);
+      formattedPeriode = `${strYear}-${strMonth}`;
+    } else if (cleaned.length >= 6) {
+      // Format YYYY-MM or YYYY-MM-DD e.g. '2026-08' or '202608'
+      const digitsOnly = cleaned.replace(/-/g, "");
+      strYear = digitsOnly.substring(0, 4);
+      strMonth = digitsOnly.substring(4, 6);
+      yymm = `${strYear.substring(2, 4)}${strMonth}`;
+      formattedPeriode = `${strYear}-${strMonth}`;
+    } else {
+      throw new Error(`Format periode tidak valid: ${periode}`);
+    }
+
+    return { strYear, strMonth, yymm, formattedPeriode };
+  }
+
+  getAuditCachePath(cabang, yymm, type = 'harian') {
+    const cacheDir = path.join(process.cwd(), "data", "rekap_backup");
+    return path.join(cacheDir, `rekap_backup_audit_${type}_${cabang}_${yymm}.json`);
+  }
+
+  async getAuditCache(cabang, periode, type = 'harian') {
+    try {
+      const { yymm } = this._parsePeriode(periode);
+      const cachePath = this.getAuditCachePath(cabang, yymm, type);
+      const exists = await fs.access(cachePath).then(() => true).catch(() => false);
+      if (!exists) return null;
+
+      const content = await fs.readFile(cachePath, "utf-8");
+      return JSON.parse(content);
+    } catch (error) {
+      logger.warn(`[getAuditCache] Gagal membaca cache audit ${type}: ${error.message}`);
+      return null;
+    }
+  }
+
+  async auditCompleteness({ cabang, periode, type = 'harian', forceRefresh = false }) {
+    if (!cabang) throw new Error("Cabang wajib diisi");
+    if (!periode) throw new Error("Periode wajib diisi");
+
+    if (type === 'bulanan') {
+      return await this._auditBulanan({ cabang, periode, forceRefresh });
+    }
+    return await this._auditHarian({ cabang, periode, forceRefresh });
+  }
+
+  async _auditBulanan({ cabang, periode, forceRefresh = false }) {
+    const { strYear, strMonth, yymm, formattedPeriode } = this._parsePeriode(periode);
+    const cachePath = this.getAuditCachePath(cabang, yymm, 'bulanan');
+
+    // Cek cache jika forceRefresh false
+    if (!forceRefresh) {
+      const cached = await this.getAuditCache(cabang, periode, 'bulanan');
+      if (cached && cached.summary && Array.isArray(cached.stores)) {
+        logger.info(`[auditCompleteness:bulanan] Menggunakan cache audit untuk ${cabang} - ${yymm}`);
+        return cached;
+      }
+    }
+
+    logger.info(`[auditCompleteness:bulanan] Memulai audit bulanan vs WRC untuk ${cabang} - ${formattedPeriode} (yymm: ${yymm})...`);
+
+    // 1. Ambil daftar toko aktif dari WRC (cukup kodetoko_{yymm} & nama toko)
+    let wrcPool = null;
+    let storeCodesRows = [];
+    let mstrTokoRows = [];
+
+    try {
+      const wrcConfig = await wrcService.getConnWRC(cabang);
+      wrcPool = mysql.createPool({
+        host: wrcConfig.host,
+        user: wrcConfig.user,
+        password: wrcConfig.password,
+        database: wrcConfig.database,
+        multipleStatements: false,
+        connectTimeout: 10000,
+        waitForConnections: true,
+        connectionLimit: 4
+      });
+
+      // Pastikan tabel kodetoko_{yymm} ada di WRC
+      const [tableCheck] = await wrcPool.query(`SHOW TABLES LIKE 'kodetoko_${yymm}'`);
+      if (!tableCheck || tableCheck.length === 0) {
+        throw new Error(`Tabel WRC kodetoko_${yymm} tidak ditemukan di database cabang ${cabang}. Data periode tersebut kemungkinan sudah diarsipkan/tidak tersedia.`);
+      }
+
+      // Ambil daftar toko aktif dari kodetoko_{yymm}
+      const pStores = wrcPool.query(
+        `SELECT DISTINCT KODE_TOKO FROM kodetoko_${yymm} WHERE KODE_TOKO IS NOT NULL AND TRIM(KODE_TOKO) != ''`
+      ).then(([rows]) => rows).catch(err => {
+        logger.error(`[auditCompleteness:bulanan] Gagal query kodetoko_${yymm}: ${err.message}`);
+        throw err;
+      });
+
+      // Ambil nama toko dari poscabang.mstr_toko_all
+      const pNames = wrcPool.query(
+        `SELECT kode_toko, nama_toko FROM poscabang.mstr_toko_all`
+      ).then(([rows]) => rows).catch(() => []);
+
+      [storeCodesRows, mstrTokoRows] = await Promise.all([pStores, pNames]);
+    } catch (wrcErr) {
+      logger.error(`[auditCompleteness:bulanan] Error koneksi/query WRC: ${wrcErr.message}`);
+      throw wrcErr;
+    } finally {
+      if (wrcPool) {
+        await wrcPool.end().catch(() => {});
+      }
+    }
+
+    // 2. Ambil data backup bulanan dari Central Database (db_edp.backup_bulanan_{strYear})
+    let sequelize = await resilientDb.getDatabase();
+    if (!sequelize) {
+      sequelize = await resilientDb.forceReconnect();
+    }
+    if (!sequelize) throw new Error("Database Central EDP not connected");
+
+    const backupBulananTable = `db_edp.backup_bulanan_${strYear}`;
+    let backupRows = [];
+    try {
+      const [rows] = await sequelize.query(
+        `SELECT cabang, kdtk, periode, stat, path, jml_isi, ip, note, updtime
+         FROM ${backupBulananTable}
+         WHERE cabang = :cab AND (periode LIKE :prd1 OR periode LIKE :prd2)`,
+        { replacements: { cab: cabang, prd1: `${formattedPeriode}%`, prd2: `${yymm}%` } }
+      );
+      backupRows = rows;
+    } catch (dbErr) {
+      logger.warn(`[auditCompleteness:bulanan] Gagal query ${backupBulananTable}: ${dbErr.message}`);
+      backupRows = [];
+    }
+
+    // 3. Olah Nama Toko
+    const storeNameMap = new Map();
+    for (const r of mstrTokoRows) {
+      if (r.kode_toko) {
+        storeNameMap.set(r.kode_toko.trim(), r.nama_toko ? r.nama_toko.trim() : "");
+      }
+    }
+
+    // 4. Map backup bulanan per kdtk
+    const backupMap = new Map();
+    for (const r of backupRows) {
+      if (!r.kdtk) continue;
+      const kdtk = r.kdtk.trim();
+      if (!backupMap.has(kdtk)) {
+        backupMap.set(kdtk, r);
+      } else {
+        const existing = backupMap.get(kdtk);
+        const existingOk = String(existing.stat).toLowerCase() === 'true' || String(existing.stat).toUpperCase() === 'OK';
+        const currentOk = String(r.stat).toLowerCase() === 'true' || String(r.stat).toUpperCase() === 'OK';
+        if (!existingOk && currentOk) {
+          backupMap.set(kdtk, r);
+        }
+      }
+    }
+
+    // 5. Pencocokan Data
+    const activeStoreCodes = storeCodesRows.map(r => String(r.KODE_TOKO).trim()).filter(Boolean);
+    activeStoreCodes.sort((a, b) => a.localeCompare(b));
+
+    const storeAuditList = [];
+    let lengkapCount = 0;
+    let dataNokCount = 0;
+    let tidakAdaCount = 0;
+
+    for (const storeCode of activeStoreCodes) {
+      const namaToko = storeNameMap.get(storeCode) || storeCode;
+      const bck = backupMap.get(storeCode);
+
+      if (!bck) {
+        tidakAdaCount++;
+        storeAuditList.push({
+          kdtk: storeCode,
+          nama_toko: namaToko,
+          status: 'TIDAK_ADA',
+          stat: null,
+          jml_isi: 0,
+          path: '',
+          ip: '',
+          note: '',
+          updtime: null,
+          keterangan: 'Tidak ada file backup IDT bulanan di database central',
+        });
+      } else {
+        const isStatOk = String(bck.stat).toLowerCase() === 'true' || String(bck.stat).toUpperCase() === 'OK';
+        const isJmlIsiOk = Number(bck.jml_isi) > 0;
+
+        if (isStatOk && isJmlIsiOk) {
+          lengkapCount++;
+          storeAuditList.push({
+            kdtk: storeCode,
+            nama_toko: namaToko,
+            status: 'LENGKAP',
+            stat: bck.stat,
+            jml_isi: Number(bck.jml_isi) || 0,
+            path: bck.path || '',
+            ip: bck.ip || '',
+            note: bck.note || '',
+            updtime: bck.updtime || null,
+            keterangan: 'Backup IDT bulanan valid dan lengkap',
+          });
+        } else {
+          dataNokCount++;
+          storeAuditList.push({
+            kdtk: storeCode,
+            nama_toko: namaToko,
+            status: 'DATA_NOK',
+            stat: bck.stat,
+            jml_isi: Number(bck.jml_isi) || 0,
+            path: bck.path || '',
+            ip: bck.ip || '',
+            note: bck.note || '',
+            updtime: bck.updtime || null,
+            keterangan: !isStatOk ? `Status di database: ${bck.stat}` : `Jml isi record: ${bck.jml_isi}`,
+          });
+        }
+      }
+    }
+
+    const payload = {
+      cabang,
+      periode: formattedPeriode,
+      yymm,
+      type: 'bulanan',
+      audited_at: dayjs().format("YYYY-MM-DD HH:mm:ss"),
+      summary: {
+        total_toko_wrc: activeStoreCodes.length,
+        lengkap: lengkapCount,
+        data_nok: dataNokCount,
+        tidak_ada: tidakAdaCount,
+      },
+      stores: storeAuditList
+    };
+
+    // Simpan snapshot ke cache JSON
+    try {
+      await fs.mkdir(path.dirname(cachePath), { recursive: true });
+      await fs.writeFile(cachePath, JSON.stringify(payload, null, 2), "utf-8");
+      logger.info(`[auditCompleteness:bulanan] Cache audit berhasil disimpan ke ${path.basename(cachePath)}`);
+    } catch (saveErr) {
+      logger.warn(`[auditCompleteness:bulanan] Gagal menyimpan cache audit: ${saveErr.message}`);
+    }
+
+    return payload;
+  }
+
+  async _auditHarian({ cabang, periode, forceRefresh = false }) {
+    const { strYear, strMonth, yymm, formattedPeriode } = this._parsePeriode(periode);
+    const cachePath = this.getAuditCachePath(cabang, yymm, 'harian');
+
+    // Cek cache jika forceRefresh false
+    if (!forceRefresh) {
+      const cached = await this.getAuditCache(cabang, periode, 'harian');
+      if (cached && cached.summary && Array.isArray(cached.stores)) {
+        logger.info(`[auditCompleteness:harian] Menggunakan cache audit untuk ${cabang} - ${yymm}`);
+        return cached;
+      }
+    }
+
+    logger.info(`[auditCompleteness:harian] Memulai audit kelengkapan data vs WRC untuk ${cabang} - ${formattedPeriode} (yymm: ${yymm})...`);
+
+    // 1. Koneksi ke WRC Cabang
+    let wrcPool = null;
+    let storeCodesRows = [];
+    let mstrTokoRows = [];
+    let lpmRows = [];
+    let mstranRows = [];
+
+    try {
+      const wrcConfig = await wrcService.getConnWRC(cabang);
+      wrcPool = mysql.createPool({
+        host: wrcConfig.host,
+        user: wrcConfig.user,
+        password: wrcConfig.password,
+        database: wrcConfig.database,
+        multipleStatements: false,
+        connectTimeout: 10000,
+        waitForConnections: true,
+        connectionLimit: 4
+      });
+
+      // Pastikan tabel kodetoko_{yymm} ada di WRC
+      const [tableCheck] = await wrcPool.query(`SHOW TABLES LIKE 'kodetoko_${yymm}'`);
+      if (!tableCheck || tableCheck.length === 0) {
+        throw new Error(`Tabel WRC kodetoko_${yymm} tidak ditemukan di database cabang ${cabang}. Data periode tersebut kemungkinan sudah diarsipkan/tidak tersedia.`);
+      }
+
+      // Ambil daftar toko aktif dari kodetoko_{yymm}
+      const pStores = wrcPool.query(
+        `SELECT DISTINCT KODE_TOKO FROM kodetoko_${yymm} WHERE KODE_TOKO IS NOT NULL AND TRIM(KODE_TOKO) != ''`
+      ).then(([rows]) => rows).catch(err => {
+        logger.error(`[auditCompleteness:harian] Gagal query kodetoko_${yymm}: ${err.message}`);
+        throw err;
+      });
+
+      // Ambil nama toko dari poscabang.mstr_toko_all
+      const pNames = wrcPool.query(
+        `SELECT kode_toko, nama_toko FROM poscabang.mstr_toko_all`
+      ).then(([rows]) => rows).catch(() => []);
+
+      // Ambil tanggal transaksi dari lpm_{yymm}
+      const pLpm = wrcPool.query(
+        `SELECT DISTINCT TOKO, DATE_FORMAT(WDATE, '%Y-%m-%d') as tgl FROM lpm_${yymm} WHERE TOKO IS NOT NULL`
+      ).then(([rows]) => rows).catch(err => {
+        logger.warn(`[auditCompleteness:harian] Gagal/tidak ada lpm_${yymm}: ${err.message}`);
+        return [];
+      });
+
+      // Eksekusi paralel kodetoko, mstr_toko, dan lpm
+      [storeCodesRows, mstrTokoRows, lpmRows] = await Promise.all([
+        pStores, pNames, pLpm
+      ]);
+
+      // Optimasi query mstran: Cari toko yang jumlah harinya < total hari bulan ini di LPM
+      const daysInMonth = dayjs(`${strYear}-${strMonth}-01`).daysInMonth();
+      const lpmStoreCounts = new Map();
+      for (const r of lpmRows) {
+        if (!r.TOKO || !r.tgl) continue;
+        const code = r.TOKO.trim();
+        if (!lpmStoreCounts.has(code)) lpmStoreCounts.set(code, new Set());
+        lpmStoreCounts.get(code).add(r.tgl);
+      }
+
+      // Toko yang sudah memiliki tanggal penuh di LPM (misal 31 dari 31 hari) tidak perlu scan mstran
+      const activeCodes = storeCodesRows.map(r => String(r.KODE_TOKO).trim()).filter(Boolean);
+      const candidateStores = activeCodes.filter(k => {
+        const dates = lpmStoreCounts.get(k);
+        return !dates || dates.size < daysInMonth;
+      });
+
+      // Query mstran_{yymm} secara terarah untuk kandidat toko memanfaatkan index IDX_SHOP
+      if (candidateStores.length > 0) {
+        logger.info(`[auditCompleteness:harian] Memeriksa mstran_${yymm} untuk ${candidateStores.length} toko kandidat (memanfaatkan index)...`);
+        const chunkSize = 150;
+        for (let i = 0; i < candidateStores.length; i += chunkSize) {
+          const chunk = candidateStores.slice(i, i + chunkSize);
+          const inList = chunk.map(s => `'${s.replace(/'/g, "\\'")}'`).join(",");
+          const [mstChunk] = await wrcPool.query(
+            `SELECT DISTINCT SHOP as TOKO, DATE FROM mstran_${yymm} WHERE SHOP IN (${inList})`
+          ).catch(err => {
+            logger.warn(`[auditCompleteness:harian] Gagal query chunk mstran_${yymm}: ${err.message}`);
+            return [[]];
+          });
+          if (Array.isArray(mstChunk)) {
+            mstranRows.push(...mstChunk);
+          }
+        }
+      }
+
+    } catch (wrcErr) {
+      logger.error(`[auditCompleteness:harian] Error koneksi/query WRC: ${wrcErr.message}`);
+      throw wrcErr;
+    } finally {
+      if (wrcPool) {
+        await wrcPool.end().catch(() => {});
+      }
+    }
+
+    // 2. Query data backup harian di Central Database (db_edp)
+    let sequelize = await resilientDb.getDatabase();
+    if (!sequelize) {
+      sequelize = await resilientDb.forceReconnect();
+    }
+    if (!sequelize) throw new Error("Database Central EDP not connected");
+
+    const backupHarianTable = `db_edp.backup_harian_${strYear}`;
+    let backupRows = [];
+    try {
+      const [rows] = await sequelize.query(
+        `SELECT kdtk, DATE_FORMAT(tanggal, '%Y-%m-%d') as tanggal, stat, jml_isi, note, path
+         FROM ${backupHarianTable}
+         WHERE cabang = :cab AND tanggal LIKE :prd`,
+        { replacements: { cab: cabang, prd: `${formattedPeriode}%` } }
+      );
+      backupRows = rows;
+    } catch (dbErr) {
+      logger.warn(`[auditCompleteness:harian] Gagal query ${backupHarianTable}: ${dbErr.message}`);
+      backupRows = [];
+    }
+
+    // 3. Olah Ground Truth WRC
+    const storeNameMap = new Map();
+    for (const r of mstrTokoRows) {
+      if (r.kode_toko) {
+        storeNameMap.set(r.kode_toko.trim(), r.nama_toko ? r.nama_toko.trim() : "");
+      }
+    }
+
+    // Tanggal WRC per toko = Union(LPM, MSTRAN)
+    const wrcDatesMap = new Map();
+
+    const ensureStoreDatesSet = (storeCode) => {
+      if (!wrcDatesMap.has(storeCode)) {
+        wrcDatesMap.set(storeCode, new Set());
+      }
+      return wrcDatesMap.get(storeCode);
+    };
+
+    // Dari LPM
+    for (const r of lpmRows) {
+      if (r.TOKO && r.tgl) {
+        const store = r.TOKO.trim();
+        ensureStoreDatesSet(store).add(r.tgl);
+      }
+    }
+
+    // Dari MSTRAN (format DATE: '260810' -> '2026-08-10')
+    for (const r of mstranRows) {
+      if (r.TOKO && r.DATE && String(r.DATE).length === 6) {
+        const dStr = String(r.DATE);
+        const y = `20${dStr.substring(0, 2)}`;
+        const m = dStr.substring(2, 4);
+        const d = dStr.substring(4, 6);
+        const tglIso = `${y}-${m}-${d}`;
+        const store = r.TOKO.trim();
+        ensureStoreDatesSet(store).add(tglIso);
+      }
+    }
+
+    // 4. Olah Data Backup Central
+    const backupMap = new Map(); // kdtk -> Map(tanggal -> backupRecord)
+    for (const r of backupRows) {
+      if (!r.kdtk || !r.tanggal) continue;
+      const kdtk = r.kdtk.trim();
+      if (!backupMap.has(kdtk)) {
+        backupMap.set(kdtk, new Map());
+      }
+      backupMap.get(kdtk).set(r.tanggal, r);
+    }
+
+    // 5. Pencocokan Data per Toko yang terdaftar di kodetoko_{yymm}
+    const activeStoreCodes = storeCodesRows.map(r => String(r.KODE_TOKO).trim()).filter(Boolean);
+    activeStoreCodes.sort((a, b) => a.localeCompare(b));
+
+    const storeAuditList = [];
+    let lengkapCount = 0;
+    let kurangTanggalCount = 0;
+    let tidakAdaCount = 0;
+
+    for (const storeCode of activeStoreCodes) {
+      const namaToko = storeNameMap.get(storeCode) || storeCode;
+      const expectedDatesSet = wrcDatesMap.get(storeCode) || new Set();
+      const expectedDates = Array.from(expectedDatesSet).sort();
+      const storeBackups = backupMap.get(storeCode) || new Map();
+
+      const missingDates = [];
+      const incompleteDates = [];
+      const validDates = [];
+
+      // Skenario 1: Toko tidak ada sama sekali di tabel backup
+      if (storeBackups.size === 0) {
+        tidakAdaCount++;
+        storeAuditList.push({
+          kdtk: storeCode,
+          nama_toko: namaToko,
+          status: 'TIDAK_ADA',
+          total_hari_wrc: expectedDates.length,
+          total_hari_backup: 0,
+          selisih_hari: expectedDates.length,
+          missing_dates: expectedDates.map(tgl => ({ tanggal: tgl, reason: 'Tidak ada record backup' })),
+          incomplete_dates: [],
+          valid_dates: [],
+        });
+        continue;
+      }
+
+      // Skenario 2 & 3: Toko ada di backup, periksa kelengkapan per tanggal WRC
+      for (const expDate of expectedDates) {
+        const bck = storeBackups.get(expDate);
+        if (!bck) {
+          missingDates.push({ tanggal: expDate, reason: 'Tanggal bolong (tidak ada file backup)' });
+        } else {
+          const isStatOk = String(bck.stat).toLowerCase() === 'true' || String(bck.stat).toUpperCase() === 'OK';
+          const isJmlIsiOk = Number(bck.jml_isi) > 0;
+          if (!isStatOk || !isJmlIsiOk) {
+            incompleteDates.push({
+              tanggal: expDate,
+              stat: bck.stat,
+              jml_isi: bck.jml_isi,
+              note: bck.note || 'File korup atau ukuran 0',
+              path: bck.path || ''
+            });
+          } else {
+            validDates.push(expDate);
+          }
+        }
+      }
+
+      const totalDefects = missingDates.length + incompleteDates.length;
+      if (totalDefects === 0 && expectedDates.length > 0) {
+        lengkapCount++;
+        storeAuditList.push({
+          kdtk: storeCode,
+          nama_toko: namaToko,
+          status: 'LENGKAP',
+          total_hari_wrc: expectedDates.length,
+          total_hari_backup: validDates.length,
+          selisih_hari: 0,
+          missing_dates: [],
+          incomplete_dates: [],
+          valid_dates: validDates,
+        });
+      } else {
+        kurangTanggalCount++;
+        storeAuditList.push({
+          kdtk: storeCode,
+          nama_toko: namaToko,
+          status: 'KURANG_TANGGAL',
+          total_hari_wrc: expectedDates.length,
+          total_hari_backup: validDates.length,
+          selisih_hari: totalDefects,
+          missing_dates: missingDates,
+          incomplete_dates: incompleteDates,
+          valid_dates: validDates,
+        });
+      }
+    }
+
+    const payload = {
+      cabang,
+      periode: formattedPeriode,
+      yymm,
+      type: 'harian',
+      audited_at: dayjs().format("YYYY-MM-DD HH:mm:ss"),
+      summary: {
+        total_toko_wrc: activeStoreCodes.length,
+        lengkap: lengkapCount,
+        kurang_tanggal: kurangTanggalCount,
+        tidak_ada: tidakAdaCount,
+      },
+      stores: storeAuditList
+    };
+
+    // Simpan snapshot ke cache JSON
+    try {
+      await fs.mkdir(path.dirname(cachePath), { recursive: true });
+      await fs.writeFile(cachePath, JSON.stringify(payload, null, 2), "utf-8");
+      logger.info(`[auditCompleteness:harian] Cache audit berhasil disimpan ke ${path.basename(cachePath)}`);
+    } catch (saveErr) {
+      logger.warn(`[auditCompleteness:harian] Gagal menyimpan cache audit: ${saveErr.message}`);
+    }
+
+    return payload;
+  }
+
+  async generateAuditExcel({ cabang, periode, type = 'harian' }) {
+    const auditData = await this.auditCompleteness({ cabang, periode, type, forceRefresh: false });
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "Reporting 2.0";
+    workbook.created = new Date();
+
+    if (type === 'bulanan') {
+      const sheet = workbook.addWorksheet("Audit Backup Bulanan");
+      sheet.columns = [
+        { header: "No", key: "no", width: 6 },
+        { header: "Kode Toko", key: "kdtk", width: 12 },
+        { header: "Nama Toko", key: "nama_toko", width: 34 },
+        { header: "Status", key: "status", width: 18 },
+        { header: "Stat di DB", key: "stat", width: 14 },
+        { header: "Jml Isi", key: "jml_isi", width: 14 },
+        { header: "Path Backup", key: "path", width: 36 },
+        { header: "Catatan (Note)", key: "note", width: 30 },
+        { header: "Keterangan", key: "keterangan", width: 40 }
+      ];
+
+      sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+      sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A8A" } };
+      sheet.getRow(1).alignment = { vertical: "middle", horizontal: "center" };
+
+      auditData.stores.forEach((s, idx) => {
+        const row = sheet.addRow({
+          no: idx + 1,
+          kdtk: s.kdtk,
+          nama_toko: s.nama_toko,
+          status: s.status === 'LENGKAP' ? 'LENGKAP' : (s.status === 'DATA_NOK' ? 'DATA NOK' : 'TIDAK TERDATA'),
+          stat: s.stat || '-',
+          jml_isi: s.jml_isi || 0,
+          path: s.path || '-',
+          note: s.note || '-',
+          keterangan: s.keterangan || '-'
+        });
+
+        row.getCell("no").alignment = { horizontal: "center" };
+        row.getCell("kdtk").alignment = { horizontal: "center" };
+        row.getCell("status").alignment = { horizontal: "center" };
+        row.getCell("stat").alignment = { horizontal: "center" };
+        row.getCell("jml_isi").alignment = { horizontal: "right" };
+
+        if (s.status === 'DATA_NOK') {
+          row.getCell("status").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFEF08A" } }; // Kuning
+        } else if (s.status === 'TIDAK_ADA') {
+          row.getCell("status").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFECACA" } }; // Merah muda
+        } else {
+          row.getCell("status").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFBBF7D0" } }; // Hijau muda
+        }
+      });
+
+      return workbook;
+    }
+
+    // ── SHEET 1: RESUME AUDIT TOKO (HARIAN) ──
+    const sheet1 = workbook.addWorksheet("Resume Toko");
+    sheet1.columns = [
+      { header: "No", key: "no", width: 6 },
+      { header: "Kode Toko", key: "kdtk", width: 12 },
+      { header: "Nama Toko", key: "nama_toko", width: 34 },
+      { header: "Status", key: "status", width: 18 },
+      { header: "Hari di WRC", key: "hari_wrc", width: 14 },
+      { header: "Hari Backup", key: "hari_bck", width: 14 },
+      { header: "Selisih Hari", key: "selisih", width: 14 },
+      { header: "Keterangan", key: "keterangan", width: 35 }
+    ];
+
+    sheet1.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+    sheet1.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A8A" } };
+    sheet1.getRow(1).alignment = { vertical: "middle", horizontal: "center" };
+
+    auditData.stores.forEach((s, idx) => {
+      const row = sheet1.addRow({
+        no: idx + 1,
+        kdtk: s.kdtk,
+        nama_toko: s.nama_toko,
+        status: s.status === 'LENGKAP' ? 'LENGKAP' : (s.status === 'KURANG_TANGGAL' ? 'KURANG TANGGAL' : 'TIDAK TERDATA'),
+        hari_wrc: s.total_hari_wrc,
+        hari_bck: s.total_hari_backup,
+        selisih: s.selisih_hari,
+        keterangan: s.status === 'LENGKAP'
+          ? 'Data 100% lengkap'
+          : (s.status === 'KURANG_TANGGAL'
+              ? `${s.missing_dates?.length || 0} tgl bolong, ${s.incomplete_dates?.length || 0} tgl korup`
+              : 'Tidak ada backup sama sekali')
+      });
+
+      row.getCell("no").alignment = { horizontal: "center" };
+      row.getCell("kdtk").alignment = { horizontal: "center" };
+      row.getCell("status").alignment = { horizontal: "center" };
+      row.getCell("hari_wrc").alignment = { horizontal: "right" };
+      row.getCell("hari_bck").alignment = { horizontal: "right" };
+      row.getCell("selisih").alignment = { horizontal: "right" };
+
+      if (s.status === 'KURANG_TANGGAL') {
+        row.getCell("status").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFEF08A" } }; // Kuning
+      } else if (s.status === 'TIDAK_ADA') {
+        row.getCell("status").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFECACA" } }; // Merah muda
+      } else {
+        row.getCell("status").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFBBF7D0" } }; // Hijau muda
+      }
+    });
+
+    // ── SHEET 2: DETAIL TANGGAL BOLONG ──
+    const sheet2 = workbook.addWorksheet("Detail Tanggal Bolong");
+    sheet2.columns = [
+      { header: "No", key: "no", width: 6 },
+      { header: "Kode Toko", key: "kdtk", width: 12 },
+      { header: "Nama Toko", key: "nama_toko", width: 34 },
+      { header: "Tanggal", key: "tanggal", width: 14 },
+      { header: "Tipe Anomali", key: "tipe", width: 22 },
+      { header: "Keterangan / Status Backup", key: "keterangan", width: 45 }
+    ];
+
+    sheet2.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+    sheet2.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF991B1B" } };
+    sheet2.getRow(1).alignment = { vertical: "middle", horizontal: "center" };
+
+    let detailIdx = 1;
+    auditData.stores.forEach(s => {
+      // Tanggal yang bolong sama sekali
+      (s.missing_dates || []).forEach(m => {
+        const row = sheet2.addRow({
+          no: detailIdx++,
+          kdtk: s.kdtk,
+          nama_toko: s.nama_toko,
+          tanggal: m.tanggal,
+          tipe: "TIDAK ADA BACKUP",
+          keterangan: m.reason || "File backup tidak ditemukan di database central"
+        });
+        row.getCell("no").alignment = { horizontal: "center" };
+        row.getCell("kdtk").alignment = { horizontal: "center" };
+        row.getCell("tanggal").alignment = { horizontal: "center" };
+      });
+
+      // Tanggal yang ada tapi gagal / korup
+      (s.incomplete_dates || []).forEach(inc => {
+        const row = sheet2.addRow({
+          no: detailIdx++,
+          kdtk: s.kdtk,
+          nama_toko: s.nama_toko,
+          tanggal: inc.tanggal,
+          tipe: "STATUS NOK / KORUP",
+          keterangan: `Stat: ${inc.stat}, Jml Isi: ${inc.jml_isi}. Note: ${inc.note || '-'}`
+        });
+        row.getCell("no").alignment = { horizontal: "center" };
+        row.getCell("kdtk").alignment = { horizontal: "center" };
+        row.getCell("tanggal").alignment = { horizontal: "center" };
+      });
+    });
+
+    return workbook;
   }
 }
 

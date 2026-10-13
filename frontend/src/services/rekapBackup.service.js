@@ -47,6 +47,30 @@ class RekapBackupService {
     const response = await api.patch(`/rekap-backup/${type}/resume/note`, payload);
     return response.data;
   }
+
+  async auditCompleteness(payload) {
+    // payload: { cabang, periode, type, forceRefresh }
+    // Timeout 3 menit khusus untuk query WRC multi-tabel (kodetoko, lpm, mstran)
+    const response = await api.post("/rekap-backup/audit", payload, {
+      timeout: 180000,
+    });
+    return response.data;
+  }
+
+  async getAuditCache(cabang, periode, type = 'harian') {
+    const response = await api.get(`/rekap-backup/audit/cache/${cabang}/${periode}`, {
+      params: { type }
+    });
+    return response.data;
+  }
+
+  async exportAuditExcel(cabang, periode, type = 'harian') {
+    return await api.get(`/rekap-backup/audit/export/${cabang}/${periode}`, {
+      params: { type },
+      responseType: "blob",
+      timeout: 180000,
+    });
+  }
 }
 
 export default new RekapBackupService();

@@ -182,15 +182,24 @@
             </Column>
 
             <!-- Aksi -->
-            <Column style="width: 56px; text-align: center;">
+            <Column header="Aksi" style="width: 110px; text-align: center;">
               <template #body="{ data }">
-                <Button
-                  icon="pi pi-chevron-right"
-                  class="p-button-rounded p-button-sm p-button-outlined"
-                  style="width: 34px; height: 34px;"
-                  v-tooltip.left="'Lihat Log Detail'"
-                  @click="openDeepDetail(data.periode)"
-                />
+                <div class="flex align-items-center justify-content-center gap-2">
+                  <Button
+                    icon="pi pi-shield"
+                    class="p-button-rounded p-button-sm p-button-outlined p-button-warning"
+                    style="width: 34px; height: 34px;"
+                    v-tooltip.top="'Audit Kelengkapan WRC'"
+                    @click="openAudit(data.periode)"
+                  />
+                  <Button
+                    icon="pi pi-chevron-right"
+                    class="p-button-rounded p-button-sm p-button-outlined"
+                    style="width: 34px; height: 34px;"
+                    v-tooltip.left="'Lihat Log Detail'"
+                    @click="openDeepDetail(data.periode)"
+                  />
+                </div>
               </template>
             </Column>
           </DataTable>
@@ -212,13 +221,22 @@
                 <span>{{ getCabangName(cabang) }} · Periode: {{ selectedPeriode }}</span>
               </div>
             </div>
-            <div class="search-wrapper">
-              <i class="pi pi-search search-icon"></i>
-              <InputText
-                v-model="deepSearch"
-                placeholder="Cari KDTK, IP, path..."
-                class="search-input"
+            <div class="flex align-items-center gap-2">
+              <Button
+                icon="pi pi-shield"
+                label="Audit WRC"
+                class="p-button-outlined p-button-warning p-button-sm"
+                v-tooltip.top="'Audit kelengkapan data vs WRC periode ini'"
+                @click="openAudit(selectedPeriode)"
               />
+              <div class="search-wrapper">
+                <i class="pi pi-search search-icon"></i>
+                <InputText
+                  v-model="deepSearch"
+                  placeholder="Cari KDTK, IP, path..."
+                  class="search-input"
+                />
+              </div>
             </div>
           </div>
           
@@ -345,6 +363,388 @@
           <div class="detail-pagination-info" style="font-size: 0.8rem; color: var(--text-color-secondary); padding: 0.5rem 0.25rem;">
             <span>Menampilkan {{ detailRangeStart }}–{{ detailRangeEnd }} dari {{ detailTotal.toLocaleString('id-ID') }} record</span>
           </div>
+        </div>
+
+        <!-- ============ AUDIT VIEW ============ -->
+        <div v-else-if="viewMode === 'audit'" key="audit">
+          <!-- Nav bar -->
+          <div class="detail-nav">
+            <div class="detail-nav__left">
+              <Button
+                icon="pi pi-arrow-left"
+                label="Kembali"
+                class="p-button-outlined p-button-secondary detail-nav__back"
+                @click="backFromAudit"
+              />
+              <div class="detail-nav__title">
+                <h3>Audit Kelengkapan Data vs WRC</h3>
+                <span v-if="type === 'bulanan'">
+                  {{ getCabangName(cabang) }} · Periode: {{ auditPeriode }} · Ground Truth: kodetoko_{{ auditYymm }} vs backup_bulanan_{{ auditYear }}
+                </span>
+                <span v-else>
+                  {{ getCabangName(cabang) }} · Periode: {{ auditPeriode }} · Ground Truth: kodetoko_{{ auditYymm }}, lpm_{{ auditYymm }}, mstran_{{ auditYymm }}
+                </span>
+              </div>
+            </div>
+            <div class="flex align-items-center gap-2 flex-wrap">
+              <Button
+                icon="pi pi-refresh"
+                label="Reload Data"
+                class="p-button-outlined p-button-secondary p-button-sm"
+                v-tooltip.top="'Muat ulang data audit dari cache lokal / database'"
+                :loading="auditLoading"
+                @click="runAudit(false)"
+              />
+              <Button
+                icon="pi pi-sync"
+                label="Audit Ulang WRC"
+                class="p-button-outlined p-button-warning p-button-sm"
+                v-tooltip.top="'Jalankan audit ulang segar langsung ke database WRC cabang'"
+                :loading="auditLoading"
+                @click="runAudit(true)"
+              />
+              <Button
+                icon="pi pi-file-excel"
+                label="Export Excel"
+                class="p-button-success p-button-sm"
+                v-tooltip.top="'Unduh laporan audit kelengkapan ke Excel'"
+                :loading="auditExporting"
+                :disabled="!auditData || !auditData.stores?.length"
+                @click="exportAudit"
+              />
+            </div>
+          </div>
+
+          <!-- Scorecard Metrik Resume -->
+          <div class="audit-scorecards">
+            <div class="audit-card audit-card--total">
+              <div class="audit-card__icon"><i class="pi pi-building"></i></div>
+              <div class="audit-card__body">
+                <span class="audit-card__label">Toko Aktif di WRC (kodetoko)</span>
+                <span class="audit-card__val">{{ formatNumber(auditData?.summary?.total_toko_wrc ?? 0) }}</span>
+              </div>
+            </div>
+            <div class="audit-card audit-card--lengkap">
+              <div class="audit-card__icon"><i class="pi pi-check-circle"></i></div>
+              <div class="audit-card__body">
+                <span class="audit-card__label">{{ type === 'bulanan' ? 'Backup Lengkap & Valid' : 'Lengkap (100% Ada)' }}</span>
+                <span class="audit-card__val">{{ formatNumber(auditData?.summary?.lengkap ?? 0) }}</span>
+              </div>
+            </div>
+            <div class="audit-card audit-card--kurang">
+              <div class="audit-card__icon"><i class="pi pi-exclamation-triangle"></i></div>
+              <div class="audit-card__body">
+                <span class="audit-card__label">{{ type === 'bulanan' ? 'Data NOK / Gagal' : 'Kurang Tanggal' }}</span>
+                <span class="audit-card__val">{{ formatNumber(type === 'bulanan' ? (auditData?.summary?.data_nok ?? 0) : (auditData?.summary?.kurang_tanggal ?? 0)) }}</span>
+              </div>
+            </div>
+            <div class="audit-card audit-card--tidakada">
+              <div class="audit-card__icon"><i class="pi pi-times-circle"></i></div>
+              <div class="audit-card__body">
+                <span class="audit-card__label">Tidak Ada Backup</span>
+                <span class="audit-card__val">{{ formatNumber(auditData?.summary?.tidak_ada ?? 0) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Filter & Search Toolbar -->
+          <div class="audit-toolbar">
+            <div class="flex align-items-center gap-2" style="flex: 1; max-width: 420px;">
+              <div class="search-wrapper" style="width: 100%;">
+                <i class="pi pi-search search-icon"></i>
+                <InputText
+                  v-model="auditSearch"
+                  placeholder="Cari kode toko atau nama toko..."
+                  class="search-input"
+                />
+              </div>
+            </div>
+            <div class="flex align-items-center gap-2">
+              <Dropdown
+                v-model="auditStatusFilter"
+                :options="statusFilterOptions"
+                optionLabel="label"
+                optionValue="value"
+                class="audit-status-dropdown"
+                style="min-width: 280px;"
+              />
+            </div>
+          </div>
+
+          <!-- DataTable Audit Toko Bulanan (Tanpa expander) -->
+          <DataTable
+            v-if="type === 'bulanan'"
+            :value="filteredAuditStores"
+            :loading="auditLoading"
+            dataKey="kdtk"
+            responsiveLayout="scroll"
+            stripedRows
+            emptyMessage="Tidak ada data audit bulanan ditemukan."
+            class="datatable-dialog"
+            paginator
+            :rows="15"
+            :rowsPerPageOptions="[15, 30, 50, 100]"
+            sortMode="single"
+          >
+            <!-- Kode Toko -->
+            <Column field="kdtk" header="Kode Toko" sortable style="width: 110px;">
+              <template #body="{ data }">
+                <span class="cell-primary font-mono font-medium">{{ formatCode(data.kdtk) }}</span>
+              </template>
+            </Column>
+
+            <!-- Nama Toko -->
+            <Column field="nama_toko" header="Nama Toko" sortable style="min-width: 200px;">
+              <template #body="{ data }">
+                <span class="cell-bold">{{ data.nama_toko || '—' }}</span>
+              </template>
+            </Column>
+
+            <!-- Status Kelengkapan -->
+            <Column field="status" header="Status Kelengkapan" sortable style="width: 160px; text-align: center;">
+              <template #body="{ data }">
+                <Tag
+                  v-if="data.status === 'LENGKAP'"
+                  severity="success"
+                  value="LENGKAP"
+                  icon="pi pi-check"
+                />
+                <Tag
+                  v-else-if="data.status === 'DATA_NOK'"
+                  severity="warning"
+                  value="DATA NOK"
+                  icon="pi pi-exclamation-triangle"
+                />
+                <Tag
+                  v-else
+                  severity="danger"
+                  value="TIDAK ADA"
+                  icon="pi pi-times"
+                />
+              </template>
+            </Column>
+
+            <!-- Stat di DB -->
+            <Column field="stat" header="Stat di DB" sortable style="width: 110px; text-align: center;">
+              <template #body="{ data }">
+                <Tag
+                  v-if="data.stat"
+                  :severity="getStatusSeverity(data.stat)"
+                  :value="data.stat"
+                />
+                <span v-else class="text-400 font-mono text-xs">—</span>
+              </template>
+            </Column>
+
+            <!-- Jml Isi -->
+            <Column field="jml_isi" header="Jml Isi" sortable style="width: 110px; text-align: right;">
+              <template #body="{ data }">
+                <span class="cell-num">{{ formatNumber(data.jml_isi) }}</span>
+              </template>
+            </Column>
+
+            <!-- Path Backup -->
+            <Column field="path" header="Path Backup" style="min-width: 220px;">
+              <template #body="{ data }">
+                <span v-if="data.path" class="cell-path" v-tooltip.top="data.path">{{ data.path }}</span>
+                <span v-else class="text-400 font-mono text-xs">—</span>
+              </template>
+            </Column>
+
+            <!-- Catatan -->
+            <Column field="note" header="Catatan" style="min-width: 160px;">
+              <template #body="{ data }">
+                <span class="note-text">{{ data.note || '—' }}</span>
+              </template>
+            </Column>
+
+            <!-- Diperbarui -->
+            <Column field="updtime" header="Diperbarui" sortable style="width: 160px;">
+              <template #body="{ data }">
+                <span class="cell-date">{{ formatDate(data.updtime) }}</span>
+              </template>
+            </Column>
+          </DataTable>
+
+          <!-- DataTable Audit Toko Harian (dengan row expansion) -->
+          <DataTable
+            v-else
+            :value="filteredAuditStores"
+            :loading="auditLoading"
+            v-model:expandedRows="auditExpandedRows"
+            dataKey="kdtk"
+            responsiveLayout="scroll"
+            stripedRows
+            emptyMessage="Tidak ada data audit harian ditemukan."
+            class="datatable-dialog"
+            paginator
+            :rows="15"
+            :rowsPerPageOptions="[15, 30, 50, 100]"
+            sortMode="single"
+          >
+            <!-- Expander Column -->
+            <Column expander style="width: 3.5rem; text-align: center;" />
+
+            <!-- Kode Toko -->
+            <Column field="kdtk" header="Kode Toko" sortable style="width: 110px;">
+              <template #body="{ data }">
+                <span class="cell-primary font-mono font-medium">{{ formatCode(data.kdtk) }}</span>
+              </template>
+            </Column>
+
+            <!-- Nama Toko -->
+            <Column field="nama_toko" header="Nama Toko" sortable style="min-width: 200px;">
+              <template #body="{ data }">
+                <span class="cell-bold">{{ data.nama_toko || '—' }}</span>
+              </template>
+            </Column>
+
+            <!-- Status -->
+            <Column field="status" header="Status Kelengkapan" sortable style="width: 150px; text-align: center;">
+              <template #body="{ data }">
+                <Tag
+                  v-if="data.status === 'LENGKAP'"
+                  severity="success"
+                  value="LENGKAP"
+                  icon="pi pi-check"
+                />
+                <Tag
+                  v-else-if="data.status === 'KURANG_TANGGAL'"
+                  severity="warning"
+                  value="KURANG TGL"
+                  icon="pi pi-exclamation-triangle"
+                />
+                <Tag
+                  v-else
+                  severity="danger"
+                  value="TIDAK ADA"
+                  icon="pi pi-times"
+                />
+              </template>
+            </Column>
+
+            <!-- Hari WRC -->
+            <Column field="total_hari_wrc" header="Hari WRC" sortable style="width: 110px; text-align: right;">
+              <template #body="{ data }">
+                <Tag severity="info" :value="data.total_hari_wrc" style="min-width: 42px; justify-content: center;" />
+              </template>
+            </Column>
+
+            <!-- Hari Backup -->
+            <Column field="total_hari_backup" header="Hari Backup" sortable style="width: 110px; text-align: right;">
+              <template #body="{ data }">
+                <Tag severity="success" :value="data.total_hari_backup" style="min-width: 42px; justify-content: center;" />
+              </template>
+            </Column>
+
+            <!-- Selisih Hari -->
+            <Column field="selisih_hari" header="Selisih" sortable style="width: 100px; text-align: right;">
+              <template #body="{ data }">
+                <Tag
+                  :severity="data.selisih_hari > 0 ? 'warning' : 'secondary'"
+                  :value="data.selisih_hari"
+                  style="min-width: 42px; justify-content: center;"
+                />
+              </template>
+            </Column>
+
+            <!-- Keterangan Tanggal -->
+            <Column header="Rincian Masalah" style="min-width: 220px;">
+              <template #body="{ data }">
+                <span v-if="data.status === 'LENGKAP'" class="text-success font-medium text-xs">
+                  <i class="pi pi-check text-xs mr-1"></i> Semua tanggal ter-backup
+                </span>
+                <span v-else-if="data.status === 'TIDAK_ADA'" class="text-danger font-medium text-xs">
+                  <i class="pi pi-times text-xs mr-1"></i> 0 file dari {{ data.total_hari_wrc }} hari aktif WRC
+                </span>
+                <div v-else class="flex align-items-center gap-1 flex-wrap">
+                  <span v-if="data.missing_dates?.length" class="audit-defect-badge audit-defect-badge--missing">
+                    {{ data.missing_dates.length }} tgl bolong
+                  </span>
+                  <span v-if="data.incomplete_dates?.length" class="audit-defect-badge audit-defect-badge--corrupt">
+                    {{ data.incomplete_dates.length }} tgl gagal/0
+                  </span>
+                </div>
+              </template>
+            </Column>
+
+            <!-- Row Expansion: Rincian Detail Tanggal Kurang -->
+            <template #expansion="{ data: store }">
+              <div class="audit-expansion-panel">
+                <div class="audit-expansion-panel__header">
+                  <div>
+                    <h4 class="m-0 text-sm font-bold">Rincian Tanggal — {{ formatCode(store.kdtk) }} ({{ store.nama_toko }})</h4>
+                    <span class="text-xs text-color-secondary">
+                      WRC mencatat {{ store.total_hari_wrc }} hari transaksi. Backup valid: {{ store.total_hari_backup }} hari. Selisih: {{ store.selisih_hari }} hari.
+                    </span>
+                  </div>
+                </div>
+
+                <div v-if="store.status === 'LENGKAP'" class="expansion-alert expansion-alert--success">
+                  <i class="pi pi-check-circle mr-2"></i>
+                  Data toko ini 100% lengkap. Seluruh {{ store.total_hari_wrc }} tanggal transaksi di WRC memiliki file backup valid di server central.
+                </div>
+
+                <div v-else-if="store.status === 'TIDAK_ADA'" class="expansion-alert expansion-alert--danger">
+                  <div class="mb-2">
+                    <i class="pi pi-times-circle mr-2"></i>
+                    <strong>Peringatan:</strong> Toko ini tercatat aktif di WRC (kodetoko_{{ auditYymm }}) dengan total {{ store.total_hari_wrc }} hari transaksi, namun sama sekali TIDAK MEMILIKI file backup di database central.
+                  </div>
+                  <div class="text-xs font-semibold mb-1 text-700">Daftar Tanggal Transaksi di WRC yang Hilang:</div>
+                  <div class="date-chip-grid">
+                    <span v-for="tgl in store.missing_dates" :key="tgl.tanggal" class="date-chip date-chip--missing">
+                      {{ tgl.tanggal }}
+                    </span>
+                  </div>
+                </div>
+
+                <div v-else class="expansion-detail-content">
+                  <!-- 1. Tanggal yang Bolong (Tidak ada backup) -->
+                  <div v-if="store.missing_dates?.length" class="expansion-section">
+                    <div class="expansion-section__title text-danger">
+                      <i class="pi pi-calendar-times mr-1"></i>
+                      Tanggal Bolong / Tidak Ada File Backup ({{ store.missing_dates.length }} hari):
+                    </div>
+                    <div class="date-chip-grid">
+                      <span v-for="m in store.missing_dates" :key="m.tanggal" class="date-chip date-chip--missing" v-tooltip.top="m.reason">
+                        {{ m.tanggal }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- 2. Tanggal yang Ada tetapi Status False / Jml Isi 0 -->
+                  <div v-if="store.incomplete_dates?.length" class="expansion-section mt-3">
+                    <div class="expansion-section__title text-warning">
+                      <i class="pi pi-exclamation-triangle mr-1"></i>
+                      Tanggal Terdata tetapi Status Gagal / Ukuran 0 ({{ store.incomplete_dates.length }} hari):
+                    </div>
+                    <div class="table-responsive mt-1">
+                      <table class="audit-defect-table">
+                        <thead>
+                          <tr>
+                            <th>Tanggal</th>
+                            <th>Status di DB</th>
+                            <th>Jml Isi</th>
+                            <th>Catatan / Note</th>
+                            <th>Path Simpan</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="inc in store.incomplete_dates" :key="inc.tanggal">
+                            <td class="font-mono font-bold">{{ inc.tanggal }}</td>
+                            <td><Tag severity="danger" :value="inc.stat" /></td>
+                            <td>{{ formatNumber(inc.jml_isi) }}</td>
+                            <td class="text-600">{{ inc.note || '—' }}</td>
+                            <td class="font-mono text-xs text-500">{{ inc.path || '—' }}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </DataTable>
         </div>
 
       </transition>
@@ -618,6 +1018,151 @@ const saveNote = async (row) => {
   }
 };
 
+// ── Audit Kelengkapan WRC ────────────────────────────────────
+const auditPeriode = ref('');
+const auditYymm = ref('');
+const auditYear = ref('');
+const auditLoading = ref(false);
+const auditExporting = ref(false);
+const auditData = ref(null);
+const auditSearch = ref('');
+const auditStatusFilter = ref('ALL');
+const auditExpandedRows = ref({});
+const previousViewMode = ref('resume');
+
+const statusFilterOptions = computed(() => {
+  if (props.type === 'bulanan') {
+    return [
+      { label: 'Semua Status Toko', value: 'ALL' },
+      { label: 'Hanya Bermasalah (NOK / Tidak Ada)', value: 'ISSUES' },
+      { label: 'Data NOK Saja', value: 'DATA_NOK' },
+      { label: 'Tidak Ada Backup Saja', value: 'TIDAK_ADA' },
+      { label: 'Lengkap (Valid) Saja', value: 'LENGKAP' },
+    ];
+  }
+  return [
+    { label: 'Semua Status Toko', value: 'ALL' },
+    { label: 'Hanya Bermasalah (Kurang / Tidak Ada)', value: 'ISSUES' },
+    { label: 'Kurang Tanggal Saja', value: 'KURANG_TANGGAL' },
+    { label: 'Tidak Ada di Backup Saja', value: 'TIDAK_ADA' },
+    { label: 'Lengkap (100%) Saja', value: 'LENGKAP' },
+  ];
+});
+
+const openAudit = async (periode) => {
+  previousViewMode.value = viewMode.value;
+  auditPeriode.value = periode;
+
+  const cleaned = String(periode || "").trim().replace(/[^\d-]/g, "");
+  if (cleaned.length === 4) {
+    auditYymm.value = cleaned;
+    auditYear.value = `20${cleaned.substring(0, 2)}`;
+  } else if (cleaned.length >= 6) {
+    const digitsOnly = cleaned.replace(/-/g, "");
+    auditYear.value = digitsOnly.substring(0, 4);
+    auditYymm.value = `${digitsOnly.substring(2, 4)}${digitsOnly.substring(4, 6)}`;
+  } else {
+    auditYymm.value = '';
+    auditYear.value = '';
+  }
+
+  viewMode.value = 'audit';
+  auditSearch.value = '';
+  auditStatusFilter.value = 'ALL';
+  auditExpandedRows.value = {};
+  await runAudit(false);
+};
+
+const backFromAudit = () => {
+  viewMode.value = previousViewMode.value || 'resume';
+};
+
+const runAudit = async (forceRefresh = false) => {
+  if (!props.cabang || !auditPeriode.value) return;
+  auditLoading.value = true;
+  try {
+    const res = await rekapBackupService.auditCompleteness({
+      cabang: props.cabang,
+      periode: auditPeriode.value,
+      type: props.type,
+      forceRefresh
+    });
+    auditData.value = res.data;
+    if (forceRefresh) {
+      toast.add({
+        severity: 'success',
+        summary: 'Audit Selesai',
+        detail: `Berhasil mengaudit ${res.data?.summary?.total_toko_wrc || 0} toko vs WRC`,
+        life: 3000
+      });
+    } else {
+      toast.add({
+        severity: 'info',
+        summary: 'Data Dimuat',
+        detail: `Memuat data audit ${props.type} untuk periode ${auditPeriode.value}`,
+        life: 2500
+      });
+    }
+  } catch (err) {
+    const msg = err?.response?.data?.message || err.message || 'Gagal menjalankan audit kelengkapan data';
+    toast.add({ severity: 'error', summary: 'Error Audit', detail: msg, life: 5000 });
+  } finally {
+    auditLoading.value = false;
+  }
+};
+
+const exportAudit = async () => {
+  if (!props.cabang || !auditPeriode.value) return;
+  auditExporting.value = true;
+  try {
+    const response = await rekapBackupService.exportAuditExcel(props.cabang, auditPeriode.value, props.type);
+    const blob = new Blob([response.data], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `AUDIT_KELENGKAPAN_BACKUP_${props.type.toUpperCase()}_${props.cabang}_${auditPeriode.value}.xlsx`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    toast.add({ severity: 'success', summary: 'Export Berhasil', detail: 'File Excel audit berhasil diunduh', life: 3000 });
+  } catch (err) {
+    const msg = err?.response?.data?.message || err.message || 'Gagal mengunduh file Excel';
+    toast.add({ severity: 'error', summary: 'Export Gagal', detail: msg, life: 3500 });
+  } finally {
+    auditExporting.value = false;
+  }
+};
+
+const filteredAuditStores = computed(() => {
+  if (!auditData.value || !Array.isArray(auditData.value.stores)) return [];
+  let list = auditData.value.stores;
+
+  // Filter status
+  if (auditStatusFilter.value === 'ISSUES') {
+    if (props.type === 'bulanan') {
+      list = list.filter(s => s.status === 'DATA_NOK' || s.status === 'TIDAK_ADA');
+    } else {
+      list = list.filter(s => s.status === 'KURANG_TANGGAL' || s.status === 'TIDAK_ADA');
+    }
+  } else if (auditStatusFilter.value !== 'ALL') {
+    list = list.filter(s => s.status === auditStatusFilter.value);
+  }
+
+  // Filter text search
+  if (auditSearch.value) {
+    const q = auditSearch.value.toLowerCase().trim();
+    list = list.filter(s =>
+      s.kdtk?.toLowerCase().includes(q) ||
+      s.nama_toko?.toLowerCase().includes(q)
+    );
+  }
+
+  return list;
+});
+
 // ── Reset on close ───────────────────────────────────────────
 watch(() => props.visible, (val) => {
   if (!val) {
@@ -631,6 +1176,10 @@ watch(() => props.visible, (val) => {
       detailTotal.value    = 0;
       detailSortField.value = '';
       detailSortOrder.value = 1;
+      auditData.value      = null;
+      auditSearch.value    = '';
+      auditStatusFilter.value = 'ALL';
+      auditExpandedRows.value = {};
       cancelEdit();
       cancelResumeEdit();
     }, 300);

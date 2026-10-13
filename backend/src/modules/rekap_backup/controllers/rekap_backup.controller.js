@@ -181,6 +181,87 @@ class RekapBackupController {
       res.status(500).json({ success: false, message: "Gagal memperbarui note resume : " + error.message });
     }
   }
+
+  async auditCompleteness(req, res) {
+    try {
+      const { cabang, periode, type = 'harian', forceRefresh } = req.body;
+      if (!cabang || !periode) {
+        return res.status(400).json({ success: false, message: "cabang dan periode wajib diisi" });
+      }
+
+      const data = await rekapBackupService.auditCompleteness({
+        cabang,
+        periode,
+        type,
+        forceRefresh: Boolean(forceRefresh)
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Audit kelengkapan data berhasil dijalankan",
+        data
+      });
+    } catch (error) {
+      logger.error(`Error auditCompleteness: ${error.message}`);
+      res.status(500).json({
+        success: false,
+        message: error.message || "Terjadi kesalahan saat memproses audit kelengkapan data"
+      });
+    }
+  }
+
+  async getAuditCache(req, res) {
+    try {
+      const { cabang, periode } = req.params;
+      const type = req.query.type || 'harian';
+      if (!cabang || !periode) {
+        return res.status(400).json({ success: false, message: "cabang dan periode wajib diisi" });
+      }
+
+      const data = await rekapBackupService.getAuditCache(cabang, periode, type);
+      res.status(200).json({
+        success: true,
+        cached: Boolean(data),
+        data
+      });
+    } catch (error) {
+      logger.error(`Error getAuditCache: ${error.message}`);
+      res.status(500).json({
+        success: false,
+        message: error.message || "Gagal mengambil cache audit"
+      });
+    }
+  }
+
+  async exportAuditExcel(req, res) {
+    try {
+      const { cabang, periode } = req.params;
+      const type = req.query.type || 'harian';
+      if (!cabang || !periode) {
+        return res.status(400).json({ success: false, message: "cabang dan periode wajib diisi" });
+      }
+
+      const workbook = await rekapBackupService.generateAuditExcel({ cabang, periode, type });
+      const filename = `AUDIT_KELENGKAPAN_BACKUP_${type.toUpperCase()}_${cabang}_${periode}.xlsx`;
+
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
+
+      await workbook.xlsx.write(res);
+      if (!res.writableEnded) res.end();
+    } catch (error) {
+      logger.error(`Error exportAuditExcel: ${error.message}`);
+      if (res.headersSent) {
+        if (!res.writableEnded) res.end();
+        return;
+      }
+      res.status(500).json({
+        success: false,
+        message: "Gagal mengekspor file Excel audit: " + error.message
+      });
+    }
+  }
 }
 
 export default new RekapBackupController();

@@ -35,4 +35,9 @@ router.get("/export", rekapBackupController.exportExcel);
 // Admin: trigger staging sync manually
 router.post("/staging/sync", rekapBackupController.triggerStagingSync);
 
+// Audit Kelengkapan Data vs WRC
+router.post("/audit", rekapBackupController.auditCompleteness);
+router.get("/audit/cache/:cabang/:periode", rekapBackupController.getAuditCache);
+router.get("/audit/export/:cabang/:periode", rekapBackupController.exportAuditExcel);
+
 export default router;

@@ -32,3 +32,15 @@ export async function checkStoreConnection(host) {
     }
   }
 }
+
+/**
+ * Check if an IP address is considered a local simulation IP
+ * (e.g. 192.168.x.x, 127.x.x.x, or localhost)
+ * @param {string} ip
+ * @returns {boolean}
+ */
+export function isLocalIp(ip) {
+  if (!ip || typeof ip !== "string") return false;
+  const cleanIp = ip.trim();
+  return /^192\.168\./.test(cleanIp) || /^127\./.test(cleanIp) || cleanIp === "localhost";
+}

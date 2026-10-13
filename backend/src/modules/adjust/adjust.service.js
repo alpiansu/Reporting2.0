@@ -11,8 +11,8 @@ import histAdjustStagingService from "./hist_adjust_staging.service.js";
 import os from "os";
 import pLimit from "p-limit";
 import progressService from "../progress/progress.service.js";
-import apiResponse from "../../utils/apiResponse.js";
 import adjustPostActionService from "./adjust_post_action.service.js";
+import { isLocalIp } from "../../utils/storeConnection.utils.js";
 
 class AdjustService {
   async executeQuery(connection, sql, params, context, timeout) {
@@ -35,9 +35,7 @@ class AdjustService {
    * @returns {boolean}
    */
   isLocalIp(ip) {
-    if (!ip || typeof ip !== "string") return false;
-    const cleanIp = ip.trim();
-    return /^192\.168\./.test(cleanIp) || /^127\./.test(cleanIp) || cleanIp === "localhost";
+    return isLocalIp(ip);
   }
 
   /**

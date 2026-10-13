@@ -56,6 +56,38 @@
             </div>
           </div>
 
+          <!-- Scorecards Ringkasan Periode Cabang (Dialog Level 1) -->
+          <div class="audit-scorecards mb-3">
+            <div class="audit-card audit-card--total">
+              <div class="audit-card__icon"><i class="pi pi-calendar"></i></div>
+              <div class="audit-card__body">
+                <span class="audit-card__label">Total Periode History</span>
+                <span class="audit-card__val">{{ formatNumber(resumeData.length) }}</span>
+              </div>
+            </div>
+            <div class="audit-card audit-card--lengkap">
+              <div class="audit-card__icon"><i class="pi pi-check-circle"></i></div>
+              <div class="audit-card__body">
+                <span class="audit-card__label">Periode Lengkap (100%)</span>
+                <span class="audit-card__val">{{ formatNumber(resumeLengkapCount) }}</span>
+              </div>
+            </div>
+            <div class="audit-card audit-card--kurang">
+              <div class="audit-card__icon"><i class="pi pi-exclamation-triangle"></i></div>
+              <div class="audit-card__body">
+                <span class="audit-card__label">Periode Ada Defect</span>
+                <span class="audit-card__val">{{ formatNumber(resumeDefectCount) }}</span>
+              </div>
+            </div>
+            <div class="audit-card audit-card--tidakada">
+              <div class="audit-card__icon"><i class="pi pi-clock"></i></div>
+              <div class="audit-card__body">
+                <span class="audit-card__label">Belum Diaudit / WRC N/A</span>
+                <span class="audit-card__val">{{ formatNumber(resumeBelumAuditCount) }}</span>
+              </div>
+            </div>
+          </div>
+
           <DataTable
             :value="filteredResumeData"
             :loading="loading"
@@ -131,6 +163,20 @@
                   severity="danger"
                   :value="formatNumber(data.data_nok)"
                   style="min-width: 52px; justify-content: center;"
+                />
+              </template>
+            </Column>
+
+            <!-- Status Audit WRC -->
+            <Column field="audit_status" header="Status Audit WRC" sortable style="width: 170px; text-align: center;">
+              <template #body="{ data }">
+                <Tag
+                  :severity="data.audit_severity || 'secondary'"
+                  :value="data.audit_label || 'Belum Diaudit'"
+                  :icon="data.audit_status === 'LENGKAP' ? 'pi pi-check' : (data.audit_status === 'BERMASALAH' ? 'pi pi-exclamation-triangle' : (data.audit_status === 'TIDAK_DAPAT_DIPERIKSA' ? 'pi pi-question-circle' : 'pi pi-shield'))"
+                  style="cursor: pointer; min-width: 115px; justify-content: center;"
+                  v-tooltip.top="data.audit_status === 'BELUM_AUDIT' ? 'Klik untuk verifikasi kelengkapan data vs WRC' : 'Klik untuk melihat rincian hasil audit'"
+                  @click="openAudit(data.periode)"
                 />
               </template>
             </Column>
@@ -415,13 +461,27 @@
             </div>
           </div>
 
+          <!-- Banner Peringatan jika data WRC tidak ada di cabang -->
+          <div v-if="auditData?.summary?.wrc_available === false" class="expansion-alert expansion-alert--danger mb-3" style="display: flex; align-items: flex-start; gap: 0.75rem;">
+            <i class="pi pi-exclamation-circle text-xl" style="color: #dc2626; margin-top: 2px;"></i>
+            <div>
+              <div class="font-bold text-sm" style="color: #991b1b;">Data Master WRC Tidak Tersedia</div>
+              <div class="text-xs mt-1" style="color: #4b5563; line-height: 1.5;">
+                {{ auditData.summary.message || 'Tabel transaksi/kodetoko untuk periode ini tidak ditemukan di database WRC cabang (sudah diarsipkan atau belum terbentuk).' }}<br>
+                Status kelengkapan ditandai sebagai <strong>Tidak Dapat Diperiksa</strong>. Daftar di bawah hanya menampilkan data yang terdata di server central.
+              </div>
+            </div>
+          </div>
+
           <!-- Scorecard Metrik Resume -->
           <div class="audit-scorecards">
             <div class="audit-card audit-card--total">
               <div class="audit-card__icon"><i class="pi pi-building"></i></div>
               <div class="audit-card__body">
                 <span class="audit-card__label">Toko Aktif di WRC (kodetoko)</span>
-                <span class="audit-card__val">{{ formatNumber(auditData?.summary?.total_toko_wrc ?? 0) }}</span>
+                <span class="audit-card__val">
+                  {{ auditData?.summary?.wrc_available === false ? '0 (WRC N/A)' : formatNumber(auditData?.summary?.total_toko_wrc ?? 0) }}
+                </span>
               </div>
             </div>
             <div class="audit-card audit-card--lengkap">
@@ -439,10 +499,14 @@
               </div>
             </div>
             <div class="audit-card audit-card--tidakada">
-              <div class="audit-card__icon"><i class="pi pi-times-circle"></i></div>
+              <div class="audit-card__icon">
+                <i :class="['pi', auditData?.summary?.wrc_available === false ? 'pi-question-circle' : 'pi-times-circle']"></i>
+              </div>
               <div class="audit-card__body">
-                <span class="audit-card__label">Tidak Ada Backup</span>
-                <span class="audit-card__val">{{ formatNumber(auditData?.summary?.tidak_ada ?? 0) }}</span>
+                <span class="audit-card__label">{{ auditData?.summary?.wrc_available === false ? 'Tidak Dapat Diperiksa' : 'Tidak Ada Backup' }}</span>
+                <span class="audit-card__val">
+                  {{ auditData?.summary?.wrc_available === false ? formatNumber(auditData?.summary?.tidak_dapat_diperiksa ?? 0) : formatNumber(auditData?.summary?.tidak_ada ?? 0) }}
+                </span>
               </div>
             </div>
           </div>
@@ -501,7 +565,7 @@
             </Column>
 
             <!-- Status Kelengkapan -->
-            <Column field="status" header="Status Kelengkapan" sortable style="width: 160px; text-align: center;">
+            <Column field="status" header="Status Kelengkapan" sortable style="width: 175px; text-align: center;">
               <template #body="{ data }">
                 <Tag
                   v-if="data.status === 'LENGKAP'"
@@ -514,6 +578,12 @@
                   severity="warning"
                   value="DATA NOK"
                   icon="pi pi-exclamation-triangle"
+                />
+                <Tag
+                  v-else-if="data.status === 'TIDAK_DAPAT_DIPERIKSA'"
+                  severity="secondary"
+                  value="TIDAK DAPAT DIPERIKSA"
+                  icon="pi pi-question-circle"
                 />
                 <Tag
                   v-else
@@ -600,7 +670,7 @@
             </Column>
 
             <!-- Status -->
-            <Column field="status" header="Status Kelengkapan" sortable style="width: 150px; text-align: center;">
+            <Column field="status" header="Status Kelengkapan" sortable style="width: 175px; text-align: center;">
               <template #body="{ data }">
                 <Tag
                   v-if="data.status === 'LENGKAP'"
@@ -613,6 +683,12 @@
                   severity="warning"
                   value="KURANG TGL"
                   icon="pi pi-exclamation-triangle"
+                />
+                <Tag
+                  v-else-if="data.status === 'TIDAK_DAPAT_DIPERIKSA'"
+                  severity="secondary"
+                  value="TIDAK DAPAT DIPERIKSA"
+                  icon="pi pi-question-circle"
                 />
                 <Tag
                   v-else
@@ -653,6 +729,9 @@
               <template #body="{ data }">
                 <span v-if="data.status === 'LENGKAP'" class="text-success font-medium text-xs">
                   <i class="pi pi-check text-xs mr-1"></i> Semua tanggal ter-backup
+                </span>
+                <span v-else-if="data.status === 'TIDAK_DAPAT_DIPERIKSA'" class="text-color-secondary font-medium text-xs">
+                  <i class="pi pi-question-circle text-xs mr-1"></i> Data WRC tidak tersedia di cabang
                 </span>
                 <span v-else-if="data.status === 'TIDAK_ADA'" class="text-danger font-medium text-xs">
                   <i class="pi pi-times text-xs mr-1"></i> 0 file dari {{ data.total_hari_wrc }} hari aktif WRC
@@ -821,6 +900,10 @@ const filteredResumeData = computed(() => {
     d.ip?.toLowerCase().includes(q)
   );
 });
+
+const resumeLengkapCount = computed(() => resumeData.value.filter(r => r.audit_status === 'LENGKAP').length);
+const resumeDefectCount = computed(() => resumeData.value.filter(r => r.audit_status === 'BERMASALAH').length);
+const resumeBelumAuditCount = computed(() => resumeData.value.filter(r => !r.audit_status || r.audit_status === 'BELUM_AUDIT' || r.audit_status === 'TIDAK_DAPAT_DIPERIKSA').length);
 
 const loadResume = async () => {
   if (!props.cabang) return;
@@ -1037,6 +1120,7 @@ const statusFilterOptions = computed(() => {
       { label: 'Hanya Bermasalah (NOK / Tidak Ada)', value: 'ISSUES' },
       { label: 'Data NOK Saja', value: 'DATA_NOK' },
       { label: 'Tidak Ada Backup Saja', value: 'TIDAK_ADA' },
+      { label: 'Tidak Dapat Diperiksa Saja', value: 'TIDAK_DAPAT_DIPERIKSA' },
       { label: 'Lengkap (Valid) Saja', value: 'LENGKAP' },
     ];
   }
@@ -1045,6 +1129,7 @@ const statusFilterOptions = computed(() => {
     { label: 'Hanya Bermasalah (Kurang / Tidak Ada)', value: 'ISSUES' },
     { label: 'Kurang Tanggal Saja', value: 'KURANG_TANGGAL' },
     { label: 'Tidak Ada di Backup Saja', value: 'TIDAK_ADA' },
+    { label: 'Tidak Dapat Diperiksa Saja', value: 'TIDAK_DAPAT_DIPERIKSA' },
     { label: 'Lengkap (100%) Saja', value: 'LENGKAP' },
   ];
 });
@@ -1052,6 +1137,7 @@ const statusFilterOptions = computed(() => {
 const openAudit = async (periode) => {
   previousViewMode.value = viewMode.value;
   auditPeriode.value = periode;
+  auditData.value = null; // WAJIB: Reset data lama agar tidak nyangkut dari periode sebelumnya
 
   const cleaned = String(periode || "").trim().replace(/[^\d-]/g, "");
   if (cleaned.length === 4) {
@@ -1074,12 +1160,15 @@ const openAudit = async (periode) => {
 };
 
 const backFromAudit = () => {
+  auditData.value = null; // Bersihkan state audit saat kembali
   viewMode.value = previousViewMode.value || 'resume';
+  loadResume(); // Muat ulang resume agar status snapshot terbaru ter-update di tabel level 1
 };
 
 const runAudit = async (forceRefresh = false) => {
   if (!props.cabang || !auditPeriode.value) return;
   auditLoading.value = true;
+  auditData.value = null; // Reset saat audit/reload dimulai
   try {
     const res = await rekapBackupService.auditCompleteness({
       cabang: props.cabang,
@@ -1104,6 +1193,7 @@ const runAudit = async (forceRefresh = false) => {
       });
     }
   } catch (err) {
+    auditData.value = null; // Pastikan data tetap null jika terjadi kegagalan
     const msg = err?.response?.data?.message || err.message || 'Gagal menjalankan audit kelengkapan data';
     toast.add({ severity: 'error', summary: 'Error Audit', detail: msg, life: 5000 });
   } finally {
@@ -1143,9 +1233,9 @@ const filteredAuditStores = computed(() => {
   // Filter status
   if (auditStatusFilter.value === 'ISSUES') {
     if (props.type === 'bulanan') {
-      list = list.filter(s => s.status === 'DATA_NOK' || s.status === 'TIDAK_ADA');
+      list = list.filter(s => s.status === 'DATA_NOK' || s.status === 'TIDAK_ADA' || s.status === 'TIDAK_DAPAT_DIPERIKSA');
     } else {
-      list = list.filter(s => s.status === 'KURANG_TANGGAL' || s.status === 'TIDAK_ADA');
+      list = list.filter(s => s.status === 'KURANG_TANGGAL' || s.status === 'TIDAK_ADA' || s.status === 'TIDAK_DAPAT_DIPERIKSA');
     }
   } else if (auditStatusFilter.value !== 'ALL') {
     list = list.filter(s => s.status === auditStatusFilter.value);

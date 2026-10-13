@@ -21,9 +21,100 @@ class RekapBackupService {
     }
   }
 
+  async _enrichResumeWithAudit(data, cabang, type) {
+    if (!Array.isArray(data) || data.length === 0) return data;
+
+    const enriched = await Promise.all(
+      data.map(async (row) => {
+        try {
+          if (!row.periode) {
+            return {
+              ...row,
+              audit_status: 'BELUM_AUDIT',
+              audit_label: 'Belum Diaudit',
+              audit_severity: 'secondary',
+              audit_summary: null,
+            };
+          }
+
+          const cache = await this.getAuditCache(cabang, row.periode, type);
+          if (!cache || !cache.summary) {
+            return {
+              ...row,
+              audit_status: 'BELUM_AUDIT',
+              audit_label: 'Belum Diaudit',
+              audit_severity: 'secondary',
+              audit_summary: null,
+            };
+          }
+
+          const sum = cache.summary;
+          if (sum.wrc_available === false || sum.status_audit === 'TIDAK_DAPAT_DIPERIKSA') {
+            return {
+              ...row,
+              audit_status: 'TIDAK_DAPAT_DIPERIKSA',
+              audit_label: 'WRC Tidak Ada',
+              audit_severity: 'secondary',
+              audit_summary: sum,
+            };
+          }
+
+          if (type === 'bulanan') {
+            const defects = (sum.data_nok || 0) + (sum.tidak_ada || 0);
+            if (defects === 0 && (sum.lengkap || 0) > 0) {
+              return {
+                ...row,
+                audit_status: 'LENGKAP',
+                audit_label: 'Lengkap (100%)',
+                audit_severity: 'success',
+                audit_summary: sum,
+              };
+            }
+            return {
+              ...row,
+              audit_status: 'BERMASALAH',
+              audit_label: `Kurang (${defects} Toko)`,
+              audit_severity: 'warning',
+              audit_summary: sum,
+            };
+          } else {
+            const defects = (sum.kurang_tanggal || 0) + (sum.tidak_ada || 0);
+            if (defects === 0 && (sum.lengkap || 0) > 0) {
+              return {
+                ...row,
+                audit_status: 'LENGKAP',
+                audit_label: 'Lengkap (100%)',
+                audit_severity: 'success',
+                audit_summary: sum,
+              };
+            }
+            return {
+              ...row,
+              audit_status: 'BERMASALAH',
+              audit_label: `Kurang (${defects} Toko)`,
+              audit_severity: 'warning',
+              audit_summary: sum,
+            };
+          }
+        } catch {
+          return {
+            ...row,
+            audit_status: 'BELUM_AUDIT',
+            audit_label: 'Belum Diaudit',
+            audit_severity: 'secondary',
+            audit_summary: null,
+          };
+        }
+      })
+    );
+
+    return enriched;
+  }
+
   async getResumeHarian(cabang) {
     try {
-      return await stagingService.getData('harian', cabang);
+      const data = await stagingService.getData('harian', cabang);
+      return await this._enrichResumeWithAudit(data, cabang, 'harian');
     } catch (error) {
       logger.error(`Error in getResumeHarian: ${error.message}`);
       throw error;
@@ -33,10 +124,8 @@ class RekapBackupService {
   async getResumeBulanan(cabang) {
     try {
       const data = await stagingService.getData('bulanan', cabang);
-      // Filter jenis_file === 'IDT' as before if needed, 
-      // although the query might return others depending on implementation.
-      // The old code did: filtered = allData.filter(r => r.cabang === cabang && r.jenis_file === 'IDT');
-      return data.filter(r => r.jenis_file === 'IDT');
+      const filtered = data.filter(r => r.jenis_file === 'IDT');
+      return await this._enrichResumeWithAudit(filtered, cabang, 'bulanan');
     } catch (error) {
       logger.error(`Error in getResumeBulanan: ${error.message}`);
       throw error;
@@ -543,24 +632,26 @@ class RekapBackupService {
 
       // Pastikan tabel kodetoko_{yymm} ada di WRC
       const [tableCheck] = await wrcPool.query(`SHOW TABLES LIKE 'kodetoko_${yymm}'`);
-      if (!tableCheck || tableCheck.length === 0) {
-        throw new Error(`Tabel WRC kodetoko_${yymm} tidak ditemukan di database cabang ${cabang}. Data periode tersebut kemungkinan sudah diarsipkan/tidak tersedia.`);
+      const wrcAvailable = Boolean(tableCheck && tableCheck.length > 0);
+
+      if (wrcAvailable) {
+        // Ambil daftar toko aktif dari kodetoko_{yymm}
+        const pStores = wrcPool.query(
+          `SELECT DISTINCT KODE_TOKO FROM kodetoko_${yymm} WHERE KODE_TOKO IS NOT NULL AND TRIM(KODE_TOKO) != ''`
+        ).then(([rows]) => rows).catch(err => {
+          logger.error(`[auditCompleteness:bulanan] Gagal query kodetoko_${yymm}: ${err.message}`);
+          throw err;
+        });
+
+        // Ambil nama toko dari poscabang.mstr_toko_all
+        const pNames = wrcPool.query(
+          `SELECT kode_toko, nama_toko FROM poscabang.mstr_toko_all`
+        ).then(([rows]) => rows).catch(() => []);
+
+        [storeCodesRows, mstrTokoRows] = await Promise.all([pStores, pNames]);
+      } else {
+        logger.warn(`[auditCompleteness:bulanan] Tabel WRC kodetoko_${yymm} tidak ditemukan di cabang ${cabang}. Status: TIDAK_DAPAT_DIPERIKSA.`);
       }
-
-      // Ambil daftar toko aktif dari kodetoko_{yymm}
-      const pStores = wrcPool.query(
-        `SELECT DISTINCT KODE_TOKO FROM kodetoko_${yymm} WHERE KODE_TOKO IS NOT NULL AND TRIM(KODE_TOKO) != ''`
-      ).then(([rows]) => rows).catch(err => {
-        logger.error(`[auditCompleteness:bulanan] Gagal query kodetoko_${yymm}: ${err.message}`);
-        throw err;
-      });
-
-      // Ambil nama toko dari poscabang.mstr_toko_all
-      const pNames = wrcPool.query(
-        `SELECT kode_toko, nama_toko FROM poscabang.mstr_toko_all`
-      ).then(([rows]) => rows).catch(() => []);
-
-      [storeCodesRows, mstrTokoRows] = await Promise.all([pStores, pNames]);
     } catch (wrcErr) {
       logger.error(`[auditCompleteness:bulanan] Error koneksi/query WRC: ${wrcErr.message}`);
       throw wrcErr;
@@ -583,13 +674,56 @@ class RekapBackupService {
       const [rows] = await sequelize.query(
         `SELECT cabang, kdtk, periode, stat, path, jml_isi, ip, note, updtime
          FROM ${backupBulananTable}
-         WHERE cabang = :cab AND (periode LIKE :prd1 OR periode LIKE :prd2)`,
+         WHERE cabang = :cab AND (periode LIKE :prd1 OR periode LIKE :prd2)
+         ORDER BY kdtk ASC`,
         { replacements: { cab: cabang, prd1: `${formattedPeriode}%`, prd2: `${yymm}%` } }
       );
       backupRows = rows;
     } catch (dbErr) {
       logger.warn(`[auditCompleteness:bulanan] Gagal query ${backupBulananTable}: ${dbErr.message}`);
       backupRows = [];
+    }
+
+    // Jika WRC tidak tersedia untuk periode ini, kembalikan status TIDAK_DAPAT_DIPERIKSA
+    if (storeCodesRows.length === 0) {
+      const storeAuditList = backupRows.map(bck => ({
+        kdtk: bck.kdtk,
+        nama_toko: bck.kdtk,
+        status: 'TIDAK_DAPAT_DIPERIKSA',
+        stat: bck.stat,
+        jml_isi: Number(bck.jml_isi) || 0,
+        path: bck.path || '',
+        ip: bck.ip || '',
+        note: bck.note || '',
+        updtime: bck.updtime || null,
+        keterangan: `Tabel WRC kodetoko_${yymm} tidak tersedia di database cabang (tidak dapat diverifikasi)`,
+      }));
+
+      const payload = {
+        cabang,
+        periode: formattedPeriode,
+        yymm,
+        type: 'bulanan',
+        audited_at: dayjs().format("YYYY-MM-DD HH:mm:ss"),
+        summary: {
+          total_toko_wrc: 0,
+          lengkap: 0,
+          data_nok: 0,
+          tidak_ada: 0,
+          tidak_dapat_diperiksa: storeAuditList.length,
+          status_audit: 'TIDAK_DAPAT_DIPERIKSA',
+          wrc_available: false,
+          message: `Tabel WRC kodetoko_${yymm} tidak ditemukan di cabang ${cabang}. Data periode ini tidak tersedia di WRC (sudah diarsipkan atau belum terbentuk).`
+        },
+        stores: storeAuditList
+      };
+
+      try {
+        await fs.mkdir(path.dirname(cachePath), { recursive: true });
+        await fs.writeFile(cachePath, JSON.stringify(payload, null, 2), "utf-8");
+      } catch {}
+
+      return payload;
     }
 
     // 3. Olah Nama Toko
@@ -744,70 +878,72 @@ class RekapBackupService {
 
       // Pastikan tabel kodetoko_{yymm} ada di WRC
       const [tableCheck] = await wrcPool.query(`SHOW TABLES LIKE 'kodetoko_${yymm}'`);
-      if (!tableCheck || tableCheck.length === 0) {
-        throw new Error(`Tabel WRC kodetoko_${yymm} tidak ditemukan di database cabang ${cabang}. Data periode tersebut kemungkinan sudah diarsipkan/tidak tersedia.`);
-      }
+      const wrcAvailable = Boolean(tableCheck && tableCheck.length > 0);
 
-      // Ambil daftar toko aktif dari kodetoko_{yymm}
-      const pStores = wrcPool.query(
-        `SELECT DISTINCT KODE_TOKO FROM kodetoko_${yymm} WHERE KODE_TOKO IS NOT NULL AND TRIM(KODE_TOKO) != ''`
-      ).then(([rows]) => rows).catch(err => {
-        logger.error(`[auditCompleteness:harian] Gagal query kodetoko_${yymm}: ${err.message}`);
-        throw err;
-      });
+      if (wrcAvailable) {
+        // Ambil daftar toko aktif dari kodetoko_{yymm}
+        const pStores = wrcPool.query(
+          `SELECT DISTINCT KODE_TOKO FROM kodetoko_${yymm} WHERE KODE_TOKO IS NOT NULL AND TRIM(KODE_TOKO) != ''`
+        ).then(([rows]) => rows).catch(err => {
+          logger.error(`[auditCompleteness:harian] Gagal query kodetoko_${yymm}: ${err.message}`);
+          throw err;
+        });
 
-      // Ambil nama toko dari poscabang.mstr_toko_all
-      const pNames = wrcPool.query(
-        `SELECT kode_toko, nama_toko FROM poscabang.mstr_toko_all`
-      ).then(([rows]) => rows).catch(() => []);
+        // Ambil nama toko dari poscabang.mstr_toko_all
+        const pNames = wrcPool.query(
+          `SELECT kode_toko, nama_toko FROM poscabang.mstr_toko_all`
+        ).then(([rows]) => rows).catch(() => []);
 
-      // Ambil tanggal transaksi dari lpm_{yymm}
-      const pLpm = wrcPool.query(
-        `SELECT DISTINCT TOKO, DATE_FORMAT(WDATE, '%Y-%m-%d') as tgl FROM lpm_${yymm} WHERE TOKO IS NOT NULL`
-      ).then(([rows]) => rows).catch(err => {
-        logger.warn(`[auditCompleteness:harian] Gagal/tidak ada lpm_${yymm}: ${err.message}`);
-        return [];
-      });
+        // Ambil tanggal transaksi dari lpm_{yymm}
+        const pLpm = wrcPool.query(
+          `SELECT DISTINCT TOKO, DATE_FORMAT(WDATE, '%Y-%m-%d') as tgl FROM lpm_${yymm} WHERE TOKO IS NOT NULL`
+        ).then(([rows]) => rows).catch(err => {
+          logger.warn(`[auditCompleteness:harian] Gagal/tidak ada lpm_${yymm}: ${err.message}`);
+          return [];
+        });
 
-      // Eksekusi paralel kodetoko, mstr_toko, dan lpm
-      [storeCodesRows, mstrTokoRows, lpmRows] = await Promise.all([
-        pStores, pNames, pLpm
-      ]);
+        // Eksekusi paralel kodetoko, mstr_toko, dan lpm
+        [storeCodesRows, mstrTokoRows, lpmRows] = await Promise.all([
+          pStores, pNames, pLpm
+        ]);
 
-      // Optimasi query mstran: Cari toko yang jumlah harinya < total hari bulan ini di LPM
-      const daysInMonth = dayjs(`${strYear}-${strMonth}-01`).daysInMonth();
-      const lpmStoreCounts = new Map();
-      for (const r of lpmRows) {
-        if (!r.TOKO || !r.tgl) continue;
-        const code = r.TOKO.trim();
-        if (!lpmStoreCounts.has(code)) lpmStoreCounts.set(code, new Set());
-        lpmStoreCounts.get(code).add(r.tgl);
-      }
+        // Optimasi query mstran: Cari toko yang jumlah harinya < total hari bulan ini di LPM
+        const daysInMonth = dayjs(`${strYear}-${strMonth}-01`).daysInMonth();
+        const lpmStoreCounts = new Map();
+        for (const r of lpmRows) {
+          if (!r.TOKO || !r.tgl) continue;
+          const code = r.TOKO.trim();
+          if (!lpmStoreCounts.has(code)) lpmStoreCounts.set(code, new Set());
+          lpmStoreCounts.get(code).add(r.tgl);
+        }
 
-      // Toko yang sudah memiliki tanggal penuh di LPM (misal 31 dari 31 hari) tidak perlu scan mstran
-      const activeCodes = storeCodesRows.map(r => String(r.KODE_TOKO).trim()).filter(Boolean);
-      const candidateStores = activeCodes.filter(k => {
-        const dates = lpmStoreCounts.get(k);
-        return !dates || dates.size < daysInMonth;
-      });
+        // Toko yang sudah memiliki tanggal penuh di LPM (misal 31 dari 31 hari) tidak perlu scan mstran
+        const activeCodes = storeCodesRows.map(r => String(r.KODE_TOKO).trim()).filter(Boolean);
+        const candidateStores = activeCodes.filter(k => {
+          const dates = lpmStoreCounts.get(k);
+          return !dates || dates.size < daysInMonth;
+        });
 
-      // Query mstran_{yymm} secara terarah untuk kandidat toko memanfaatkan index IDX_SHOP
-      if (candidateStores.length > 0) {
-        logger.info(`[auditCompleteness:harian] Memeriksa mstran_${yymm} untuk ${candidateStores.length} toko kandidat (memanfaatkan index)...`);
-        const chunkSize = 150;
-        for (let i = 0; i < candidateStores.length; i += chunkSize) {
-          const chunk = candidateStores.slice(i, i + chunkSize);
-          const inList = chunk.map(s => `'${s.replace(/'/g, "\\'")}'`).join(",");
-          const [mstChunk] = await wrcPool.query(
-            `SELECT DISTINCT SHOP as TOKO, DATE FROM mstran_${yymm} WHERE SHOP IN (${inList})`
-          ).catch(err => {
-            logger.warn(`[auditCompleteness:harian] Gagal query chunk mstran_${yymm}: ${err.message}`);
-            return [[]];
-          });
-          if (Array.isArray(mstChunk)) {
-            mstranRows.push(...mstChunk);
+        // Query mstran_{yymm} secara terarah untuk kandidat toko memanfaatkan index IDX_SHOP
+        if (candidateStores.length > 0) {
+          logger.info(`[auditCompleteness:harian] Memeriksa mstran_${yymm} untuk ${candidateStores.length} toko kandidat (memanfaatkan index)...`);
+          const chunkSize = 150;
+          for (let i = 0; i < candidateStores.length; i += chunkSize) {
+            const chunk = candidateStores.slice(i, i + chunkSize);
+            const inList = chunk.map(s => `'${s.replace(/'/g, "\\'")}'`).join(",");
+            const [mstChunk] = await wrcPool.query(
+              `SELECT DISTINCT SHOP as TOKO, DATE FROM mstran_${yymm} WHERE SHOP IN (${inList})`
+            ).catch(err => {
+              logger.warn(`[auditCompleteness:harian] Gagal query chunk mstran_${yymm}: ${err.message}`);
+              return [[]];
+            });
+            if (Array.isArray(mstChunk)) {
+              mstranRows.push(...mstChunk);
+            }
           }
         }
+      } else {
+        logger.warn(`[auditCompleteness:harian] Tabel WRC kodetoko_${yymm} tidak ditemukan di cabang ${cabang}. Status: TIDAK_DAPAT_DIPERIKSA.`);
       }
 
     } catch (wrcErr) {
@@ -839,6 +975,53 @@ class RekapBackupService {
     } catch (dbErr) {
       logger.warn(`[auditCompleteness:harian] Gagal query ${backupHarianTable}: ${dbErr.message}`);
       backupRows = [];
+    }
+
+    // Jika WRC tidak tersedia untuk periode ini, kembalikan status TIDAK_DAPAT_DIPERIKSA
+    if (storeCodesRows.length === 0) {
+      const storeCodeSet = new Set();
+      for (const r of backupRows) {
+        if (r.kdtk) storeCodeSet.add(r.kdtk.trim());
+      }
+      const sortedCodes = Array.from(storeCodeSet).sort();
+      const storeAuditList = sortedCodes.map(code => ({
+        kdtk: code,
+        nama_toko: code,
+        status: 'TIDAK_DAPAT_DIPERIKSA',
+        total_hari_wrc: 0,
+        total_hari_backup: 0,
+        selisih_hari: 0,
+        missing_dates: [],
+        incomplete_dates: [],
+        valid_dates: [],
+        keterangan: `Tabel WRC kodetoko_${yymm} tidak tersedia di database cabang (tidak dapat diverifikasi)`
+      }));
+
+      const payload = {
+        cabang,
+        periode: formattedPeriode,
+        yymm,
+        type: 'harian',
+        audited_at: dayjs().format("YYYY-MM-DD HH:mm:ss"),
+        summary: {
+          total_toko_wrc: 0,
+          lengkap: 0,
+          kurang_tanggal: 0,
+          tidak_ada: 0,
+          tidak_dapat_diperiksa: storeAuditList.length,
+          status_audit: 'TIDAK_DAPAT_DIPERIKSA',
+          wrc_available: false,
+          message: `Tabel WRC kodetoko_${yymm} tidak ditemukan di database cabang ${cabang}. Data periode ini tidak tersedia di WRC (sudah diarsipkan atau belum terbentuk).`
+        },
+        stores: storeAuditList
+      };
+
+      try {
+        await fs.mkdir(path.dirname(cachePath), { recursive: true });
+        await fs.writeFile(cachePath, JSON.stringify(payload, null, 2), "utf-8");
+      } catch {}
+
+      return payload;
     }
 
     // 3. Olah Ground Truth WRC

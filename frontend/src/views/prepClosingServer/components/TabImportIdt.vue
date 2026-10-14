@@ -115,11 +115,12 @@ import * as api from '@/services/ceklistPrepClosing.service.js';
 
 
 const props = defineProps({
-  rows:    { type: Array, default: () => [] },
-  loading: { type: Boolean, default: false },
-  periode: { type: String, default: '' },
-  panduan: { type: Object, default: () => ({}) },
-  cabangs: { type: Array,  default: () => [] },
+  rows:      { type: Array, default: () => [] },
+  loading:   { type: Boolean, default: false },
+  periode:   { type: String, default: '' },
+  panduan:   { type: Object, default: () => ({}) },
+  cabangs:   { type: Array,  default: () => [] },
+  onRefresh: { type: Function, default: null },
 });
 const emit = defineEmits(['delete', 'refresh']);
 const toast = useToast();
@@ -133,6 +134,9 @@ async function handleInit() {
     const res = await api.initImportIdt(props.periode);
     toast.add({ severity: 'success', summary: 'Init Selesai',
       detail: `Dibuat ${res.created} record dari ${res.total} cabang`, life: 4000 });
+    if (props.onRefresh) {
+      await props.onRefresh();
+    }
     emit('refresh');
   } catch (e) {
     toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 4000 });
@@ -166,6 +170,9 @@ async function saveText() {
     await api.upsertImportIdt({ kdcab: form.kdcab, periode: props.periode, capture: form.capture || null });
     editDlgVisible.value = false;
     toast.add({ severity: 'success', summary: 'Sukses', detail: 'Data tersimpan', life: 3000 });
+    if (props.onRefresh) {
+      await props.onRefresh();
+    }
     emit('refresh');
   } catch (e) { toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 4000 }); }
   finally { saving.value = false; }
@@ -199,6 +206,9 @@ async function doUpload() {
     await api.uploadCapture(fd, uploadTarget.value.KDCAB, props.periode);
     closeUpload();
     toast.add({ severity: 'success', summary: 'Upload Berhasil', detail: 'Gambar capture disimpan', life: 3000 });
+    if (props.onRefresh) {
+      await props.onRefresh();
+    }
     emit('refresh');
   } catch (e) { toast.add({ severity: 'error', summary: 'Error Upload', detail: e.message, life: 4000 }); }
   finally { uploading.value = false; }

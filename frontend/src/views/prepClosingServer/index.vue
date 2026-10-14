@@ -113,6 +113,7 @@
             :periode="filters.periode"
             :panduan="panduanMap"
             :cabangs="cabangs"
+            :on-refresh="loadAll"
             @refresh="loadAll"
             @delete="(row) => askDelete('hdd', row)" />
         </TabPanel>
@@ -129,6 +130,7 @@
             :periode="filters.periode"
             :panduan="panduanMap"
             :cabangs="cabangs"
+            :on-refresh="loadAll"
             @refresh="loadAll"
             @delete="(row) => askDelete('tampung', row)" />
         </TabPanel>
@@ -144,6 +146,7 @@
             :periode="filters.periode"
             :panduan="panduanMap"
             :cabangs="cabangs"
+            :on-refresh="loadAll"
             @refresh="loadAll"
             @delete="(row) => askDelete('idt', row)" />
         </TabPanel>

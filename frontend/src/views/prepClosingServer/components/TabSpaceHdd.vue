@@ -183,11 +183,12 @@ import Tag from 'primevue/tag';
 import * as api from '@/services/ceklistPrepClosing.service.js';
 
 const props = defineProps({
-  rows:    { type: Array, default: () => [] },
-  loading: { type: Boolean, default: false },
-  periode: { type: String, default: '' },
-  panduan: { type: Object, default: () => ({}) },
-  cabangs: { type: Array,  default: () => [] },
+  rows:      { type: Array, default: () => [] },
+  loading:   { type: Boolean, default: false },
+  periode:   { type: String, default: '' },
+  panduan:   { type: Object, default: () => ({}) },
+  cabangs:   { type: Array,  default: () => [] },
+  onRefresh: { type: Function, default: null },
 });
 const emit = defineEmits(['delete', 'refresh']);
 
@@ -242,6 +243,9 @@ async function doUpload() {
     capturePath.value = res.captureUrl;
     captureFile.value = null;
     toast.add({ severity: 'success', summary: 'Upload Berhasil', detail: 'Gambar capture disimpan', life: 3000 });
+    if (props.onRefresh) {
+      await props.onRefresh();
+    }
     emit('refresh');
   } catch (e) {
     toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 4000 });
@@ -256,6 +260,9 @@ async function handleInit() {
     const res = await api.initSpaceHdd(props.periode);
     toast.add({ severity: 'success', summary: 'Init Selesai',
       detail: `Dibuat ${res.created} record baru dari total ${res.total} cabang`, life: 4000 });
+    if (props.onRefresh) {
+      await props.onRefresh();
+    }
     emit('refresh');
   } catch (e) {
     toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 4000 });
@@ -292,6 +299,9 @@ async function save() {
     });
     dlgVisible.value = false;
     toast.add({ severity: 'success', summary: 'Sukses', detail: 'Data tersimpan', life: 3000 });
+    if (props.onRefresh) {
+      await props.onRefresh();
+    }
     emit('refresh');
   } catch (e) {
     toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 4000 });

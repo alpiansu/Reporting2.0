@@ -440,6 +440,7 @@
                 v-tooltip.top="'Muat ulang data audit dari cache lokal / database'"
                 :loading="auditLoading"
                 @click="runAudit(false)"
+                style="margin-right: 0.5rem;"
               />
               <Button
                 icon="pi pi-sync"
@@ -448,6 +449,7 @@
                 v-tooltip.top="'Jalankan audit ulang segar langsung ke database WRC cabang'"
                 :loading="auditLoading"
                 @click="runAudit(true)"
+                style="margin-right: 0.5rem;"
               />
               <Button
                 icon="pi pi-file-excel"

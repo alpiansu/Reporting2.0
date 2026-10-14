@@ -205,7 +205,7 @@ class SshStorageService {
 
     logger.info(`[ssh_storage.service] checkStorage kdcab=${kdcab} periode=${periode} targetPath=${targetPath || "(default)"}`);
 
-    const panduan = await ceklistPanduanService.getOne(kdcab);
+    const panduan = await (ceklistPanduanService.getByKdcab ? ceklistPanduanService.getByKdcab(kdcab) : ceklistPanduanService.getOne(kdcab));
     if (!panduan) {
       throw new Error(`Data panduan untuk cabang ${kdcab} tidak ditemukan.`);
     }
@@ -335,7 +335,7 @@ class SshStorageService {
   async listMounts(kdcab) {
     if (!kdcab) throw new Error("kdcab wajib diisi");
 
-    const panduan = await ceklistPanduanService.getOne(kdcab);
+    const panduan = await (ceklistPanduanService.getByKdcab ? ceklistPanduanService.getByKdcab(kdcab) : ceklistPanduanService.getOne(kdcab));
     if (!panduan) throw new Error(`Data panduan untuk cabang ${kdcab} tidak ditemukan.`);
 
     const isSsh = String(panduan.REMOTE_BULANAN || "").toUpperCase().includes("SSH") ||

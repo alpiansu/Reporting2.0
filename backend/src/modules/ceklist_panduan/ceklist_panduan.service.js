@@ -192,6 +192,10 @@ class CeklistPanduanService {
     return row ? (row.dataValues ?? row) : null;
   }
 
+  async getOne(kdcab) {
+    return this.getByKdcab(kdcab);
+  }
+
   /**
    * Peta panduan { KDCAB: row } untuk backfill/autofill di modul ceklist.
    */

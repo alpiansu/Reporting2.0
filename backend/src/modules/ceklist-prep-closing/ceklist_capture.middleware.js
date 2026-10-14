@@ -6,14 +6,9 @@
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { fileURLToPath } from "url";
-import { dirname } from "path";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 // Base upload directory
-const BASE_UPLOAD_DIR = path.join(__dirname, "../../../public/uploads/ceklist-capture");
+const BASE_UPLOAD_DIR = path.resolve(process.cwd(), "public/uploads/ceklist-capture");
 
 // Ensure base directory exists at module load
 if (!fs.existsSync(BASE_UPLOAD_DIR)) {

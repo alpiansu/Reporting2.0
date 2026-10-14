@@ -18,10 +18,8 @@ import importIdtService from "./import_idt.service.js";
 import rekapScreeningService from "./rekap_screening.service.js";
 import { getPreviousPeriode } from "./space_hdd.service.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname  = dirname(__filename);
-// public/ is at: backend/public/ → relative to this file: ../../../../public
-const PUBLIC_DIR = path.join(__dirname, "../../../../public");
+// public/ is at: backend/public/
+const PUBLIC_DIR = path.resolve(process.cwd(), "public");
 
 // ─── Style helpers ────────────────────────────────────────────────────────────
 

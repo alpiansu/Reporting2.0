@@ -255,3 +255,55 @@ describe("RekapScreeningService", () => {
     expect(row).toHaveProperty("vir_disc05_check");
   });
 });
+
+describe("CeklistPrepClosingService.initSpaceHdd (Auto-SSH Integration)", () => {
+  let ceklistPrepClosingService;
+  let spaceHddService;
+  let sshStorageService;
+
+  beforeAll(async () => {
+    const mod = await import("../modules/ceklist-prep-closing/ceklist_prep_closing.service.js");
+    ceklistPrepClosingService = mod.default;
+    const spaceHddMod = await import("../modules/ceklist-prep-closing/services/space_hdd.service.js");
+    spaceHddService = spaceHddMod.default;
+    const sshMod = await import("../modules/ceklist-prep-closing/services/ssh_storage.service.js");
+    sshStorageService = sshMod.default;
+  });
+
+  test("creates skeleton and automatically executes batch SSH check", async () => {
+    jest.spyOn(spaceHddService, "getBulkTemplate").mockResolvedValueOnce({ created: 2, existing: 0, total: 2 });
+    jest.spyOn(sshStorageService, "checkBatchStorage").mockResolvedValueOnce({
+      total: 2,
+      successCount: 2,
+      failedCount: 0,
+      results: [],
+    });
+
+    const result = await ceklistPrepClosingService.initSpaceHdd("2410");
+
+    expect(result.created).toBe(2);
+    expect(result.total).toBe(2);
+    expect(result.ssh).toEqual(
+      expect.objectContaining({
+        total: 2,
+        successCount: 2,
+        failedCount: 0,
+      })
+    );
+  });
+
+  test("handles SSH check failure gracefully without failing skeleton initialization", async () => {
+    jest.spyOn(spaceHddService, "getBulkTemplate").mockResolvedValueOnce({ created: 2, existing: 0, total: 2 });
+    jest.spyOn(sshStorageService, "checkBatchStorage").mockRejectedValueOnce(new Error("Network timeout"));
+
+    const result = await ceklistPrepClosingService.initSpaceHdd("2410");
+
+    expect(result.created).toBe(2);
+    expect(result.ssh).toEqual(
+      expect.objectContaining({
+        error: "Network timeout",
+      })
+    );
+  });
+});
+

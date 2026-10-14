@@ -3,10 +3,10 @@
     <div class="tab-toolbar">
       <Button icon="pi pi-bolt" label="Init Semua Cabang" class="p-button-warning p-button-sm mr-2"
         :loading="initLoading" :disabled="!periode" @click="handleInit"
-        v-tooltip.top="'Generate skeleton record untuk semua INDUK cabang'" />
+        v-tooltip.top="'Generate skeleton record & otomatis cek sisa storage SSH server Linux'" style="margin-right: 0.5rem;" />
       <Button icon="pi pi-server" label="Cek SSH Semua Linux" class="p-button-help p-button-sm mr-2"
         :loading="batchLoading" :disabled="!periode || loading" @click="handleBatchSsh"
-        v-tooltip.top="'Cek sisa storage via SSH otomatis untuk semua cabang Linux'" />
+        v-tooltip.top="'Cek sisa storage via SSH otomatis untuk semua cabang Linux'" style="margin-right: 0.5rem;" />
       <Button icon="pi pi-plus" label="Tambah Data" class="p-button-primary p-button-sm"
         :disabled="!periode" @click="openDialog(null)" />
     </div>
@@ -362,8 +362,16 @@ async function handleInit() {
   initLoading.value = true;
   try {
     const res = await api.initSpaceHdd(props.periode);
-    toast.add({ severity: 'success', summary: 'Init Selesai',
-      detail: `Dibuat ${res.created} record baru dari total ${res.total} cabang`, life: 4000 });
+    let detailMsg = `Dibuat ${res.created} record baru dari total ${res.total} cabang.`;
+    if (res.ssh && res.ssh.total > 0) {
+      detailMsg += ` SSH Linux: ${res.ssh.successCount} berhasil, ${res.ssh.failedCount} gagal.`;
+    }
+    toast.add({
+      severity: res.ssh?.failedCount > 0 ? 'warn' : 'success',
+      summary: 'Init & Cek SSH Selesai',
+      detail: detailMsg,
+      life: 5000,
+    });
     if (props.onRefresh) {
       await props.onRefresh();
     }

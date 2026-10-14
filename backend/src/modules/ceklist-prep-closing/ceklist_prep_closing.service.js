@@ -26,7 +26,22 @@ class CeklistPrepClosingService {
   }
 
   async initSpaceHdd(periode) {
-    return spaceHddService.getBulkTemplate(periode);
+    const templateResult = await spaceHddService.getBulkTemplate(periode);
+
+    // Otomatis lakukan pengecekan sisa storage via SSH untuk seluruh server Linux
+    let sshResult = null;
+    try {
+      sshResult = await sshStorageService.checkBatchStorage(periode);
+      logger.info(`[ceklist_prep_closing] initSpaceHdd auto-SSH check completed: ${sshResult.successCount} success, ${sshResult.failedCount} failed`);
+    } catch (err) {
+      logger.warn(`[ceklist_prep_closing] initSpaceHdd auto-SSH check failed: ${err.message}`);
+      sshResult = { total: 0, successCount: 0, failedCount: 0, error: err.message };
+    }
+
+    return {
+      ...templateResult,
+      ssh: sshResult,
+    };
   }
 
   async getSpaceHddHistory(kdcab) {

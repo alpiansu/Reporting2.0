@@ -3,7 +3,7 @@
     <div class="tab-toolbar">
       <Button icon="pi pi-bolt" label="Init Semua Cabang" class="p-button-warning p-button-sm mr-2"
         :loading="initLoading" :disabled="!periode" @click="handleInit"
-        v-tooltip.top="'Generate skeleton untuk semua INDUK cabang'" />
+        v-tooltip.top="'Generate skeleton untuk semua INDUK cabang'" style="margin-right: 0.5rem;" />
       <Button icon="pi pi-plus" label="Tambah Manual" class="p-button-primary p-button-sm"
         :disabled="!periode" @click="openCaptureDialog(null)" />
     </div>

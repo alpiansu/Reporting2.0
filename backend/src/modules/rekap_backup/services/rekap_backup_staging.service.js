@@ -1,6 +1,7 @@
 import fs from "fs/promises";
 // createWriteStream tidak lagi dipakai setelah refactor ke JSON.stringify
 import path from "path";
+import { fileURLToPath } from "url";
 import logger from "../../../config/logger.js";
 import lockfile from "proper-lockfile";
 import config from "../../../config/index.js";
@@ -9,6 +10,10 @@ import WrcService from "../../../services/wrc.service.js";
 
 const { resilientDb } = config;
 const wrcService = new WrcService();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const DEFAULT_DATA_DIR = path.resolve(__dirname, "../../../../data/rekap_backup");
 
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc.js";
@@ -38,7 +43,7 @@ function normalizeRecord(record) {
 
 class RekapBackupStagingService {
   constructor() {
-    this.dataDir = path.join(process.cwd(), "data", "rekap_backup");
+    this.dataDir = process.env.REKAP_BACKUP_DATA_DIR || DEFAULT_DATA_DIR;
     this.memoryCacheHarian = new Map();
     this.memoryCacheBulanan = new Map();
     this.memoryCacheSummary = null;

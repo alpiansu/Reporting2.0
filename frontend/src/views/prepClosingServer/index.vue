@@ -181,8 +181,6 @@
           <Button label="Hapus" icon="pi pi-trash" class="p-button-danger" @click="runDelete" />
         </template>
       </Dialog>
-
-      <Toast />
     </div>
   </div>
 </template>
@@ -198,7 +196,6 @@ import TabView from 'primevue/tabview';
 import TabPanel from 'primevue/tabpanel';
 import Badge from 'primevue/badge';
 import Dialog from 'primevue/dialog';
-import Toast from 'primevue/toast';
 
 import TabSpaceHdd from './components/TabSpaceHdd.vue';
 import TabSpaceTampung from './components/TabSpaceTampung.vue';

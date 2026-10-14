@@ -58,6 +58,16 @@ export const uploadCaptureHdd = (formData, kdcab, periode) =>
     headers: { 'Content-Type': 'multipart/form-data' },
   }).then(unwrap);
 
+export const checkSshStorage = body =>
+  api.post(`${BASE_URL}/space-hdd/check-ssh`, body).then(unwrap);
+
+export const checkBatchSshStorage = periode =>
+  api.post(`${BASE_URL}/space-hdd/check-ssh-batch`, { periode }).then(unwrap);
+
+export const listSshMounts = kdcab =>
+  api.get(`${BASE_URL}/space-hdd/ssh-mounts`, { params: { kdcab } }).then(unwrap);
+
+
 // Space HDD Tampung
 export const getSpaceTampung = params =>
   api.get(`${BASE_URL}/space-tampung`, { params: normalizeParams(params) }).then(unwrap);

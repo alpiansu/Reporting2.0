@@ -96,6 +96,62 @@ export const uploadCaptureSpaceHdd = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/ceklist-prep-closing/space-hdd/check-ssh
+ * Body: { kdcab, periode, targetPath }
+ */
+export const checkSshStorage = async (req, res) => {
+  try {
+    const { kdcab, periode, targetPath } = req.body;
+    if (!kdcab || !periode) {
+      return apiResponse.badRequest(res, "kdcab dan periode wajib diisi");
+    }
+    logger.info(`[ceklist_prep_closing.controller] checkSshStorage kdcab=${kdcab} periode=${periode}`);
+    const result = await ceklistPrepClosingService.checkSshStorage({ kdcab, periode, targetPath });
+    return apiResponse.success(res, result);
+  } catch (error) {
+    logger.error(`[ceklist_prep_closing.controller] checkSshStorage error: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+/**
+ * POST /api/ceklist-prep-closing/space-hdd/check-ssh-batch
+ * Body: { periode }
+ */
+export const checkBatchSshStorage = async (req, res) => {
+  try {
+    const { periode } = req.body;
+    if (!periode) {
+      return apiResponse.badRequest(res, "periode wajib diisi");
+    }
+    logger.info(`[ceklist_prep_closing.controller] checkBatchSshStorage periode=${periode}`);
+    const result = await ceklistPrepClosingService.checkBatchSshStorage(periode);
+    return apiResponse.success(res, result);
+  } catch (error) {
+    logger.error(`[ceklist_prep_closing.controller] checkBatchSshStorage error: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
+/**
+ * GET /api/ceklist-prep-closing/space-hdd/ssh-mounts?kdcab=
+ */
+export const listSshMounts = async (req, res) => {
+  try {
+    const { kdcab } = req.query;
+    if (!kdcab) {
+      return apiResponse.badRequest(res, "kdcab wajib diisi");
+    }
+    logger.info(`[ceklist_prep_closing.controller] listSshMounts kdcab=${kdcab}`);
+    const result = await ceklistPrepClosingService.listSshMounts(kdcab);
+    return apiResponse.success(res, result);
+  } catch (error) {
+    logger.error(`[ceklist_prep_closing.controller] listSshMounts error: ${error.message}`);
+    return apiResponse.error(res, error.message);
+  }
+};
+
 // ─── Space HDD Tampung ────────────────────────────────────────────────────────
 
 /**

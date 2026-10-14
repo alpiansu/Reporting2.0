@@ -4,6 +4,9 @@
       <Button icon="pi pi-bolt" label="Init Semua Cabang" class="p-button-warning p-button-sm mr-2"
         :loading="initLoading" :disabled="!periode" @click="handleInit"
         v-tooltip.top="'Generate skeleton record untuk semua INDUK cabang'" />
+      <Button icon="pi pi-server" label="Cek SSH Semua Linux" class="p-button-help p-button-sm mr-2"
+        :loading="batchLoading" :disabled="!periode || loading" @click="handleBatchSsh"
+        v-tooltip.top="'Cek sisa storage via SSH otomatis untuk semua cabang Linux'" />
       <Button icon="pi pi-plus" label="Tambah Data" class="p-button-primary p-button-sm"
         :disabled="!periode" @click="openDialog(null)" />
     </div>
@@ -82,9 +85,14 @@
           <i v-else class="pi pi-image" style="font-size:1.4rem;color:var(--text-color-secondary)" />
         </template>
       </Column>
-      <Column header="Aksi" style="width:90px">
+      <Column header="Aksi" style="width:125px">
         <template #body="{ data }">
           <div class="row-actions">
+            <Button v-if="isLinux(data)" icon="pi pi-server" class="p-button-text p-button-sm p-button-success"
+              :loading="checkingKdcab === data.KDCAB"
+              v-tooltip.top="'Cek Storage SSH (Buka Opsi / Eksekusi)'" @click="openSshDialog(data)" />
+            <Button v-else icon="pi pi-server" class="p-button-text p-button-sm p-button-secondary opacity-40 cursor-not-allowed"
+              disabled v-tooltip.top="'Khusus server Linux (Windows cek manual)'" />
             <Button icon="pi pi-pencil" class="p-button-text p-button-sm p-button-info"
               v-tooltip.top="'Edit'" @click="openDialog(data)" />
             <Button icon="pi pi-trash" class="p-button-text p-button-sm p-button-danger"
@@ -163,6 +171,84 @@
 
     <!-- Image Preview Dialog -->
     <ImagePreviewDialog v-model:visible="previewVisible" :src="previewSrc" title="Capture" />
+
+    <!-- SSH Dynamic Check Dialog -->
+    <Dialog v-model:visible="sshDlgVisible"
+      :header="`Cek Storage SSH: ${formatCode(sshTarget.kdcab)} - ${panduan[sshTarget.kdcab]?.NAMACAB || ''}`"
+      modal class="ceklist-dialog" :style="{ width: '560px' }">
+      <div class="ssh-dialog-content">
+        <!-- Server Details Summary -->
+        <div class="ssh-server-summary mb-3 p-3 surface-50 border-round">
+          <div class="grid text-sm">
+            <div class="col-6"><strong>IP Server:</strong> <code>{{ sshTarget.ip || '—' }}</code></div>
+            <div class="col-6"><strong>User:</strong> <code>{{ sshTarget.user || 'root' }}</code></div>
+            <div class="col-12 mt-1" v-if="sshTarget.hddCheck">
+              <strong>Panduan:</strong> <span class="text-color-secondary">{{ sshTarget.hddCheck }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Target Mount Path configuration -->
+        <div class="form-field mb-3">
+          <label class="block font-medium mb-1">
+            Target Mount Path / Partisi
+            <span class="text-color-secondary font-normal text-xs">(Dapat diubah dinamis)</span>
+          </label>
+          <div class="flex gap-2">
+            <InputText v-model="sshTarget.path" placeholder="Default / auto-detect (cth: /home atau /)" class="flex-1" />
+            <Button icon="pi pi-search" label="Deteksi Mount" class="p-button-outlined p-button-secondary p-button-sm"
+              :loading="detectingMounts" @click="handleDetectMounts" v-tooltip.top="'Ambil daftar mount point langsung dari server via SSH'" />
+          </div>
+          <small class="text-color-secondary block mt-1">
+            Bila dikosongkan, sistem otomatis menggunakan target dari panduan atau partisi utama (/home / /).
+          </small>
+        </div>
+
+        <!-- Detected Mounts Selection -->
+        <div v-if="detectedMounts.length > 0" class="detected-mounts mb-3">
+          <label class="block font-medium text-xs mb-1 text-color-secondary">Pilih Mount Point yang Terdeteksi:</label>
+          <div class="flex flex-wrap gap-2">
+            <span v-for="m in detectedMounts" :key="m.mounted"
+              class="mount-chip cursor-pointer"
+              :class="{ 'mount-chip-active': sshTarget.path === m.mounted }"
+              @click="sshTarget.path = m.mounted">
+              <i class="pi pi-folder mr-1"></i>
+              <strong>{{ m.mounted }}</strong>
+              <span class="ml-1 text-xs text-color-secondary">({{ (m.available / 1024).toFixed(1) }} GB free)</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- Check Result Box -->
+        <div v-if="sshCheckResult" class="ssh-result-card p-3 border-round mb-2"
+          :class="sshCheckResult.success ? 'bg-green-50 border-1 border-green-200' : 'bg-red-50 border-1 border-red-200'">
+          <div class="flex align-items-center mb-2">
+            <i :class="sshCheckResult.success ? 'pi pi-check-circle text-green-600' : 'pi pi-times-circle text-red-600'" class="mr-2 text-lg"></i>
+            <strong :class="sshCheckResult.success ? 'text-green-800' : 'text-red-800'">
+              {{ sshCheckResult.success ? 'Hasil Pengecekan Berhasil Disimpan ke Database' : 'Gagal Mengecek Storage' }}
+            </strong>
+          </div>
+          <div v-if="sshCheckResult.success" class="text-sm">
+            <div><strong>Free Space:</strong> <span class="font-bold text-green-700 font-mono">{{ sshCheckResult.freeSpace }}</span></div>
+            <div><strong>Target Path:</strong> <code>{{ sshCheckResult.targetPath }}</code> (Mount: <code>{{ sshCheckResult.matchedMount }}</code>)</div>
+            <div v-if="sshCheckResult.details" class="text-xs text-color-secondary mt-1">
+              Total: {{ (sshCheckResult.details.sizeMb / 1024).toFixed(1) }} GB |
+              Terpakai: {{ (sshCheckResult.details.usedMb / 1024).toFixed(1) }} GB ({{ sshCheckResult.details.usePercent }}) |
+              Filesystem: {{ sshCheckResult.details.filesystem }}
+            </div>
+          </div>
+          <div v-else class="text-sm text-red-700">
+            {{ sshCheckResult.error }}
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <Button label="Tutup" icon="pi pi-times" class="p-button-text" @click="sshDlgVisible = false" />
+        <Button label="Cek Sekarang & Simpan" icon="pi pi-server" class="p-button-success"
+          :loading="sshChecking" @click="executeSingleSsh" />
+      </template>
+    </Dialog>
   </div>
 </template>
 
@@ -204,6 +290,24 @@ const fileInput = ref(null);
 const previewVisible = ref(false);
 const previewSrc = ref('');
 const form = reactive({ kdcab: '', ip: '', freeSpace: '', os: 'WINDOWS', tglCheck: null, fu: '', freeAfter: '' });
+
+// ─── SSH Storage Checking State ───────────────────────────────────────────────
+const checkingKdcab = ref(null);
+const batchLoading = ref(false);
+const sshDlgVisible = ref(false);
+const sshChecking = ref(false);
+const detectingMounts = ref(false);
+const detectedMounts = ref([]);
+const sshCheckResult = ref(null);
+
+const sshTarget = reactive({
+  kdcab: '',
+  ip: '',
+  user: '',
+  hddCheck: '',
+  path: '',
+});
+
 
 // Cabang yang sudah punya record pada periode ini → tidak boleh ditambah dua kali
 const existingKdcabs = computed(() => new Set(props.rows.map(r => r.KDCAB)));
@@ -306,6 +410,116 @@ async function save() {
   } catch (e) {
     toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 4000 });
   } finally { saving.value = false; }
+}
+
+// ─── SSH Storage Methods ──────────────────────────────────────────────────────
+function isLinux(data) {
+  if (!data) return false;
+  const p = props.panduan[data.KDCAB];
+  const pOs = String(p?.OS || '').toUpperCase();
+  const pRemote = String(p?.REMOTE_BULANAN || '').toUpperCase();
+  const dataOs = String(data.OS || '').toUpperCase();
+  return dataOs === 'LINUX' || pOs === 'LINUX' || pRemote === 'SSH';
+}
+
+function openSshDialog(data) {
+  const p = props.panduan[data.KDCAB] || {};
+  sshTarget.kdcab = data.KDCAB;
+  sshTarget.ip = data.IP || p.IP_BULANAN || '';
+  sshTarget.user = p.USER_BULANAN || 'root';
+  sshTarget.hddCheck = p.HDD_CHECK || '';
+
+  // Extract default target path from panduan HDD_CHECK if present
+  const match = (p.HDD_CHECK || '').match(/(?:df\s+(?:-[a-zA-Z]+\s+)?|partisi\s+)([\/\w\-_]+)/i);
+  sshTarget.path = match ? match[1] : '';
+
+  detectedMounts.value = [];
+  sshCheckResult.value = null;
+  sshDlgVisible.value = true;
+}
+
+async function handleDetectMounts() {
+  if (!sshTarget.kdcab) return;
+  detectingMounts.value = true;
+  try {
+    const res = await api.listSshMounts(sshTarget.kdcab);
+    detectedMounts.value = res.mounts || [];
+    if (detectedMounts.value.length === 0) {
+      toast.add({ severity: 'warn', summary: 'Deteksi Mount', detail: 'Tidak ada mount point terdeteksi', life: 3000 });
+    } else {
+      toast.add({ severity: 'info', summary: 'Deteksi Mount', detail: `Ditemukan ${detectedMounts.value.length} mount point di server`, life: 3000 });
+    }
+  } catch (err) {
+    toast.add({ severity: 'error', summary: 'Deteksi Gagal', detail: err.message, life: 4000 });
+  } finally {
+    detectingMounts.value = false;
+  }
+}
+
+async function executeSingleSsh() {
+  if (!sshTarget.kdcab || !props.periode) return;
+  sshChecking.value = true;
+  checkingKdcab.value = sshTarget.kdcab;
+  try {
+    const res = await api.checkSshStorage({
+      kdcab: sshTarget.kdcab,
+      periode: props.periode,
+      targetPath: sshTarget.path?.trim() || undefined,
+    });
+    sshCheckResult.value = res;
+    toast.add({
+      severity: 'success',
+      summary: 'SSH Berhasil',
+      detail: `Free Space: ${res.freeSpace} (${res.targetPath}) tersimpan ke database`,
+      life: 4000,
+    });
+    if (props.onRefresh) {
+      await props.onRefresh();
+    }
+    emit('refresh');
+  } catch (err) {
+    sshCheckResult.value = { success: false, error: err.message };
+    toast.add({ severity: 'error', summary: 'SSH Gagal', detail: err.message, life: 5000 });
+  } finally {
+    sshChecking.value = false;
+    checkingKdcab.value = null;
+  }
+}
+
+async function handleBatchSsh() {
+  if (!props.periode) return;
+  const proceed = window.confirm(
+    `Jalankan pengecekan sisa storage via SSH untuk semua cabang Linux pada periode ${props.periode}?`
+  );
+  if (!proceed) return;
+  batchLoading.value = true;
+  try {
+    const res = await api.checkBatchSshStorage(props.periode);
+    const s = res.summary || { total: 0, success: 0, failed: 0 };
+    if (s.failed === 0) {
+      toast.add({
+        severity: 'success',
+        summary: 'Batch SSH Sukses',
+        detail: `Semua ${s.success} cabang Linux berhasil dicek dan diupdate ke DB`,
+        life: 4000,
+      });
+    } else {
+      toast.add({
+        severity: 'warn',
+        summary: 'Batch SSH Selesai',
+        detail: `${s.success} berhasil, ${s.failed} gagal dari total ${s.total} cabang`,
+        life: 5000,
+      });
+    }
+    if (props.onRefresh) {
+      await props.onRefresh();
+    }
+    emit('refresh');
+  } catch (err) {
+    toast.add({ severity: 'error', summary: 'Batch SSH Gagal', detail: err.message, life: 5000 });
+  } finally {
+    batchLoading.value = false;
+  }
 }
 
 function formatCode(val) {

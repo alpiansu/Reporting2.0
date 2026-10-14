@@ -8,3 +8,25 @@
 }
 .capture-upload-actions { display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start; }
 .capture-filename { font-size: 0.78rem; color: var(--text-color-secondary); word-break: break-all; max-width: 200px; }
+
+.mount-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  background: var(--surface-100, #f1f3f5);
+  border: 1px solid var(--surface-300, #ced4da);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  transition: all 0.2s;
+}
+.mount-chip:hover {
+  background: var(--surface-200, #e9ecef);
+  border-color: var(--primary-color, #2196f3);
+}
+.mount-chip-active {
+  background: #e3f2fd !important;
+  border-color: #2196f3 !important;
+  color: #0d47a1 !important;
+  font-weight: 600;
+}
+

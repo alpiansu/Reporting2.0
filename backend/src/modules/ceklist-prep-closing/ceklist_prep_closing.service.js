@@ -8,6 +8,7 @@ import spaceTampungService from "./services/space_tampung.service.js";
 import importIdtService from "./services/import_idt.service.js";
 import rekapScreeningService from "./services/rekap_screening.service.js";
 import excelExportService from "./services/excel_export.service.js";
+import sshStorageService from "./services/ssh_storage.service.js";
 
 class CeklistPrepClosingService {
   // ─── Space HDD Bulanan ───────────────────────────────────────────────────
@@ -30,6 +31,18 @@ class CeklistPrepClosingService {
 
   async getSpaceHddHistory(kdcab) {
     return spaceHddService.getHistory(kdcab);
+  }
+
+  async checkSshStorage({ kdcab, periode, targetPath }) {
+    return sshStorageService.checkStorage({ kdcab, periode, targetPath });
+  }
+
+  async checkBatchSshStorage(periode) {
+    return sshStorageService.checkBatchStorage(periode);
+  }
+
+  async listSshMounts(kdcab) {
+    return sshStorageService.listMounts(kdcab);
   }
 
   // ─── Space HDD Tampung ───────────────────────────────────────────────────

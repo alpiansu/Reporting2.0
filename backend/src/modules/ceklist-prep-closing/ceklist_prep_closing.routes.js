@@ -14,12 +14,15 @@ const hddUpload     = createCaptureUpload("space-hdd");
 const tampungUpload = createCaptureUpload("space-tampung");
 
 // ─── Space HDD Bulanan ────────────────────────────────────────────────────────
-router.get("/space-hdd",         ceklistController.getSpaceHdd);
-router.post("/space-hdd",        ceklistController.upsertSpaceHdd);
-router.put("/space-hdd",         ceklistController.upsertSpaceHdd);
-router.delete("/space-hdd",      ceklistController.deleteSpaceHdd);
-router.post("/space-hdd/init",   ceklistController.initSpaceHdd);
-router.post("/space-hdd/upload", hddUpload.single("capture"), ceklistController.uploadCaptureSpaceHdd);
+router.get("/space-hdd",                 ceklistController.getSpaceHdd);
+router.post("/space-hdd",                ceklistController.upsertSpaceHdd);
+router.put("/space-hdd",                 ceklistController.upsertSpaceHdd);
+router.delete("/space-hdd",              ceklistController.deleteSpaceHdd);
+router.post("/space-hdd/init",           ceklistController.initSpaceHdd);
+router.post("/space-hdd/upload",         hddUpload.single("capture"), ceklistController.uploadCaptureSpaceHdd);
+router.post("/space-hdd/check-ssh",       ceklistController.checkSshStorage);
+router.post("/space-hdd/check-ssh-batch", ceklistController.checkBatchSshStorage);
+router.get("/space-hdd/ssh-mounts",      ceklistController.listSshMounts);
 
 // ─── Space HDD Tampung ────────────────────────────────────────────────────────
 router.get("/space-tampung",         ceklistController.getSpaceTampung);

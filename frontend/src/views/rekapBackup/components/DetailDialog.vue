@@ -82,7 +82,7 @@
             <div class="audit-card audit-card--tidakada">
               <div class="audit-card__icon"><i class="pi pi-clock"></i></div>
               <div class="audit-card__body">
-                <span class="audit-card__label">Belum Diaudit / WRC N/A</span>
+                <span class="audit-card__label">Belum Diaudit / Tidak Bisa Dicek</span>
                 <span class="audit-card__val">{{ formatNumber(resumeBelumAuditCount) }}</span>
               </div>
             </div>
@@ -168,13 +168,13 @@
             </Column>
 
             <!-- Status Audit WRC -->
-            <Column field="audit_status" header="Status Audit WRC" sortable style="width: 170px; text-align: center;">
+            <Column field="audit_status" header="Status Audit WRC" sortable style="width: 175px; text-align: center;">
               <template #body="{ data }">
                 <Tag
                   :severity="data.audit_severity || 'secondary'"
                   :value="data.audit_label || 'Belum Diaudit'"
                   :icon="data.audit_status === 'LENGKAP' ? 'pi pi-check' : (data.audit_status === 'BERMASALAH' ? 'pi pi-exclamation-triangle' : (data.audit_status === 'TIDAK_DAPAT_DIPERIKSA' ? 'pi pi-question-circle' : 'pi pi-shield'))"
-                  style="cursor: pointer; min-width: 115px; justify-content: center;"
+                  :style="getAuditTagStyle(data)"
                   v-tooltip.top="data.audit_status === 'BELUM_AUDIT' ? 'Klik untuk verifikasi kelengkapan data vs WRC' : 'Klik untuk melihat rincian hasil audit'"
                   @click="openAudit(data.periode)"
                 />
@@ -882,6 +882,63 @@ const getStatusSeverity = (stat) => {
   if (s === 'ok' || s === '1' || s === 'success') return 'success';
   if (s === 'pending' || s === 'process') return 'warning';
   return 'danger';
+};
+
+const getAuditTagStyle = (data) => {
+  const baseStyle = {
+    cursor: 'pointer',
+    minWidth: '120px',
+    justifyContent: 'center',
+    transition: 'all 0.2s ease',
+  };
+
+  if (data.audit_status !== 'BERMASALAH') {
+    return baseStyle;
+  }
+
+  const defects = Number(
+    data.audit_defect_count ??
+    ((data.audit_summary?.data_nok || 0) + (data.audit_summary?.kurang_tanggal || 0) + (data.audit_summary?.tidak_ada || 0))
+  );
+
+  // Semakin besar jumlah toko yang kurang, semakin merah badgenya
+  if (defects <= 1) {
+    // 1 toko: Kuning / Amber lembut (Minor)
+    return {
+      ...baseStyle,
+      backgroundColor: '#fef3c7',
+      color: '#92400e',
+      border: '1px solid #fcd34d',
+      fontWeight: '600',
+    };
+  } else if (defects <= 5) {
+    // 2 - 5 toko: Oranye (Sedang)
+    return {
+      ...baseStyle,
+      backgroundColor: '#ffedd5',
+      color: '#c2410c',
+      border: '1px solid #fdba74',
+      fontWeight: '600',
+    };
+  } else if (defects <= 20) {
+    // 6 - 20 toko: Merah Terang (Banyak)
+    return {
+      ...baseStyle,
+      backgroundColor: '#fee2e2',
+      color: '#dc2626',
+      border: '1px solid #fca5a5',
+      fontWeight: '600',
+    };
+  } else {
+    // > 20 toko: Merah Tua / Crimson Pekat (Kritis)
+    return {
+      ...baseStyle,
+      backgroundColor: '#fecaca',
+      color: '#991b1b',
+      border: '1.5px solid #ef4444',
+      fontWeight: '700',
+    };
+  }
 };
 
 // ── Resume ───────────────────────────────────────────────────

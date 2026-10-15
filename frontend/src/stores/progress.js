@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import progressService from "../services/progress.service";
+import { broadcastMessage } from "../utils/broadcastSync";
 
 export const useProgressStore = defineStore("progress", {
   state: () => ({
@@ -13,6 +14,9 @@ export const useProgressStore = defineStore("progress", {
     // Real-time tracking of which stores are currently being processed per task
     // shape: { [taskId]: string[] }
     processingStores: {},
+
+    eventSource: null,
+    pollInterval: null,
   }),
 
   getters: {
@@ -48,60 +52,112 @@ export const useProgressStore = defineStore("progress", {
   },
 
   actions: {
-    initProgressMonitoring() {
-      if (this.isInitialized && this.eventSource) return;
-
+    /**
+     * Inisialisasi monitoring progress secara on-demand.
+     * Tidak membuka SSE jika tidak ada task yang aktif.
+     */
+    async initProgressMonitoring() {
+      if (this.isInitialized) return;
       this.isInitialized = true;
+
+      await this.syncActiveTasks();
+      this._startPolling();
+    },
+
+    _startPolling() {
+      if (this.pollInterval) return;
+      this.pollInterval = setInterval(() => {
+        if (!this.eventSource) {
+          this.syncActiveTasks();
+        }
+      }, 15000);
+    },
+
+    _stopPolling() {
+      if (this.pollInterval) {
+        clearInterval(this.pollInterval);
+        this.pollInterval = null;
+      }
+    },
+
+    async syncActiveTasks() {
+      try {
+        const active = await progressService.getActiveProgressTasks();
+        if (active) {
+          const taskList = Array.isArray(active) ? active : Object.values(active);
+          if (taskList.length > 0) {
+            taskList.forEach((task) => {
+              this.updateTask(task, false, false);
+            });
+            if (!this.eventSource && this.hasActiveTasks) {
+              this._startStream();
+            }
+          }
+        }
+      } catch (err) {
+        // Silent on background poll error
+      }
+    },
+
+    _startStream() {
+      if (this.eventSource) return;
 
       this.eventSource = progressService.monitorAllProgress(
         // onInit
         (allTasks) => {
           if (allTasks && typeof allTasks === "object") {
             Object.values(allTasks).forEach((task) => {
-              this.updateTask(task, false); // Don't auto-expand for old tasks
+              this.updateTask(task, false, false);
             });
+            if (!this.hasActiveTasks) {
+              this.stopMonitoring();
+            }
           }
         },
         // onStart
         (task) => {
-          this.updateTask(task, this.autoExpandOnNewTask);
+          this.updateTask(task, this.autoExpandOnNewTask, true);
         },
         // onUpdate
         (task) => {
-          this.updateTask(task, false);
+          this.updateTask(task, false, true);
         },
         // onComplete
         (task) => {
-          this.handleTaskConclusion(task.id || task.taskId, "completed");
+          const tid = task.id || task.taskId;
+          this.handleTaskConclusion(tid, "completed", true);
         },
         // onError
         (task) => {
-          this.handleTaskConclusion(task.id || task.taskId, "failed");
+          const tid = task.id || task.taskId;
+          this.handleTaskConclusion(tid, "failed", true);
         },
         // onCancel - handle user-initiated cancellation gracefully
         (task) => {
-          this.handleTaskConclusion(task.id || task.taskId, "cancelled");
+          const tid = task.id || task.taskId;
+          this.handleTaskConclusion(tid, "cancelled", true);
         },
         // onProcessing - real-time store processing tracking
         (data) => {
-          this.handleProcessingUpdate(data);
+          this.handleProcessingUpdate(data, true);
         },
       );
 
       // Handle connection errors
       this.eventSource.onerror = (err) => {
         console.error("❌ Global Monitoring Connection Error:", err);
-        // Retry connection after 5 seconds if still required
-        setTimeout(() => {
-          if (this.isInitialized) {
-            this.stopMonitoring();
-            this.initProgressMonitoring();
-          }
-        }, 5000);
+        this.stopMonitoring();
+        if (this.hasActiveTasks) {
+          setTimeout(() => {
+            if (this.hasActiveTasks && !this.eventSource) {
+              this._startStream();
+            }
+          }, 5000);
+        }
       };
     },
 
-    updateTask(taskData, expand = false) {
+    updateTask(taskData, expand = false, shouldBroadcast = true) {
       if (!taskData) return;
       const taskId = taskData.id || taskData.taskId;
       if (!taskId) return;
@@ -141,7 +197,6 @@ export const useProgressStore = defineStore("progress", {
         taskData.message ||
         (typeof taskData.info === "string" ? taskData.info : "Processing...");
 
-
       // Update state
       this.tasks[taskId] = {
         taskId: taskId,
@@ -156,13 +211,29 @@ export const useProgressStore = defineStore("progress", {
           null,
       };
 
+      const inactiveStatuses = [
+        "completed",
+        "failed",
+        "success",
+        "error",
+        "cancelled",
+        "timed_out",
+      ];
+      if (!inactiveStatuses.includes(status.toLowerCase()) && !this.eventSource) {
+        this._startStream();
+      }
+
       // Trigger global event for widget to expand if needed
       if (expand) {
         window.dispatchEvent(new CustomEvent("progress-widget-expand"));
       }
+
+      if (shouldBroadcast) {
+        broadcastMessage("PROGRESS_UPDATE", { task: taskData, expand });
+      }
     },
 
-    handleTaskConclusion(taskId, finalStatus) {
+    handleTaskConclusion(taskId, finalStatus, shouldBroadcast = false) {
       if (this.tasks[taskId]) {
         this.tasks[taskId].status = finalStatus;
 
@@ -173,8 +244,14 @@ export const useProgressStore = defineStore("progress", {
           setTimeout(() => {
             if (this.tasks[taskId] && this.tasks[taskId].status === "cancelled") {
               delete this.tasks[taskId];
+              if (!this.hasActiveTasks) {
+                this.stopMonitoring();
+              }
             }
           }, 2000);
+          if (shouldBroadcast) {
+            broadcastMessage("PROGRESS_CONCLUSION", { taskId, status: "cancelled" });
+          }
           return;
         }
 
@@ -188,8 +265,15 @@ export const useProgressStore = defineStore("progress", {
               this.tasks[taskId].status === "failed")
           ) {
             delete this.tasks[taskId];
+            if (!this.hasActiveTasks) {
+              this.stopMonitoring();
+            }
           }
         }, 3000);
+
+        if (shouldBroadcast) {
+          broadcastMessage("PROGRESS_CONCLUSION", { taskId, status: finalStatus });
+        }
       }
     },
 
@@ -198,21 +282,22 @@ export const useProgressStore = defineStore("progress", {
         this.eventSource.close();
         this.eventSource = null;
       }
-      // Keep isInitialized as true if we just want to restart,
-      // but typically we'd set to false if fully stopping.
-      this.isInitialized = false;
     },
 
     /**
      * Handle real-time processing store updates from SSE.
      * Updates the processingStores map so the widget can display which stores are active.
      */
-    handleProcessingUpdate(data) {
+    handleProcessingUpdate(data, shouldBroadcast = false) {
       if (!data || !data.taskId) return;
       if (data.stores && data.stores.length > 0) {
         this.processingStores[data.taskId] = data.stores;
       } else {
         delete this.processingStores[data.taskId];
+      }
+
+      if (shouldBroadcast) {
+        broadcastMessage("PROGRESS_PROCESSING", data);
       }
     },
 
@@ -225,6 +310,7 @@ export const useProgressStore = defineStore("progress", {
           this.tasks[taskId].status = 'cancelled';
           this.tasks[taskId].percentage = 0;
         }
+        broadcastMessage("PROGRESS_CONCLUSION", { taskId, status: "cancelled" });
         this.cancelingTaskId = null;
       } catch (err) {
         console.error('Cancel failed:', err);

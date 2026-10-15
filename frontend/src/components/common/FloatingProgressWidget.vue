@@ -129,6 +129,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useProgressStore, useExportsStore } from '../../stores';
 import { useAuthStore } from '../../stores';
 import { useToastService } from '../../utils/toast';
+import { getSyncChannel } from '../../utils/broadcastSync';
 
 const progressStore = useProgressStore();
 const exportStore = useExportsStore();
@@ -268,6 +269,40 @@ const handleExpand = () => {
   isMinimal.value = false;
 };
 
+// ── Cross-tab synchronization ───────────────────────────────────────────────
+const onCrossTabMessage = (event) => {
+  const { type, payload } = event.data || {};
+  if (!type) return;
+
+  switch (type) {
+    case 'PROGRESS_UPDATE':
+      if (payload?.task) {
+        progressStore.updateTask(payload.task, payload.expand || false, false);
+      }
+      break;
+    case 'PROGRESS_CONCLUSION':
+      if (payload?.taskId && payload?.status) {
+        progressStore.handleTaskConclusion(payload.taskId, payload.status, false);
+      }
+      break;
+    case 'PROGRESS_PROCESSING':
+      if (payload) {
+        progressStore.handleProcessingUpdate(payload, false);
+      }
+      break;
+    case 'EXPORT_UPDATE':
+      if (payload?.job) {
+        exportStore._upsertJob(payload.job, payload.expand || false, false, true);
+      }
+      break;
+  }
+};
+
+const onWindowFocus = () => {
+  progressStore.syncActiveTasks();
+  exportStore.syncActiveJobs();
+};
+
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
 onMounted(() => {
@@ -275,12 +310,27 @@ onMounted(() => {
   exportStore.initMonitoring();
   window.addEventListener('progress-widget-expand', handleExpand);
   window.addEventListener('export-notify', onExportNotify);
+  window.addEventListener('focus', onWindowFocus);
+
+  const channel = getSyncChannel();
+  if (channel) {
+    channel.addEventListener('message', onCrossTabMessage);
+  }
 });
 
 onBeforeUnmount(() => {
+  progressStore.stopMonitoring();
+  progressStore._stopPolling();
   exportStore.stopMonitoring();
+  exportStore._stopPolling();
   window.removeEventListener('progress-widget-expand', handleExpand);
   window.removeEventListener('export-notify', onExportNotify);
+  window.removeEventListener('focus', onWindowFocus);
+
+  const channel = getSyncChannel();
+  if (channel) {
+    channel.removeEventListener('message', onCrossTabMessage);
+  }
 });
 
 // Reset cancelling state when task is gone (SSE confirmed)

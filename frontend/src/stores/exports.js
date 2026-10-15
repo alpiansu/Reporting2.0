@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import monthlyReportsService from "@/services/monthlyReports.service";
+import { broadcastMessage } from "@/utils/broadcastSync";
 
 // Berapa lama job terminal (failed/cancelled) dipertahankan di UI sebelum dihapus
 const TERMINAL_HOLD_MS = 3000;
@@ -8,7 +9,7 @@ const TERMINAL_HOLD_MS = 3000;
  * Store Export Laporan — SELF-CONTAINED (tidak memakai modul progress/screening).
  *
  * Tanggung jawab:
- *   1. Monitor semua job export milik user via SSE (GET /export/stream).
+ *   1. Monitor semua job export milik user via SSE (GET /export/stream) secara on-demand.
  *   2. Mulai & batalkan job (DELETE /export/:taskId).
  *   3. Auto-download saat job selesai (dari halaman mana pun — store hidup
  *      di level aplikasi, bukan di satu view).
@@ -21,6 +22,7 @@ export const useExportsStore = defineStore("exports", {
     eventSource: null,
     isInitialized: false,
     autoExpandOnNewTask: true,
+    pollInterval: null,
   }),
 
   getters: {
@@ -58,30 +60,82 @@ export const useExportsStore = defineStore("exports", {
   },
 
   actions: {
-    /** Mulai monitoring SSE global export (dipanggil sekali dari widget/layout). */
-    initMonitoring() {
-      if (this.isInitialized && this.eventSource) return;
+    /** Mulai monitoring global export secara on-demand (tidak membuka SSE jika tidak ada job aktif). */
+    async initMonitoring() {
+      if (this.isInitialized) return;
       this.isInitialized = true;
+
+      await this.syncActiveJobs();
+      this._startPolling();
+    },
+
+    _startPolling() {
+      if (this.pollInterval) return;
+      this.pollInterval = setInterval(() => {
+        if (!this.eventSource) {
+          this.syncActiveJobs();
+        }
+      }, 20000);
+    },
+
+    _stopPolling() {
+      if (this.pollInterval) {
+        clearInterval(this.pollInterval);
+        this.pollInterval = null;
+      }
+    },
+
+    async syncActiveJobs() {
+      try {
+        const res = await monthlyReportsService.listExports();
+        const jobs = res.data?.data?.jobs || [];
+        jobs.forEach((j) => this._upsertJob(j, false, false, false));
+        if (this.hasActiveJobs && !this.eventSource) {
+          this._startStream();
+        }
+      } catch (err) {
+        // Silent on background poll
+      }
+    },
+
+    _startStream() {
+      if (this.eventSource) return;
 
       this.eventSource = monthlyReportsService.monitorExports({
         onInit: (jobs) => {
-          (jobs || []).forEach((j) => this._upsertJob(j, false));
+          (jobs || []).forEach((j) => this._upsertJob(j, false, false, false));
+          if (!this.hasActiveJobs) {
+            this.stopMonitoring();
+          }
         },
-        onUpdate: (job) => this._upsertJob(job, true),
+        onUpdate: (job) => {
+          this._upsertJob(job, true, true, false);
+          if (!this.hasActiveJobs) {
+            setTimeout(() => {
+              if (!this.hasActiveJobs) {
+                this.stopMonitoring();
+              }
+            }, 3000);
+          }
+        },
         onRemove: ({ taskId }) => {
           delete this.jobs[taskId];
+          if (!this.hasActiveJobs) {
+            this.stopMonitoring();
+          }
         },
       });
 
       this.eventSource.onerror = (err) => {
         console.error("❌ Export SSE Connection Error:", err);
-        // Coba sambung ulang setelah 5 detik
-        setTimeout(() => {
-          if (this.isInitialized) {
-            this.stopMonitoring();
-            this.initMonitoring();
-          }
-        }, 5000);
+        this.stopMonitoring();
+        if (this.hasActiveJobs) {
+          setTimeout(() => {
+            if (this.hasActiveJobs && !this.eventSource) {
+              this._startStream();
+            }
+          }, 5000);
+        }
       };
     },
 
@@ -90,14 +144,13 @@ export const useExportsStore = defineStore("exports", {
         this.eventSource.close();
         this.eventSource = null;
       }
-      this.isInitialized = false;
     },
 
     /**
      * Gabungkan update job ke state + efek samping:
      * auto-download (completed) & notifikasi (terminal).
      */
-    _upsertJob(job, expand) {
+    _upsertJob(job, expand, shouldBroadcast = false, isCrossTab = false) {
       if (!job?.taskId) return;
       const prevStatus = this.jobs[job.taskId]?.status;
       this.jobs[job.taskId] = { ...job };
@@ -114,8 +167,8 @@ export const useExportsStore = defineStore("exports", {
       // (expand=true). Data historis dari init/refresh (expand=false) tidak boleh
       // memicu unduhan/toast mendadak saat halaman dimuat.
       if (expand && prevStatus !== job.status) {
-        // Baru saja selesai → unduh otomatis
-        if (job.status === "completed") {
+        // Baru saja selesai → unduh otomatis (hanya di tab aktif / non-cross-tab)
+        if (job.status === "completed" && !isCrossTab) {
           this._autoDownload(job);
         }
 
@@ -126,10 +179,17 @@ export const useExportsStore = defineStore("exports", {
             setTimeout(() => {
               if (this.jobs[job.taskId]?.status === job.status) {
                 delete this.jobs[job.taskId];
+                if (!this.hasActiveJobs) {
+                  this.stopMonitoring();
+                }
               }
             }, TERMINAL_HOLD_MS);
           }
         }
+      }
+
+      if (shouldBroadcast) {
+        broadcastMessage("EXPORT_UPDATE", { job, expand, isCrossTab: true });
       }
     },
 
@@ -200,6 +260,9 @@ export const useExportsStore = defineStore("exports", {
           updatedAt: now,
         };
       }
+
+      this._startStream();
+      broadcastMessage("EXPORT_UPDATE", { job: this.jobs[taskId], expand: true, isCrossTab: true });
       return taskId;
     },
 
@@ -210,6 +273,7 @@ export const useExportsStore = defineStore("exports", {
       if (this.jobs[taskId]) {
         this.jobs[taskId].status = "cancelled";
         this.jobs[taskId].message = "Membatalkan...";
+        broadcastMessage("EXPORT_UPDATE", { job: this.jobs[taskId], expand: false, isCrossTab: true });
       }
     },
 

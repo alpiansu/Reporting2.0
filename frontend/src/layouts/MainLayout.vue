@@ -277,13 +277,14 @@ const toggleNotifications = (event) => {
   notificationsOpen.value = !notificationsOpen.value;
   if (notificationsOpen.value) {
     userMenuOpen.value = false;
+    loadNotifications(false);
   }
 };
 
 // ─── Notification State ──────────────────────────────────────────
 const notifications = ref([]);
 const unreadCount = ref(0);
-let sseConnection = null;
+let notifPollInterval = null;
 
 const formatNotifTime = (isoStr) => {
   if (!isoStr) return '';
@@ -357,52 +358,24 @@ const handleNotificationClick = async (n) => {
   }
 };
 
-const connectNotificationSSE = () => {
+const loadNotifications = async (isInitial = false) => {
   if (!user.value?.username) return;
-  
-  // Cleanup previous connection
-  if (sseConnection) {
-    sseConnection.close();
-  }
 
   try {
-    sseConnection = notifSvc.connectSSE(user.value.username);
+    const res = await notifSvc.getAll(user.value.username, 20);
+    const newItems = res?.data || [];
+    const newUnread = res?.unread ?? 0;
 
-    sseConnection.addEventListener('init', (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        notifications.value = data.notifications || [];
-        unreadCount.value = data.unread || 0;
-      } catch {}
-    });
+    // Munculkan toast jika ada notifikasi baru masuk (menjaga perilaku live seperti SSE)
+    if (!isInitial && newUnread > unreadCount.value && newItems.length > 0) {
+      const latest = newItems[0];
+      toast.showWarning(latest.title || 'Notifikasi', latest.message || 'Ada perubahan penyesuaian');
+    }
 
-    sseConnection.addEventListener('new', (event) => {
-      try {
-        const notif = JSON.parse(event.data);
-
-        if (notif._update) {
-          // UPDATE (tiban): cari notifikasi existing by ID, update in-place
-          const idx = notifications.value.findIndex(n => n.id === notif.id);
-          if (idx !== -1) {
-            const { _update, ...cleanNotif } = notif;
-            notifications.value[idx] = { ...notifications.value[idx], ...cleanNotif };
-          }
-          // Tidak nambah unreadCount karena status read sudah di-reset (tetap unread)
-          toast.showWarning(notif.title || 'Notifikasi', notif.message || 'Ada perubahan penyesuaian');
-        } else {
-          // NOTIFIKASI BARU
-          notifications.value.unshift(notif);
-          unreadCount.value++;
-          toast.showWarning(notif.title || 'Notifikasi', notif.message || 'Ada perubahan penyesuaian');
-        }
-      } catch {}
-    });
-
-    sseConnection.onerror = () => {
-      // Will auto-reconnect
-    };
+    notifications.value = newItems;
+    unreadCount.value = newUnread;
   } catch (err) {
-    console.error('Failed to connect notification SSE:', err);
+    // Silent fail on background polling to avoid console spam
   }
 };
 
@@ -433,17 +406,20 @@ const handleClickOutside = (event) => {
   }
 };
 
-// Add and remove click event listener
+// Add and remove click event listener + smart polling
 onMounted(() => {
   document.addEventListener('click', handleClickOutside);
-  connectNotificationSSE();
+  loadNotifications(true);
+  notifPollInterval = setInterval(() => {
+    loadNotifications(false);
+  }, 30000);
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside);
-  if (sseConnection) {
-    sseConnection.close();
-    sseConnection = null;
+  if (notifPollInterval) {
+    clearInterval(notifPollInterval);
+    notifPollInterval = null;
   }
 });
 

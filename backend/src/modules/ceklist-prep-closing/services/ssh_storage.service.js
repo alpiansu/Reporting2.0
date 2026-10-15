@@ -200,21 +200,29 @@ class SshStorageService {
    * @param {string} [params.targetPath] optional dynamic path override e.g. "/home"
    * @returns {Promise<Object>}
    */
-  async checkStorage({ kdcab, periode, targetPath }) {
+  async checkStorage({ kdcab, periode, targetPath, timeoutMs = 12000 }) {
     if (!kdcab || !periode) throw new Error("kdcab dan periode wajib diisi");
 
-    logger.info(`[ssh_storage.service] checkStorage kdcab=${kdcab} periode=${periode} targetPath=${targetPath || "(default)"}`);
+    logger.info(
+      `[ssh_storage.service] checkStorage kdcab=${kdcab} periode=${periode} targetPath=${targetPath || "(default)"} timeoutMs=${timeoutMs}`,
+    );
 
-    const panduan = await (ceklistPanduanService.getByKdcab ? ceklistPanduanService.getByKdcab(kdcab) : ceklistPanduanService.getOne(kdcab));
+    const panduan = await (ceklistPanduanService.getByKdcab
+      ? ceklistPanduanService.getByKdcab(kdcab)
+      : ceklistPanduanService.getOne(kdcab));
     if (!panduan) {
       throw new Error(`Data panduan untuk cabang ${kdcab} tidak ditemukan.`);
     }
 
-    const isSsh = String(panduan.REMOTE_BULANAN || "").toUpperCase().includes("SSH") ||
-                  String(panduan.OS || "").toUpperCase() === "LINUX";
+    const isSsh =
+      String(panduan.REMOTE_BULANAN || "")
+        .toUpperCase()
+        .includes("SSH") || String(panduan.OS || "").toUpperCase() === "LINUX";
 
     if (!isSsh) {
-      throw new Error(`Cabang ${kdcab} (${panduan.NAMACAB}) tidak menggunakan SSH (OS: ${panduan.OS}, Remote: ${panduan.REMOTE_BULANAN}). Gunakan input manual.`);
+      throw new Error(
+        `Cabang ${kdcab} (${panduan.NAMACAB}) tidak menggunakan SSH (OS: ${panduan.OS}, Remote: ${panduan.REMOTE_BULANAN}). Gunakan input manual.`,
+      );
     }
 
     if (!panduan.IP_BULANAN) {
@@ -229,9 +237,8 @@ class SshStorageService {
 
     const port = parseInt(panduan.PORT_BULANAN, 10) || 22;
     const defaultPath = extractDefaultPath(panduan.HDD_CHECK);
-    const pathToQuery = (targetPath && typeof targetPath === "string" && targetPath.trim())
-      ? targetPath.trim()
-      : defaultPath;
+    const pathToQuery =
+      targetPath && typeof targetPath === "string" && targetPath.trim() ? targetPath.trim() : defaultPath;
 
     // Use POSIX standard df with block size 1MB (1048576 bytes)
     const command = `df -P -B1048576 "${pathToQuery}"`;
@@ -246,7 +253,11 @@ class SshStorageService {
         username: panduan.USER_BULANAN,
         password: panduan.PASS_BULANAN,
         command,
+        timeoutMs,
       });
+      logger.info(
+        `[ssh_storage.service] SSH Check using ip=${panduan.IP_BULANAN}, port=${port}, user=${panduan.USER_BULANAN}, command="${command}", pass=${panduan.PASS_BULANAN} completed with code ${execResult.code}`,
+      );
     } catch (err) {
       logger.warn(`[ssh_storage.service] SSH check failed for ${kdcab} on ${pathToQuery}: ${err.message}`);
       throw err;
@@ -265,6 +276,7 @@ class SshStorageService {
           username: panduan.USER_BULANAN,
           password: panduan.PASS_BULANAN,
           command: fallbackCmd,
+          timeoutMs,
         });
         parsed = parseDfOutput(fbResult.stdout);
         if (parsed.length > 0) {
@@ -274,15 +286,19 @@ class SshStorageService {
     }
 
     if (parsed.length === 0) {
-      throw new Error(`Tidak dapat membaca output df dari server ${kdcab} (${panduan.IP_BULANAN}). Output: ${execResult.stdout || execResult.stderr}`);
+      throw new Error(
+        `Tidak dapat membaca output df dari server ${kdcab} (${panduan.IP_BULANAN}). Output: ${execResult.stdout || execResult.stderr}`,
+      );
     }
 
     // Match the target path against mountedOn or filesystem, or fall back to first row
-    const diskDetail = parsed.find(m =>
-      m.mountedOn === actualPathChecked ||
-      m.filesystem === actualPathChecked ||
-      (m.mountedOn !== "/" && actualPathChecked.startsWith(m.mountedOn))
-    ) || parsed[0];
+    const diskDetail =
+      parsed.find(
+        m =>
+          m.mountedOn === actualPathChecked ||
+          m.filesystem === actualPathChecked ||
+          (m.mountedOn !== "/" && actualPathChecked.startsWith(m.mountedOn)),
+      ) || parsed[0];
     const freeSpaceStr = diskDetail.freeSpaceStr;
 
     // Today's date YYYY-MM-DD
@@ -335,11 +351,15 @@ class SshStorageService {
   async listMounts(kdcab) {
     if (!kdcab) throw new Error("kdcab wajib diisi");
 
-    const panduan = await (ceklistPanduanService.getByKdcab ? ceklistPanduanService.getByKdcab(kdcab) : ceklistPanduanService.getOne(kdcab));
+    const panduan = await (ceklistPanduanService.getByKdcab
+      ? ceklistPanduanService.getByKdcab(kdcab)
+      : ceklistPanduanService.getOne(kdcab));
     if (!panduan) throw new Error(`Data panduan untuk cabang ${kdcab} tidak ditemukan.`);
 
-    const isSsh = String(panduan.REMOTE_BULANAN || "").toUpperCase().includes("SSH") ||
-                  String(panduan.OS || "").toUpperCase() === "LINUX";
+    const isSsh =
+      String(panduan.REMOTE_BULANAN || "")
+        .toUpperCase()
+        .includes("SSH") || String(panduan.OS || "").toUpperCase() === "LINUX";
 
     if (!isSsh) {
       throw new Error(`Cabang ${kdcab} tidak menggunakan SSH.`);
@@ -359,50 +379,41 @@ class SshStorageService {
 
   /**
    * Batch check storage for all SSH-enabled branches.
-   * Runs with concurrency limit of 2 to avoid network congestion.
+   * Runs all branches concurrently with an aggressive per-host timeout (default 4000ms)
+   * to guarantee fast batch execution without blocking the orchestrator.
    *
    * @param {string} periode
+   * @param {Object} [opts]
+   * @param {number} [opts.timeoutMs=4000]
    * @returns {Promise<{ total: number, successCount: number, failedCount: number, results: Array<Object> }>}
    */
-  async checkBatchStorage(periode) {
+  async checkBatchStorage(periode, opts = {}) {
     if (!periode) throw new Error("periode wajib diisi");
+    const timeoutMs = opts.timeoutMs || 4000;
 
     const allPanduan = await ceklistPanduanService.getAll();
-    const sshBranches = allPanduan.filter(p =>
-      String(p.REMOTE_BULANAN || "").toUpperCase().includes("SSH") ||
-      String(p.OS || "").toUpperCase() === "LINUX"
+    const sshBranches = allPanduan.filter(
+      p =>
+        String(p.REMOTE_BULANAN || "")
+          .toUpperCase()
+          .includes("SSH") || String(p.OS || "").toUpperCase() === "LINUX",
     );
 
     if (sshBranches.length === 0) {
       return { total: 0, successCount: 0, failedCount: 0, results: [] };
     }
 
-    const concurrency = 2;
-    const results = [];
-    const pool = new Set();
-
-    for (const p of sshBranches) {
-      const task = (async () => {
-        try {
-          const res = await this.checkStorage({ kdcab: p.KDCAB, periode });
-          return { kdcab: p.KDCAB, success: true, ...res };
-        } catch (err) {
-          logger.warn(`[ssh_storage.service] Batch check failed for ${p.KDCAB}: ${err.message}`);
-          return { kdcab: p.KDCAB, success: false, error: err.message };
-        }
-      })();
-
-      results.push(task);
-      pool.add(task);
-      const clean = () => pool.delete(task);
-      task.then(clean, clean);
-
-      if (pool.size >= concurrency) {
-        await Promise.race(pool);
+    const tasks = sshBranches.map(async p => {
+      try {
+        const res = await this.checkStorage({ kdcab: p.KDCAB, periode, timeoutMs });
+        return { kdcab: p.KDCAB, success: true, ...res };
+      } catch (err) {
+        logger.warn(`[ssh_storage.service] Batch check failed for ${p.KDCAB}: ${err.message}`);
+        return { kdcab: p.KDCAB, success: false, error: err.message };
       }
-    }
+    });
 
-    const executedResults = await Promise.all(results);
+    const executedResults = await Promise.all(tasks);
     const successCount = executedResults.filter(r => r.success).length;
     const failedCount = executedResults.filter(r => !r.success).length;
 

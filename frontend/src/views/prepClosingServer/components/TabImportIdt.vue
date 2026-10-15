@@ -132,8 +132,10 @@ async function handleInit() {
   initLoading.value = true;
   try {
     const res = await api.initImportIdt(props.periode);
-    toast.add({ severity: 'success', summary: 'Init Selesai',
-      detail: `Dibuat ${res.created} record dari ${res.total} cabang`, life: 4000 });
+    const detailMsg = res.created > 0
+      ? `Dibuat ${res.created} record baru dari total ${res.total} cabang`
+      : `${res.existing || res.total} cabang sudah terdaftar`;
+    toast.add({ severity: 'success', summary: 'Init Selesai', detail: detailMsg, life: 4000 });
     if (props.onRefresh) {
       await props.onRefresh();
     }

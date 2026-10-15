@@ -29,12 +29,19 @@ class CeklistPrepClosingService {
     const templateResult = await spaceHddService.getBulkTemplate(periode);
 
     // Otomatis lakukan pengecekan sisa storage via SSH untuk seluruh server Linux
+    // Dibatasi dengan batas waktu maksimal 7 detik agar tidak memblokir respon HTTP
     let sshResult = null;
     try {
-      sshResult = await sshStorageService.checkBatchStorage(periode);
+      const sshPromise = sshStorageService.checkBatchStorage(periode, { timeoutMs: 4000 });
+      let timeoutHandle;
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutHandle = setTimeout(() => reject(new Error("Timeout proses pengecekan SSH batch (7s)")), 7000);
+      });
+      sshResult = await Promise.race([sshPromise, timeoutPromise]);
+      clearTimeout(timeoutHandle);
       logger.info(`[ceklist_prep_closing] initSpaceHdd auto-SSH check completed: ${sshResult.successCount} success, ${sshResult.failedCount} failed`);
     } catch (err) {
-      logger.warn(`[ceklist_prep_closing] initSpaceHdd auto-SSH check failed: ${err.message}`);
+      logger.warn(`[ceklist_prep_closing] initSpaceHdd auto-SSH check failed/timed out: ${err.message}`);
       sshResult = { total: 0, successCount: 0, failedCount: 0, error: err.message };
     }
 

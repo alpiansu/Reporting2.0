@@ -49,8 +49,9 @@ export const deleteSpaceHdd = (kdcab, periode) =>
 
 // Body sengaja `undefined`, bukan `null`: axios akan mengubah `null` menjadi
 // string "null" dan express.json() menolaknya. Tanpa body, req.body = {}.
+// Timeout di-set 60 detik untuk mengakomodasi pengecekan SSH batch ke server remote Linux.
 export const initSpaceHdd = periode =>
-  api.post(`${BASE_URL}/space-hdd/init`, undefined, { params: { periode } }).then(unwrap);
+  api.post(`${BASE_URL}/space-hdd/init`, undefined, { params: { periode }, timeout: 60000 }).then(unwrap);
 
 export const uploadCaptureHdd = (formData, kdcab, periode) =>
   api.post(`${BASE_URL}/space-hdd/upload`, formData, {
@@ -59,10 +60,10 @@ export const uploadCaptureHdd = (formData, kdcab, periode) =>
   }).then(unwrap);
 
 export const checkSshStorage = body =>
-  api.post(`${BASE_URL}/space-hdd/check-ssh`, body).then(unwrap);
+  api.post(`${BASE_URL}/space-hdd/check-ssh`, body, { timeout: 30000 }).then(unwrap);
 
 export const checkBatchSshStorage = periode =>
-  api.post(`${BASE_URL}/space-hdd/check-ssh-batch`, { periode }).then(unwrap);
+  api.post(`${BASE_URL}/space-hdd/check-ssh-batch`, { periode }, { timeout: 60000 }).then(unwrap);
 
 export const listSshMounts = kdcab =>
   api.get(`${BASE_URL}/space-hdd/ssh-mounts`, { params: { kdcab } }).then(unwrap);

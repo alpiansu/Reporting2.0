@@ -362,13 +362,22 @@ async function handleInit() {
   initLoading.value = true;
   try {
     const res = await api.initSpaceHdd(props.periode);
-    let detailMsg = `Dibuat ${res.created} record baru dari total ${res.total} cabang.`;
-    if (res.ssh && res.ssh.total > 0) {
-      detailMsg += ` SSH Linux: ${res.ssh.successCount} berhasil, ${res.ssh.failedCount} gagal.`;
+    let detailMsg = '';
+    if (res.created > 0) {
+      detailMsg = `Dibuat ${res.created} record baru dari total ${res.total} cabang.`;
+    } else {
+      detailMsg = `${res.existing || res.total} cabang sudah terdaftar.`;
+    }
+    if (res.ssh) {
+      if (res.ssh.total > 0) {
+        detailMsg += ` SSH Linux: ${res.ssh.successCount} berhasil, ${res.ssh.failedCount} gagal.`;
+      } else if (res.ssh.error) {
+        detailMsg += ` SSH dilewati (${res.ssh.error}).`;
+      }
     }
     toast.add({
-      severity: res.ssh?.failedCount > 0 ? 'warn' : 'success',
-      summary: 'Init & Cek SSH Selesai',
+      severity: (res.ssh?.failedCount > 0 || res.ssh?.error) ? 'warn' : 'success',
+      summary: 'Init Cabang Selesai',
       detail: detailMsg,
       life: 5000,
     });
@@ -377,7 +386,12 @@ async function handleInit() {
     }
     emit('refresh');
   } catch (e) {
-    toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 4000 });
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal Init Cabang',
+      detail: e.message || 'Terjadi kesalahan saat inisialisasi cabang.',
+      life: 5000,
+    });
   } finally { initLoading.value = false; }
 }
 

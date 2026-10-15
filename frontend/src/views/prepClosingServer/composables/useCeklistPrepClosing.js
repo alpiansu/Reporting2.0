@@ -21,6 +21,7 @@ export function useCeklistPrepClosing() {
   const loading   = ref(false);
   const exporting = ref(false);
   const panduanLoading = ref(false);
+  const rekapLoading = ref(false);
 
   // ─── Data ────────────────────────────────────────────────────────────────
   const hddRows     = ref([]);
@@ -87,20 +88,44 @@ export function useCeklistPrepClosing() {
     }
   }
 
+  async function loadRekapScreening(force = false) {
+    if (!filters.periode) return;
+    if (rekapLoading.value) return;
+    if (rekapData.value.data.length > 0 && !force) return;
+
+    rekapLoading.value = true;
+    try {
+      const res = await api.getRekapScreening(paramsStr.value);
+      rekapData.value = res ?? { data: [], ruleKeys: [], total: 0 };
+    } catch (e) {
+      console.error('[loadRekapScreening] error:', e);
+    } finally {
+      rekapLoading.value = false;
+    }
+  }
+
   // ─── Load All ────────────────────────────────────────────────────────────
-  async function loadAll() {
+  async function loadAll(isTab4Active = false) {
     if (!filters.periode) return;
     loading.value = true;
+    if (!isTab4Active) {
+      rekapData.value = { data: [], ruleKeys: [], total: summary.value?.rekapScreening?.total || 0 };
+    }
     try {
-      const results = await Promise.allSettled([
+      const calls = [
         api.getSpaceHdd(paramsStr.value),
         api.getSpaceTampung(paramsStr.value),
         api.getImportIdt(paramsStr.value),
-        api.getRekapScreening(paramsStr.value),
         api.getSummary(paramsStr.value),
-      ]);
+      ];
 
-      const [hddRes, tampRes, idtRes, rekapRes, sumRes] = results;
+      if (isTab4Active) {
+        rekapLoading.value = true;
+        calls.push(api.getRekapScreening(paramsStr.value));
+      }
+
+      const results = await Promise.allSettled(calls);
+      const [hddRes, tampRes, idtRes, sumRes, rekapRes] = results;
 
       if (hddRes.status === 'fulfilled') {
         const hdd = hddRes.value;
@@ -123,21 +148,24 @@ export function useCeklistPrepClosing() {
         console.error('[loadAll] getImportIdt failed:', idtRes.reason);
       }
 
-      if (rekapRes.status === 'fulfilled') {
-        rekapData.value = rekapRes.value ?? { data: [], ruleKeys: [], total: 0 };
-      } else {
-        console.error('[loadAll] getRekapScreening failed:', rekapRes.reason);
-      }
-
       if (sumRes.status === 'fulfilled') {
         summary.value = sumRes.value?.summary ?? null;
       } else {
         console.error('[loadAll] getSummary failed:', sumRes.reason);
       }
+
+      if (isTab4Active && rekapRes) {
+        if (rekapRes.status === 'fulfilled') {
+          rekapData.value = rekapRes.value ?? { data: [], ruleKeys: [], total: 0 };
+        } else {
+          console.error('[loadAll] getRekapScreening failed:', rekapRes.reason);
+        }
+      }
     } catch (e) {
       console.error('[loadAll] unexpected error:', e);
     } finally {
       loading.value = false;
+      if (isTab4Active) rekapLoading.value = false;
     }
   }
 
@@ -169,10 +197,10 @@ export function useCeklistPrepClosing() {
 
   return {
     filters, periodeDate, paramsStr,
-    loading, exporting, panduanLoading,
+    loading, exporting, panduanLoading, rekapLoading,
     hddRows, tampungRows, idtRows, rekapData, summary,
     panduanRows, panduanMap, cabangs,
-    loadAll, loadSpaceHdd, loadSpaceTampung, loadImportIdt, doExport, loadPanduan,
+    loadAll, loadSpaceHdd, loadSpaceTampung, loadImportIdt, loadRekapScreening, doExport, loadPanduan,
     handlePeriodeSelect, formatTgl,
   };
 }

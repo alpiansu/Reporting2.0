@@ -118,6 +118,10 @@ const getScreeningPraClosingModel = async () => {
               name: "idx_screening_ready",
               fields: ["IS_READY"],
             },
+            {
+              name: "idx_screening_prd_ready_cab",
+              fields: ["PRD_CLOSING", "IS_READY", "CAB", "KDTK"],
+            },
           ],
         },
       );

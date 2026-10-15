@@ -124,11 +124,11 @@ class CeklistPrepClosingService {
   async getSummary({ periode, cabang = "All" }) {
     logger.info(`[ceklist_prep_closing.service] getSummary periode=${periode} cabang=${cabang}`);
 
-    const [hddRows, tampungRows, idtRows, rekapResult] = await Promise.all([
+    const [hddRows, tampungRows, idtRows, rekapSummary] = await Promise.all([
       spaceHddService.getAll(periode, cabang),
       spaceTampungService.getAll(periode, cabang),
       importIdtService.getAll(periode, cabang),
-      rekapScreeningService.getRekapScreening({ periode, cabang }),
+      rekapScreeningService.getRekapSummary({ periode, cabang }),
     ]);
 
     return {
@@ -147,8 +147,8 @@ class CeklistPrepClosingService {
           done: idtRows.filter(r => r.CAPTURE && r.CAPTURE.trim() !== "").length,
         },
         rekapScreening: {
-          total: rekapResult.total,
-          ruleKeys: rekapResult.ruleKeys,
+          total: rekapSummary.total,
+          ruleKeys: rekapSummary.ruleKeys,
         },
       },
     };

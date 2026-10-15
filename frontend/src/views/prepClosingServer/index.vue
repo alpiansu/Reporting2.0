@@ -24,7 +24,7 @@
           class="p-button-primary p-button-sm action-btn"
           :loading="loading"
           :disabled="!filters.periode"
-          @click="loadAll"
+          @click="handleLoadAll"
         />
         <Button
           icon="pi pi-file-excel"
@@ -52,7 +52,7 @@
               class="w-full filter-input"
               filter
               filter-placeholder="Cari cabang..."
-              @change="loadAll"
+              @change="handleLoadAll"
             />
           </div>
           <div class="filter-group">
@@ -155,9 +155,9 @@
         <TabPanel>
           <template #header>
             <span class="tab-label"><i class="pi pi-search mr-2"></i>Rekap Screening Toko</span>
-            <Badge v-if="rekapData.total > 0" :value="rekapData.total" severity="danger" class="ml-2" />
+            <Badge v-if="rekapBadgeTotal > 0" :value="rekapBadgeTotal" severity="danger" class="ml-2" />
           </template>
-          <TabRekapScreening :data="rekapData" :loading="loading" />
+          <TabRekapScreening :data="rekapData" :loading="rekapLoading" />
         </TabPanel>
 
         <!-- Tab 5: Panduan -->
@@ -186,7 +186,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { useCabangStore } from '@/stores';
 import Calendar from 'primevue/calendar';
@@ -208,10 +208,10 @@ import * as api from '@/services/ceklistPrepClosing.service.js';
 // ─── Composable ───────────────────────────────────────────────────────────────
 const {
   filters, periodeDate,
-  loading, exporting,
+  loading, exporting, rekapLoading,
   hddRows, tampungRows, idtRows, rekapData, summary,
   panduanRows, panduanMap, cabangs, panduanLoading,
-  loadAll, doExport, loadPanduan,
+  loadAll, loadRekapScreening, doExport, loadPanduan,
   handlePeriodeSelect,
 } = useCeklistPrepClosing();
 
@@ -237,10 +237,25 @@ const activeCabangName = computed(() => {
   return found ? `${found.kdcab} - ${found.namacab}` : filters.cabang;
 });
 
+const rekapBadgeTotal = computed(() => {
+  return summary.value?.rekapScreening?.total ?? rekapData.value?.total ?? 0;
+});
+
+function handleLoadAll() {
+  loadAll(activeTab.value === 3);
+}
+
 function onPeriodeChange() {
   handlePeriodeSelect();
-  loadAll();
+  handleLoadAll();
 }
+
+// Lazy load Tab 4 (Rekap Screening) when user switches to it
+watch(activeTab, (newTab) => {
+  if (newTab === 3 && filters.periode && (!rekapData.value.data || rekapData.value.data.length === 0)) {
+    loadRekapScreening();
+  }
+});
 
 // ─── Confirm Delete ───────────────────────────────────────────────────────────
 const confirmDlg = reactive({ visible: false, header: '', message: '', type: '', row: null });

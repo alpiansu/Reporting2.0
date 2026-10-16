@@ -10,6 +10,8 @@
 /backend/.env
 *.env.deploy
 .env.deploy
+*.env.deploy.bak
+.env.deploy.bak
 
 /backend/logs/
 /backend/data/

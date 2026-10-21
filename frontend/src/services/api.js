@@ -69,9 +69,13 @@ api.interceptors.response.use(
         localStorage.removeItem("refreshToken");
         localStorage.removeItem("user");
         
-        // Redirect to login page
+        // Redirect to login page — sertakan ?redirect= berisi halaman saat ini,
+        // supaya setelah login ulang user kembali ke halaman yang ia tinggali
+        // (dulu selalu dilempar ke /login polos → user berakhir di dashboard)
         if (window.location.pathname !== '/login') {
-          window.location.href = '/login';
+          window.location.href =
+            '/login?redirect=' +
+            encodeURIComponent(window.location.pathname + window.location.search);
         }
         
         return Promise.reject(refreshError);
@@ -85,9 +89,12 @@ api.interceptors.response.use(
       localStorage.removeItem("refreshToken");
       localStorage.removeItem("user");
       
-      // Redirect to login page if not already there
+      // Redirect to login page if not already there — dengan ?redirect= yang sama,
+      // agar jalur401 biasa juga mengembalikan user ke halaman sebelumnya
       if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+        window.location.href =
+          '/login?redirect=' +
+          encodeURIComponent(window.location.pathname + window.location.search);
       }
     }
     

@@ -73,12 +73,30 @@
             <span class="stat-unit">Toko</span>
           </div>
           <div class="kpi-sub-stat">
-            <span class="sub-label">Total Selisih:</span>
+            <span class="sub-label">Total Akumulasi Selisih:</span>
             <span class="sub-value">{{ formatCurrency(kpi.penyesuaian?.totalNominalUnfollowed) }}</span>
           </div>
-          <div v-if="(kpi.penyesuaian?.fantasticCount || 0) > 0" class="fantastic-notice" @click="openFantasticDialog">
+          <div class="kpi-accumulation-hint">
             <i class="pi pi-info-circle mr-1"></i>
-            <span>{{ kpi.penyesuaian.fantasticCount }} toko selisih ≥ Rp 1 Jt</span>
+            <span>Akumulasi dari {{ kpi.penyesuaian?.unfollowedStores ?? 0 }} toko belum difollow-up</span>
+          </div>
+          <div class="kpi-stats-grid" v-if="(kpi.penyesuaian?.unfollowedStores || 0) > 0">
+            <div class="kpi-mini-stat" v-tooltip.top="'Rata-rata selisih per toko belum FU'">
+              <span class="mini-label">Rata-rata:</span>
+              <span class="mini-val">{{ formatCurrency(kpi.penyesuaian?.avgNominalUnfollowed) }}</span>
+            </div>
+            <div class="kpi-mini-stat" v-tooltip.top="`Toko selisih tertinggi: ${kpi.penyesuaian?.maxStore?.kdtk || '—'}`">
+              <span class="mini-label">Tertinggi (Max):</span>
+              <span class="mini-val text-red-600 font-bold">{{ formatCurrency(kpi.penyesuaian?.maxNominalUnfollowed) }}</span>
+            </div>
+            <div class="kpi-mini-stat" v-tooltip.top="`Toko selisih terendah: ${kpi.penyesuaian?.minStore?.kdtk || '—'}`">
+              <span class="mini-label">Terendah (Min):</span>
+              <span class="mini-val text-emerald-600 font-semibold">{{ formatCurrency(kpi.penyesuaian?.minNominalUnfollowed) }}</span>
+            </div>
+          </div>
+          <div v-if="(kpi.penyesuaian?.fantasticCount || 0) > 0" class="fantastic-notice" @click="openFantasticDialog">
+            <i class="pi pi-bolt mr-1"></i>
+            <span>{{ kpi.penyesuaian.fantasticCount }} toko bernilai fantastis (≥ Rp 1 Jt)</span>
             <i class="pi pi-angle-right ml-1"></i>
           </div>
         </div>
@@ -294,7 +312,7 @@
         </Column>
 
         <!-- Kolom Penyesuaian -->
-        <Column header="Penyesuaian Toko" style="min-width: 220px">
+        <Column header="Penyesuaian Toko" style="min-width: 260px">
           <template #body="{ data }">
             <div v-if="data.penyesuaian?.unfollowedStores > 0" class="case-detail-box">
               <div class="case-line">
@@ -304,7 +322,15 @@
                 </span>
               </div>
               <div class="case-nominal">
-                Selisih: <strong>{{ formatCurrency(data.penyesuaian.totalNominalUnfollowed) }}</strong>
+                Total Akumulasi: <strong>{{ formatCurrency(data.penyesuaian.totalNominalUnfollowed) }}</strong>
+              </div>
+              <div class="case-stats-row">
+                <span class="stat-pill">
+                  Rata-rata: <strong>{{ formatCurrency(data.penyesuaian.avgNominalUnfollowed) }}</strong> / toko
+                </span>
+                <span class="stat-pill text-muted">
+                  Rentang: Min {{ formatCurrency(data.penyesuaian.minNominalUnfollowed) }} ~ Max {{ formatCurrency(data.penyesuaian.maxNominalUnfollowed) }}
+                </span>
               </div>
               <button
                 class="direct-link-btn"
@@ -1172,4 +1198,59 @@ const filteredBranches = computed(() => {
   color: var(--text-color-secondary, #64748b);
   margin-bottom: 1rem;
 }
+
+/* ── Additional Accumulation & Stats Styles ── */
+.kpi-accumulation-hint {
+  font-size: 0.725rem;
+  color: var(--text-color-secondary, #64748b);
+  margin-top: 0.2rem;
+  margin-bottom: 0.4rem;
+  display: flex;
+  align-items: center;
+}
+
+.kpi-stats-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--surface-ground, #f8fafc);
+  border-radius: 6px;
+  border: 1px solid var(--surface-border, #e2e8f0);
+  margin: 0.35rem 0;
+}
+
+.kpi-mini-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+}
+
+.mini-label {
+  color: var(--text-color-secondary, #64748b);
+}
+
+.mini-val {
+  font-weight: 600;
+  color: var(--text-color, #1e293b);
+}
+
+.case-stats-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.725rem;
+  color: var(--text-color-secondary, #64748b);
+  margin: 0.15rem 0;
+}
+
+.stat-pill {
+  line-height: 1.25;
+}
+
+.text-muted {
+  opacity: 0.85;
+}
+
 </style>

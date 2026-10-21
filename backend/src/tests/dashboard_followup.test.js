@@ -139,6 +139,9 @@ describe("Dashboard Follow-Up Resume", () => {
       // Fantastic stores = 1 (TK01 with 1500000)
       expect(result.kpi.penyesuaian.unfollowedStores).toBe(2);
       expect(result.kpi.penyesuaian.totalNominalUnfollowed).toBe(1550000);
+      expect(result.kpi.penyesuaian.avgNominalUnfollowed).toBe(775000);
+      expect(result.kpi.penyesuaian.maxNominalUnfollowed).toBe(1500000);
+      expect(result.kpi.penyesuaian.minNominalUnfollowed).toBe(50000);
       expect(result.kpi.penyesuaian.fantasticCount).toBe(1);
       expect(result.kpi.penyesuaian.fantasticStores).toHaveLength(1);
       expect(result.kpi.penyesuaian.fantasticStores[0].kdtk).toBe("TK01");

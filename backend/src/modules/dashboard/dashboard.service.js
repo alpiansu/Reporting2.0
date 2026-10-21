@@ -192,8 +192,14 @@ class DashboardService {
       totalStores: 0,
       unfollowedStores: 0,
       totalNominalUnfollowed: 0,
+      avgNominalUnfollowed: 0,
+      maxNominalUnfollowed: 0,
+      minNominalUnfollowed: 0,
+      maxStore: null,
+      minStore: null,
       fantasticStores: [],
       byCabang: {},
+      _unfollowedList: [],
     };
 
     try {
@@ -212,7 +218,13 @@ class DashboardService {
               totalStores: 0,
               unfollowedStores: 0,
               totalNominalUnfollowed: 0,
+              avgNominalUnfollowed: 0,
+              maxNominalUnfollowed: 0,
+              minNominalUnfollowed: 0,
+              maxStore: null,
+              minStore: null,
               fantasticCount: 0,
+              _unfollowedList: [],
             };
           }
           penyesuaianStats.byCabang[cab].totalStores++;
@@ -220,24 +232,59 @@ class DashboardService {
           const hasNote = Boolean(store.note && store.note.noteText && store.note.noteText.trim() !== "");
           if (!hasNote) {
             const absSesuai = Math.abs(Number(store.SESUAI) || 0);
+            const storeItem = {
+              cabang: store.CABANG,
+              kdtk: store.KDTK,
+              sesuai: Number(store.SESUAI) || 0,
+              absSesuai,
+              updtime: store.UPDTIME,
+            };
+
             penyesuaianStats.unfollowedStores++;
             penyesuaianStats.totalNominalUnfollowed += absSesuai;
+            penyesuaianStats._unfollowedList.push(storeItem);
+
             penyesuaianStats.byCabang[cab].unfollowedStores++;
             penyesuaianStats.byCabang[cab].totalNominalUnfollowed += absSesuai;
+            penyesuaianStats.byCabang[cab]._unfollowedList.push(storeItem);
 
             // Toko bernilai fantastis (|SESUAI| >= Rp 1.000.000)
             if (absSesuai >= 1000000) {
               penyesuaianStats.byCabang[cab].fantasticCount++;
-              penyesuaianStats.fantasticStores.push({
-                cabang: store.CABANG,
-                kdtk: store.KDTK,
-                sesuai: Number(store.SESUAI) || 0,
-                absSesuai,
-                updtime: store.UPDTIME,
-              });
+              penyesuaianStats.fantasticStores.push(storeItem);
             }
           }
         }
+
+        // Kalkulasi Rata-rata, Max, dan Min global
+        if (penyesuaianStats._unfollowedList.length > 0) {
+          penyesuaianStats.avgNominalUnfollowed = Math.round(
+            penyesuaianStats.totalNominalUnfollowed / penyesuaianStats.unfollowedStores,
+          );
+          const sortedGlobal = [...penyesuaianStats._unfollowedList].sort((a, b) => b.absSesuai - a.absSesuai);
+          penyesuaianStats.maxStore = sortedGlobal[0];
+          penyesuaianStats.maxNominalUnfollowed = sortedGlobal[0].absSesuai;
+          penyesuaianStats.minStore = sortedGlobal[sortedGlobal.length - 1];
+          penyesuaianStats.minNominalUnfollowed = sortedGlobal[sortedGlobal.length - 1].absSesuai;
+        }
+        delete penyesuaianStats._unfollowedList;
+
+        // Kalkulasi Rata-rata, Max, dan Min per cabang
+        for (const cab in penyesuaianStats.byCabang) {
+          const cData = penyesuaianStats.byCabang[cab];
+          if (cData._unfollowedList && cData._unfollowedList.length > 0) {
+            cData.avgNominalUnfollowed = Math.round(
+              cData.totalNominalUnfollowed / cData.unfollowedStores,
+            );
+            const sortedCab = [...cData._unfollowedList].sort((a, b) => b.absSesuai - a.absSesuai);
+            cData.maxStore = sortedCab[0];
+            cData.maxNominalUnfollowed = sortedCab[0].absSesuai;
+            cData.minStore = sortedCab[sortedCab.length - 1];
+            cData.minNominalUnfollowed = sortedCab[sortedCab.length - 1].absSesuai;
+          }
+          delete cData._unfollowedList;
+        }
+
         // Urutkan toko fantastis dari nilai selisih terbesar
         penyesuaianStats.fantasticStores.sort((a, b) => b.absSesuai - a.absSesuai);
 
@@ -384,6 +431,11 @@ class DashboardService {
           totalStores: 0,
           unfollowedStores: 0,
           totalNominalUnfollowed: 0,
+          avgNominalUnfollowed: 0,
+          maxNominalUnfollowed: 0,
+          minNominalUnfollowed: 0,
+          maxStore: null,
+          minStore: null,
           fantasticCount: 0,
         };
         const virtualMrg = virtualMrgStats.byCabang[cab] || {
@@ -431,6 +483,11 @@ class DashboardService {
           totalStores: penyesuaianStats.totalStores,
           unfollowedStores: penyesuaianStats.unfollowedStores,
           totalNominalUnfollowed: Math.round(penyesuaianStats.totalNominalUnfollowed),
+          avgNominalUnfollowed: penyesuaianStats.avgNominalUnfollowed,
+          maxNominalUnfollowed: penyesuaianStats.maxNominalUnfollowed,
+          minNominalUnfollowed: penyesuaianStats.minNominalUnfollowed,
+          maxStore: penyesuaianStats.maxStore,
+          minStore: penyesuaianStats.minStore,
           fantasticCount: penyesuaianStats.fantasticStores.length,
           fantasticStores: penyesuaianStats.fantasticStores.slice(0, 10),
         },

@@ -71,6 +71,9 @@
       </div>
     </div>
 
+    <!-- Follow-Up & Closing Resume Section -->
+    <DashboardFollowUpResume />
+
     <!-- Main Content -->
     <div class="dashboard-main">
 
@@ -182,6 +185,7 @@ import { ref, computed, onMounted } from 'vue';
 import Button from 'primevue/button';
 import Skeleton from 'primevue/skeleton';
 import dashboardService from '@/services/dashboard.service';
+import DashboardFollowUpResume from './components/DashboardFollowUpResume.vue';
 import { useAuthStore, useMenuStore } from '@/stores';
 
 // ── Auth ──────────────────────────────────────────────────────────────────────

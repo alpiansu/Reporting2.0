@@ -6,5 +6,6 @@ const router = express.Router();
 
 router.get("/stats", authenticateJWT, dashboardController.getStats);
 router.get("/recent-activity", authenticateJWT, dashboardController.getRecentActivity);
+router.get("/followup-resume", authenticateJWT, dashboardController.getFollowUpResume);
 
 export default router;

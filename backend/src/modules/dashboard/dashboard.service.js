@@ -1,8 +1,13 @@
 import fs from "fs/promises";
 import path from "path";
+import moment from "moment-timezone";
 import logger from "../../config/logger.js";
 import resilientDb from "../../config/resilient-database.js";
 import User from "../../models/user.model.js";
+import penyesuaianService from "../penyesuaian/penyesuaian.service.js";
+import rekonVirtualMrgService from "../rekon_virtual_mrg/rekon_virtual_mrg.service.js";
+import spaceHddService from "../ceklist-prep-closing/services/space_hdd.service.js";
+import storeService from "../store/storeService.js";
 
 class DashboardService {
   constructor() {
@@ -122,7 +127,6 @@ class DashboardService {
       const recent = allActivities.slice(0, 15);
 
       // Enrich with user data from DB so the frontend can display names.
-      // Falls back gracefully if DB is unavailable.
       const uniqueUserIds = [
         ...new Set(recent.map((a) => a.userId).filter(Boolean)),
       ];
@@ -130,8 +134,6 @@ class DashboardService {
 
       if (uniqueUserIds.length > 0) {
         try {
-          // User model is JSON-file-based; findAll returns all users without filtering.
-          // We fetch all and keep only the IDs we need.
           const allUsers = await User.findAll();
           allUsers.forEach((u) => {
             if (uniqueUserIds.includes(u.id)) {
@@ -143,7 +145,6 @@ class DashboardService {
             }
           });
         } catch (dbErr) {
-          // DB might be offline — log a warning and continue without enrichment
           logger.warn(
             `Could not enrich activities with user data: ${dbErr.message}`,
           );
@@ -158,6 +159,299 @@ class DashboardService {
       logger.error(`Dashboard recent activity failed: ${error.message}`);
       return [];
     }
+  }
+
+  /**
+   * Mengumpulkan ringkasan kasus yang perlu difollow-up dari:
+   * 1. Penyesuaian Toko (toko belum follow-up, total nominal belum FU, dan nilai fantastis)
+   * 2. Saldo Virtual Margin Based (item belum follow-up per cabang)
+   * 3. Checklist Closing Bulanan (Space HDD server cabang, sisa GB kritis/warning belum FU)
+   *
+   * @param {string} [requestedPeriode] - Format YYMM (misal: "2610")
+   * @returns {Promise<Object>} KPI Summary & Matriks Cabang yang perlu follow-up
+   */
+  async getFollowUpResume(requestedPeriode) {
+    const periode = requestedPeriode && /^\d{4}$/.test(requestedPeriode)
+      ? requestedPeriode
+      : moment().format("YYMM");
+
+    logger.info(`[dashboard.service] Mengambil follow-up resume untuk periode: ${periode}`);
+
+    // Inisialisasi metadata cabang & toko dari storeService
+    await storeService.ensureInitialized();
+    const branchNameMap = new Map();
+    for (const s of storeService.stores || []) {
+      const bCode = s.branch || s.cab;
+      if (bCode && !branchNameMap.has(bCode)) {
+        branchNameMap.set(bCode, s.branchName || s.namaCabang || bCode);
+      }
+    }
+
+    // ── 1. KASUS PENYESUAIAN TOKO ──
+    const penyesuaianStats = {
+      totalStores: 0,
+      unfollowedStores: 0,
+      totalNominalUnfollowed: 0,
+      fantasticStores: [],
+      byCabang: {},
+    };
+
+    try {
+      await penyesuaianService.ensureDataLoaded(periode);
+      const activeStores = (penyesuaianService.penyesuaianData || []).filter(
+        (i) => i.PERIODE === periode && i.RECID === "*",
+      );
+      penyesuaianStats.totalStores = activeStores.length;
+
+      if (activeStores.length > 0) {
+        const enriched = await penyesuaianService.enrichWithNotes(activeStores);
+        for (const store of enriched) {
+          const cab = store.CABANG || "UNKNOWN";
+          if (!penyesuaianStats.byCabang[cab]) {
+            penyesuaianStats.byCabang[cab] = {
+              totalStores: 0,
+              unfollowedStores: 0,
+              totalNominalUnfollowed: 0,
+              fantasticCount: 0,
+            };
+          }
+          penyesuaianStats.byCabang[cab].totalStores++;
+
+          const hasNote = Boolean(store.note && store.note.noteText && store.note.noteText.trim() !== "");
+          if (!hasNote) {
+            const absSesuai = Math.abs(Number(store.SESUAI) || 0);
+            penyesuaianStats.unfollowedStores++;
+            penyesuaianStats.totalNominalUnfollowed += absSesuai;
+            penyesuaianStats.byCabang[cab].unfollowedStores++;
+            penyesuaianStats.byCabang[cab].totalNominalUnfollowed += absSesuai;
+
+            // Toko bernilai fantastis (|SESUAI| >= Rp 1.000.000)
+            if (absSesuai >= 1000000) {
+              penyesuaianStats.byCabang[cab].fantasticCount++;
+              penyesuaianStats.fantasticStores.push({
+                cabang: store.CABANG,
+                kdtk: store.KDTK,
+                sesuai: Number(store.SESUAI) || 0,
+                absSesuai,
+                updtime: store.UPDTIME,
+              });
+            }
+          }
+        }
+        // Urutkan toko fantastis dari nilai selisih terbesar
+        penyesuaianStats.fantasticStores.sort((a, b) => b.absSesuai - a.absSesuai);
+
+        // Berikan nama toko pada daftar fantastis
+        for (const item of penyesuaianStats.fantasticStores.slice(0, 15)) {
+          try {
+            const sInfo = await storeService.getStoreByCode(item.kdtk);
+            item.namaToko = sInfo?.storeName || item.kdtk;
+          } catch {
+            item.namaToko = item.kdtk;
+          }
+        }
+      }
+    } catch (err) {
+      logger.warn(`[dashboard.service] Gagal memuat resume penyesuaian: ${err.message}`);
+    }
+
+    // ── 2. KASUS SALDO VIRTUAL MARGIN BASED ──
+    const virtualMrgStats = {
+      totalItems: 0,
+      unfollowedItems: 0,
+      unfollowedShops: 0,
+      byCabang: {},
+    };
+
+    try {
+      const virtualRes = await rekonVirtualMrgService.getAllRecords({ cabang: "All", periode });
+      const virtualRecords = virtualRes?.data || [];
+      virtualMrgStats.totalItems = virtualRecords.length;
+
+      const shopSet = new Set();
+      for (const rec of virtualRecords) {
+        const cab = rec.CABANG || "UNKNOWN";
+        if (!virtualMrgStats.byCabang[cab]) {
+          virtualMrgStats.byCabang[cab] = {
+            totalItems: 0,
+            unfollowedItems: 0,
+            unfollowedShops: 0,
+            totalSel: 0,
+            _shops: new Set(),
+          };
+        }
+        virtualMrgStats.byCabang[cab].totalItems++;
+
+        const hasNote = Boolean(rec.note && rec.note.noteText && rec.note.noteText.trim() !== "");
+        if (!hasNote) {
+          virtualMrgStats.unfollowedItems++;
+          shopSet.add(rec.SHOP);
+          virtualMrgStats.byCabang[cab].unfollowedItems++;
+          virtualMrgStats.byCabang[cab].totalSel += Number(rec.SEL) || 0;
+          virtualMrgStats.byCabang[cab]._shops.add(rec.SHOP);
+        }
+      }
+      virtualMrgStats.unfollowedShops = shopSet.size;
+
+      for (const cab in virtualMrgStats.byCabang) {
+        virtualMrgStats.byCabang[cab].unfollowedShops = virtualMrgStats.byCabang[cab]._shops.size;
+        delete virtualMrgStats.byCabang[cab]._shops;
+      }
+    } catch (err) {
+      logger.warn(`[dashboard.service] Gagal memuat resume virtual margin: ${err.message}`);
+    }
+
+    // ── 3. KASUS KESIAPAN CLOSING BULANAN (SPACE HDD) ──
+    const closingSpaceStats = {
+      totalBranches: 0,
+      uncheckedBranches: 0,
+      criticalUnfollowed: 0,
+      warningUnfollowed: 0,
+      byCabang: {},
+    };
+
+    try {
+      const hddRows = await spaceHddService.getAll(periode, "All");
+      closingSpaceStats.totalBranches = hddRows.length;
+
+      for (const r of hddRows) {
+        const cab = r.KDCAB;
+        const isChecked = r.FREE_SPACE !== null && r.FREE_SPACE !== undefined && r.FREE_SPACE !== "";
+        const freeGb = r.freeSpaceGb;
+        const predGb = r.predictedUsage;
+        const hasFu = Boolean(r.FU && r.FU.trim() !== "" && r.FU !== "—");
+
+        let status = "ok";
+        let needsFu = false;
+
+        if (!isChecked) {
+          status = "unchecked";
+          needsFu = true;
+          closingSpaceStats.uncheckedBranches++;
+        } else if ((predGb !== null && predGb < 10) || (freeGb !== null && freeGb < 10)) {
+          status = "critical";
+          if (!hasFu) {
+            needsFu = true;
+            closingSpaceStats.criticalUnfollowed++;
+          }
+        } else if ((freeGb !== null && freeGb < 30) || (r.usageDiskSpace !== null && r.usageDiskSpace < -20)) {
+          status = "warning";
+          if (!hasFu) {
+            needsFu = true;
+            closingSpaceStats.warningUnfollowed++;
+          }
+        }
+
+        closingSpaceStats.byCabang[cab] = {
+          kdcab: cab,
+          ip: r.IP || "—",
+          os: r.OS || "—",
+          freeSpace: r.FREE_SPACE || "Belum Cek",
+          freeSpaceGb: freeGb,
+          predictedGb: predGb,
+          usageDiskSpace: r.usageDiskSpace,
+          status,
+          fu: r.FU || null,
+          freeAfter: r.FREE_AFTER || null,
+          hasFu,
+          needsFu,
+        };
+      }
+    } catch (err) {
+      logger.warn(`[dashboard.service] Gagal memuat resume space closing: ${err.message}`);
+    }
+
+    // ── 4. GABUNGKAN KE BRANCH ATTENTION MATRIX ──
+    let registeredBranches = [];
+    try {
+      registeredBranches = await storeService.getRegisteredBranches();
+    } catch {
+      registeredBranches = [];
+    }
+
+    const allCabSet = new Set([
+      ...registeredBranches,
+      ...Object.keys(penyesuaianStats.byCabang),
+      ...Object.keys(virtualMrgStats.byCabang),
+      ...Object.keys(closingSpaceStats.byCabang),
+    ]);
+
+    const branchMatrix = Array.from(allCabSet)
+      .filter(Boolean)
+      .map((cab) => {
+        const namaCabang = branchNameMap.get(cab) || cab;
+        const penyesuaian = penyesuaianStats.byCabang[cab] || {
+          totalStores: 0,
+          unfollowedStores: 0,
+          totalNominalUnfollowed: 0,
+          fantasticCount: 0,
+        };
+        const virtualMrg = virtualMrgStats.byCabang[cab] || {
+          totalItems: 0,
+          unfollowedItems: 0,
+          unfollowedShops: 0,
+          totalSel: 0,
+        };
+        const closingSpace = closingSpaceStats.byCabang[cab] || {
+          kdcab: cab,
+          freeSpace: "—",
+          freeSpaceGb: null,
+          predictedGb: null,
+          status: "unchecked",
+          hasFu: false,
+          needsFu: true,
+        };
+
+        const needsAttention =
+          penyesuaian.unfollowedStores > 0 ||
+          virtualMrg.unfollowedItems > 0 ||
+          closingSpace.needsFu;
+
+        return {
+          cabang: cab,
+          namaCabang,
+          needsAttention,
+          penyesuaian,
+          virtualMrg,
+          closingSpace,
+        };
+      });
+
+    // Urutkan cabang: Cabang yang perlu attention di atas, lalu urut kode cabang
+    branchMatrix.sort((a, b) => {
+      if (a.needsAttention && !b.needsAttention) return -1;
+      if (!a.needsAttention && b.needsAttention) return 1;
+      return a.cabang.localeCompare(b.cabang);
+    });
+
+    return {
+      periode,
+      kpi: {
+        penyesuaian: {
+          totalStores: penyesuaianStats.totalStores,
+          unfollowedStores: penyesuaianStats.unfollowedStores,
+          totalNominalUnfollowed: Math.round(penyesuaianStats.totalNominalUnfollowed),
+          fantasticCount: penyesuaianStats.fantasticStores.length,
+          fantasticStores: penyesuaianStats.fantasticStores.slice(0, 10),
+        },
+        virtualMrg: {
+          totalItems: virtualMrgStats.totalItems,
+          unfollowedItems: virtualMrgStats.unfollowedItems,
+          unfollowedShops: virtualMrgStats.unfollowedShops,
+        },
+        closingSpace: {
+          totalBranches: closingSpaceStats.totalBranches,
+          uncheckedBranches: closingSpaceStats.uncheckedBranches,
+          criticalUnfollowed: closingSpaceStats.criticalUnfollowed,
+          warningUnfollowed: closingSpaceStats.warningUnfollowed,
+          totalNeedsFu:
+            closingSpaceStats.criticalUnfollowed +
+            closingSpaceStats.warningUnfollowed +
+            closingSpaceStats.uncheckedBranches,
+        },
+      },
+      branches: branchMatrix,
+    };
   }
 }
 

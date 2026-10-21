@@ -20,6 +20,18 @@ class DashboardService {
       throw error;
     }
   }
+
+  async getFollowUpResume(periode) {
+    try {
+      const response = await api.get("/dashboard/followup-resume", {
+        params: periode ? { periode } : {},
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching dashboard followup resume:", error);
+      throw error;
+    }
+  }
 }
 
 export default new DashboardService();

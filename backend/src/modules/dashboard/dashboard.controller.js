@@ -21,6 +21,17 @@ class DashboardController {
       res.status(500).json({ message: "Internal server error" });
     }
   }
+
+  async getFollowUpResume(req, res) {
+    try {
+      const { periode } = req.query;
+      const resume = await dashboardService.getFollowUpResume(periode);
+      res.json(resume);
+    } catch (error) {
+      logger.error(`Error in getFollowUpResume controller: ${error.message}`);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  }
 }
 
 export default new DashboardController();

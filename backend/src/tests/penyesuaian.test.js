@@ -377,6 +377,23 @@ describe("config queries — filterWrc tidak lagi menyaring threshold di SQL", (
   test("sesuaiThreshold dipakai sebagai sumber kebenaran threshold", () => {
     expect(penyesuaianConfig.sesuaiThreshold).toBe(500000);
   });
+
+  test("filterWrc dan fullDetailWrc membatasi kolom UNION secara eksplisit (mencegah MySQL Error 1222)", () => {
+    const filterSql = penyesuaianConfig.queries.filterWrc(CAB, PERIODE, KDTK, "261020");
+    const detailSql = penyesuaianConfig.queries.fullDetailWrc(CAB, PERIODE, KDTK, "261020");
+
+    // Tidak boleh ada SELECT * dalam subquery UNION wt_ dan DT_
+    expect(filterSql).not.toMatch(/SELECT\s+\*\s+FROM\s+wt_/i);
+    expect(filterSql).not.toMatch(/SELECT\s+\*\s+FROM\s+DT_/i);
+    expect(detailSql).not.toMatch(/SELECT\s+\*\s+FROM\s+wt_/i);
+    expect(detailSql).not.toMatch(/SELECT\s+\*\s+FROM\s+DT_/i);
+
+    // Wajib memilih kolom eksplisit
+    expect(filterSql).toContain("SELECT PRDCD, RTYPE, QTY, ISTYPE, GROSS FROM wt_");
+    expect(filterSql).toContain("SELECT PRDCD, RTYPE, QTY, HPP FROM DT_");
+    expect(detailSql).toContain("SELECT PRDCD, RTYPE, QTY, ISTYPE, GROSS FROM wt_");
+    expect(detailSql).toContain("SELECT PRDCD, RTYPE, QTY, HPP FROM DT_");
+  });
 });
 
 describe("getDetailFromStore — lastday periode tarikan penyesuaian terakhir SUKSES", () => {

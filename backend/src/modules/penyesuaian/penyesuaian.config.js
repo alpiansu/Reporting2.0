@@ -1,6 +1,34 @@
 /**
  * Configuration for penyesuaian module
  */
+/**
+ * Generate UNION ALL query untuk tabel wt harian (mstran).
+ * Kolom dibatasi eksplisit untuk mencegah error MySQL 1222 ("different number of columns")
+ * jika skema tabel wt_ memiliki jumlah kolom berbeda antar tanggal (misal penambahan DISC06).
+ */
+function buildWtUnion(yyMM, lastDayNumber, kdtk) {
+  return Array.from({ length: lastDayNumber }, (_, index) => {
+    const day = String(index + 1).padStart(2, "0");
+    const tableDate = `${yyMM}${day}`;
+
+    return `SELECT PRDCD, RTYPE, QTY, ISTYPE, GROSS FROM wt_${tableDate} WHERE SHOP = '${kdtk}'`;
+  }).join(" UNION ALL\n\t\t");
+}
+
+/**
+ * Generate UNION ALL query untuk tabel DT harian (mtran).
+ * Kolom dibatasi eksplisit untuk mencegah error MySQL 1222 ("different number of columns")
+ * serta menghemat I/O dan memory database.
+ */
+function buildDtUnion(yyMM, lastDayNumber, kdtk) {
+  return Array.from({ length: lastDayNumber }, (_, index) => {
+    const day = String(index + 1).padStart(2, "0");
+    const tableDate = `${yyMM}${day}`;
+
+    return `SELECT PRDCD, RTYPE, QTY, HPP FROM DT_${tableDate} WHERE SHOP = '${kdtk}'`;
+  }).join(" UNION ALL\n\t\t");
+}
+
 export default {
   // Query templates
   queries: {
@@ -44,31 +72,11 @@ export default {
       // SELECT * FROM wt_260827 WHERE shop = 'T001'
       // ============================================================
 
-      const wtUnion = Array.from({ length: lastDayNumber }, (_, index) => {
-        const day = String(index + 1).padStart(2, "0");
-        const tableDate = `${yyMM}${day}`;
-
-        return `SELECT * FROM wt_${tableDate} WHERE shop = '${kdtk}'`;
-      }).join(" UNION ALL\n\t\t");
-
       // ============================================================
-      // Generate UNION ALL DT
-      //
-      // Contoh lastday = 260827:
-      //
-      // SELECT * FROM DT_260801 WHERE SHOP = 'T001'
-      // UNION ALL
-      // SELECT * FROM DT_260802 WHERE SHOP = 'T001'
-      // ...
-      // SELECT * FROM DT_260827 WHERE SHOP = 'T001'
+      // Generate UNION ALL WT & DT (Explicit column projection)
       // ============================================================
-
-      const dtUnion = Array.from({ length: lastDayNumber }, (_, index) => {
-        const day = String(index + 1).padStart(2, "0");
-        const tableDate = `${yyMM}${day}`;
-
-        return `SELECT * FROM DT_${tableDate} WHERE SHOP = '${kdtk}'`;
-      }).join(" UNION ALL\n\t\t");
+      const wtUnion = buildWtUnion(yyMM, lastDayNumber, kdtk);
+      const dtUnion = buildDtUnion(yyMM, lastDayNumber, kdtk);
 
       // ============================================================
       // Main Query
@@ -389,31 +397,11 @@ export default {
       // SELECT * FROM wt_260827 WHERE shop = 'T001'
       // ============================================================
 
-      const wtUnion = Array.from({ length: lastDayNumber }, (_, index) => {
-        const day = String(index + 1).padStart(2, "0");
-        const tableDate = `${yyMM}${day}`;
-
-        return `SELECT * FROM wt_${tableDate} WHERE shop = '${kdtk}'`;
-      }).join(" UNION ALL\n\t\t");
-
       // ============================================================
-      // Generate UNION ALL DT
-      //
-      // Contoh lastday = 260827:
-      //
-      // SELECT * FROM DT_260801 WHERE SHOP = 'T001'
-      // UNION ALL
-      // SELECT * FROM DT_260802 WHERE SHOP = 'T001'
-      // ...
-      // SELECT * FROM DT_260827 WHERE SHOP = 'T001'
+      // Generate UNION ALL WT & DT (Explicit column projection)
       // ============================================================
-
-      const dtUnion = Array.from({ length: lastDayNumber }, (_, index) => {
-        const day = String(index + 1).padStart(2, "0");
-        const tableDate = `${yyMM}${day}`;
-
-        return `SELECT * FROM DT_${tableDate} WHERE SHOP = '${kdtk}'`;
-      }).join(" UNION ALL\n\t\t");
+      const wtUnion = buildWtUnion(yyMM, lastDayNumber, kdtk);
+      const dtUnion = buildDtUnion(yyMM, lastDayNumber, kdtk);
 
       // ============================================================
       // Main Query

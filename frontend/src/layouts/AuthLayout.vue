@@ -1,16 +1,19 @@
 <template>
   <div class="auth-layout">
-    <animated-element animation="fade-in" :duration="800">
-      <page-transition name="fade" mode="out-in">
-        <router-view />
-      </page-transition>
-    </animated-element>
+    <!--
+      Transisi route tidak lagi dibungkus PageTransition/AnimatedElement di sini.
+      App.vue sudah membungkus <router-view /> dengan PageTransition zoom-fade,
+      sehingga menumpukkannya lagi hanya memperlambat render tanpa manfaat visual.
+    -->
+    <router-view />
   </div>
 </template>
 
 <script setup>
 /**
- * Layout for authentication pages (login, register)
+ * Layout for authentication pages (login, register).
+ * Menyediakan kanvas full-bleed (lihat AuthLayout.style.css) tempat
+ * halaman auth me-render card melayang-nya.
  */
 </script>
 

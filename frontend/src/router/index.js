@@ -55,6 +55,12 @@ const staticRoutes = [
 // MainLayout route akan ditambahkan secara dinamis setelah routes dimuat
 let mainLayoutRoute = null;
 
+// Tujuan akhir user saat navigasi harus dialihkan sementara ke AppLoading
+// (routes belum dimuat). Disimpan di sini — bukan lewat query string — agar:
+// (1) setelah routes selesai dimuat user kembali ke halaman yang ia tuju,
+// (2) nilainya berasal dari navigasi internal, tidak bisa dimanipulasi via URL.
+let pendingTarget = null;
+
 // Gabungkan rute statis dengan rute dinamis
 const routes = [...staticRoutes];
 
@@ -298,6 +304,11 @@ router.beforeEach(async (to, from, next) => {
     if (to.name === "AppLoading") {
       // Mulai proses loading routes di background
       setTimeout(async () => {
+        // Konsumsi tujuan tersimpan SEKARANG, lalu bersihkan — mencegah loop
+        // bila tujuan gagal dimuat (fallback tetap ke Dashboard)
+        const target = pendingTarget;
+        pendingTarget = null;
+
         try {
           // Muat data cabang terlebih dahulu
           if (!cabangStore.isInitialized) {
@@ -305,10 +316,10 @@ router.beforeEach(async (to, from, next) => {
           }
 
           // Kemudian muat routes dinamis
-          await addDynamicRoutes();
+          const routesLoaded = await addDynamicRoutes();
 
-          // Setelah selesai, arahkan ke dashboard
-          router.push({ name: "Dashboard" });
+          // Setelah selesai, arahkan ke tujuan awal user (jika routes valid) atau dashboard
+          router.push(routesLoaded && target ? target : { name: "Dashboard" });
         } catch (error) {
           console.error("Failed to load application data:", error);
           // Jika gagal, tetap arahkan ke dashboard dengan routes minimal
@@ -321,6 +332,9 @@ router.beforeEach(async (to, from, next) => {
     }
 
     // Jika mencoba akses route lain sebelum loading selesai, arahkan ke loading
+    // sambil menyimpan tujuan awalnya (perbaikan bug: user selalu berakhir di
+    // Dashboard setelah login, mengabaikan ?redirect= dari router guard)
+    pendingTarget = to.fullPath;
     next({ name: "AppLoading" });
     return;
   }

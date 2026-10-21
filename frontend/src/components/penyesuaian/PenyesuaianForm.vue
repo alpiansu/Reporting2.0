@@ -213,6 +213,7 @@ const startDirectProgressMonitoring = (taskId) => {
         info: "Processing completed",
         status: "completed"
       };
+      handleReconciliationComplete();
     },
     // onError callback
     (errorData) => {
@@ -372,11 +373,22 @@ const handleCabChange = () => {
 // Define emits
 const emit = defineEmits(['view-results']);
 
+let reconciliationCompleted = false;
+
+const handleReconciliationComplete = () => {
+  if (reconciliationCompleted) return;
+  reconciliationCompleted = true;
+  isReconciling.value = false;
+  emitViewResults();
+  toast.showSuccess('Sukses', 'Proses rekonsiliasi selesai! Data telah diperbarui.');
+};
+
 // Function to start reconciliation process
 const startReconciliation = async () => {
   if (!validateForm()) return;
   
   try {
+    reconciliationCompleted = false;
     isReconciling.value = true;
     
     toast.showInfo('Info', 'Memulai proses rekonsiliasi...', 2000);
@@ -388,15 +400,17 @@ const startReconciliation = async () => {
       force: forceScreening.value
     });
     
-    toast.showSuccess('Sukses', 'Proses rekonsiliasi selesai');
-    
-    // Refresh results after reconciliation
-    emitViewResults();
+    handleReconciliationComplete();
   } catch (error) {
-    const errorMessage = error.response?.data?.message || error.message || 'Terjadi kesalahan saat memulai rekonsiliasi';
-    toast.showError('Error', errorMessage);
-  } finally {
-    isReconciling.value = false;
+    const isTimeout = error.code === 'ECONNABORTED' || error.message?.includes('timeout');
+    if (isTimeout) {
+      console.warn('⚠️ HTTP screening request timeout, monitoring remains active via SSE');
+      toast.showInfo('Info', 'Screening memerlukan waktu lebih lama dan tetap berjalan di server. Progress tetap dipantau...');
+    } else {
+      const errorMessage = error.response?.data?.message || error.message || 'Terjadi kesalahan saat memulai rekonsiliasi';
+      toast.showError('Error', errorMessage);
+      isReconciling.value = false;
+    }
   }
 };
 </script>

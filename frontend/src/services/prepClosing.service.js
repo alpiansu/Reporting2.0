@@ -12,6 +12,7 @@ export const prepClosingApi = {
   async screenStore(periode, kdtk) {
     const response = await api.get(`${BASE_URL}/screening`, {
       params: { periode, kdtk },
+      timeout: 120000,
     });
     return response.data;
   },
@@ -22,7 +23,10 @@ export const prepClosingApi = {
   async screenCabang(periode, cabang, force = false) {
     const params = { periode, cabang };
     if (force) params.force = "true";
-    const response = await api.get(`${BASE_URL}/screening`, { params });
+    const response = await api.get(`${BASE_URL}/screening`, {
+      params,
+      timeout: 0,
+    });
     return response.data;
   },
 
@@ -32,7 +36,10 @@ export const prepClosingApi = {
   async screenAllCabang(periode, force = false) {
     const params = { periode, cabang: "All" };
     if (force) params.force = "true";
-    const response = await api.get(`${BASE_URL}/screening`, { params });
+    const response = await api.get(`${BASE_URL}/screening`, {
+      params,
+      timeout: 0,
+    });
     return response.data;
   },
 

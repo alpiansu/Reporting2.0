@@ -10,7 +10,10 @@ const rekonPersediaanService = {
    */
   async startScreening(params) {
     if (params.force) params.force = "true";
-    const response = await api.get("/rekon-persediaan/screening", { params });
+    const response = await api.get("/rekon-persediaan/screening", {
+      params,
+      timeout: 0,
+    });
     return response.data;
   },
 

@@ -84,7 +84,10 @@ class PenyesuaianService {
     if (data.force) {
       params.force = "true";
     }
-    const response = await api.get(`/${this.fixedPattern}/screening`, { params });
+    const response = await api.get(`/${this.fixedPattern}/screening`, {
+      params,
+      timeout: 0, // Screening multi-store/cabang memakan waktu > 30 detik
+    });
     return response.data;
   }
 
@@ -94,6 +97,7 @@ class PenyesuaianService {
   async refreshStore(kdtk, periode) {
     const response = await api.get(`/${this.fixedPattern}/screening`, {
       params: { kdtk, periode },
+      timeout: 120000, // 2 menit untuk single store
     });
     return response.data;
   }
@@ -224,6 +228,7 @@ class PenyesuaianService {
   async deleteNote(kdtk, periode) {
     const response = await api.delete(`/${this.fixedPattern}/note/`, {
       params: { kdtk, periode },
+      timeout: 120000, // 2 menit untuk single store
     });
     return response.data;
   }

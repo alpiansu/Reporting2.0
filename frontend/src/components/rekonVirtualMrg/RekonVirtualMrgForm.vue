@@ -259,6 +259,7 @@ const startDirectProgressMonitoring = (taskId) => {
         info: "Processing completed",
         status: "completed"
       };
+      handleReconciliationComplete();
     },
     // onError callback
     (errorData) => {
@@ -485,6 +486,17 @@ const onStoreFilter = (event) => {
 // Define emits
 const emit = defineEmits(['view-results']);
 
+let reconciliationCompleted = false;
+
+const handleReconciliationComplete = () => {
+  if (reconciliationCompleted) return;
+  reconciliationCompleted = true;
+  isReconciling.value = false;
+  isSingleLoading.value = false;
+  emitViewResults();
+  toast.showSuccess('Sukses', 'Proses rekonsiliasi selesai! Data telah diperbarui.');
+};
+
 // Function to start reconciliation process
 const startReconciliation = async () => {
   if (!validateForm()) return;
@@ -492,6 +504,7 @@ const startReconciliation = async () => {
   const isSingleStore = formData.shops && formData.shops.length === 1;
   
   try {
+    reconciliationCompleted = false;
     if (isSingleStore) {
       isSingleLoading.value = true;
     } else {
@@ -501,23 +514,25 @@ const startReconciliation = async () => {
     toast.showInfo('Info', 'Memulai proses rekonsiliasi...', 2000);
     
     // Call API to start reconciliation
-    const response = await rekonVirtualMrgService.startReconciliation({
+    await rekonVirtualMrgService.startReconciliation({
       cab: formData.cab,
       periode: formData.periode,
       shops: formData.shops,
       force: forceScreening.value
     });
     
-    toast.showSuccess('Sukses', 'Proses rekonsiliasi selesai');
-    
-    // Refresh results after reconciliation
-    emitViewResults();
+    handleReconciliationComplete();
   } catch (error) {
-    const errorMessage = error.response?.data?.message || error.message || 'Terjadi kesalahan saat memulai rekonsiliasi';
-    toast.showError('Error', errorMessage);
-  } finally {
-    isReconciling.value = false;
-    isSingleLoading.value = false;
+    const isTimeout = error.code === 'ECONNABORTED' || error.message?.includes('timeout');
+    if (isTimeout) {
+      console.warn('⚠️ HTTP screening request timeout, monitoring remains active via SSE');
+      toast.showInfo('Info', 'Screening memerlukan waktu lebih lama dan tetap berjalan di server. Progress tetap dipantau...');
+    } else {
+      const errorMessage = error.response?.data?.message || error.message || 'Terjadi kesalahan saat memulai rekonsiliasi';
+      toast.showError('Error', errorMessage);
+      isReconciling.value = false;
+      isSingleLoading.value = false;
+    }
   }
 };
 </script>

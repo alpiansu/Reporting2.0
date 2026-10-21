@@ -11,7 +11,7 @@ export default {
       } else {
         delete params.shops;
       }
-      return (await api.get(`${BASE_URL}/screening`, { params })).data;
+      return (await api.get(`${BASE_URL}/screening`, { params, timeout: 0 })).data;
     } catch (err) {
       console.log(`error when trying to do screening on rekon_sales: ${err.message}`);
     }
@@ -19,7 +19,7 @@ export default {
 
   async screenStore(kdtk, periode) {
     // Re-screen single store via screening endpoint (GET)
-    return (await api.get(`${BASE_URL}/screening`, { params: { kdtk, periode } })).data;
+    return (await api.get(`${BASE_URL}/screening`, { params: { kdtk, periode }, timeout: 120000 })).data;
   },
 
   async getSummary(params) {

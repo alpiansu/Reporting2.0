@@ -264,7 +264,7 @@ class DashboardService {
     };
 
     try {
-      const virtualRes = await rekonVirtualMrgService.getAllRecords({ cabang: "All", periode });
+      const virtualRes = await rekonVirtualMrgService.getAll({ cabang: "All", periode });
       const virtualRecords = virtualRes?.data || [];
       virtualMrgStats.totalItems = virtualRecords.length;
 

@@ -33,6 +33,11 @@ export function useScreening() {
       screeningResult.value = await prepClosingApi.screenCabang(periode, cabang, force);
       return screeningResult.value;
     } catch (err) {
+      const isTimeout = err.code === "ECONNABORTED" || err.message?.includes("timeout");
+      if (isTimeout) {
+        console.warn("⚠️ HTTP screening request timeout, monitoring remains active via SSE");
+        return { success: true };
+      }
       screeningError.value = err.response?.data?.message || "Gagal melakukan screening cabang";
       console.error("Error screening cabang:", err);
       throw err;
@@ -48,6 +53,11 @@ export function useScreening() {
       screeningResult.value = await prepClosingApi.screenAllCabang(periode, force);
       return screeningResult.value;
     } catch (err) {
+      const isTimeout = err.code === "ECONNABORTED" || err.message?.includes("timeout");
+      if (isTimeout) {
+        console.warn("⚠️ HTTP screening request timeout, monitoring remains active via SSE");
+        return { success: true };
+      }
       screeningError.value = err.response?.data?.message || "Gagal melakukan screening semua cabang";
       console.error("Error screening all cabang:", err);
       throw err;

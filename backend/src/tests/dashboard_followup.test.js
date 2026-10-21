@@ -55,19 +55,23 @@ jest.mock("../modules/penyesuaian/penyesuaian.service.js", () => {
   };
 });
 
-jest.mock("../modules/rekon_virtual_mrg/rekon_virtual_mrg.service.js", () => ({
-  __esModule: true,
-  default: {
-    getAllRecords: jest.fn().mockResolvedValue({
-      status: "success",
-      data: [
-        { CABANG: "G001", SHOP: "TK01", PRDCD: "PR01", SEL: -5, note: null },
-        { CABANG: "G001", SHOP: "TK01", PRDCD: "PR02", SEL: 10, note: { noteText: "OK" } },
-        { CABANG: "G002", SHOP: "TK03", PRDCD: "PR03", SEL: 2, note: null },
-      ],
-    }),
-  },
-}));
+jest.mock("../modules/rekon_virtual_mrg/rekon_virtual_mrg.service.js", () => {
+  const mockData = {
+    status: "success",
+    data: [
+      { CABANG: "G001", SHOP: "TK01", PRDCD: "PR01", SEL: -5, note: null },
+      { CABANG: "G001", SHOP: "TK01", PRDCD: "PR02", SEL: 10, note: { noteText: "OK" } },
+      { CABANG: "G002", SHOP: "TK03", PRDCD: "PR03", SEL: 2, note: null },
+    ],
+  };
+  return {
+    __esModule: true,
+    default: {
+      getAll: jest.fn().mockResolvedValue(mockData),
+      getAllRecords: jest.fn().mockResolvedValue(mockData),
+    },
+  };
+});
 
 jest.mock("../modules/ceklist-prep-closing/services/space_hdd.service.js", () => ({
   __esModule: true,

@@ -79,7 +79,10 @@ const rekonVirtualMrgService = {
       params.force = "true";
     }
 
-    const response = await api.get(`/${fixedPattern}/screening`, { params });
+    const response = await api.get(`/${fixedPattern}/screening`, {
+      params,
+      timeout: 0, // Screening multi-store/cabang memakan waktu > 30 detik
+    });
     return response.data;
   },
 

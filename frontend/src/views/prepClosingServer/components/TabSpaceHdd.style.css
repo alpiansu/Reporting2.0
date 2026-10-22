@@ -112,8 +112,9 @@
 
 .server-cabang {
   display: flex;
-  align-items: baseline;
-  gap: 0.35rem;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
 }
 
 .cabang-code {
@@ -123,14 +124,14 @@
 }
 
 .cabang-name {
-  font-size: 0.72rem;
+  font-size: 0.76rem;
   color: var(--text-color-secondary, #64748b);
   text-transform: uppercase;
   letter-spacing: 0.02em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 110px;
+  max-width: 170px;
 }
 
 .server-meta {

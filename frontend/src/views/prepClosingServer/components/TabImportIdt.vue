@@ -63,7 +63,7 @@
         </div>
       </template>
 
-      <Column header="Cabang" sortable sortField="KDCAB" style="width:140px">
+      <Column header="Cabang" sortable sortField="KDCAB" headerStyle="width:25%" style="width:25%">
         <template #body="{ data }">
           <div class="cabang-cell">
             <span class="cabang-code font-mono">{{ formatCode(data.KDCAB) }}</span>
@@ -71,14 +71,14 @@
           </div>
         </template>
       </Column>
-      <Column header="Status" sortable :sortField="(d) => d.CAPTURE ? 1 : 0" style="width:100px">
+      <Column header="Status" sortable :sortField="(d) => d.CAPTURE ? 1 : 0" headerStyle="width:14%" style="width:14%">
         <template #body="{ data }">
           <Tag :value="data.CAPTURE ? 'Done' : 'Pending'"
             :severity="data.CAPTURE ? 'success' : 'warning'"
             :icon="data.CAPTURE ? 'pi pi-check' : 'pi pi-clock'" />
         </template>
       </Column>
-      <Column header="Capture" style="min-width:150px">
+      <Column header="Capture" headerStyle="width:30%" style="width:30%">
         <template #body="{ data }">
           <div v-if="data.CAPTURE" class="capture-cell-content">
             <a v-if="isImageUrl(data.CAPTURE)" :href="api.getAssetUrl(data.CAPTURE)"
@@ -93,19 +93,19 @@
           </div>
         </template>
       </Column>
-      <Column field="UPDTIME" header="Update Terakhir" sortable style="width:130px">
+      <Column field="UPDTIME" header="Update Terakhir" sortable headerStyle="width:18%" style="width:18%">
         <template #body="{ data }">
           <span class="text-xs text-color-secondary font-mono">{{ formatDateTime(data.UPDTIME) }}</span>
         </template>
       </Column>
-      <Column header="Aksi" style="width:100px; text-align:center">
+      <Column header="Aksi" headerStyle="width:13%; min-width:110px; text-align:center" style="width:13%; min-width:110px; text-align:center">
         <template #body="{ data }">
           <div class="row-actions justify-content-center">
-            <Button icon="pi pi-upload" class="p-button-text p-button-sm p-button-success p-1"
+            <Button icon="pi pi-upload" class="p-button-text p-button-sm p-button-success"
               v-tooltip.top="'Upload Gambar'" @click="openUploadDlg(data)" />
-            <Button icon="pi pi-pencil" class="p-button-text p-button-sm p-button-info p-1"
+            <Button icon="pi pi-pencil" class="p-button-text p-button-sm p-button-info"
               v-tooltip.top="'Edit Teks'" @click="openCaptureDialog(data)" />
-            <Button icon="pi pi-trash" class="p-button-text p-button-sm p-button-danger p-1"
+            <Button icon="pi pi-trash" class="p-button-text p-button-sm p-button-danger"
               v-tooltip.top="'Hapus'" @click="$emit('delete', data)" />
           </div>
         </template>

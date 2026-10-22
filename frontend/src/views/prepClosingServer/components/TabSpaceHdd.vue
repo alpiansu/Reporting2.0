@@ -77,7 +77,7 @@
       </template>
 
       <!-- Kolom 1: Cabang & Host (KDCAB + Nama + IP + OS + Indikator FU) -->
-      <Column header="Cabang & Host" sortable sortField="KDCAB" style="min-width:180px">
+      <Column header="Cabang & Host" sortable sortField="KDCAB" headerStyle="width:25%" style="width:25%">
         <template #body="{ data }">
           <div class="server-cell">
             <div class="server-cabang">
@@ -100,7 +100,7 @@
       </Column>
 
       <!-- Kolom 2: Free Space Saat Ini (dengan delta pemakaian) -->
-      <Column header="Free Space" sortable sortField="freeSpaceGb" style="width:125px">
+      <Column header="Free Space" sortable sortField="freeSpaceGb" headerStyle="width:17%" style="width:17%">
         <template #body="{ data }">
           <div class="space-cell">
             <span :class="['space-badge', spaceClass(data.freeSpaceGb)]">
@@ -117,7 +117,7 @@
       </Column>
 
       <!-- Kolom 3: Histori & Prediksi Bln Depan -->
-      <Column header="Bulan Lalu & Prediksi" style="width:150px">
+      <Column header="Bulan Lalu & Prediksi" headerStyle="width:20%" style="width:20%">
         <template #body="{ data }">
           <div class="history-cell">
             <div class="history-row">
@@ -142,14 +142,14 @@
       </Column>
 
       <!-- Kolom 4: Tanggal Check -->
-      <Column field="TGL_CHECK" header="Tgl Check" sortable style="width:95px">
+      <Column field="TGL_CHECK" header="Tgl Check" sortable headerStyle="width:14%" style="width:14%">
         <template #body="{ data }">
           <span class="text-xs font-mono">{{ formatDateShort(data.TGL_CHECK) }}</span>
         </template>
       </Column>
 
       <!-- Kolom 5: Capture Thumbnail -->
-      <Column header="Capture" style="width:70px; text-align:center">
+      <Column header="Capture" headerStyle="width:9%; text-align:center" style="width:9%; text-align:center">
         <template #body="{ data }">
           <div class="flex justify-content-center">
             <img v-if="data.CAPTURE_PATH" :src="api.getAssetUrl(data.CAPTURE_PATH)" alt="capture"
@@ -161,17 +161,17 @@
       </Column>
 
       <!-- Kolom 6: Aksi -->
-      <Column header="Aksi" style="width:100px; text-align:center">
+      <Column header="Aksi" headerStyle="width:15%; min-width:125px; text-align:center" style="width:15%; min-width:125px; text-align:center">
         <template #body="{ data }">
           <div class="row-actions justify-content-center">
-            <Button v-if="isLinux(data)" icon="pi pi-server" class="p-button-text p-button-sm p-button-success p-1"
+            <Button v-if="isLinux(data)" icon="pi pi-server" class="p-button-text p-button-sm p-button-success"
               :loading="checkingKdcab === data.KDCAB"
               v-tooltip.top="'Cek Storage SSH'" @click="openSshDialog(data)" />
-            <Button v-else icon="pi pi-server" class="p-button-text p-button-sm p-button-secondary opacity-30 cursor-not-allowed p-1"
+            <Button v-else icon="pi pi-server" class="p-button-text p-button-sm p-button-secondary opacity-30 cursor-not-allowed"
               disabled v-tooltip.top="'Khusus Linux'" />
-            <Button icon="pi pi-pencil" class="p-button-text p-button-sm p-button-info p-1"
+            <Button icon="pi pi-pencil" class="p-button-text p-button-sm p-button-info"
               v-tooltip.top="'Edit'" @click="openDialog(data)" />
-            <Button icon="pi pi-trash" class="p-button-text p-button-sm p-button-danger p-1"
+            <Button icon="pi pi-trash" class="p-button-text p-button-sm p-button-danger"
               v-tooltip.top="'Hapus'" @click="$emit('delete', data)" />
           </div>
         </template>

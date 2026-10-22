@@ -376,8 +376,19 @@
 }
 
 .row-actions {
-    display: flex;
-    gap: .2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    flex-wrap: nowrap !important;
+    white-space: nowrap !important;
+}
+
+.row-actions .p-button {
+    width: 28px !important;
+    height: 28px !important;
+    padding: 0 !important;
+    flex-shrink: 0 !important;
 }
 
 /* ─── Rekap ──────────────────────────────────────────────────────────────────── */

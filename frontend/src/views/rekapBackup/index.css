@@ -99,3 +99,11 @@
     padding: 0.75rem;
   }
 }
+
+@media (prefers-color-scheme: dark) {
+  .active-filter-badge {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: rgba(99, 102, 241, 0.35);
+    color: #a5b4fc;
+  }
+}

@@ -15,9 +15,9 @@
           <i :class="['pi text-xl', type === 'harian' ? 'pi-calendar' : 'pi-briefcase']"></i>
         </div>
         <div>
-          <div class="text-xl font-bold text-900 capitalize mb-1" style="line-height: 1.2;">Resume Data {{ type }}</div>
-          <div class="text-sm text-600">
-            <span class="font-bold text-700">{{ getCabangName(cabang) }}</span>
+          <div class="text-xl font-bold capitalize mb-1 dialog-header-title" style="line-height: 1.2;">Resume Data {{ type }}</div>
+          <div class="text-sm dialog-header-subtitle">
+            <span class="font-bold dialog-header-cabang">{{ getCabangName(cabang) }}</span>
             <span class="font-mono"> — {{ formatCode(cabang) }}</span>
           </div>
         </div>
@@ -174,7 +174,8 @@
                   :severity="data.audit_severity || 'secondary'"
                   :value="data.audit_label || 'Belum Diaudit'"
                   :icon="data.audit_status === 'LENGKAP' ? 'pi pi-check' : (data.audit_status === 'BERMASALAH' ? 'pi pi-exclamation-triangle' : (data.audit_status === 'TIDAK_DAPAT_DIPERIKSA' ? 'pi pi-question-circle' : 'pi pi-shield'))"
-                  :style="getAuditTagStyle(data)"
+                  :class="['audit-status-tag', getAuditTagClass(data)]"
+                  :style="getAuditTagStyle()"
                   v-tooltip.top="data.audit_status === 'BELUM_AUDIT' ? 'Klik untuk verifikasi kelengkapan data vs WRC' : 'Klik untuk melihat rincian hasil audit'"
                   @click="openAudit(data.periode)"
                 />
@@ -465,10 +466,10 @@
 
           <!-- Banner Peringatan jika data WRC tidak ada di cabang -->
           <div v-if="auditData?.summary?.wrc_available === false" class="expansion-alert expansion-alert--danger mb-3" style="display: flex; align-items: flex-start; gap: 0.75rem;">
-            <i class="pi pi-exclamation-circle text-xl" style="color: #dc2626; margin-top: 2px;"></i>
+            <i class="pi pi-exclamation-circle text-xl alert-icon-danger" style="margin-top: 2px;"></i>
             <div>
-              <div class="font-bold text-sm" style="color: #991b1b;">Data Master WRC Tidak Tersedia</div>
-              <div class="text-xs mt-1" style="color: #4b5563; line-height: 1.5;">
+              <div class="font-bold text-sm alert-title-danger">Data Master WRC Tidak Tersedia</div>
+              <div class="text-xs mt-1 alert-desc-danger" style="line-height: 1.5;">
                 {{ auditData.summary.message || 'Tabel transaksi/kodetoko untuk periode ini tidak ditemukan di database WRC cabang (sudah diarsipkan atau belum terbentuk).' }}<br>
                 Status kelengkapan ditandai sebagai <strong>Tidak Dapat Diperiksa</strong>. Daftar di bawah hanya menampilkan data yang terdata di server central.
               </div>
@@ -771,7 +772,7 @@
                     <i class="pi pi-times-circle mr-2"></i>
                     <strong>Peringatan:</strong> Toko ini tercatat aktif di WRC (kodetoko_{{ auditYymm }}) dengan total {{ store.total_hari_wrc }} hari transaksi, namun sama sekali TIDAK MEMILIKI file backup di database central.
                   </div>
-                  <div class="text-xs font-semibold mb-1 text-700">Daftar Tanggal Transaksi di WRC yang Hilang:</div>
+                  <div class="text-xs font-semibold mb-1 expansion-subheading">Daftar Tanggal Transaksi di WRC yang Hilang:</div>
                   <div class="date-chip-grid">
                     <span v-for="tgl in store.missing_dates" :key="tgl.tanggal" class="date-chip date-chip--missing">
                       {{ tgl.tanggal }}
@@ -815,8 +816,8 @@
                             <td class="font-mono font-bold">{{ inc.tanggal }}</td>
                             <td><Tag severity="danger" :value="inc.stat" /></td>
                             <td>{{ formatNumber(inc.jml_isi) }}</td>
-                            <td class="text-600">{{ inc.note || '—' }}</td>
-                            <td class="font-mono text-xs text-500">{{ inc.path || '—' }}</td>
+                            <td class="defect-note">{{ inc.note || '—' }}</td>
+                            <td class="defect-path">{{ inc.path || '—' }}</td>
                           </tr>
                         </tbody>
                       </table>
@@ -886,61 +887,24 @@ const getStatusSeverity = (stat) => {
   return 'danger';
 };
 
-const getAuditTagStyle = (data) => {
-  const baseStyle = {
-    cursor: 'pointer',
-    minWidth: '120px',
-    justifyContent: 'center',
-    transition: 'all 0.2s ease',
-  };
+const getAuditTagStyle = () => ({
+  cursor: 'pointer',
+  minWidth: '120px',
+  justifyContent: 'center',
+  transition: 'all 0.2s ease',
+});
 
-  if (data.audit_status !== 'BERMASALAH') {
-    return baseStyle;
-  }
-
+const getAuditTagClass = (data) => {
+  if (data.audit_status !== 'BERMASALAH') return '';
   const defects = Number(
     data.audit_defect_count ??
     ((data.audit_summary?.data_nok || 0) + (data.audit_summary?.kurang_tanggal || 0) + (data.audit_summary?.tidak_ada || 0))
   );
 
-  // Semakin besar jumlah toko yang kurang, semakin merah badgenya
-  if (defects <= 1) {
-    // 1 toko: Kuning / Amber lembut (Minor)
-    return {
-      ...baseStyle,
-      backgroundColor: '#fef3c7',
-      color: '#92400e',
-      border: '1px solid #fcd34d',
-      fontWeight: '600',
-    };
-  } else if (defects <= 5) {
-    // 2 - 5 toko: Oranye (Sedang)
-    return {
-      ...baseStyle,
-      backgroundColor: '#ffedd5',
-      color: '#c2410c',
-      border: '1px solid #fdba74',
-      fontWeight: '600',
-    };
-  } else if (defects <= 20) {
-    // 6 - 20 toko: Merah Terang (Banyak)
-    return {
-      ...baseStyle,
-      backgroundColor: '#fee2e2',
-      color: '#dc2626',
-      border: '1px solid #fca5a5',
-      fontWeight: '600',
-    };
-  } else {
-    // > 20 toko: Merah Tua / Crimson Pekat (Kritis)
-    return {
-      ...baseStyle,
-      backgroundColor: '#fecaca',
-      color: '#991b1b',
-      border: '1.5px solid #ef4444',
-      fontWeight: '700',
-    };
-  }
+  if (defects <= 1) return 'audit-status-tag--minor';
+  if (defects <= 5) return 'audit-status-tag--medium';
+  if (defects <= 20) return 'audit-status-tag--major';
+  return 'audit-status-tag--critical';
 };
 
 // ── Resume ───────────────────────────────────────────────────

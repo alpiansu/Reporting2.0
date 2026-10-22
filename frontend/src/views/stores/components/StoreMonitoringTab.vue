@@ -56,7 +56,7 @@
       </div>
     </div>
 
-    <!-- Summary KPI Cards -->
+    <!-- Summary KPI Cards (Dinamis sesuai Cabang yang dipilih) -->
     <div class="monitoring-kpi-grid">
       <!-- KPI Toko Akan Buka & Baru -->
       <div
@@ -70,9 +70,9 @@
         <div class="kpi-text-box">
           <span class="kpi-label">Akan Buka / Baru</span>
           <div class="kpi-value-row">
-            <span class="kpi-value">{{ summary.totalAkanBuka || 0 }}</span>
-            <span v-if="summary.totalBaruBulanIni > 0" class="kpi-sub-badge" title="Toko yang baru buka pada bulan ini">
-              {{ summary.totalBaruBulanIni }} baru bulan ini
+            <span class="kpi-value">{{ dynamicSummary.totalAkanBuka }}</span>
+            <span v-if="dynamicSummary.totalBaruBulanIni > 0" class="kpi-sub-badge" title="Toko yang baru buka pada bulan ini">
+              {{ dynamicSummary.totalBaruBulanIni }} baru bulan ini
             </span>
           </div>
         </div>
@@ -90,8 +90,8 @@
         <div class="kpi-text-box">
           <span class="kpi-label">Tutup Sementara (TS)</span>
           <div class="kpi-value-row">
-            <span class="kpi-value">{{ summary.totalTutupSementara || 0 }}</span>
-            <span class="kpi-sub-badge warning" v-if="summary.totalTutupSementara > 0">
+            <span class="kpi-value">{{ dynamicSummary.totalTutupSementara }}</span>
+            <span class="kpi-sub-badge warning" v-if="dynamicSummary.totalTutupSementara > 0">
               Perbaikan / Renovasi
             </span>
           </div>
@@ -110,8 +110,8 @@
         <div class="kpi-text-box">
           <span class="kpi-label">Rencana Tutup</span>
           <div class="kpi-value-row">
-            <span class="kpi-value">{{ summary.totalAkanTutup || 0 }}</span>
-            <span class="kpi-sub-badge warning" v-if="summary.totalAkanTutup > 0">
+            <span class="kpi-value">{{ dynamicSummary.totalAkanTutup }}</span>
+            <span class="kpi-sub-badge warning" v-if="dynamicSummary.totalAkanTutup > 0">
               Jadwal Akan Tutup
             </span>
           </div>
@@ -130,20 +130,54 @@
         <div class="kpi-text-box">
           <span class="kpi-label">Sudah Tutup & Saldo</span>
           <div class="kpi-value-row">
-            <span class="kpi-value">{{ summary.totalSudahTutup || 0 }}</span>
+            <span class="kpi-value">{{ dynamicSummary.totalSudahTutup }}</span>
             <span
-              v-if="summary.totalSudahTutupAdaSisa > 0"
+              v-if="dynamicSummary.totalSudahTutupAdaSisa > 0"
               class="kpi-sub-badge warning"
               title="Toko sudah tutup namun masih ada sisa saldo di closing WRC"
             >
-              {{ summary.totalSudahTutupAdaSisa }} ada sisa
+              {{ dynamicSummary.totalSudahTutupAdaSisa }} ada sisa
             </span>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Category Toolbar & Filter Bar -->
+    <!-- Quick Branch Filter Strip (Pills per Cabang) -->
+    <div class="branch-filter-strip">
+      <div class="branch-filter-label">
+        <i class="pi pi-building"></i>
+        <span>Filter Cabang:</span>
+      </div>
+      <div class="branch-pills-container">
+        <button
+          type="button"
+          class="branch-pill-btn"
+          :class="{ active: selectedCabang === '' }"
+          @click="selectedCabang = ''"
+          title="Tampilkan semua cabang"
+        >
+          <span>Semua Cabang</span>
+          <span class="branch-pill-badge">{{ totalStoresAllBranches }}</span>
+        </button>
+
+        <button
+          v-for="cab in cabangListWithStats"
+          :key="cab.code"
+          type="button"
+          class="branch-pill-btn"
+          :class="{ active: selectedCabang === cab.code }"
+          @click="selectedCabang = cab.code"
+          :title="`${cab.code} - ${cab.name}`"
+        >
+          <span>{{ cab.code }}</span>
+          <span class="branch-name-text">{{ cab.name }}</span>
+          <span class="branch-pill-badge">{{ cab.totalCount }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Category Toolbar & Live Search Controls -->
     <div class="monitoring-toolbar">
       <div class="category-tab-group">
         <button
@@ -192,24 +226,26 @@
       </div>
 
       <div class="monitoring-filter-controls">
-        <!-- Search Field -->
+        <!-- Live Search Input -->
         <div class="search-input-box">
           <i class="pi pi-search"></i>
           <input
             type="text"
             v-model="searchQuery"
-            placeholder="Cari kode, nama toko, keterangan..."
-            class="search-field"
+            placeholder="Live search kode, nama, cabang, keterangan..."
+            class="search-field-live"
           />
-          <button v-if="searchQuery" class="clear-btn" @click="searchQuery = ''" title="Hapus">
+          <button v-if="searchQuery" class="clear-btn" @click="searchQuery = ''" title="Bersihkan pencarian">
             <i class="pi pi-times"></i>
           </button>
         </div>
 
-        <!-- Filter Cabang -->
+        <!-- Filter Cabang Dropdown (Alternative Compact View) -->
         <select v-model="selectedCabang" class="select-filter" title="Filter Cabang">
           <option value="">Semua Cabang</option>
-          <option v-for="cab in cabangList" :key="cab" :value="cab">{{ cab }}</option>
+          <option v-for="cab in cabangListWithStats" :key="cab.code" :value="cab.code">
+            {{ cab.code }} - {{ cab.name }} ({{ cab.totalCount }})
+          </option>
         </select>
 
         <!-- Sub Filter Khusus Akan Buka -->
@@ -238,6 +274,25 @@
       </div>
     </div>
 
+    <!-- Live Search & Filter Status Alert -->
+    <div v-if="isFiltered" class="filter-status-alert">
+      <div>
+        <i class="pi pi-filter mr-1"></i>
+        <span>
+          Menampilkan hasil untuk
+          <span v-if="selectedCabang"> Cabang <strong>{{ selectedCabang }}</strong></span>
+          <span v-if="selectedCabang && searchQuery"> &amp; </span>
+          <span v-if="searchQuery"> pencarian "<strong>{{ searchQuery }}</strong>"</span>
+          <span v-if="filterBukaType !== 'all' && activeCategory === 'akan_buka'"> ({{ filterBukaType === 'baru' ? 'Baru Bulan Ini' : 'Akan Datang' }})</span>
+          <span v-if="filterSaldoStatus !== 'all' && activeCategory === 'sudah_tutup'"> ({{ filterSaldoStatus === 'ada_sisa' ? 'Ada Sisa Saldo' : 'Saldo Nol' }})</span>:
+          ditemukan <strong>{{ currentCategoryCount }}</strong> data.
+        </span>
+      </div>
+      <button type="button" class="btn-reset-filters" @click="resetFilters" title="Reset semua filter ke kondisi awal">
+        <i class="pi pi-times"></i> Reset Filter
+      </button>
+    </div>
+
     <!-- Table Container -->
     <div class="monitoring-table-card">
       <!-- 1. TABEL AKAN BUKA & BARU -->
@@ -253,7 +308,7 @@
       >
         <template #empty>
           <div class="p-4 text-center text-muted">
-            <i class="pi pi-inbox mr-2"></i> Tidak ada data toko akan buka atau baru yang sesuai kriteria.
+            <i class="pi pi-inbox mr-2"></i> Tidak ada data toko akan buka atau baru yang sesuai kriteria pencarian.
           </div>
         </template>
         <Column header="No" :style="{ width: '60px', textAlign: 'center' }">
@@ -261,9 +316,9 @@
             {{ slotProps.index + 1 }}
           </template>
         </Column>
-        <Column field="cabang" header="Cabang" :style="{ width: '100px' }">
+        <Column field="cabang" header="Cabang" :style="{ width: '110px' }">
           <template #body="slotProps">
-            <span class="branch-tag">{{ slotProps.data.cabang }}</span>
+            <span class="branch-tag" :title="getCabangName(slotProps.data.cabang)">{{ slotProps.data.cabang }}</span>
           </template>
         </Column>
         <Column field="kodeToko" header="Kode Toko" :style="{ width: '120px' }">
@@ -277,7 +332,7 @@
             <span>{{ formatDate(slotProps.data.tglBuka) }}</span>
           </template>
         </Column>
-        <Column header="Status" :style="{ width: '180px' }">
+        <Column header="Status" :style="{ width: '190px' }">
           <template #body="slotProps">
             <span
               v-if="slotProps.data.isNewThisMonth"
@@ -306,7 +361,7 @@
       >
         <template #empty>
           <div class="p-4 text-center text-muted">
-            <i class="pi pi-inbox mr-2"></i> Tidak ada data toko tutup sementara yang sesuai kriteria.
+            <i class="pi pi-inbox mr-2"></i> Tidak ada data toko tutup sementara yang sesuai kriteria pencarian.
           </div>
         </template>
         <Column header="No" :style="{ width: '60px', textAlign: 'center' }">
@@ -314,9 +369,9 @@
             {{ slotProps.index + 1 }}
           </template>
         </Column>
-        <Column field="cabang" header="Cabang" :style="{ width: '100px' }">
+        <Column field="cabang" header="Cabang" :style="{ width: '110px' }">
           <template #body="slotProps">
-            <span class="branch-tag">{{ slotProps.data.cabang }}</span>
+            <span class="branch-tag" :title="getCabangName(slotProps.data.cabang)">{{ slotProps.data.cabang }}</span>
           </template>
         </Column>
         <Column field="kodeToko" header="Kode Toko" :style="{ width: '120px' }">
@@ -371,7 +426,7 @@
       >
         <template #empty>
           <div class="p-4 text-center text-muted">
-            <i class="pi pi-inbox mr-2"></i> Tidak ada data toko rencana tutup yang sesuai kriteria.
+            <i class="pi pi-inbox mr-2"></i> Tidak ada data toko rencana tutup yang sesuai kriteria pencarian.
           </div>
         </template>
         <Column header="No" :style="{ width: '60px', textAlign: 'center' }">
@@ -379,9 +434,9 @@
             {{ slotProps.index + 1 }}
           </template>
         </Column>
-        <Column field="cabang" header="Cabang" :style="{ width: '100px' }">
+        <Column field="cabang" header="Cabang" :style="{ width: '110px' }">
           <template #body="slotProps">
-            <span class="branch-tag">{{ slotProps.data.cabang }}</span>
+            <span class="branch-tag" :title="getCabangName(slotProps.data.cabang)">{{ slotProps.data.cabang }}</span>
           </template>
         </Column>
         <Column field="kodeToko" header="Kode Toko" :style="{ width: '120px' }">
@@ -422,7 +477,7 @@
       >
         <template #empty>
           <div class="p-4 text-center text-muted">
-            <i class="pi pi-inbox mr-2"></i> Tidak ada data toko sudah tutup yang sesuai kriteria.
+            <i class="pi pi-inbox mr-2"></i> Tidak ada data toko sudah tutup yang sesuai kriteria pencarian.
           </div>
         </template>
         <Column header="No" :style="{ width: '60px', textAlign: 'center' }">
@@ -430,9 +485,9 @@
             {{ slotProps.index + 1 }}
           </template>
         </Column>
-        <Column field="cabang" header="Cabang" :style="{ width: '100px' }">
+        <Column field="cabang" header="Cabang" :style="{ width: '110px' }">
           <template #body="slotProps">
-            <span class="branch-tag">{{ slotProps.data.cabang }}</span>
+            <span class="branch-tag" :title="getCabangName(slotProps.data.cabang)">{{ slotProps.data.cabang }}</span>
           </template>
         </Column>
         <Column field="kodeToko" header="Kode Toko" :style="{ width: '120px' }">
@@ -494,7 +549,7 @@
           </div>
           <div class="ts-info-item">
             <span class="ts-info-label">Cabang</span>
-            <span class="ts-info-val">{{ selectedTsStore.cabang }}</span>
+            <span class="ts-info-val">{{ selectedTsStore.cabang }} - {{ getCabangName(selectedTsStore.cabang) }}</span>
           </div>
           <div class="ts-info-item">
             <span class="ts-info-label">Total Durasi</span>
@@ -533,6 +588,7 @@
 import { ref, computed, onMounted } from 'vue';
 import storeService from '@/services/store.service';
 import { useToast } from 'primevue/usetoast';
+import { useCabangStore } from '@/stores/cabang';
 
 const props = defineProps({
   canSync: {
@@ -542,6 +598,7 @@ const props = defineProps({
 });
 
 const toast = useToast();
+const cabangStore = useCabangStore();
 
 const loading = ref(false);
 const syncing = ref(false);
@@ -574,17 +631,77 @@ const rawData = ref({
 const showTsModal = ref(false);
 const selectedTsStore = ref(null);
 
-// Cabang list unique
-const cabangList = computed(() => {
-  const set = new Set();
-  (rawData.value.akanBuka || []).forEach(x => x.cabang && set.add(x.cabang));
-  (rawData.value.tutupSementara || []).forEach(x => x.cabang && set.add(x.cabang));
-  (rawData.value.akanTutup || []).forEach(x => x.cabang && set.add(x.cabang));
-  (rawData.value.sudahTutup || []).forEach(x => x.cabang && set.add(x.cabang));
-  return Array.from(set).sort();
+// Ambil nama cabang dari cabangStore
+const getCabangName = (code) => {
+  if (!code) return '';
+  return cabangStore.getCabangName(code) || code;
+};
+
+// Hitung total semua toko di semua cabang
+const totalStoresAllBranches = computed(() => {
+  return (
+    (rawData.value.akanBuka?.length || 0) +
+    (rawData.value.tutupSementara?.length || 0) +
+    (rawData.value.akanTutup?.length || 0) +
+    (rawData.value.sudahTutup?.length || 0)
+  );
 });
 
-// Filter helper
+// Cabang list with count stats
+const cabangListWithStats = computed(() => {
+  const map = new Map();
+
+  const countForCabang = (list) => {
+    (list || []).forEach((item) => {
+      const c = item.cabang;
+      if (c) {
+        map.set(c, (map.get(c) || 0) + 1);
+      }
+    });
+  };
+
+  countForCabang(rawData.value.akanBuka);
+  countForCabang(rawData.value.tutupSementara);
+  countForCabang(rawData.value.akanTutup);
+  countForCabang(rawData.value.sudahTutup);
+
+  return Array.from(map.entries())
+    .map(([code, totalCount]) => ({
+      code,
+      name: getCabangName(code),
+      totalCount,
+    }))
+    .sort((a, b) => a.code.localeCompare(b.code));
+});
+
+// Dynamic Summary Reactive terhadap filter cabang yang aktif
+const dynamicSummary = computed(() => {
+  const filterByCabang = (list) => {
+    if (!selectedCabang.value) return list || [];
+    return (list || []).filter((x) => x.cabang === selectedCabang.value);
+  };
+
+  const bAkanBuka = filterByCabang(rawData.value.akanBuka);
+  const bTutupSementara = filterByCabang(rawData.value.tutupSementara);
+  const bAkanTutup = filterByCabang(rawData.value.akanTutup);
+  const bSudahTutup = filterByCabang(rawData.value.sudahTutup);
+
+  const totalBaruBulanIni = bAkanBuka.filter((x) => x.isNewThisMonth).length;
+  const totalSudahTutupAdaSisa = bSudahTutup.filter((x) => x.statusSaldo === 'ADA_SISA').length;
+  const totalSudahTutupNol = bSudahTutup.filter((x) => x.statusSaldo === 'NOL').length;
+
+  return {
+    totalAkanBuka: bAkanBuka.length,
+    totalBaruBulanIni,
+    totalTutupSementara: bTutupSementara.length,
+    totalAkanTutup: bAkanTutup.length,
+    totalSudahTutup: bSudahTutup.length,
+    totalSudahTutupAdaSisa,
+    totalSudahTutupNol,
+  };
+});
+
+// Filter helper untuk pencarian live dan cabang
 const matchesSearchAndCabang = (item) => {
   if (selectedCabang.value && item.cabang !== selectedCabang.value) {
     return false;
@@ -606,9 +723,9 @@ const matchesSearchAndCabang = (item) => {
 const filteredAkanBuka = computed(() => {
   let list = (rawData.value.akanBuka || []).filter(matchesSearchAndCabang);
   if (filterBukaType.value === 'baru') {
-    list = list.filter(x => x.isNewThisMonth);
+    list = list.filter((x) => x.isNewThisMonth);
   } else if (filterBukaType.value === 'akan_datang') {
-    list = list.filter(x => !x.isNewThisMonth);
+    list = list.filter((x) => !x.isNewThisMonth);
   }
   return list;
 });
@@ -624,12 +741,39 @@ const filteredAkanTutup = computed(() => {
 const filteredSudahTutup = computed(() => {
   let list = (rawData.value.sudahTutup || []).filter(matchesSearchAndCabang);
   if (filterSaldoStatus.value === 'ada_sisa') {
-    list = list.filter(x => x.statusSaldo === 'ADA_SISA');
+    list = list.filter((x) => x.statusSaldo === 'ADA_SISA');
   } else if (filterSaldoStatus.value === 'nol') {
-    list = list.filter(x => x.statusSaldo === 'NOL');
+    list = list.filter((x) => x.statusSaldo === 'NOL');
   }
   return list;
 });
+
+// Apakah filter sedang aktif
+const isFiltered = computed(() => {
+  return (
+    Boolean(searchQuery.value.trim()) ||
+    Boolean(selectedCabang.value) ||
+    (activeCategory.value === 'akan_buka' && filterBukaType.value !== 'all') ||
+    (activeCategory.value === 'sudah_tutup' && filterSaldoStatus.value !== 'all')
+  );
+});
+
+// Hitung data pada kategori aktif saat ini
+const currentCategoryCount = computed(() => {
+  if (activeCategory.value === 'akan_buka') return filteredAkanBuka.value.length;
+  if (activeCategory.value === 'tutup_sementara') return filteredTutupSementara.value.length;
+  if (activeCategory.value === 'akan_tutup') return filteredAkanTutup.value.length;
+  if (activeCategory.value === 'sudah_tutup') return filteredSudahTutup.value.length;
+  return 0;
+});
+
+// Reset semua filter
+const resetFilters = () => {
+  searchQuery.value = '';
+  selectedCabang.value = '';
+  filterBukaType.value = 'all';
+  filterSaldoStatus.value = 'all';
+};
 
 // Fetch data
 const fetchMonitoringData = async () => {
@@ -692,7 +836,7 @@ const handleManualSync = async () => {
   }
 };
 
-// Export Excel
+// Export Excel (mengikuti filter cabang & pencarian aktif)
 const handleExportExcel = async () => {
   try {
     toast.add({
@@ -709,7 +853,8 @@ const handleExportExcel = async () => {
     const link = document.createElement('a');
     link.href = url;
     const dateStr = new Date().toISOString().slice(0, 10);
-    link.setAttribute('download', `store-monitoring-${dateStr}.xlsx`);
+    const branchSuffix = selectedCabang.value ? `-${selectedCabang.value}` : '';
+    link.setAttribute('download', `store-monitoring${branchSuffix}-${dateStr}.xlsx`);
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -774,7 +919,8 @@ const getDaysRemaining = (targetDateStr) => {
   return Math.max(0, diffDays);
 };
 
-onMounted(() => {
+onMounted(async () => {
+  cabangStore.fetchCabang().catch(() => {});
   fetchMonitoringData();
 });
 </script>

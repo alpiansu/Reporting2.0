@@ -2,7 +2,7 @@
 .store-monitoring-container {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1.15rem;
   width: 100%;
 }
 
@@ -30,12 +30,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 42px;
+  height: 42px;
   border-radius: 10px;
   background: rgba(59, 130, 246, 0.1);
   color: #3b82f6;
-  font-size: 1.2rem;
+  font-size: 1.25rem;
 }
 
 .meta-details {
@@ -229,6 +229,91 @@
   color: #dc2626;
 }
 
+/* --------------------------------------------------------------------------
+   Interactive Branch Filter Strip (Pills)
+   -------------------------------------------------------------------------- */
+.branch-filter-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface-card, #ffffff);
+  border: 1px solid var(--surface-border, #e2e8f0);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.branch-filter-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.825rem;
+  font-weight: 600;
+  color: var(--text-color-secondary, #64748b);
+  margin-right: 0.25rem;
+  flex-shrink: 0;
+}
+
+.branch-pills-container {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  flex: 1;
+}
+
+.branch-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-color, #334155);
+  background: var(--surface-ground, #f1f5f9);
+  border: 1px solid var(--surface-border, #cbd5e1);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.branch-pill-btn:hover {
+  background: var(--surface-hover, #e2e8f0);
+  border-color: #94a3b8;
+  transform: translateY(-1px);
+}
+
+.branch-pill-btn.active {
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  border-color: #0284c7;
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(14, 165, 233, 0.25);
+}
+
+.branch-name-text {
+  font-size: 0.72rem;
+  opacity: 0.85;
+}
+
+.branch-pill-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.08);
+  color: inherit;
+}
+
+.branch-pill-btn.active .branch-pill-badge {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
 /* Category Filter Tabs & Toolbar */
 .monitoring-toolbar {
   display: flex;
@@ -299,6 +384,7 @@
   flex-wrap: wrap;
 }
 
+/* Live Search Input */
 .search-input-box {
   position: relative;
   display: flex;
@@ -312,7 +398,7 @@
   font-size: 0.85rem;
 }
 
-.search-field {
+.search-field-live {
   padding: 0.45rem 2rem 0.45rem 2.25rem;
   font-size: 0.85rem;
   border: 1px solid var(--surface-border, #cbd5e1);
@@ -320,12 +406,14 @@
   background: var(--surface-ground, #ffffff);
   color: var(--text-color, #0f172a);
   outline: none;
-  width: 240px;
-  transition: border-color 0.2s ease;
+  width: 270px;
+  transition: all 0.2s ease;
 }
 
-.search-field:focus {
+.search-field-live:focus {
   border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+  width: 310px;
 }
 
 .clear-btn {
@@ -336,6 +424,11 @@
   color: var(--text-color-secondary, #94a3b8);
   cursor: pointer;
   font-size: 0.8rem;
+  padding: 0.2rem;
+}
+
+.clear-btn:hover {
+  color: #ef4444;
 }
 
 .select-filter {
@@ -347,6 +440,44 @@
   color: var(--text-color, #0f172a);
   outline: none;
   cursor: pointer;
+}
+
+/* Filter Status Alert Banner */
+.filter-status-alert {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 8px;
+  font-size: 0.825rem;
+  color: var(--text-color, #1e293b);
+}
+
+.filter-status-alert strong {
+  color: #2563eb;
+}
+
+.btn-reset-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-reset-filters:hover {
+  background: rgba(239, 68, 68, 0.2);
 }
 
 /* Table Container & DataTable styling */
@@ -493,10 +624,22 @@
   .meta-title {
     color: #f1f5f9;
   }
-  .search-field,
+  .search-field-live,
   .select-filter {
     background: #1e293b;
     border-color: #334155;
+    color: #f8fafc;
+  }
+  .search-field-live:focus {
+    border-color: #38bdf8;
+  }
+  .branch-pill-btn {
+    background: #1e293b;
+    border-color: #334155;
+    color: #cbd5e1;
+  }
+  .branch-pill-btn:hover {
+    background: #334155;
     color: #f8fafc;
   }
   .tab-pill-btn {
@@ -507,6 +650,14 @@
   .tab-pill-btn:hover {
     background: #334155;
     color: #f8fafc;
+  }
+  .filter-status-alert {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: rgba(59, 130, 246, 0.3);
+    color: #e2e8f0;
+  }
+  .filter-status-alert strong {
+    color: #38bdf8;
   }
   .ts-info-summary {
     background: #1e293b;

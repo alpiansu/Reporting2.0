@@ -1,74 +1,78 @@
 <template>
   <div class="tab-content">
-    <!-- Toolbar with Action Buttons & Live Search -->
-    <div class="tab-toolbar-wrapper">
-      <div class="tab-actions-group">
-        <Button icon="pi pi-bolt" label="Init Semua Cabang" class="p-button-warning p-button-sm"
+    <!-- Streamlined 1-Row Toolbar -->
+    <div class="tab-toolbar">
+      <div class="toolbar-left">
+        <Button icon="pi pi-bolt" label="Init Semua" class="p-button-warning p-button-sm"
           :loading="initLoading" :disabled="!periode" @click="handleInit"
           v-tooltip.top="'Generate skeleton record untuk semua INDUK cabang'" />
-        <Button icon="pi pi-plus" label="Tambah Data" class="p-button-primary p-button-sm"
+        <Button icon="pi pi-plus" label="Tambah" class="p-button-primary p-button-sm"
           :disabled="!periode" @click="openDialog(null)" />
       </div>
 
-      <div class="tab-search-box">
-        <IconField iconPosition="left">
+      <div class="toolbar-right">
+        <!-- Compact Status Filter Pills -->
+        <div class="compact-pills">
+          <button
+            type="button"
+            class="mini-pill"
+            :class="{ active: statusFilter === 'all' }"
+            @click="statusFilter = 'all'"
+            v-tooltip.top="'Semua cabang'"
+          >
+            Semua <span class="mini-badge">{{ totalCount }}</span>
+          </button>
+          <button
+            type="button"
+            class="mini-pill pill-danger"
+            :class="{ active: statusFilter === 'critical' }"
+            @click="statusFilter = 'critical'"
+            v-tooltip.top="'Free space < 10 GB'"
+          >
+            Kritis <span class="mini-badge badge-danger">{{ criticalCount }}</span>
+          </button>
+          <button
+            type="button"
+            class="mini-pill pill-warn"
+            :class="{ active: statusFilter === 'warning' }"
+            @click="statusFilter = 'warning'"
+            v-tooltip.top="'Free space 10 - 30 GB'"
+          >
+            Warning <span class="mini-badge badge-warn">{{ warningCount }}</span>
+          </button>
+          <button
+            type="button"
+            class="mini-pill pill-success"
+            :class="{ active: statusFilter === 'ok' }"
+            @click="statusFilter = 'ok'"
+            v-tooltip.top="'Free space >= 30 GB'"
+          >
+            Aman <span class="mini-badge badge-success">{{ okCount }}</span>
+          </button>
+        </div>
+
+        <!-- Live Search -->
+        <IconField iconPosition="left" class="search-field">
           <InputIcon class="pi pi-search" />
-          <InputText v-model="searchQuery" placeholder="Cari cabang, nama, path..." class="p-inputtext-sm search-input" />
+          <InputText v-model="searchQuery" placeholder="Cari cabang/path..." class="p-inputtext-sm search-input" />
         </IconField>
       </div>
     </div>
 
-    <!-- Filter Pills Row -->
-    <div class="filter-pills-row">
-      <button
-        type="button"
-        class="filter-pill"
-        :class="{ active: statusFilter === 'all' }"
-        @click="statusFilter = 'all'"
-      >
-        <i class="pi pi-th-large mr-1"></i> Semua <span class="pill-badge">{{ totalCount }}</span>
-      </button>
-      <button
-        type="button"
-        class="filter-pill pill-danger"
-        :class="{ active: statusFilter === 'critical' }"
-        @click="statusFilter = 'critical'"
-      >
-        <i class="pi pi-exclamation-circle mr-1"></i> Kritis &lt; 10 GB <span class="pill-badge badge-danger">{{ criticalCount }}</span>
-      </button>
-      <button
-        type="button"
-        class="filter-pill pill-warn"
-        :class="{ active: statusFilter === 'warning' }"
-        @click="statusFilter = 'warning'"
-      >
-        <i class="pi pi-exclamation-triangle mr-1"></i> Warning &lt; 30 GB <span class="pill-badge badge-warn">{{ warningCount }}</span>
-      </button>
-      <button
-        type="button"
-        class="filter-pill pill-success"
-        :class="{ active: statusFilter === 'ok' }"
-        @click="statusFilter = 'ok'"
-      >
-        <i class="pi pi-check-circle mr-1"></i> Aman &ge; 30 GB <span class="pill-badge badge-success">{{ okCount }}</span>
-      </button>
-    </div>
-
-    <DataTable :value="filteredRows" :loading="loading" class="ceklist-table" stripedRows responsiveLayout="scroll"
-      :paginator="filteredRows.length > 15" :rows="15" :rowsPerPageOptions="[15, 30, 50]">
+    <DataTable :value="filteredRows" :loading="loading" class="ceklist-table" stripedRows responsiveLayout="scroll">
       <template #empty>
         <div class="table-empty">
           <i class="pi pi-search-minus" v-if="searchQuery || statusFilter !== 'all'"></i>
           <i class="pi pi-inbox" v-else></i>
           <span v-if="searchQuery || statusFilter !== 'all'">
-            Tidak ada data yang sesuai dengan filter/pencarian.
+            Tidak ada data yang sesuai filter/pencarian.
             <Button label="Reset Filter" class="p-button-link p-button-sm p-0 ml-1" @click="resetFilters" />
           </span>
           <span v-else>Belum ada data untuk periode ini</span>
         </div>
       </template>
 
-      <Column header="Cabang" sortable sortField="CAB" style="min-width:145px">
+      <Column header="Cabang" sortable sortField="CAB" style="width:130px">
         <template #body="{ data }">
           <div class="cabang-cell">
             <span class="cabang-code font-mono">{{ formatCode(data.CAB) }}</span>
@@ -76,12 +80,12 @@
           </div>
         </template>
       </Column>
-      <Column field="PATH" header="Path" sortable style="min-width:190px">
+      <Column field="PATH" header="Path" sortable style="min-width:170px">
         <template #body="{ data }">
           <code class="path-badge">{{ data.PATH || '—' }}</code>
         </template>
       </Column>
-      <Column header="Storage (Free / Total)" sortable :sortField="(d) => parseGbSimple(d.FREE_SPACE) || 0" style="min-width:210px">
+      <Column header="Storage (Free / Total)" sortable :sortField="(d) => parseGbSimple(d.FREE_SPACE) || 0" style="min-width:190px">
         <template #body="{ data }">
           <div v-if="calcStorage(data)" class="storage-gauge">
             <div class="storage-gauge-header">
@@ -106,12 +110,12 @@
           </div>
         </template>
       </Column>
-      <Column field="TGL_CHECK" header="Tgl Check" sortable style="width:120px">
+      <Column field="TGL_CHECK" header="Tgl Check" sortable style="width:110px">
         <template #body="{ data }">
           <span class="text-sm font-mono">{{ formatDateShort(data.TGL_CHECK) }}</span>
         </template>
       </Column>
-      <Column header="Capture" style="width:85px">
+      <Column header="Capture" style="width:75px">
         <template #body="{ data }">
           <img v-if="data.CAPTURE_PATH" :src="api.getAssetUrl(data.CAPTURE_PATH)" alt="capture"
             class="capture-thumb-mini"
@@ -119,7 +123,7 @@
           <i v-else class="pi pi-image text-color-secondary opacity-40 text-lg" />
         </template>
       </Column>
-      <Column header="Aksi" style="width:95px">
+      <Column header="Aksi" style="width:90px">
         <template #body="{ data }">
           <div class="row-actions">
             <Button icon="pi pi-pencil" class="p-button-text p-button-sm p-button-info"
@@ -129,12 +133,6 @@
           </div>
         </template>
       </Column>
-
-      <template #paginatorleft>
-        <span class="text-xs text-color-secondary">
-          Menampilkan {{ filteredRows.length }} dari total {{ rows.length }} cabang
-        </span>
-      </template>
     </DataTable>
 
     <!-- Upsert Dialog -->

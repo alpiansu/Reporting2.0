@@ -11,38 +11,41 @@
       </div>
     </div>
 
-    <!-- Toolbar with Search & Quick Filter -->
-    <div class="tab-toolbar-wrapper" v-if="data.total > 0">
-      <div class="filter-pills-row m-0">
-        <button
-          type="button"
-          class="filter-pill"
-          :class="{ active: !criticalOnly }"
-          @click="criticalOnly = false"
-        >
-          <i class="pi pi-th-large mr-1"></i> Semua Toko Isu <span class="pill-badge">{{ totalCount }}</span>
-        </button>
-        <button
-          type="button"
-          class="filter-pill pill-danger"
-          :class="{ active: criticalOnly }"
-          @click="criticalOnly = true"
-        >
-          <i class="pi pi-exclamation-circle mr-1"></i> Hanya Isu Kritis <span class="pill-badge badge-danger">{{ criticalCount }}</span>
-        </button>
+    <!-- Streamlined 1-Row Toolbar -->
+    <div class="tab-toolbar" v-if="data.total > 0">
+      <div class="toolbar-left">
+        <div class="compact-pills">
+          <button
+            type="button"
+            class="mini-pill"
+            :class="{ active: !criticalOnly }"
+            @click="criticalOnly = false"
+            v-tooltip.top="'Semua toko yang memiliki isu screening'"
+          >
+            Semua Isu <span class="mini-badge">{{ totalCount }}</span>
+          </button>
+          <button
+            type="button"
+            class="mini-pill pill-danger"
+            :class="{ active: criticalOnly }"
+            @click="criticalOnly = true"
+            v-tooltip.top="'Toko dengan isu kritis (critical > 0)'"
+          >
+            Hanya Kritis <span class="mini-badge badge-danger">{{ criticalCount }}</span>
+          </button>
+        </div>
       </div>
 
-      <div class="tab-search-box">
-        <IconField iconPosition="left">
+      <div class="toolbar-right">
+        <IconField iconPosition="left" class="search-field">
           <InputIcon class="pi pi-search" />
-          <InputText v-model="searchQuery" placeholder="Cari kode toko (KDTK) / cabang..." class="p-inputtext-sm search-input" />
+          <InputText v-model="searchQuery" placeholder="Cari KDTK/cabang..." class="p-inputtext-sm search-input" />
         </IconField>
       </div>
     </div>
 
     <DataTable :value="filteredRows" :loading="loading" class="ceklist-table rekap-table"
-      stripedRows responsiveLayout="scroll" scrollable scrollHeight="500px"
-      :paginator="filteredRows.length > 20" :rows="20" :rowsPerPageOptions="[20, 50, 100]">
+      stripedRows responsiveLayout="scroll">
       <template #empty>
         <div class="table-empty text-green-500" v-if="data.total === 0">
           <i class="pi pi-check-circle"></i>
@@ -53,33 +56,33 @@
           <span>Tidak ada toko yang cocok dengan pencarian / filter.</span>
         </div>
       </template>
-      <Column field="cab" header="CAB" style="width:80px" frozen sortable>
+      <Column field="cab" header="CAB" style="width:75px" frozen sortable>
         <template #body="{ data: row }">
           <span class="font-mono font-bold text-sm">{{ formatCode(row.cab) }}</span>
         </template>
       </Column>
-      <Column field="kdtk" header="KDTK" style="width:95px" frozen sortable>
+      <Column field="kdtk" header="KDTK" style="width:90px" frozen sortable>
         <template #body="{ data: row }">
           <span class="font-mono font-medium text-sm text-primary">{{ formatCode(row.kdtk) }}</span>
         </template>
       </Column>
-      <Column field="failedRules" header="Failed/Total" style="width:115px" sortable>
+      <Column field="failedRules" header="Failed/Total" style="width:110px" sortable>
         <template #body="{ data: row }">
           <span class="text-sm font-mono">{{ row.failedRules }}/{{ row.totalRules }}</span>
         </template>
       </Column>
-      <Column field="criticalIssues" header="Critical" style="width:95px" sortable>
+      <Column field="criticalIssues" header="Critical" style="width:90px" sortable>
         <template #body="{ data: row }">
           <Tag v-if="row.criticalIssues > 0" :value="String(row.criticalIssues)" severity="danger" />
           <span v-else class="text-color-secondary">0</span>
         </template>
       </Column>
-      <Column field="lastScreened" header="Last Screened" style="width:130px" sortable>
+      <Column field="lastScreened" header="Last Screened" style="width:125px" sortable>
         <template #body="{ data: row }">
           <span class="text-sm text-color-secondary">{{ formatDate(row.lastScreened) }}</span>
         </template>
       </Column>
-      <Column v-for="key in data.ruleKeys" :key="key" :header="key" style="width:110px">
+      <Column v-for="key in data.ruleKeys" :key="key" :header="key" style="width:105px">
         <template #body="{ data: row }">
           <Tag v-if="row[key] !== null && row[key] !== undefined"
             :value="row[key] === true ? 'FAIL' : String(row[key])"
@@ -87,12 +90,6 @@
           <span v-else class="text-color-secondary text-sm">—</span>
         </template>
       </Column>
-
-      <template #paginatorleft>
-        <span class="text-xs text-color-secondary">
-          Menampilkan {{ filteredRows.length }} dari total {{ data.total }} toko bermasalah
-        </span>
-      </template>
     </DataTable>
   </div>
 </template>

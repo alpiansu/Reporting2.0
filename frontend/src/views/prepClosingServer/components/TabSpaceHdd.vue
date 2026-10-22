@@ -1,95 +1,82 @@
 <template>
   <div class="tab-content">
-    <!-- Toolbar with Action Buttons & Live Search -->
-    <div class="tab-toolbar-wrapper">
-      <div class="tab-actions-group">
-        <Button icon="pi pi-bolt" label="Init Semua Cabang" class="p-button-warning p-button-sm"
+    <!-- Streamlined 1-Row Toolbar -->
+    <div class="tab-toolbar">
+      <div class="toolbar-left">
+        <Button icon="pi pi-bolt" label="Init Semua" class="p-button-warning p-button-sm"
           :loading="initLoading" :disabled="!periode" @click="handleInit"
           v-tooltip.top="'Generate skeleton record & otomatis cek sisa storage SSH server Linux'" />
-        <Button icon="pi pi-server" label="Cek SSH Semua Linux" class="p-button-help p-button-sm"
+        <Button icon="pi pi-server" label="Cek SSH Linux" class="p-button-help p-button-sm"
           :loading="batchLoading" :disabled="!periode || loading" @click="handleBatchSsh"
           v-tooltip.top="'Cek sisa storage via SSH otomatis untuk semua cabang Linux'" />
-        <Button icon="pi pi-plus" label="Tambah Data" class="p-button-primary p-button-sm"
+        <Button icon="pi pi-plus" label="Tambah" class="p-button-primary p-button-sm"
           :disabled="!periode" @click="openDialog(null)" />
       </div>
 
-      <div class="tab-search-box">
-        <IconField iconPosition="left">
+      <div class="toolbar-right">
+        <!-- Compact Status Filter Pills -->
+        <div class="compact-pills">
+          <button
+            type="button"
+            class="mini-pill"
+            :class="{ active: statusFilter === 'all' }"
+            @click="statusFilter = 'all'"
+            v-tooltip.top="'Semua cabang'"
+          >
+            Semua <span class="mini-badge">{{ totalCount }}</span>
+          </button>
+          <button
+            type="button"
+            class="mini-pill pill-danger"
+            :class="{ active: statusFilter === 'critical' }"
+            @click="statusFilter = 'critical'"
+            v-tooltip.top="'Kritis: Free space < 10 GB'"
+          >
+            Kritis <span class="mini-badge badge-danger">{{ criticalCount }}</span>
+          </button>
+          <button
+            type="button"
+            class="mini-pill pill-warn"
+            :class="{ active: statusFilter === 'warning' }"
+            @click="statusFilter = 'warning'"
+            v-tooltip.top="'Warning: Free space 10 - 30 GB'"
+          >
+            Warning <span class="mini-badge badge-warn">{{ warningCount }}</span>
+          </button>
+          <button
+            type="button"
+            class="mini-pill pill-success"
+            :class="{ active: statusFilter === 'ok' }"
+            @click="statusFilter = 'ok'"
+            v-tooltip.top="'Aman: Free space >= 30 GB'"
+          >
+            Aman <span class="mini-badge badge-success">{{ okCount }}</span>
+          </button>
+        </div>
+
+        <!-- Live Search -->
+        <IconField iconPosition="left" class="search-field">
           <InputIcon class="pi pi-search" />
-          <InputText v-model="searchQuery" placeholder="Cari cabang, nama, IP..." class="p-inputtext-sm search-input" />
+          <InputText v-model="searchQuery" placeholder="Cari cabang/IP..." class="p-inputtext-sm search-input" />
         </IconField>
       </div>
     </div>
 
-    <!-- Filter Pills Row -->
-    <div class="filter-pills-row">
-      <button
-        type="button"
-        class="filter-pill"
-        :class="{ active: statusFilter === 'all' }"
-        @click="statusFilter = 'all'"
-      >
-        <i class="pi pi-th-large mr-1"></i> Semua <span class="pill-badge">{{ totalCount }}</span>
-      </button>
-      <button
-        type="button"
-        class="filter-pill pill-danger"
-        :class="{ active: statusFilter === 'critical' }"
-        @click="statusFilter = 'critical'"
-      >
-        <i class="pi pi-exclamation-circle mr-1"></i> Kritis &lt; 10 GB <span class="pill-badge badge-danger">{{ criticalCount }}</span>
-      </button>
-      <button
-        type="button"
-        class="filter-pill pill-warn"
-        :class="{ active: statusFilter === 'warning' }"
-        @click="statusFilter = 'warning'"
-      >
-        <i class="pi pi-exclamation-triangle mr-1"></i> Warning &lt; 30 GB <span class="pill-badge badge-warn">{{ warningCount }}</span>
-      </button>
-      <button
-        type="button"
-        class="filter-pill pill-success"
-        :class="{ active: statusFilter === 'ok' }"
-        @click="statusFilter = 'ok'"
-      >
-        <i class="pi pi-check-circle mr-1"></i> Aman &ge; 30 GB <span class="pill-badge badge-success">{{ okCount }}</span>
-      </button>
-      <span class="pills-separator">|</span>
-      <button
-        type="button"
-        class="filter-pill"
-        :class="{ active: statusFilter === 'linux' }"
-        @click="statusFilter = 'linux'"
-      >
-        <i class="pi pi-server mr-1"></i> Linux <span class="pill-badge">{{ linuxCount }}</span>
-      </button>
-      <button
-        type="button"
-        class="filter-pill"
-        :class="{ active: statusFilter === 'windows' }"
-        @click="statusFilter = 'windows'"
-      >
-        <i class="pi pi-microsoft mr-1"></i> Windows <span class="pill-badge">{{ windowsCount }}</span>
-      </button>
-    </div>
-
     <DataTable :value="filteredRows" :loading="loading" class="ceklist-table" stripedRows
-      responsiveLayout="scroll" :rowClass="rowClass"
-      :paginator="filteredRows.length > 15" :rows="15" :rowsPerPageOptions="[15, 30, 50]">
+      responsiveLayout="scroll" :rowClass="rowClass">
       <template #empty>
         <div class="table-empty">
           <i class="pi pi-search-minus" v-if="searchQuery || statusFilter !== 'all'"></i>
           <i class="pi pi-inbox" v-else></i>
           <span v-if="searchQuery || statusFilter !== 'all'">
-            Tidak ada data yang sesuai dengan filter/pencarian.
+            Tidak ada data yang sesuai filter/pencarian.
             <Button label="Reset Filter" class="p-button-link p-button-sm p-0 ml-1" @click="resetFilters" />
           </span>
           <span v-else>Belum ada data untuk periode ini</span>
         </div>
       </template>
 
-      <Column header="Cabang" sortable sortField="KDCAB" style="min-width:145px">
+      <Column header="Cabang" sortable sortField="KDCAB" style="width:125px">
         <template #body="{ data }">
           <div class="cabang-cell">
             <span class="cabang-code font-mono">{{ formatCode(data.KDCAB) }}</span>
@@ -97,12 +84,12 @@
           </div>
         </template>
       </Column>
-      <Column field="IP" header="IP Address" sortable style="width:130px">
+      <Column field="IP" header="IP Address" sortable style="width:125px">
         <template #body="{ data }">
           <span class="font-mono text-sm">{{ data.IP || '—' }}</span>
         </template>
       </Column>
-      <Column field="freeSpaceGb" header="Free Space" sortable style="width:125px">
+      <Column field="freeSpaceGb" header="Free Space" sortable style="width:110px">
         <template #body="{ data }">
           <span :class="['space-badge', spaceClass(data.freeSpaceGb)]">
             <i :class="spaceIcon(data.freeSpaceGb)" class="mr-1"></i>
@@ -110,7 +97,7 @@
           </span>
         </template>
       </Column>
-      <Column field="freeSpaceLastMonthGb" header="Bulan Lalu" sortable style="width:120px">
+      <Column field="freeSpaceLastMonthGb" header="Bulan Lalu" sortable style="width:105px">
         <template #body="{ data }">
           <span v-if="data.freeSpaceLastMonthGb !== null && data.freeSpaceLastMonthGb !== undefined" class="font-mono text-sm">
             {{ data.freeSpaceLastMonthGb?.toFixed(1) }} GB
@@ -118,7 +105,7 @@
           <span v-else class="text-color-secondary text-sm">—</span>
         </template>
       </Column>
-      <Column field="usageDiskSpace" header="Usage Disk" sortable style="width:130px">
+      <Column field="usageDiskSpace" header="Usage Disk" sortable style="width:115px">
         <template #body="{ data }">
           <span v-if="data.usageDiskSpace !== null && data.usageDiskSpace !== undefined"
             :class="['usage-badge', data.usageDiskSpace < 0 ? 'usage-neg' : 'usage-pos']">
@@ -128,7 +115,7 @@
           <span v-else class="text-color-secondary text-sm">—</span>
         </template>
       </Column>
-      <Column field="predictedUsage" header="Prediksi Bln Depan" sortable style="width:150px">
+      <Column field="predictedUsage" header="Prediksi Bln Depan" sortable style="width:130px">
         <template #body="{ data }">
           <div v-if="data.predictedUsage !== null && data.predictedUsage !== undefined" class="flex align-items-center gap-1">
             <span :class="['space-badge', spaceClass(data.predictedUsage)]">
@@ -139,25 +126,25 @@
           <span v-else class="text-color-secondary text-sm">—</span>
         </template>
       </Column>
-      <Column field="TGL_CHECK" header="Tgl Check" sortable style="width:115px">
+      <Column field="TGL_CHECK" header="Tgl Check" sortable style="width:105px">
         <template #body="{ data }">
           <span class="text-sm font-mono">{{ formatDateShort(data.TGL_CHECK) }}</span>
         </template>
       </Column>
-      <Column field="OS" header="OS" sortable style="width:95px">
+      <Column field="OS" header="OS" sortable style="width:90px">
         <template #body="{ data }">
           <Tag :value="data.OS || '—'" :severity="data.OS === 'WINDOWS' ? 'info' : 'warning'" />
         </template>
       </Column>
-      <Column field="FU" header="Follow Up" style="min-width:160px">
+      <Column field="FU" header="Follow Up" style="min-width:140px">
         <template #body="{ data }">
           <span class="fu-text">{{ data.FU || '—' }}</span>
         </template>
       </Column>
-      <Column field="FREE_AFTER" header="Free After FU" style="width:115px">
+      <Column field="FREE_AFTER" header="Free After FU" style="width:105px">
         <template #body="{ data }">{{ data.FREE_AFTER || '—' }}</template>
       </Column>
-      <Column header="Capture" style="width:85px">
+      <Column header="Capture" style="width:80px">
         <template #body="{ data }">
           <img v-if="data.CAPTURE_PATH" :src="api.getAssetUrl(data.CAPTURE_PATH)" alt="capture"
             class="capture-thumb-mini"
@@ -165,7 +152,7 @@
           <i v-else class="pi pi-image text-color-secondary opacity-40 text-lg" />
         </template>
       </Column>
-      <Column header="Aksi" style="width:125px">
+      <Column header="Aksi" style="width:120px">
         <template #body="{ data }">
           <div class="row-actions">
             <Button v-if="isLinux(data)" icon="pi pi-server" class="p-button-text p-button-sm p-button-success"
@@ -180,12 +167,6 @@
           </div>
         </template>
       </Column>
-
-      <template #paginatorleft>
-        <span class="text-xs text-color-secondary">
-          Menampilkan {{ filteredRows.length }} dari total {{ rows.length }} cabang
-        </span>
-      </template>
     </DataTable>
 
     <!-- Upsert Dialog -->

@@ -1,66 +1,69 @@
 <template>
   <div class="tab-content">
-    <!-- Toolbar with Action Buttons & Live Search -->
-    <div class="tab-toolbar-wrapper">
-      <div class="tab-actions-group">
-        <Button icon="pi pi-bolt" label="Init Semua Cabang" class="p-button-warning p-button-sm"
+    <!-- Streamlined 1-Row Toolbar -->
+    <div class="tab-toolbar">
+      <div class="toolbar-left">
+        <Button icon="pi pi-bolt" label="Init Semua" class="p-button-warning p-button-sm"
           :loading="initLoading" :disabled="!periode" @click="handleInit"
           v-tooltip.top="'Generate skeleton untuk semua INDUK cabang'" />
         <Button icon="pi pi-plus" label="Tambah Manual" class="p-button-primary p-button-sm"
           :disabled="!periode" @click="openCaptureDialog(null)" />
       </div>
 
-      <div class="tab-search-box">
-        <IconField iconPosition="left">
+      <div class="toolbar-right">
+        <!-- Compact Status Filter Pills -->
+        <div class="compact-pills">
+          <button
+            type="button"
+            class="mini-pill"
+            :class="{ active: statusFilter === 'all' }"
+            @click="statusFilter = 'all'"
+            v-tooltip.top="'Semua cabang'"
+          >
+            Semua <span class="mini-badge">{{ totalCount }}</span>
+          </button>
+          <button
+            type="button"
+            class="mini-pill pill-warn"
+            :class="{ active: statusFilter === 'pending' }"
+            @click="statusFilter = 'pending'"
+            v-tooltip.top="'Cabang yang belum upload capture'"
+          >
+            Belum Upload <span class="mini-badge badge-warn">{{ pendingCount }}</span>
+          </button>
+          <button
+            type="button"
+            class="mini-pill pill-success"
+            :class="{ active: statusFilter === 'done' }"
+            @click="statusFilter = 'done'"
+            v-tooltip.top="'Cabang yang sudah upload'"
+          >
+            Selesai <span class="mini-badge badge-success">{{ doneCount }}</span>
+          </button>
+        </div>
+
+        <!-- Live Search -->
+        <IconField iconPosition="left" class="search-field">
           <InputIcon class="pi pi-search" />
-          <InputText v-model="searchQuery" placeholder="Cari cabang atau nama..." class="p-inputtext-sm search-input" />
+          <InputText v-model="searchQuery" placeholder="Cari cabang/nama..." class="p-inputtext-sm search-input" />
         </IconField>
       </div>
     </div>
 
-    <!-- Filter Pills Row -->
-    <div class="filter-pills-row">
-      <button
-        type="button"
-        class="filter-pill"
-        :class="{ active: statusFilter === 'all' }"
-        @click="statusFilter = 'all'"
-      >
-        <i class="pi pi-th-large mr-1"></i> Semua <span class="pill-badge">{{ totalCount }}</span>
-      </button>
-      <button
-        type="button"
-        class="filter-pill pill-warn"
-        :class="{ active: statusFilter === 'pending' }"
-        @click="statusFilter = 'pending'"
-      >
-        <i class="pi pi-clock mr-1"></i> Belum Upload / Pending <span class="pill-badge badge-warn">{{ pendingCount }}</span>
-      </button>
-      <button
-        type="button"
-        class="filter-pill pill-success"
-        :class="{ active: statusFilter === 'done' }"
-        @click="statusFilter = 'done'"
-      >
-        <i class="pi pi-check-circle mr-1"></i> Selesai / Done <span class="pill-badge badge-success">{{ doneCount }}</span>
-      </button>
-    </div>
-
-    <DataTable :value="filteredRows" :loading="loading" class="ceklist-table" stripedRows responsiveLayout="scroll"
-      :paginator="filteredRows.length > 15" :rows="15" :rowsPerPageOptions="[15, 30, 50]">
+    <DataTable :value="filteredRows" :loading="loading" class="ceklist-table" stripedRows responsiveLayout="scroll">
       <template #empty>
         <div class="table-empty">
           <i class="pi pi-search-minus" v-if="searchQuery || statusFilter !== 'all'"></i>
           <i class="pi pi-inbox" v-else></i>
           <span v-if="searchQuery || statusFilter !== 'all'">
-            Tidak ada data yang sesuai dengan filter/pencarian.
+            Tidak ada data yang sesuai filter/pencarian.
             <Button label="Reset Filter" class="p-button-link p-button-sm p-0 ml-1" @click="resetFilters" />
           </span>
           <span v-else>Belum ada data. Klik "Init Semua Cabang" untuk generate.</span>
         </div>
       </template>
 
-      <Column header="Cabang" sortable sortField="KDCAB" style="min-width:145px">
+      <Column header="Cabang" sortable sortField="KDCAB" style="width:140px">
         <template #body="{ data }">
           <div class="cabang-cell">
             <span class="cabang-code font-mono">{{ formatCode(data.KDCAB) }}</span>
@@ -68,14 +71,14 @@
           </div>
         </template>
       </Column>
-      <Column header="Status" sortable :sortField="(d) => d.CAPTURE ? 1 : 0" style="width:130px">
+      <Column header="Status" sortable :sortField="(d) => d.CAPTURE ? 1 : 0" style="width:115px">
         <template #body="{ data }">
           <Tag :value="data.CAPTURE ? 'Done' : 'Pending'"
             :severity="data.CAPTURE ? 'success' : 'warning'"
             :icon="data.CAPTURE ? 'pi pi-check' : 'pi pi-clock'" />
         </template>
       </Column>
-      <Column header="Capture" style="min-width:220px">
+      <Column header="Capture" style="min-width:180px">
         <template #body="{ data }">
           <div v-if="data.CAPTURE" class="capture-cell-content">
             <a v-if="isImageUrl(data.CAPTURE)" :href="api.getAssetUrl(data.CAPTURE)"
@@ -90,12 +93,12 @@
           </div>
         </template>
       </Column>
-      <Column field="UPDTIME" header="Update Terakhir" sortable style="width:160px">
+      <Column field="UPDTIME" header="Update Terakhir" sortable style="width:140px">
         <template #body="{ data }">
           <span class="text-sm text-color-secondary">{{ formatDateTime(data.UPDTIME) }}</span>
         </template>
       </Column>
-      <Column header="Aksi" style="width:125px">
+      <Column header="Aksi" style="width:115px">
         <template #body="{ data }">
           <div class="row-actions">
             <Button icon="pi pi-upload" class="p-button-text p-button-sm p-button-success"
@@ -107,12 +110,6 @@
           </div>
         </template>
       </Column>
-
-      <template #paginatorleft>
-        <span class="text-xs text-color-secondary">
-          Menampilkan {{ filteredRows.length }} dari total {{ rows.length }} cabang
-        </span>
-      </template>
     </DataTable>
 
     <!-- Edit Text Dialog -->

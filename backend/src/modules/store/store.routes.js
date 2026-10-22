@@ -1,5 +1,6 @@
 import express from 'express';
-import { getAllStores,
+import {
+  getAllStores,
   getStoreById,
   getStoresByBranch,
   createStore,
@@ -10,7 +11,11 @@ import { getAllStores,
   uploadMasterCsv,
   getSyncStatus,
   syncMaster,
-  syncMasterCsv } from './store.controller.js';
+  syncMasterCsv,
+  getStoreMonitoring,
+  triggerStoreMonitoringSync,
+  exportStoreMonitoringExcel,
+} from './store.controller.js';
 import { uploadIni, uploadCsv, handleMulterError } from './store.middleware.js';
 import { authenticateJWT, authorizeRole } from '../../middlewares/index.js';
 
@@ -24,6 +29,11 @@ router.get("/branch/:branchCode", authenticateJWT, getStoresByBranch);
 
 // Get master store sync status (snapshot + last sync info)
 router.get("/sync-status", authenticateJWT, getSyncStatus);
+
+// Store Monitoring Routes (HARUS sebelum /:id)
+router.get("/monitoring", authenticateJWT, getStoreMonitoring);
+router.get("/monitoring/export", authenticateJWT, exportStoreMonitoringExcel);
+router.post("/monitoring/sync", authenticateJWT, authorizeRole(["admin", "superadmin"]), triggerStoreMonitoringSync);
 
 // Get store by ID
 router.get("/:id", authenticateJWT, getStoreById);

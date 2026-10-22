@@ -11,7 +11,7 @@
           <p class="header-subtitle">Kelola data master toko, server IP, dan konfigurasi cabang</p>
         </div>
       </div>
-      <div class="header-actions">
+      <div class="header-actions" v-if="currentMainTab === 'master'">
         <button
           type="button"
           class="btn-header-secondary"
@@ -45,6 +45,32 @@
         </button>
       </div>
     </header>
+
+    <!-- Main Navigation Tabs -->
+    <div class="store-main-tabs">
+      <button
+        type="button"
+        class="store-main-tab-btn"
+        :class="{ active: currentMainTab === 'master' }"
+        @click="currentMainTab = 'master'"
+      >
+        <i class="pi pi-server"></i>
+        <span>Master Toko & Server IP</span>
+      </button>
+
+      <button
+        type="button"
+        class="store-main-tab-btn"
+        :class="{ active: currentMainTab === 'monitoring' }"
+        @click="currentMainTab = 'monitoring'"
+      >
+        <i class="pi pi-compass"></i>
+        <span>Monitoring Buka / Tutup Toko (WRC)</span>
+      </button>
+    </div>
+
+    <!-- Master Toko Content Tab -->
+    <div v-if="currentMainTab === 'master'" class="store-master-content">
 
     <!-- KPI & Sync Summary Bar (Compact) -->
     <section class="kpi-summary-strip">
@@ -501,6 +527,13 @@
         </button>
       </div>
     </footer>
+    </div>
+
+    <!-- Store Monitoring Tab (WRC) -->
+    <StoreMonitoringTab
+      v-else-if="currentMainTab === 'monitoring'"
+      :can-sync="canEdit"
+    />
 
     <!-- Add/Edit Store Dialog (Redesigned) -->
     <div v-if="showAddStoreDialog" class="dialog-overlay-modern" @click="closeStoreDialog">
@@ -908,11 +941,14 @@ import { useStoreStore, useAuthStore } from '../../stores';
 import { useToastService } from '../../utils/toast';
 import StoreDetails from './StoreDetails.vue';
 import storeService from '../../services/store.service.js';
+import StoreMonitoringTab from './components/StoreMonitoringTab.vue';
 
 const router = useRouter();
 const storeStore = useStoreStore();
 const authStore = useAuthStore();
 const toast = useToastService();
+
+const currentMainTab = ref('master');
 
 const csvFileInput = ref(null);
 

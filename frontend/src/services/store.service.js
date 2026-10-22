@@ -119,6 +119,36 @@ class StoreService {
     const response = await api.post("/stores/sync-master-csv", { force });
     return response.data;
   }
+
+  /**
+   * Get store monitoring data from WRC cache
+   * @param {Object} params - { category, cabang, search, saldoStatus, isNew }
+   */
+  async getStoreMonitoring(params = {}) {
+    const response = await api.get("/stores/monitoring", { params });
+    return response.data;
+  }
+
+  /**
+   * Trigger manual sync store monitoring from all branches WRC
+   */
+  async syncStoreMonitoring() {
+    const response = await api.post("/stores/monitoring/sync");
+    return response.data;
+  }
+
+  /**
+   * Download store monitoring Excel report
+   * @param {Object} params - { category, cabang, search, saldoStatus, isNew }
+   */
+  async exportStoreMonitoringExcel(params = {}) {
+    const response = await api.get("/stores/monitoring/export", {
+      params,
+      responseType: "blob",
+    });
+    return response.data;
+  }
+
 }
 
 export default new StoreService();

@@ -1496,3 +1496,58 @@
     grid-column: span 1;
   }
 }
+
+/* --------------------------------------------------------------------------
+   Main Navigation Tabs (Master Toko vs Monitoring)
+   -------------------------------------------------------------------------- */
+.store-main-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--surface-card, #ffffff);
+  padding: 0.4rem;
+  border-radius: 10px;
+  border: 1px solid var(--surface-border, #e2e8f0);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.store-main-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1.1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-color-secondary, #64748b);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.store-main-tab-btn:hover {
+  background: var(--surface-hover, #f1f5f9);
+  color: var(--text-color, #0f172a);
+}
+
+.store-main-tab-btn.active {
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(14, 165, 233, 0.25);
+}
+
+@media (prefers-color-scheme: dark) {
+  .store-main-tabs {
+    background: #1e293b;
+    border-color: #334155;
+  }
+  .store-main-tab-btn {
+    color: #94a3b8;
+  }
+  .store-main-tab-btn:hover {
+    background: #334155;
+    color: #f8fafc;
+  }
+}

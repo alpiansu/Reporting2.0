@@ -325,3 +325,55 @@ export const syncMasterCsv = async (req, res, next) => {
     next(error);
   }
 };
+/**
+ * Get store monitoring data (Akan Buka, Tutup Sementara, Akan Tutup, Sudah Tutup)
+ */
+export const getStoreMonitoring = async (req, res, next) => {
+  try {
+    const result = await storeSyncService.getStoreMonitoring(req.query);
+    res.status(200).json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    logger.error(`Get store monitoring error: ${error.message}`);
+    next(error);
+  }
+};
+
+/**
+ * Trigger sync store monitoring from all WRC branches
+ */
+export const triggerStoreMonitoringSync = async (req, res, next) => {
+  try {
+    const result = await storeSyncService.syncStoreMonitoring({ user: req.user });
+    res.status(200).json({
+      success: true,
+      message: "Sinkronisasi monitoring toko dari WRC berhasil",
+      ...result,
+    });
+  } catch (error) {
+    logger.error(`Trigger store monitoring sync error: ${error.message}`);
+    next(error);
+  }
+};
+
+/**
+ * Export store monitoring to Excel
+ */
+export const exportStoreMonitoringExcel = async (req, res, next) => {
+  try {
+    const workbook = await storeSyncService.exportStoreMonitoringExcel(req.query);
+    const filename = `store-monitoring-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    logger.error(`Export store monitoring error: ${error.message}`);
+    next(error);
+  }
+};

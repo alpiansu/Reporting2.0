@@ -76,93 +76,108 @@
         </div>
       </template>
 
-      <Column header="Cabang" sortable sortField="KDCAB" style="width:125px">
+      <!-- Kolom 1: Cabang & Host (KDCAB + Nama + IP + OS) -->
+      <Column header="Cabang & Host" sortable sortField="KDCAB" style="width:170px">
         <template #body="{ data }">
-          <div class="cabang-cell">
-            <span class="cabang-code font-mono">{{ formatCode(data.KDCAB) }}</span>
-            <span class="cabang-name">{{ getCabangName(data.KDCAB) }}</span>
+          <div class="server-cell">
+            <div class="server-cabang">
+              <span class="cabang-code font-mono">{{ formatCode(data.KDCAB) }}</span>
+              <span class="cabang-name">{{ getCabangName(data.KDCAB) }}</span>
+            </div>
+            <div class="server-meta">
+              <span class="font-mono text-xs text-color-secondary">{{ data.IP || '—' }}</span>
+              <Tag :value="data.OS || '—'" :severity="data.OS === 'WINDOWS' ? 'info' : 'warning'" class="mini-tag-os" />
+            </div>
           </div>
         </template>
       </Column>
-      <Column field="IP" header="IP Address" sortable style="width:125px">
+
+      <!-- Kolom 2: Free Space Saat Ini (dengan delta pemakaian) -->
+      <Column header="Free Space" sortable sortField="freeSpaceGb" style="width:115px">
         <template #body="{ data }">
-          <span class="font-mono text-sm">{{ data.IP || '—' }}</span>
-        </template>
-      </Column>
-      <Column field="freeSpaceGb" header="Free Space" sortable style="width:110px">
-        <template #body="{ data }">
-          <span :class="['space-badge', spaceClass(data.freeSpaceGb)]">
-            <i :class="spaceIcon(data.freeSpaceGb)" class="mr-1"></i>
-            {{ data.FREE_SPACE || '—' }}
-          </span>
-        </template>
-      </Column>
-      <Column field="freeSpaceLastMonthGb" header="Bulan Lalu" sortable style="width:105px">
-        <template #body="{ data }">
-          <span v-if="data.freeSpaceLastMonthGb !== null && data.freeSpaceLastMonthGb !== undefined" class="font-mono text-sm">
-            {{ data.freeSpaceLastMonthGb?.toFixed(1) }} GB
-          </span>
-          <span v-else class="text-color-secondary text-sm">—</span>
-        </template>
-      </Column>
-      <Column field="usageDiskSpace" header="Usage Disk" sortable style="width:115px">
-        <template #body="{ data }">
-          <span v-if="data.usageDiskSpace !== null && data.usageDiskSpace !== undefined"
-            :class="['usage-badge', data.usageDiskSpace < 0 ? 'usage-neg' : 'usage-pos']">
-            <i :class="data.usageDiskSpace < 0 ? 'pi pi-arrow-down' : 'pi pi-arrow-up'" class="mr-1 text-xs"></i>
-            {{ data.usageDiskSpace >= 0 ? '+' : '' }}{{ data.usageDiskSpace?.toFixed(1) }} GB
-          </span>
-          <span v-else class="text-color-secondary text-sm">—</span>
-        </template>
-      </Column>
-      <Column field="predictedUsage" header="Prediksi Bln Depan" sortable style="width:130px">
-        <template #body="{ data }">
-          <div v-if="data.predictedUsage !== null && data.predictedUsage !== undefined" class="flex align-items-center gap-1">
-            <span :class="['space-badge', spaceClass(data.predictedUsage)]">
-              {{ data.predictedUsage?.toFixed(1) }} GB
+          <div class="space-cell">
+            <span :class="['space-badge', spaceClass(data.freeSpaceGb)]">
+              <i :class="spaceIcon(data.freeSpaceGb)" class="mr-1"></i>
+              {{ data.FREE_SPACE || '—' }}
             </span>
-            <Tag v-if="data.predictedUsage < 10" value="Kritis" severity="danger" class="text-xs" />
+            <div v-if="data.usageDiskSpace !== null && data.usageDiskSpace !== undefined"
+                 :class="['text-xs font-mono font-medium', data.usageDiskSpace < 0 ? 'text-red-500' : 'text-green-600']">
+              <i :class="data.usageDiskSpace < 0 ? 'pi pi-arrow-down' : 'pi pi-arrow-up'" class="text-xs mr-0.5"></i>
+              {{ data.usageDiskSpace >= 0 ? '+' : '' }}{{ data.usageDiskSpace?.toFixed(1) }} GB
+            </div>
           </div>
-          <span v-else class="text-color-secondary text-sm">—</span>
         </template>
       </Column>
-      <Column field="TGL_CHECK" header="Tgl Check" sortable style="width:105px">
+
+      <!-- Kolom 3: Histori & Prediksi Bln Depan -->
+      <Column header="Bulan Lalu & Prediksi" style="width:145px">
         <template #body="{ data }">
-          <span class="text-sm font-mono">{{ formatDateShort(data.TGL_CHECK) }}</span>
+          <div class="history-cell">
+            <div class="history-row">
+              <span class="text-color-secondary">Lalu:</span>
+              <span v-if="data.freeSpaceLastMonthGb !== null && data.freeSpaceLastMonthGb !== undefined" class="font-mono font-semibold">
+                {{ data.freeSpaceLastMonthGb?.toFixed(1) }} GB
+              </span>
+              <span v-else class="text-color-secondary">—</span>
+            </div>
+            <div class="history-row">
+              <span class="text-color-secondary">Prediksi:</span>
+              <div v-if="data.predictedUsage !== null && data.predictedUsage !== undefined" class="flex align-items-center gap-1">
+                <span class="font-mono font-bold" :class="spaceClass(data.predictedUsage)">
+                  {{ data.predictedUsage?.toFixed(1) }} GB
+                </span>
+                <Tag v-if="data.predictedUsage < 10" value="Kritis" severity="danger" class="mini-tag-os" />
+              </div>
+              <span v-else class="text-color-secondary">—</span>
+            </div>
+          </div>
         </template>
       </Column>
-      <Column field="OS" header="OS" sortable style="width:90px">
+
+      <!-- Kolom 4: Tanggal Check -->
+      <Column field="TGL_CHECK" header="Tgl Check" sortable style="width:90px">
         <template #body="{ data }">
-          <Tag :value="data.OS || '—'" :severity="data.OS === 'WINDOWS' ? 'info' : 'warning'" />
+          <span class="text-xs font-mono">{{ formatDateShort(data.TGL_CHECK) }}</span>
         </template>
       </Column>
-      <Column field="FU" header="Follow Up" style="min-width:140px">
+
+      <!-- Kolom 5: Follow Up & Free After FU -->
+      <Column field="FU" header="Follow Up" style="min-width:130px">
         <template #body="{ data }">
-          <span class="fu-text">{{ data.FU || '—' }}</span>
+          <div class="fu-cell">
+            <span class="fu-text">{{ data.FU || '—' }}</span>
+            <div v-if="data.FREE_AFTER" class="free-after-chip">
+              <i class="pi pi-check-circle text-xs text-green-500 mr-1"></i>
+              <span class="text-xs font-mono text-green-700">After: <strong>{{ data.FREE_AFTER }}</strong></span>
+            </div>
+          </div>
         </template>
       </Column>
-      <Column field="FREE_AFTER" header="Free After FU" style="width:105px">
-        <template #body="{ data }">{{ data.FREE_AFTER || '—' }}</template>
-      </Column>
-      <Column header="Capture" style="width:80px">
+
+      <!-- Kolom 6: Capture Thumbnail -->
+      <Column header="Capture" style="width:65px; text-align:center">
         <template #body="{ data }">
-          <img v-if="data.CAPTURE_PATH" :src="api.getAssetUrl(data.CAPTURE_PATH)" alt="capture"
-            class="capture-thumb-mini"
-            @click="openPreview(api.getAssetUrl(data.CAPTURE_PATH))" />
-          <i v-else class="pi pi-image text-color-secondary opacity-40 text-lg" />
+          <div class="flex justify-content-center">
+            <img v-if="data.CAPTURE_PATH" :src="api.getAssetUrl(data.CAPTURE_PATH)" alt="capture"
+              class="capture-thumb-mini"
+              @click="openPreview(api.getAssetUrl(data.CAPTURE_PATH))" />
+            <i v-else class="pi pi-image text-color-secondary opacity-30 text-base" />
+          </div>
         </template>
       </Column>
-      <Column header="Aksi" style="width:120px">
+
+      <!-- Kolom 7: Aksi -->
+      <Column header="Aksi" style="width:95px; text-align:center">
         <template #body="{ data }">
-          <div class="row-actions">
-            <Button v-if="isLinux(data)" icon="pi pi-server" class="p-button-text p-button-sm p-button-success"
+          <div class="row-actions justify-content-center">
+            <Button v-if="isLinux(data)" icon="pi pi-server" class="p-button-text p-button-sm p-button-success p-1"
               :loading="checkingKdcab === data.KDCAB"
-              v-tooltip.top="'Cek Storage SSH (Buka Opsi / Eksekusi)'" @click="openSshDialog(data)" />
-            <Button v-else icon="pi pi-server" class="p-button-text p-button-sm p-button-secondary opacity-40 cursor-not-allowed"
-              disabled v-tooltip.top="'Khusus server Linux (Windows cek manual)'" />
-            <Button icon="pi pi-pencil" class="p-button-text p-button-sm p-button-info"
+              v-tooltip.top="'Cek Storage SSH'" @click="openSshDialog(data)" />
+            <Button v-else icon="pi pi-server" class="p-button-text p-button-sm p-button-secondary opacity-30 cursor-not-allowed p-1"
+              disabled v-tooltip.top="'Khusus Linux'" />
+            <Button icon="pi pi-pencil" class="p-button-text p-button-sm p-button-info p-1"
               v-tooltip.top="'Edit'" @click="openDialog(data)" />
-            <Button icon="pi pi-trash" class="p-button-text p-button-sm p-button-danger"
+            <Button icon="pi pi-trash" class="p-button-text p-button-sm p-button-danger p-1"
               v-tooltip.top="'Hapus'" @click="$emit('delete', data)" />
           </div>
         </template>

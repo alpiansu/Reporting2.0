@@ -240,10 +240,15 @@
     background: var(--primary-color, #2563eb);
     color: var(--primary-contrast-color);
     font-weight: 600;
-    font-size: .78rem;
+    font-size: .76rem;
     text-transform: uppercase;
-    letter-spacing: .04em;
-    padding: .65rem .75rem;
+    letter-spacing: .03em;
+    padding: .55rem .65rem;
+}
+
+:deep(.ceklist-table .p-datatable-tbody > tr > td) {
+    padding: .45rem .65rem;
+    font-size: .82rem;
 }
 
 :deep(.ceklist-table .p-datatable-thead > tr > th.p-sortable-column) {

@@ -72,7 +72,7 @@
         </div>
       </template>
 
-      <Column header="Cabang" sortable sortField="CAB" style="width:130px">
+      <Column header="Cabang" sortable sortField="CAB" style="width:140px">
         <template #body="{ data }">
           <div class="cabang-cell">
             <span class="cabang-code font-mono">{{ formatCode(data.CAB) }}</span>
@@ -80,12 +80,12 @@
           </div>
         </template>
       </Column>
-      <Column field="PATH" header="Path" sortable style="min-width:170px">
+      <Column field="PATH" header="Path" sortable style="min-width:140px">
         <template #body="{ data }">
           <code class="path-badge">{{ data.PATH || '—' }}</code>
         </template>
       </Column>
-      <Column header="Storage (Free / Total)" sortable :sortField="(d) => parseGbSimple(d.FREE_SPACE) || 0" style="min-width:190px">
+      <Column header="Storage (Free / Total)" sortable :sortField="(d) => parseGbSimple(d.FREE_SPACE) || 0" style="width:175px">
         <template #body="{ data }">
           <div v-if="calcStorage(data)" class="storage-gauge">
             <div class="storage-gauge-header">
@@ -110,25 +110,27 @@
           </div>
         </template>
       </Column>
-      <Column field="TGL_CHECK" header="Tgl Check" sortable style="width:110px">
+      <Column field="TGL_CHECK" header="Tgl Check" sortable style="width:85px">
         <template #body="{ data }">
-          <span class="text-sm font-mono">{{ formatDateShort(data.TGL_CHECK) }}</span>
+          <span class="text-xs font-mono">{{ formatDateShort(data.TGL_CHECK) }}</span>
         </template>
       </Column>
-      <Column header="Capture" style="width:75px">
+      <Column header="Capture" style="width:65px; text-align:center">
         <template #body="{ data }">
-          <img v-if="data.CAPTURE_PATH" :src="api.getAssetUrl(data.CAPTURE_PATH)" alt="capture"
-            class="capture-thumb-mini"
-            @click="openPreview(api.getAssetUrl(data.CAPTURE_PATH))" />
-          <i v-else class="pi pi-image text-color-secondary opacity-40 text-lg" />
+          <div class="flex justify-content-center">
+            <img v-if="data.CAPTURE_PATH" :src="api.getAssetUrl(data.CAPTURE_PATH)" alt="capture"
+              class="capture-thumb-mini"
+              @click="openPreview(api.getAssetUrl(data.CAPTURE_PATH))" />
+            <i v-else class="pi pi-image text-color-secondary opacity-30 text-base" />
+          </div>
         </template>
       </Column>
-      <Column header="Aksi" style="width:90px">
+      <Column header="Aksi" style="width:85px; text-align:center">
         <template #body="{ data }">
-          <div class="row-actions">
-            <Button icon="pi pi-pencil" class="p-button-text p-button-sm p-button-info"
+          <div class="row-actions justify-content-center">
+            <Button icon="pi pi-pencil" class="p-button-text p-button-sm p-button-info p-1"
               v-tooltip.top="'Edit'" @click="openDialog(data)" />
-            <Button icon="pi pi-trash" class="p-button-text p-button-sm p-button-danger"
+            <Button icon="pi pi-trash" class="p-button-text p-button-sm p-button-danger p-1"
               v-tooltip.top="'Hapus'" @click="$emit('delete', data)" />
           </div>
         </template>

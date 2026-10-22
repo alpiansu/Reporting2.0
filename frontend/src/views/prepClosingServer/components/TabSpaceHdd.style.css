@@ -103,16 +103,22 @@
 }
 
 /* ─── Cabang & Table Cell Typography ────────────────────────────────────────── */
-.cabang-cell {
+.server-cell {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
-  line-height: 1.15;
+  gap: 0.2rem;
+  line-height: 1.2;
+}
+
+.server-cabang {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
 }
 
 .cabang-code {
   font-weight: 700;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   color: var(--text-color, #0f172a);
 }
 
@@ -125,6 +131,56 @@
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 110px;
+}
+
+.server-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.mini-tag-os {
+  font-size: 0.65rem !important;
+  padding: 0.05rem 0.35rem !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+}
+
+.space-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+}
+
+.history-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.76rem;
+}
+
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.fu-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.free-after-chip {
+  display: inline-flex;
+  align-items: center;
+  background: var(--green-50, rgba(16, 185, 129, 0.1));
+  border: 1px solid var(--green-200, rgba(16, 185, 129, 0.25));
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  width: fit-content;
 }
 
 .capture-thumb-mini {

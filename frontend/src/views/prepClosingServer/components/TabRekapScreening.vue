@@ -56,38 +56,38 @@
           <span>Tidak ada toko yang cocok dengan pencarian / filter.</span>
         </div>
       </template>
-      <Column field="cab" header="CAB" style="width:75px" frozen sortable>
+      <Column field="cab" header="CAB" style="width:65px" frozen sortable>
         <template #body="{ data: row }">
-          <span class="font-mono font-bold text-sm">{{ formatCode(row.cab) }}</span>
+          <span class="font-mono font-bold text-xs">{{ formatCode(row.cab) }}</span>
         </template>
       </Column>
-      <Column field="kdtk" header="KDTK" style="width:90px" frozen sortable>
+      <Column field="kdtk" header="KDTK" style="width:80px" frozen sortable>
         <template #body="{ data: row }">
-          <span class="font-mono font-medium text-sm text-primary">{{ formatCode(row.kdtk) }}</span>
+          <span class="font-mono font-medium text-xs text-primary">{{ formatCode(row.kdtk) }}</span>
         </template>
       </Column>
-      <Column field="failedRules" header="Failed/Total" style="width:110px" sortable>
+      <Column field="failedRules" header="Failed/Total" style="width:85px" sortable>
         <template #body="{ data: row }">
-          <span class="text-sm font-mono">{{ row.failedRules }}/{{ row.totalRules }}</span>
+          <span class="text-xs font-mono">{{ row.failedRules }}/{{ row.totalRules }}</span>
         </template>
       </Column>
-      <Column field="criticalIssues" header="Critical" style="width:90px" sortable>
+      <Column field="criticalIssues" header="Critical" style="width:75px" sortable>
         <template #body="{ data: row }">
-          <Tag v-if="row.criticalIssues > 0" :value="String(row.criticalIssues)" severity="danger" />
-          <span v-else class="text-color-secondary">0</span>
+          <Tag v-if="row.criticalIssues > 0" :value="String(row.criticalIssues)" severity="danger" class="text-xs p-0 px-1" />
+          <span v-else class="text-color-secondary text-xs">0</span>
         </template>
       </Column>
-      <Column field="lastScreened" header="Last Screened" style="width:125px" sortable>
+      <Column field="lastScreened" header="Last Screened" style="width:105px" sortable>
         <template #body="{ data: row }">
-          <span class="text-sm text-color-secondary">{{ formatDate(row.lastScreened) }}</span>
+          <span class="text-xs text-color-secondary font-mono">{{ formatDate(row.lastScreened) }}</span>
         </template>
       </Column>
-      <Column v-for="key in data.ruleKeys" :key="key" :header="key" style="width:105px">
+      <Column v-for="key in data.ruleKeys" :key="key" :header="key" style="width:85px">
         <template #body="{ data: row }">
           <Tag v-if="row[key] !== null && row[key] !== undefined"
             :value="row[key] === true ? 'FAIL' : String(row[key])"
             severity="danger" class="tag-sm" />
-          <span v-else class="text-color-secondary text-sm">—</span>
+          <span v-else class="text-color-secondary text-xs">—</span>
         </template>
       </Column>
     </DataTable>

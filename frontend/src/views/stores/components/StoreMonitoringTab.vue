@@ -36,7 +36,7 @@
           class="btn-monitoring-export"
           @click="handleExportExcel"
           :disabled="loading || syncing"
-          title="Download laporan lengkap Excel (4 Sheet)"
+          title="Download laporan lengkap Excel (5 Sheet)"
         >
           <i class="pi pi-file-excel"></i>
           <span>Export Excel</span>
@@ -141,6 +141,30 @@
           </div>
         </div>
       </div>
+
+      <!-- KPI Toko Takeover (BARU) -->
+      <div
+        class="monitoring-kpi-card"
+        :class="{ active: activeCategory === 'takeover' }"
+        @click="activeCategory = 'takeover'"
+      >
+        <div class="kpi-icon-box takeover">
+          <i class="pi pi-sync"></i>
+        </div>
+        <div class="kpi-text-box">
+          <span class="kpi-label">Toko Takeover</span>
+          <div class="kpi-value-row">
+            <span class="kpi-value">{{ dynamicSummary.totalTakeover }}</span>
+            <span
+              v-if="dynamicSummary.totalTakeoverAlerts > 0"
+              class="kpi-sub-badge danger"
+              title="Toko dalam periode peringatan takeover (H-3 s.d. H+2)"
+            >
+              {{ dynamicSummary.totalTakeoverAlerts }} H-3 s.d. H+2
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Quick Branch Filter Strip (Pills per Cabang) -->
@@ -223,6 +247,17 @@
           <span>Sudah Tutup</span>
           <span class="pill-count">{{ filteredSudahTutup.length }}</span>
         </button>
+
+        <button
+          type="button"
+          class="tab-pill-btn"
+          :class="{ active: activeCategory === 'takeover' }"
+          @click="activeCategory = 'takeover'"
+        >
+          <i class="pi pi-sync"></i>
+          <span>Toko Takeover</span>
+          <span class="pill-count">{{ filteredTakeover.length }}</span>
+        </button>
       </div>
 
       <div class="monitoring-filter-controls">
@@ -232,7 +267,7 @@
           <input
             type="text"
             v-model="searchQuery"
-            placeholder="Live search kode, nama, cabang, keterangan..."
+            placeholder="Live search kode, nama, cabang..."
             class="search-field-live"
           />
           <button v-if="searchQuery" class="clear-btn" @click="searchQuery = ''" title="Bersihkan pencarian">
@@ -240,7 +275,7 @@
           </button>
         </div>
 
-        <!-- Filter Cabang Dropdown (Alternative Compact View) -->
+        <!-- Filter Cabang Dropdown -->
         <select v-model="selectedCabang" class="select-filter" title="Filter Cabang">
           <option value="">Semua Cabang</option>
           <option v-for="cab in cabangListWithStats" :key="cab.code" :value="cab.code">
@@ -271,6 +306,19 @@
           <option value="ada_sisa">Ada Sisa Saldo Saja</option>
           <option value="nol">Saldo Nol (Clear) Saja</option>
         </select>
+
+        <!-- Sub Filter Khusus Takeover -->
+        <select
+          v-if="activeCategory === 'takeover'"
+          v-model="filterTakeoverType"
+          class="select-filter"
+          title="Filter Jenis Transisi Takeover"
+        >
+          <option value="all">Semua Jenis Transisi</option>
+          <option value="Franchise ➜ Reguler">Franchise ➜ Reguler</option>
+          <option value="Reguler ➜ Franchise">Reguler ➜ Franchise</option>
+          <option value="Franchise ➜ Franchise">Franchise ➜ Franchise</option>
+        </select>
       </div>
     </div>
 
@@ -282,13 +330,11 @@
           Menampilkan hasil untuk
           <span v-if="selectedCabang"> Cabang <strong>{{ selectedCabang }}</strong></span>
           <span v-if="selectedCabang && searchQuery"> &amp; </span>
-          <span v-if="searchQuery"> pencarian "<strong>{{ searchQuery }}</strong>"</span>
-          <span v-if="filterBukaType !== 'all' && activeCategory === 'akan_buka'"> ({{ filterBukaType === 'baru' ? 'Baru Bulan Ini' : 'Akan Datang' }})</span>
-          <span v-if="filterSaldoStatus !== 'all' && activeCategory === 'sudah_tutup'"> ({{ filterSaldoStatus === 'ada_sisa' ? 'Ada Sisa Saldo' : 'Saldo Nol' }})</span>:
+          <span v-if="searchQuery"> pencarian "<strong>{{ searchQuery }}</strong>"</span>:
           ditemukan <strong>{{ currentCategoryCount }}</strong> data.
         </span>
       </div>
-      <button type="button" class="btn-reset-filters" @click="resetFilters" title="Reset semua filter ke kondisi awal">
+      <button type="button" class="btn-reset-filters" @click="resetFilters" title="Reset semua filter">
         <i class="pi pi-times"></i> Reset Filter
       </button>
     </div>
@@ -312,9 +358,7 @@
           </div>
         </template>
         <Column header="No" :style="{ width: '60px', textAlign: 'center' }">
-          <template #body="slotProps">
-            {{ slotProps.index + 1 }}
-          </template>
+          <template #body="slotProps">{{ slotProps.index + 1 }}</template>
         </Column>
         <Column field="cabang" header="Cabang" :style="{ width: '110px' }">
           <template #body="slotProps">
@@ -327,12 +371,12 @@
           </template>
         </Column>
         <Column field="namaToko" header="Nama Toko" sortable></Column>
-        <Column field="tglBuka" header="Tanggal Buka" sortable :style="{ width: '140px' }">
+        <Column field="tglBuka" header="Tanggal Buka" sortable :style="{ width: '180px' }">
           <template #body="slotProps">
             <span>{{ formatDate(slotProps.data.tglBuka) }}</span>
           </template>
         </Column>
-        <Column header="Status" :style="{ width: '190px' }">
+        <Column header="Status" :style="{ width: '210px' }">
           <template #body="slotProps">
             <span
               v-if="slotProps.data.isNewThisMonth"
@@ -365,9 +409,7 @@
           </div>
         </template>
         <Column header="No" :style="{ width: '60px', textAlign: 'center' }">
-          <template #body="slotProps">
-            {{ slotProps.index + 1 }}
-          </template>
+          <template #body="slotProps">{{ slotProps.index + 1 }}</template>
         </Column>
         <Column field="cabang" header="Cabang" :style="{ width: '110px' }">
           <template #body="slotProps">
@@ -380,12 +422,12 @@
           </template>
         </Column>
         <Column field="namaToko" header="Nama Toko" sortable></Column>
-        <Column field="tglMulai" header="Tgl Mulai" :style="{ width: '130px' }">
+        <Column field="tglMulai" header="Tgl Mulai" :style="{ width: '170px' }">
           <template #body="slotProps">
             <span>{{ formatDate(slotProps.data.tglMulai) }}</span>
           </template>
         </Column>
-        <Column field="tglSelesai" header="Tgl Selesai" :style="{ width: '130px' }">
+        <Column field="tglSelesai" header="Tgl Selesai" :style="{ width: '170px' }">
           <template #body="slotProps">
             <span>{{ formatDate(slotProps.data.tglSelesai) }}</span>
           </template>
@@ -404,7 +446,7 @@
               type="button"
               class="btn-detail-link"
               @click="openTsDetails(slotProps.data)"
-              title="Lihat daftar rincian tanggal tutup sementara"
+              title="Lihat rincian tanggal tutup"
             >
               <i class="pi pi-list"></i>
               <span>Rincian</span>
@@ -430,9 +472,7 @@
           </div>
         </template>
         <Column header="No" :style="{ width: '60px', textAlign: 'center' }">
-          <template #body="slotProps">
-            {{ slotProps.index + 1 }}
-          </template>
+          <template #body="slotProps">{{ slotProps.index + 1 }}</template>
         </Column>
         <Column field="cabang" header="Cabang" :style="{ width: '110px' }">
           <template #body="slotProps">
@@ -445,12 +485,12 @@
           </template>
         </Column>
         <Column field="namaToko" header="Nama Toko" sortable></Column>
-        <Column field="tglBuka" header="Tgl Buka" :style="{ width: '130px' }">
+        <Column field="tglBuka" header="Tgl Buka" :style="{ width: '170px' }">
           <template #body="slotProps">
             <span>{{ slotProps.data.tglBuka ? formatDate(slotProps.data.tglBuka) : '-' }}</span>
           </template>
         </Column>
-        <Column field="tglTutup" header="Rencana Tutup" sortable :style="{ width: '140px' }">
+        <Column field="tglTutup" header="Rencana Tutup" sortable :style="{ width: '180px' }">
           <template #body="slotProps">
             <span class="text-danger font-semibold">{{ formatDate(slotProps.data.tglTutup) }}</span>
           </template>
@@ -481,9 +521,7 @@
           </div>
         </template>
         <Column header="No" :style="{ width: '60px', textAlign: 'center' }">
-          <template #body="slotProps">
-            {{ slotProps.index + 1 }}
-          </template>
+          <template #body="slotProps">{{ slotProps.index + 1 }}</template>
         </Column>
         <Column field="cabang" header="Cabang" :style="{ width: '110px' }">
           <template #body="slotProps">
@@ -496,7 +534,7 @@
           </template>
         </Column>
         <Column field="namaToko" header="Nama Toko" sortable></Column>
-        <Column field="tglTutup" header="Tanggal Tutup" sortable :style="{ width: '140px' }">
+        <Column field="tglTutup" header="Tanggal Tutup" sortable :style="{ width: '180px' }">
           <template #body="slotProps">
             <span>{{ formatDate(slotProps.data.tglTutup) }}</span>
           </template>
@@ -531,6 +569,64 @@
           </template>
         </Column>
       </DataTable>
+
+      <!-- 5. TABEL TOKO TAKEOVER (BARU) -->
+      <DataTable
+        v-if="activeCategory === 'takeover'"
+        :value="filteredTakeover"
+        :paginator="true"
+        :rows="15"
+        :rowsPerPageOptions="[15, 30, 50, 100]"
+        responsiveLayout="scroll"
+        class="p-datatable-sm"
+        stripedRows
+      >
+        <template #empty>
+          <div class="p-4 text-center text-muted">
+            <i class="pi pi-inbox mr-2"></i> Tidak ada data toko takeover yang sesuai kriteria pencarian.
+          </div>
+        </template>
+        <Column header="No" :style="{ width: '60px', textAlign: 'center' }">
+          <template #body="slotProps">{{ slotProps.index + 1 }}</template>
+        </Column>
+        <Column field="cabang" header="Cabang" :style="{ width: '110px' }">
+          <template #body="slotProps">
+            <span class="branch-tag" :title="getCabangName(slotProps.data.cabang)">{{ slotProps.data.cabang }}</span>
+          </template>
+        </Column>
+        <Column field="namaToko" header="Nama Toko" sortable></Column>
+        <Column field="tipeTransisi" header="Jenis Transisi" :style="{ width: '200px' }" sortable>
+          <template #body="slotProps">
+            <span class="takeover-transisi-badge">
+              <i class="pi pi-sync"></i>
+              {{ slotProps.data.tipeTransisi }}
+            </span>
+          </template>
+        </Column>
+        <Column header="Toko Lama" :style="{ width: '220px' }">
+          <template #body="slotProps">
+            <div class="flex items-center gap-2">
+              <span class="code-badge-old">{{ slotProps.data.kodeLama }}</span>
+              <span class="text-xs text-muted">{{ formatDate(slotProps.data.tglTutupLama) }}</span>
+            </div>
+          </template>
+        </Column>
+        <Column header="Toko Baru" :style="{ width: '220px' }">
+          <template #body="slotProps">
+            <div class="flex items-center gap-2">
+              <span class="code-badge-new">{{ slotProps.data.kodeBaru }}</span>
+              <span class="text-xs text-muted">{{ formatDate(slotProps.data.tglBukaBaru) }}</span>
+            </div>
+          </template>
+        </Column>
+        <Column field="selisihHari" header="Selisih" :style="{ width: '120px', textAlign: 'center' }">
+          <template #body="slotProps">
+            <span class="table-badge success">
+              {{ slotProps.data.selisihHari === 0 ? 'Hari Sama' : '1 Hari' }}
+            </span>
+          </template>
+        </Column>
+      </DataTable>
     </div>
 
     <!-- Modal Rincian Tanggal Tutup Sementara (TS) -->
@@ -538,7 +634,7 @@
       v-model:visible="showTsModal"
       modal
       header="Rincian Tanggal Tutup Sementara"
-      :style="{ width: '520px' }"
+      :style="{ width: '560px' }"
       :closable="true"
     >
       <div v-if="selectedTsStore" class="ts-dates-modal-content">
@@ -608,6 +704,7 @@ const searchQuery = ref('');
 const selectedCabang = ref('');
 const filterBukaType = ref('all');
 const filterSaldoStatus = ref('all');
+const filterTakeoverType = ref('all');
 
 const meta = ref(null);
 const summary = ref({
@@ -618,6 +715,8 @@ const summary = ref({
   totalSudahTutup: 0,
   totalSudahTutupAdaSisa: 0,
   totalSudahTutupNol: 0,
+  totalTakeover: 0,
+  totalTakeoverAlerts: 0,
 });
 
 const rawData = ref({
@@ -625,6 +724,8 @@ const rawData = ref({
   tutupSementara: [],
   akanTutup: [],
   sudahTutup: [],
+  takeover: [],
+  takeoverAlerts: [],
 });
 
 // Modal TS
@@ -643,7 +744,8 @@ const totalStoresAllBranches = computed(() => {
     (rawData.value.akanBuka?.length || 0) +
     (rawData.value.tutupSementara?.length || 0) +
     (rawData.value.akanTutup?.length || 0) +
-    (rawData.value.sudahTutup?.length || 0)
+    (rawData.value.sudahTutup?.length || 0) +
+    (rawData.value.takeover?.length || 0)
   );
 });
 
@@ -664,6 +766,7 @@ const cabangListWithStats = computed(() => {
   countForCabang(rawData.value.tutupSementara);
   countForCabang(rawData.value.akanTutup);
   countForCabang(rawData.value.sudahTutup);
+  countForCabang(rawData.value.takeover);
 
   return Array.from(map.entries())
     .map(([code, totalCount]) => ({
@@ -685,6 +788,8 @@ const dynamicSummary = computed(() => {
   const bTutupSementara = filterByCabang(rawData.value.tutupSementara);
   const bAkanTutup = filterByCabang(rawData.value.akanTutup);
   const bSudahTutup = filterByCabang(rawData.value.sudahTutup);
+  const bTakeover = filterByCabang(rawData.value.takeover);
+  const bAlerts = filterByCabang(rawData.value.takeoverAlerts);
 
   const totalBaruBulanIni = bAkanBuka.filter((x) => x.isNewThisMonth).length;
   const totalSudahTutupAdaSisa = bSudahTutup.filter((x) => x.statusSaldo === 'ADA_SISA').length;
@@ -698,6 +803,8 @@ const dynamicSummary = computed(() => {
     totalSudahTutup: bSudahTutup.length,
     totalSudahTutupAdaSisa,
     totalSudahTutupNol,
+    totalTakeover: bTakeover.length,
+    totalTakeoverAlerts: bAlerts.length,
   };
 });
 
@@ -708,10 +815,10 @@ const matchesSearchAndCabang = (item) => {
   }
   if (searchQuery.value) {
     const q = searchQuery.value.toLowerCase().trim();
-    const code = (item.kodeToko || '').toLowerCase();
+    const code = (item.kodeToko || item.kodeLama || item.kodeBaru || '').toLowerCase();
     const name = (item.namaToko || '').toLowerCase();
     const cab = (item.cabang || '').toLowerCase();
-    const ket = (item.keterangan || '').toLowerCase();
+    const ket = (item.keterangan || item.tipeTransisi || '').toLowerCase();
     if (!code.includes(q) && !name.includes(q) && !cab.includes(q) && !ket.includes(q)) {
       return false;
     }
@@ -748,13 +855,22 @@ const filteredSudahTutup = computed(() => {
   return list;
 });
 
+const filteredTakeover = computed(() => {
+  let list = (rawData.value.takeover || []).filter(matchesSearchAndCabang);
+  if (filterTakeoverType.value !== 'all') {
+    list = list.filter((x) => x.tipeTransisi === filterTakeoverType.value);
+  }
+  return list;
+});
+
 // Apakah filter sedang aktif
 const isFiltered = computed(() => {
   return (
     Boolean(searchQuery.value.trim()) ||
     Boolean(selectedCabang.value) ||
     (activeCategory.value === 'akan_buka' && filterBukaType.value !== 'all') ||
-    (activeCategory.value === 'sudah_tutup' && filterSaldoStatus.value !== 'all')
+    (activeCategory.value === 'sudah_tutup' && filterSaldoStatus.value !== 'all') ||
+    (activeCategory.value === 'takeover' && filterTakeoverType.value !== 'all')
   );
 });
 
@@ -764,6 +880,7 @@ const currentCategoryCount = computed(() => {
   if (activeCategory.value === 'tutup_sementara') return filteredTutupSementara.value.length;
   if (activeCategory.value === 'akan_tutup') return filteredAkanTutup.value.length;
   if (activeCategory.value === 'sudah_tutup') return filteredSudahTutup.value.length;
+  if (activeCategory.value === 'takeover') return filteredTakeover.value.length;
   return 0;
 });
 
@@ -773,6 +890,7 @@ const resetFilters = () => {
   selectedCabang.value = '';
   filterBukaType.value = 'all';
   filterSaldoStatus.value = 'all';
+  filterTakeoverType.value = 'all';
 };
 
 // Fetch data
@@ -788,6 +906,8 @@ const fetchMonitoringData = async () => {
         tutupSementara: [],
         akanTutup: [],
         sudahTutup: [],
+        takeover: [],
+        takeoverAlerts: [],
       };
     }
   } catch (err) {
@@ -842,7 +962,7 @@ const handleExportExcel = async () => {
     toast.add({
       severity: 'info',
       summary: 'Mengunduh Laporan',
-      detail: 'Menyiapkan workbook Excel 4 sheet...',
+      detail: 'Menyiapkan workbook Excel 5 sheet...',
       life: 3000,
     });
     const blob = await storeService.exportStoreMonitoringExcel({
@@ -875,12 +995,20 @@ const openTsDetails = (store) => {
   showTsModal.value = true;
 };
 
-// Formatters
+// Formatters tanggal dd MMMM YYYY (Bahasa Indonesia)
 const formatDate = (dateStr) => {
   if (!dateStr || dateStr === '0000-00-00') return '-';
   const parts = dateStr.split('-');
   if (parts.length === 3) {
-    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    const d = new Date(year, month, day);
+    return new Intl.DateTimeFormat('id-ID', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    }).format(d);
   }
   return dateStr;
 };
@@ -888,13 +1016,15 @@ const formatDate = (dateStr) => {
 const formatDateTime = (isoStr) => {
   if (!isoStr) return '-';
   const d = new Date(isoStr);
-  return d.toLocaleString('id-ID', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return (
+    new Intl.DateTimeFormat('id-ID', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(d) + ' WIB'
+  );
 };
 
 const formatNumber = (num) => {

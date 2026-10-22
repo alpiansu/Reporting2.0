@@ -603,6 +603,35 @@ class StoreSyncService {
       } catch (err) {
         logger.warn(`[store-sync] Query mstr_toko_ts failed for cabang ${cab}: ${err.message}`);
       }
+      // 4. Query Toko Takeover (nama identik, beda kode toko, selisih tanggal tutup-buka 0 s/d 1 hari)
+      const qTakeover = `
+        SELECT 
+          t_old.kode_toko AS kodeLama,
+          t_old.nama_toko AS namaToko,
+          t_old.kode_gudang AS kodeGudang,
+          DATE_FORMAT(t_old.tok_tgl_tutup, '%Y-%m-%d') AS tglTutupLama,
+          t_new.kode_toko AS kodeBaru,
+          DATE_FORMAT(t_new.tgl_buka, '%Y-%m-%d') AS tglBukaBaru,
+          DATEDIFF(t_new.tgl_buka, t_old.tok_tgl_tutup) AS selisihHari
+        FROM poscabang.mstr_toko_all t_old
+        JOIN poscabang.mstr_toko_all t_new 
+          ON TRIM(t_old.nama_toko) = TRIM(t_new.nama_toko)
+          AND t_old.kode_toko != t_new.kode_toko
+        WHERE t_old.tok_tgl_tutup IS NOT NULL 
+          AND t_old.tok_tgl_tutup != '0000-00-00'
+          AND t_new.tgl_buka IS NOT NULL 
+          AND t_new.tgl_buka != '0000-00-00'
+          AND DATEDIFF(t_new.tgl_buka, t_old.tok_tgl_tutup) BETWEEN 0 AND 1
+        ORDER BY t_new.tgl_buka DESC
+      `;
+      let takeoverRows = [];
+      try {
+        const [rows] = await connection.query(qTakeover);
+        takeoverRows = rows;
+      } catch (err) {
+        logger.warn(`[store-sync] Query takeover failed for cabang ${cab}: ${err.message}`);
+      }
+
 
       // 3. Query saldo toko dari kodetoko_YYMM terbaru untuk cek saldo toko sudah tutup
       let saldoMap = new Map();
@@ -734,6 +763,32 @@ class StoreSyncService {
         }
       }
 
+      
+      const takeover = takeoverRows.map((r) => {
+        const kodeLama = String(r.kodeLama || "").trim();
+        const kodeBaru = String(r.kodeBaru || "").trim();
+        const isOldReg = kodeLama.toUpperCase().startsWith("T");
+        const isNewReg = kodeBaru.toUpperCase().startsWith("T");
+        let tipeTransisi = "Takeover";
+        if (!isOldReg && isNewReg) tipeTransisi = "Franchise ➜ Reguler";
+        else if (isOldReg && !isNewReg) tipeTransisi = "Reguler ➜ Franchise";
+        else if (!isOldReg && !isNewReg) tipeTransisi = "Franchise ➜ Franchise";
+        else if (isOldReg && isNewReg) tipeTransisi = "Reguler ➜ Reguler";
+
+        return {
+          kodeLama,
+          kodeBaru,
+          namaToko: String(r.namaToko || "").trim(),
+          cabang: cab,
+          kodeGudang: String(r.kodeGudang || cab).trim(),
+          tglTutupLama: r.tglTutupLama,
+          tglBukaBaru: r.tglBukaBaru,
+          tglTakeover: r.tglBukaBaru,
+          selisihHari: Number(r.selisihHari) || 0,
+          tipeTransisi,
+        };
+      });
+
       const tutupSementara = [];
       for (const [k, item] of tsMap.entries()) {
         const sortedDates = [...new Set(item.dates)].sort();
@@ -762,6 +817,7 @@ class StoreSyncService {
         tutupSementara,
         akanTutup,
         sudahTutup,
+        takeover,
       };
     } catch (err) {
       logger.error(`[store-sync] fetchWrcMonitoringData failed for cabang ${cab}: ${err.message}`);
@@ -773,6 +829,7 @@ class StoreSyncService {
         tutupSementara: [],
         akanTutup: [],
         sudahTutup: [],
+        takeover: [],
       };
     } finally {
       if (connection) {
@@ -803,6 +860,7 @@ class StoreSyncService {
     const tutupSementara = [];
     const akanTutup = [];
     const sudahTutup = [];
+    const takeover = [];
     const cabangSummary = [];
 
     let totalBaruBulanIni = 0;
@@ -818,6 +876,7 @@ class StoreSyncService {
         countTutupSementara: res.tutupSementara.length,
         countAkanTutup: res.akanTutup.length,
         countSudahTutup: res.sudahTutup.length,
+        countTakeover: res.takeover?.length || 0,
       });
 
       if (res.success) {
@@ -839,11 +898,62 @@ class StoreSyncService {
           }
           sudahTutup.push(item);
         }
+        for (const item of res.takeover || []) {
+          takeover.push(item);
+        }
       }
     }
 
     const durationMs = Date.now() - startTime;
     const now = new Date();
+
+    
+    // Hitung toko yang masuk dalam masa warning alert takeover (H-3 s.d. H+2)
+    const todayZero = new Date();
+    todayZero.setHours(0, 0, 0, 0);
+    const msPerDay = 24 * 60 * 60 * 1000;
+
+    const takeoverAlerts = takeover
+      .map((item) => {
+        if (!item.tglTakeover) return null;
+        const targetDate = new Date(item.tglTakeover);
+        targetDate.setHours(0, 0, 0, 0);
+        // daysDiff: selisih hari dari today ke tglTakeover
+        // misal today 2026-10-22, target 2026-10-25 => 3 (H-3)
+        // target 2026-10-20 => -2 (H+2)
+        const daysDiff = Math.round((targetDate - todayZero) / msPerDay);
+
+        // Alert aktif dari H-3 (daysDiff = 3) sampai H+2 (daysDiff = -2)
+        if (daysDiff >= -2 && daysDiff <= 3) {
+          let statusAlert = "";
+          let badgeSeverity = "warning";
+          if (daysDiff > 1) {
+            statusAlert = `${daysDiff} hari lagi (H-${daysDiff})`;
+          } else if (daysDiff === 1) {
+            statusAlert = "Besok (H-1)";
+            badgeSeverity = "danger";
+          } else if (daysDiff === 0) {
+            statusAlert = "Hari Ini (H-0)";
+            badgeSeverity = "danger";
+          } else if (daysDiff === -1) {
+            statusAlert = "Kemarin (H+1)";
+            badgeSeverity = "info";
+          } else if (daysDiff === -2) {
+            statusAlert = "2 hari lalu (H+2)";
+            badgeSeverity = "info";
+          }
+
+          return {
+            ...item,
+            daysDiff,
+            statusAlert,
+            badgeSeverity,
+          };
+        }
+        return null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.daysDiff - b.daysDiff);
 
     const monitoringData = {
       meta: {
@@ -863,6 +973,8 @@ class StoreSyncService {
         totalSudahTutup: sudahTutup.length,
         totalSudahTutupAdaSisa,
         totalSudahTutupNol,
+        totalTakeover: takeover.length,
+        totalTakeoverAlerts: takeoverAlerts.length,
       },
       cabangSummary,
       data: {
@@ -870,6 +982,8 @@ class StoreSyncService {
         tutupSementara,
         akanTutup,
         sudahTutup,
+        takeover,
+        takeoverAlerts,
       },
     };
 
@@ -917,12 +1031,14 @@ class StoreSyncService {
     let tutupSementara = cached.data?.tutupSementara || [];
     let akanTutup = cached.data?.akanTutup || [];
     let sudahTutup = cached.data?.sudahTutup || [];
+    let takeover = cached.data?.takeover || [];
 
     // Filter cabang & search
     akanBuka = akanBuka.filter(filterItem);
     tutupSementara = tutupSementara.filter(filterItem);
     akanTutup = akanTutup.filter(filterItem);
     sudahTutup = sudahTutup.filter(filterItem);
+    takeover = takeover.filter(filterItem);
 
     // Filter saldoStatus khusus sudahTutup
     if (saldoStatus && saldoStatus !== "all") {
@@ -947,6 +1063,8 @@ class StoreSyncService {
         totalSudahTutup: sudahTutup.length,
         totalSudahTutupAdaSisa: sudahTutup.filter(x => x.statusSaldo === "ADA_SISA").length,
         totalSudahTutupNol: sudahTutup.filter(x => x.statusSaldo === "NOL").length,
+        totalTakeover: takeover.length,
+        totalTakeoverAlerts: cached.data?.takeoverAlerts?.length || 0,
       },
       rawSummary: cached.summary,
       cabangSummary: cached.cabangSummary,
@@ -955,6 +1073,8 @@ class StoreSyncService {
         tutupSementara: category === "all" || category === "tutup_sementara" ? tutupSementara : [],
         akanTutup: category === "all" || category === "akan_tutup" ? akanTutup : [],
         sudahTutup: category === "all" || category === "sudah_tutup" ? sudahTutup : [],
+        takeover: category === "all" || category === "takeover" ? takeover : [],
+        takeoverAlerts: cached.data?.takeoverAlerts || [],
       },
     };
   }
@@ -964,7 +1084,7 @@ class StoreSyncService {
    */
   async exportStoreMonitoringExcel(options = {}) {
     const monitoringResult = await this.getStoreMonitoring(options);
-    const { akanBuka, tutupSementara, akanTutup, sudahTutup } = monitoringResult.data;
+    const { akanBuka, tutupSementara, akanTutup, sudahTutup, takeover } = monitoringResult.data;
 
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "Reporting 2.0";
@@ -1107,6 +1227,38 @@ class StoreSyncService {
       });
       row.getCell("saldoQty").numFmt = "#,##0";
       row.getCell("saldoRp").numFmt = "#,##0";
+      row.eachCell((cell) => {
+        cell.border = borderThin;
+        cell.font = { name: "Arial", size: 9 };
+      });
+    });
+
+    
+    // Sheet 5: Toko Takeover
+    const wsTakeover = workbook.addWorksheet("Toko Takeover");
+    styleWorksheet(wsTakeover, [
+      { header: "No", key: "no", width: 6 },
+      { header: "Cabang", key: "cabang", width: 10 },
+      { header: "Nama Toko", key: "namaToko", width: 35 },
+      { header: "Tipe Transisi", key: "tipeTransisi", width: 24 },
+      { header: "Kode Lama", key: "kodeLama", width: 12 },
+      { header: "Tgl Tutup Lama", key: "tglTutupLama", width: 15 },
+      { header: "Kode Baru", key: "kodeBaru", width: 12 },
+      { header: "Tgl Buka Baru", key: "tglBukaBaru", width: 15 },
+      { header: "Selisih", key: "selisihHari", width: 10 },
+    ]);
+    (takeover || []).forEach((item, idx) => {
+      const row = wsTakeover.addRow({
+        no: idx + 1,
+        cabang: item.cabang,
+        namaToko: item.namaToko,
+        tipeTransisi: item.tipeTransisi,
+        kodeLama: item.kodeLama,
+        tglTutupLama: item.tglTutupLama,
+        kodeBaru: item.kodeBaru,
+        tglBukaBaru: item.tglBukaBaru,
+        selisihHari: `${item.selisihHari} Hari`,
+      });
       row.eachCell((cell) => {
         cell.border = borderThin;
         cell.font = { name: "Arial", size: 9 };

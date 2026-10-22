@@ -138,6 +138,12 @@
 
   <!-- Global Floating Progress Widget -->
   <FloatingProgressWidget />
+
+  <!-- Modal Peringatan Toko Takeover (H-3 s.d. H+2) -->
+  <TakeoverAlertModal
+    v-model:visible="showTakeoverAlert"
+    :alerts="takeoverAlertList"
+  />
 </template>
 
 <script setup>
@@ -151,6 +157,8 @@ import ChangePasswordForm from '../components/auth/ChangePasswordForm.vue';
 import AppSidebar from '../components/sidebar/AppSidebar.vue';
 import LoadingOverlay from '../components/common/LoadingOverlay.vue';
 import FloatingProgressWidget from '../components/common/FloatingProgressWidget.vue';
+import TakeoverAlertModal from '../components/common/TakeoverAlertModal.vue';
+import storeService from '../services/store.service';
 import { notificationsService as notifSvc } from '../services';
 import api from '../services/api';
 
@@ -406,8 +414,30 @@ const handleClickOutside = (event) => {
   }
 };
 
+
+// ─── Takeover Warning Alert (H-3 s.d. H+2) ──────────────────────────
+const showTakeoverAlert = ref(false);
+const takeoverAlertList = ref([]);
+
+const checkTakeoverAlerts = async () => {
+  try {
+    const res = await storeService.getStoreMonitoring();
+    const alerts = res?.data?.takeoverAlerts || [];
+    takeoverAlertList.value = alerts;
+
+    const alreadyShown = sessionStorage.getItem('takeover_alert_shown_session');
+    if (alerts.length > 0 && !alreadyShown) {
+      showTakeoverAlert.value = true;
+      sessionStorage.setItem('takeover_alert_shown_session', 'true');
+    }
+  } catch (err) {
+    // Silent fail to avoid interrupting user session
+  }
+};
+
 // Add and remove click event listener + smart polling
 onMounted(() => {
+  checkTakeoverAlerts();
   document.addEventListener('click', handleClickOutside);
   loadNotifications(true);
   notifPollInterval = setInterval(() => {
@@ -433,6 +463,7 @@ const confirmLogout = () => {
 // Handle actual logout
 const handleLogout = async () => {
   try {
+    sessionStorage.removeItem("takeover_alert_shown_session");
     await authStore.logout();
     router.push('/login');
     toast.showSuccess('Success', 'Logged out successfully');

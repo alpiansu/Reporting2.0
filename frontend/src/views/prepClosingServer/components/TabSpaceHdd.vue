@@ -76,13 +76,20 @@
         </div>
       </template>
 
-      <!-- Kolom 1: Cabang & Host (KDCAB + Nama + IP + OS) -->
-      <Column header="Cabang & Host" sortable sortField="KDCAB" style="width:170px">
+      <!-- Kolom 1: Cabang & Host (KDCAB + Nama + IP + OS + Indikator FU) -->
+      <Column header="Cabang & Host" sortable sortField="KDCAB" style="min-width:180px">
         <template #body="{ data }">
           <div class="server-cell">
             <div class="server-cabang">
               <span class="cabang-code font-mono">{{ formatCode(data.KDCAB) }}</span>
               <span class="cabang-name">{{ getCabangName(data.KDCAB) }}</span>
+              <span
+                v-if="data.FU || data.FREE_AFTER"
+                class="fu-indicator-badge"
+                v-tooltip.top="getFuTooltip(data)"
+              >
+                <i class="pi pi-comment text-xs mr-0.5"></i>FU
+              </span>
             </div>
             <div class="server-meta">
               <span class="font-mono text-xs text-color-secondary">{{ data.IP || '—' }}</span>
@@ -93,7 +100,7 @@
       </Column>
 
       <!-- Kolom 2: Free Space Saat Ini (dengan delta pemakaian) -->
-      <Column header="Free Space" sortable sortField="freeSpaceGb" style="width:115px">
+      <Column header="Free Space" sortable sortField="freeSpaceGb" style="width:125px">
         <template #body="{ data }">
           <div class="space-cell">
             <span :class="['space-badge', spaceClass(data.freeSpaceGb)]">
@@ -110,7 +117,7 @@
       </Column>
 
       <!-- Kolom 3: Histori & Prediksi Bln Depan -->
-      <Column header="Bulan Lalu & Prediksi" style="width:145px">
+      <Column header="Bulan Lalu & Prediksi" style="width:150px">
         <template #body="{ data }">
           <div class="history-cell">
             <div class="history-row">
@@ -135,27 +142,14 @@
       </Column>
 
       <!-- Kolom 4: Tanggal Check -->
-      <Column field="TGL_CHECK" header="Tgl Check" sortable style="width:90px">
+      <Column field="TGL_CHECK" header="Tgl Check" sortable style="width:95px">
         <template #body="{ data }">
           <span class="text-xs font-mono">{{ formatDateShort(data.TGL_CHECK) }}</span>
         </template>
       </Column>
 
-      <!-- Kolom 5: Follow Up & Free After FU -->
-      <Column field="FU" header="Follow Up" style="min-width:130px">
-        <template #body="{ data }">
-          <div class="fu-cell">
-            <span class="fu-text">{{ data.FU || '—' }}</span>
-            <div v-if="data.FREE_AFTER" class="free-after-chip">
-              <i class="pi pi-check-circle text-xs text-green-500 mr-1"></i>
-              <span class="text-xs font-mono text-green-700">After: <strong>{{ data.FREE_AFTER }}</strong></span>
-            </div>
-          </div>
-        </template>
-      </Column>
-
-      <!-- Kolom 6: Capture Thumbnail -->
-      <Column header="Capture" style="width:65px; text-align:center">
+      <!-- Kolom 5: Capture Thumbnail -->
+      <Column header="Capture" style="width:70px; text-align:center">
         <template #body="{ data }">
           <div class="flex justify-content-center">
             <img v-if="data.CAPTURE_PATH" :src="api.getAssetUrl(data.CAPTURE_PATH)" alt="capture"
@@ -166,8 +160,8 @@
         </template>
       </Column>
 
-      <!-- Kolom 7: Aksi -->
-      <Column header="Aksi" style="width:95px; text-align:center">
+      <!-- Kolom 6: Aksi -->
+      <Column header="Aksi" style="width:100px; text-align:center">
         <template #body="{ data }">
           <div class="row-actions justify-content-center">
             <Button v-if="isLinux(data)" icon="pi pi-server" class="p-button-text p-button-sm p-button-success p-1"
@@ -456,6 +450,15 @@ function formatDateShort(val) {
   const d = new Date(val);
   if (isNaN(d.getTime())) return val;
   return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function getFuTooltip(data) {
+  if (data.FU && data.FREE_AFTER) {
+    return `Tindakan FU: ${data.FU} | Free After: ${data.FREE_AFTER}`;
+  }
+  if (data.FU) return `Tindakan FU: ${data.FU}`;
+  if (data.FREE_AFTER) return `Free After FU: ${data.FREE_AFTER}`;
+  return 'Catatan Follow Up';
 }
 
 const {

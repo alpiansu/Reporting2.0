@@ -1,41 +1,125 @@
 <template>
   <div class="tab-content">
-    <div class="tab-toolbar">
-      <Button icon="pi pi-bolt" label="Init Semua Cabang" class="p-button-warning p-button-sm mr-2"
-        :loading="initLoading" :disabled="!periode" @click="handleInit"
-        v-tooltip.top="'Generate skeleton record untuk semua INDUK cabang'" style="margin-right: 0.5rem;" />
-      <Button icon="pi pi-plus" label="Tambah Data" class="p-button-primary p-button-sm"
-        :disabled="!periode" @click="openDialog(null)" />
+    <!-- Toolbar with Action Buttons & Live Search -->
+    <div class="tab-toolbar-wrapper">
+      <div class="tab-actions-group">
+        <Button icon="pi pi-bolt" label="Init Semua Cabang" class="p-button-warning p-button-sm"
+          :loading="initLoading" :disabled="!periode" @click="handleInit"
+          v-tooltip.top="'Generate skeleton record untuk semua INDUK cabang'" />
+        <Button icon="pi pi-plus" label="Tambah Data" class="p-button-primary p-button-sm"
+          :disabled="!periode" @click="openDialog(null)" />
+      </div>
+
+      <div class="tab-search-box">
+        <IconField iconPosition="left">
+          <InputIcon class="pi pi-search" />
+          <InputText v-model="searchQuery" placeholder="Cari cabang, nama, path..." class="p-inputtext-sm search-input" />
+        </IconField>
+      </div>
     </div>
 
-    <DataTable :value="rows" :loading="loading" class="ceklist-table" stripedRows responsiveLayout="scroll">
+    <!-- Filter Pills Row -->
+    <div class="filter-pills-row">
+      <button
+        type="button"
+        class="filter-pill"
+        :class="{ active: statusFilter === 'all' }"
+        @click="statusFilter = 'all'"
+      >
+        <i class="pi pi-th-large mr-1"></i> Semua <span class="pill-badge">{{ totalCount }}</span>
+      </button>
+      <button
+        type="button"
+        class="filter-pill pill-danger"
+        :class="{ active: statusFilter === 'critical' }"
+        @click="statusFilter = 'critical'"
+      >
+        <i class="pi pi-exclamation-circle mr-1"></i> Kritis &lt; 10 GB <span class="pill-badge badge-danger">{{ criticalCount }}</span>
+      </button>
+      <button
+        type="button"
+        class="filter-pill pill-warn"
+        :class="{ active: statusFilter === 'warning' }"
+        @click="statusFilter = 'warning'"
+      >
+        <i class="pi pi-exclamation-triangle mr-1"></i> Warning &lt; 30 GB <span class="pill-badge badge-warn">{{ warningCount }}</span>
+      </button>
+      <button
+        type="button"
+        class="filter-pill pill-success"
+        :class="{ active: statusFilter === 'ok' }"
+        @click="statusFilter = 'ok'"
+      >
+        <i class="pi pi-check-circle mr-1"></i> Aman &ge; 30 GB <span class="pill-badge badge-success">{{ okCount }}</span>
+      </button>
+    </div>
+
+    <DataTable :value="filteredRows" :loading="loading" class="ceklist-table" stripedRows responsiveLayout="scroll"
+      :paginator="filteredRows.length > 15" :rows="15" :rowsPerPageOptions="[15, 30, 50]">
       <template #empty>
-        <div class="table-empty"><i class="pi pi-inbox"></i><span>Belum ada data</span></div>
+        <div class="table-empty">
+          <i class="pi pi-search-minus" v-if="searchQuery || statusFilter !== 'all'"></i>
+          <i class="pi pi-inbox" v-else></i>
+          <span v-if="searchQuery || statusFilter !== 'all'">
+            Tidak ada data yang sesuai dengan filter/pencarian.
+            <Button label="Reset Filter" class="p-button-link p-button-sm p-0 ml-1" @click="resetFilters" />
+          </span>
+          <span v-else>Belum ada data untuk periode ini</span>
+        </div>
       </template>
-      <Column header="CAB" style="width:85px">
+
+      <Column header="Cabang" sortable sortField="CAB" style="min-width:145px">
         <template #body="{ data }">
-          <span class="font-mono font-medium">{{ formatCode(data.CAB) }}</span>
+          <div class="cabang-cell">
+            <span class="cabang-code font-mono">{{ formatCode(data.CAB) }}</span>
+            <span class="cabang-name">{{ getCabangName(data.CAB) }}</span>
+          </div>
         </template>
       </Column>
-      <Column field="PATH" header="Path" style="min-width:200px" />
-      <Column field="CAPACITY" header="Capacity" style="width:110px" />
-      <Column field="FREE_SPACE" header="Free Space" style="width:110px">
+      <Column field="PATH" header="Path" sortable style="min-width:190px">
         <template #body="{ data }">
-          <span :class="['space-badge', spaceClass(parseGbSimple(data.FREE_SPACE))]">{{ data.FREE_SPACE || '—' }}</span>
+          <code class="path-badge">{{ data.PATH || '—' }}</code>
         </template>
       </Column>
-      <Column field="TGL_CHECK" header="Tgl Check" style="width:110px">
-        <template #body="{ data }">{{ data.TGL_CHECK || '—' }}</template>
+      <Column header="Storage (Free / Total)" sortable :sortField="(d) => parseGbSimple(d.FREE_SPACE) || 0" style="min-width:210px">
+        <template #body="{ data }">
+          <div v-if="calcStorage(data)" class="storage-gauge">
+            <div class="storage-gauge-header">
+              <span :class="['font-mono font-bold text-xs', spaceClass(calcStorage(data).freeGb)]">
+                {{ data.FREE_SPACE || '—' }} Sisa
+              </span>
+              <span class="text-xs text-color-secondary">Total: {{ data.CAPACITY || '—' }}</span>
+            </div>
+            <div class="storage-bar-track">
+              <div
+                class="storage-bar-fill"
+                :class="calcStorage(data).pctUsed >= 90 ? 'bar-critical' : calcStorage(data).pctUsed >= 75 ? 'bar-warning' : 'bar-ok'"
+                :style="{ width: calcStorage(data).pctUsed + '%' }"
+              ></div>
+            </div>
+            <div class="storage-gauge-footer text-xs text-color-secondary">
+              <span>{{ calcStorage(data).pctUsed }}% terpakai</span>
+            </div>
+          </div>
+          <div v-else class="text-sm">
+            <span class="font-mono">{{ data.FREE_SPACE || '—' }}</span> / {{ data.CAPACITY || '—' }}
+          </div>
+        </template>
       </Column>
-      <Column header="Capture" style="width:90px">
+      <Column field="TGL_CHECK" header="Tgl Check" sortable style="width:120px">
+        <template #body="{ data }">
+          <span class="text-sm font-mono">{{ formatDateShort(data.TGL_CHECK) }}</span>
+        </template>
+      </Column>
+      <Column header="Capture" style="width:85px">
         <template #body="{ data }">
           <img v-if="data.CAPTURE_PATH" :src="api.getAssetUrl(data.CAPTURE_PATH)" alt="capture"
-            style="max-width:80px;max-height:56px;width:auto;height:auto;object-fit:contain;border-radius:3px;display:block;cursor:pointer"
+            class="capture-thumb-mini"
             @click="openPreview(api.getAssetUrl(data.CAPTURE_PATH))" />
-          <i v-else class="pi pi-image" style="font-size:1.4rem;color:var(--text-color-secondary)" />
+          <i v-else class="pi pi-image text-color-secondary opacity-40 text-lg" />
         </template>
       </Column>
-      <Column header="Aksi" style="width:90px">
+      <Column header="Aksi" style="width:95px">
         <template #body="{ data }">
           <div class="row-actions">
             <Button icon="pi pi-pencil" class="p-button-text p-button-sm p-button-info"
@@ -45,6 +129,12 @@
           </div>
         </template>
       </Column>
+
+      <template #paginatorleft>
+        <span class="text-xs text-color-secondary">
+          Menampilkan {{ filteredRows.length }} dari total {{ rows.length }} cabang
+        </span>
+      </template>
     </DataTable>
 
     <!-- Upsert Dialog -->
@@ -164,6 +254,87 @@ const fileInput = ref(null);
 const previewVisible = ref(false);
 const previewSrc = ref('');
 const form = reactive({ cab: '', path: '', capacity: '', freeSpace: '', tglCheck: null });
+
+// ─── Filter & Live Search State ──────────────────────────────────────────────
+const searchQuery = ref('');
+const statusFilter = ref('all'); // 'all' | 'critical' | 'warning' | 'ok'
+
+function getCabangName(cab) {
+  const code = formatCode(cab);
+  if (props.panduan?.[code]?.NAMACAB) return props.panduan[code].NAMACAB;
+  const found = props.cabangs?.find(c => formatCode(c.kdcab) === code);
+  return found?.namacab || '';
+}
+
+function calcStorage(row) {
+  const freeGb = parseGbSimple(row.FREE_SPACE);
+  const capGb = parseGbSimple(row.CAPACITY);
+  if (!capGb || freeGb === null) return null;
+  const usedGb = Math.max(0, capGb - freeGb);
+  const pctUsed = Math.min(100, Math.max(0, Math.round((usedGb / capGb) * 100)));
+  return { freeGb, capGb, usedGb, pctUsed };
+}
+
+const totalCount = computed(() => props.rows?.length || 0);
+const criticalCount = computed(() => props.rows?.filter(r => {
+  const gb = parseGbSimple(r.FREE_SPACE);
+  return gb !== null && gb < 10;
+}).length || 0);
+const warningCount = computed(() => props.rows?.filter(r => {
+  const gb = parseGbSimple(r.FREE_SPACE);
+  return gb !== null && gb >= 10 && gb < 30;
+}).length || 0);
+const okCount = computed(() => props.rows?.filter(r => {
+  const gb = parseGbSimple(r.FREE_SPACE);
+  return gb !== null && gb >= 30;
+}).length || 0);
+
+const filteredRows = computed(() => {
+  let list = props.rows || [];
+
+  if (statusFilter.value === 'critical') {
+    list = list.filter(r => {
+      const gb = parseGbSimple(r.FREE_SPACE);
+      return gb !== null && gb < 10;
+    });
+  } else if (statusFilter.value === 'warning') {
+    list = list.filter(r => {
+      const gb = parseGbSimple(r.FREE_SPACE);
+      return gb !== null && gb >= 10 && gb < 30;
+    });
+  } else if (statusFilter.value === 'ok') {
+    list = list.filter(r => {
+      const gb = parseGbSimple(r.FREE_SPACE);
+      return gb !== null && gb >= 30;
+    });
+  }
+
+  const q = searchQuery.value?.trim().toLowerCase();
+  if (q) {
+    list = list.filter(r => {
+      const code = formatCode(r.CAB).toLowerCase();
+      const name = getCabangName(r.CAB).toLowerCase();
+      const path = (r.PATH || '').toLowerCase();
+      const cap = (r.CAPACITY || '').toLowerCase();
+      const free = (r.FREE_SPACE || '').toLowerCase();
+      return code.includes(q) || name.includes(q) || path.includes(q) || cap.includes(q) || free.includes(q);
+    });
+  }
+
+  return list;
+});
+
+function resetFilters() {
+  searchQuery.value = '';
+  statusFilter.value = 'all';
+}
+
+function formatDateShort(val) {
+  if (!val) return '—';
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return val;
+  return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+}
 
 const {
   isDragging,

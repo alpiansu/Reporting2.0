@@ -1,70 +1,150 @@
 <template>
   <div class="tab-content">
-    <div class="tab-toolbar">
-      <Button icon="pi pi-bolt" label="Init Semua Cabang" class="p-button-warning p-button-sm mr-2"
-        :loading="initLoading" :disabled="!periode" @click="handleInit"
-        v-tooltip.top="'Generate skeleton record & otomatis cek sisa storage SSH server Linux'" style="margin-right: 0.5rem;" />
-      <Button icon="pi pi-server" label="Cek SSH Semua Linux" class="p-button-help p-button-sm mr-2"
-        :loading="batchLoading" :disabled="!periode || loading" @click="handleBatchSsh"
-        v-tooltip.top="'Cek sisa storage via SSH otomatis untuk semua cabang Linux'" style="margin-right: 0.5rem;" />
-      <Button icon="pi pi-plus" label="Tambah Data" class="p-button-primary p-button-sm"
-        :disabled="!periode" @click="openDialog(null)" />
+    <!-- Toolbar with Action Buttons & Live Search -->
+    <div class="tab-toolbar-wrapper">
+      <div class="tab-actions-group">
+        <Button icon="pi pi-bolt" label="Init Semua Cabang" class="p-button-warning p-button-sm"
+          :loading="initLoading" :disabled="!periode" @click="handleInit"
+          v-tooltip.top="'Generate skeleton record & otomatis cek sisa storage SSH server Linux'" />
+        <Button icon="pi pi-server" label="Cek SSH Semua Linux" class="p-button-help p-button-sm"
+          :loading="batchLoading" :disabled="!periode || loading" @click="handleBatchSsh"
+          v-tooltip.top="'Cek sisa storage via SSH otomatis untuk semua cabang Linux'" />
+        <Button icon="pi pi-plus" label="Tambah Data" class="p-button-primary p-button-sm"
+          :disabled="!periode" @click="openDialog(null)" />
+      </div>
+
+      <div class="tab-search-box">
+        <IconField iconPosition="left">
+          <InputIcon class="pi pi-search" />
+          <InputText v-model="searchQuery" placeholder="Cari cabang, nama, IP..." class="p-inputtext-sm search-input" />
+        </IconField>
+      </div>
     </div>
 
-    <DataTable :value="rows" :loading="loading" class="ceklist-table" stripedRows
-      responsiveLayout="scroll" :rowClass="rowClass">
+    <!-- Filter Pills Row -->
+    <div class="filter-pills-row">
+      <button
+        type="button"
+        class="filter-pill"
+        :class="{ active: statusFilter === 'all' }"
+        @click="statusFilter = 'all'"
+      >
+        <i class="pi pi-th-large mr-1"></i> Semua <span class="pill-badge">{{ totalCount }}</span>
+      </button>
+      <button
+        type="button"
+        class="filter-pill pill-danger"
+        :class="{ active: statusFilter === 'critical' }"
+        @click="statusFilter = 'critical'"
+      >
+        <i class="pi pi-exclamation-circle mr-1"></i> Kritis &lt; 10 GB <span class="pill-badge badge-danger">{{ criticalCount }}</span>
+      </button>
+      <button
+        type="button"
+        class="filter-pill pill-warn"
+        :class="{ active: statusFilter === 'warning' }"
+        @click="statusFilter = 'warning'"
+      >
+        <i class="pi pi-exclamation-triangle mr-1"></i> Warning &lt; 30 GB <span class="pill-badge badge-warn">{{ warningCount }}</span>
+      </button>
+      <button
+        type="button"
+        class="filter-pill pill-success"
+        :class="{ active: statusFilter === 'ok' }"
+        @click="statusFilter = 'ok'"
+      >
+        <i class="pi pi-check-circle mr-1"></i> Aman &ge; 30 GB <span class="pill-badge badge-success">{{ okCount }}</span>
+      </button>
+      <span class="pills-separator">|</span>
+      <button
+        type="button"
+        class="filter-pill"
+        :class="{ active: statusFilter === 'linux' }"
+        @click="statusFilter = 'linux'"
+      >
+        <i class="pi pi-server mr-1"></i> Linux <span class="pill-badge">{{ linuxCount }}</span>
+      </button>
+      <button
+        type="button"
+        class="filter-pill"
+        :class="{ active: statusFilter === 'windows' }"
+        @click="statusFilter = 'windows'"
+      >
+        <i class="pi pi-microsoft mr-1"></i> Windows <span class="pill-badge">{{ windowsCount }}</span>
+      </button>
+    </div>
+
+    <DataTable :value="filteredRows" :loading="loading" class="ceklist-table" stripedRows
+      responsiveLayout="scroll" :rowClass="rowClass"
+      :paginator="filteredRows.length > 15" :rows="15" :rowsPerPageOptions="[15, 30, 50]">
       <template #empty>
         <div class="table-empty">
-          <i class="pi pi-inbox"></i>
-          <span>Belum ada data untuk periode ini</span>
+          <i class="pi pi-search-minus" v-if="searchQuery || statusFilter !== 'all'"></i>
+          <i class="pi pi-inbox" v-else></i>
+          <span v-if="searchQuery || statusFilter !== 'all'">
+            Tidak ada data yang sesuai dengan filter/pencarian.
+            <Button label="Reset Filter" class="p-button-link p-button-sm p-0 ml-1" @click="resetFilters" />
+          </span>
+          <span v-else>Belum ada data untuk periode ini</span>
         </div>
       </template>
 
-      <Column header="KDCAB" style="width:85px">
+      <Column header="Cabang" sortable sortField="KDCAB" style="min-width:145px">
         <template #body="{ data }">
-          <span class="font-mono font-medium">{{ formatCode(data.KDCAB) }}</span>
+          <div class="cabang-cell">
+            <span class="cabang-code font-mono">{{ formatCode(data.KDCAB) }}</span>
+            <span class="cabang-name">{{ getCabangName(data.KDCAB) }}</span>
+          </div>
         </template>
       </Column>
-      <Column header="IP Address" style="width:130px">
+      <Column field="IP" header="IP Address" sortable style="width:130px">
         <template #body="{ data }">
           <span class="font-mono text-sm">{{ data.IP || '—' }}</span>
         </template>
       </Column>
-      <Column field="FREE_SPACE" header="Free Space" style="width:110px">
+      <Column field="freeSpaceGb" header="Free Space" sortable style="width:125px">
         <template #body="{ data }">
-          <span :class="['space-badge', spaceClass(data.freeSpaceGb)]">{{ data.FREE_SPACE || '—' }}</span>
+          <span :class="['space-badge', spaceClass(data.freeSpaceGb)]">
+            <i :class="spaceIcon(data.freeSpaceGb)" class="mr-1"></i>
+            {{ data.FREE_SPACE || '—' }}
+          </span>
         </template>
       </Column>
-      <Column header="Free Space (Bln Lalu)" style="width:150px">
+      <Column field="freeSpaceLastMonthGb" header="Bulan Lalu" sortable style="width:120px">
         <template #body="{ data }">
-          <span v-if="data.freeSpaceLastMonthGb !== null && data.freeSpaceLastMonthGb !== undefined">
+          <span v-if="data.freeSpaceLastMonthGb !== null && data.freeSpaceLastMonthGb !== undefined" class="font-mono text-sm">
             {{ data.freeSpaceLastMonthGb?.toFixed(1) }} GB
           </span>
-          <span v-else class="text-color-secondary">—</span>
+          <span v-else class="text-color-secondary text-sm">—</span>
         </template>
       </Column>
-      <Column header="Usage Disk (GB)" style="width:130px">
+      <Column field="usageDiskSpace" header="Usage Disk" sortable style="width:130px">
         <template #body="{ data }">
           <span v-if="data.usageDiskSpace !== null && data.usageDiskSpace !== undefined"
             :class="['usage-badge', data.usageDiskSpace < 0 ? 'usage-neg' : 'usage-pos']">
+            <i :class="data.usageDiskSpace < 0 ? 'pi pi-arrow-down' : 'pi pi-arrow-up'" class="mr-1 text-xs"></i>
             {{ data.usageDiskSpace >= 0 ? '+' : '' }}{{ data.usageDiskSpace?.toFixed(1) }} GB
           </span>
-          <span v-else class="text-color-secondary">—</span>
+          <span v-else class="text-color-secondary text-sm">—</span>
         </template>
       </Column>
-      <Column header="Prediksi Bln Depan" style="width:145px">
+      <Column field="predictedUsage" header="Prediksi Bln Depan" sortable style="width:150px">
         <template #body="{ data }">
-          <span v-if="data.predictedUsage !== null && data.predictedUsage !== undefined"
-            :class="['space-badge', spaceClass(data.predictedUsage)]">
-            {{ data.predictedUsage?.toFixed(1) }} GB
-          </span>
-          <span v-else class="text-color-secondary">—</span>
+          <div v-if="data.predictedUsage !== null && data.predictedUsage !== undefined" class="flex align-items-center gap-1">
+            <span :class="['space-badge', spaceClass(data.predictedUsage)]">
+              {{ data.predictedUsage?.toFixed(1) }} GB
+            </span>
+            <Tag v-if="data.predictedUsage < 10" value="Kritis" severity="danger" class="text-xs" />
+          </div>
+          <span v-else class="text-color-secondary text-sm">—</span>
         </template>
       </Column>
-      <Column field="TGL_CHECK" header="Tgl Check" style="width:110px">
-        <template #body="{ data }">{{ data.TGL_CHECK || '—' }}</template>
+      <Column field="TGL_CHECK" header="Tgl Check" sortable style="width:115px">
+        <template #body="{ data }">
+          <span class="text-sm font-mono">{{ formatDateShort(data.TGL_CHECK) }}</span>
+        </template>
       </Column>
-      <Column field="OS" header="OS" style="width:90px">
+      <Column field="OS" header="OS" sortable style="width:95px">
         <template #body="{ data }">
           <Tag :value="data.OS || '—'" :severity="data.OS === 'WINDOWS' ? 'info' : 'warning'" />
         </template>
@@ -74,15 +154,15 @@
           <span class="fu-text">{{ data.FU || '—' }}</span>
         </template>
       </Column>
-      <Column field="FREE_AFTER" header="Free After FU" style="width:120px">
+      <Column field="FREE_AFTER" header="Free After FU" style="width:115px">
         <template #body="{ data }">{{ data.FREE_AFTER || '—' }}</template>
       </Column>
-      <Column header="Capture" style="width:90px">
+      <Column header="Capture" style="width:85px">
         <template #body="{ data }">
           <img v-if="data.CAPTURE_PATH" :src="api.getAssetUrl(data.CAPTURE_PATH)" alt="capture"
-            style="max-width:80px;max-height:56px;width:auto;height:auto;object-fit:contain;border-radius:3px;display:block;cursor:pointer"
+            class="capture-thumb-mini"
             @click="openPreview(api.getAssetUrl(data.CAPTURE_PATH))" />
-          <i v-else class="pi pi-image" style="font-size:1.4rem;color:var(--text-color-secondary)" />
+          <i v-else class="pi pi-image text-color-secondary opacity-40 text-lg" />
         </template>
       </Column>
       <Column header="Aksi" style="width:125px">
@@ -100,6 +180,12 @@
           </div>
         </template>
       </Column>
+
+      <template #paginatorleft>
+        <span class="text-xs text-color-secondary">
+          Menampilkan {{ filteredRows.length }} dari total {{ rows.length }} cabang
+        </span>
+      </template>
     </DataTable>
 
     <!-- Upsert Dialog -->
@@ -308,6 +394,73 @@ const fileInput = ref(null);
 const previewVisible = ref(false);
 const previewSrc = ref('');
 const form = reactive({ kdcab: '', ip: '', freeSpace: '', os: 'WINDOWS', tglCheck: null, fu: '', freeAfter: '' });
+
+// ─── Filter & Live Search State ──────────────────────────────────────────────
+const searchQuery = ref('');
+const statusFilter = ref('all'); // 'all' | 'critical' | 'warning' | 'ok' | 'linux' | 'windows'
+
+function getCabangName(kdcab) {
+  const code = formatCode(kdcab);
+  if (props.panduan?.[code]?.NAMACAB) return props.panduan[code].NAMACAB;
+  const found = props.cabangs?.find(c => formatCode(c.kdcab) === code);
+  return found?.namacab || '';
+}
+
+const totalCount = computed(() => props.rows?.length || 0);
+const criticalCount = computed(() => props.rows?.filter(r => r.freeSpaceGb !== null && r.freeSpaceGb !== undefined && r.freeSpaceGb < 10).length || 0);
+const warningCount = computed(() => props.rows?.filter(r => r.freeSpaceGb !== null && r.freeSpaceGb !== undefined && r.freeSpaceGb >= 10 && r.freeSpaceGb < 30).length || 0);
+const okCount = computed(() => props.rows?.filter(r => r.freeSpaceGb !== null && r.freeSpaceGb !== undefined && r.freeSpaceGb >= 30).length || 0);
+const linuxCount = computed(() => props.rows?.filter(r => isLinux(r)).length || 0);
+const windowsCount = computed(() => props.rows?.filter(r => !isLinux(r)).length || 0);
+
+const filteredRows = computed(() => {
+  let list = props.rows || [];
+
+  if (statusFilter.value === 'critical') {
+    list = list.filter(r => r.freeSpaceGb !== null && r.freeSpaceGb !== undefined && r.freeSpaceGb < 10);
+  } else if (statusFilter.value === 'warning') {
+    list = list.filter(r => r.freeSpaceGb !== null && r.freeSpaceGb !== undefined && r.freeSpaceGb >= 10 && r.freeSpaceGb < 30);
+  } else if (statusFilter.value === 'ok') {
+    list = list.filter(r => r.freeSpaceGb !== null && r.freeSpaceGb !== undefined && r.freeSpaceGb >= 30);
+  } else if (statusFilter.value === 'linux') {
+    list = list.filter(r => isLinux(r));
+  } else if (statusFilter.value === 'windows') {
+    list = list.filter(r => !isLinux(r));
+  }
+
+  const q = searchQuery.value?.trim().toLowerCase();
+  if (q) {
+    list = list.filter(r => {
+      const code = formatCode(r.KDCAB).toLowerCase();
+      const name = getCabangName(r.KDCAB).toLowerCase();
+      const ip = (r.IP || '').toLowerCase();
+      const os = (r.OS || '').toLowerCase();
+      const fu = (r.FU || '').toLowerCase();
+      return code.includes(q) || name.includes(q) || ip.includes(q) || os.includes(q) || fu.includes(q);
+    });
+  }
+
+  return list;
+});
+
+function resetFilters() {
+  searchQuery.value = '';
+  statusFilter.value = 'all';
+}
+
+function spaceIcon(gb) {
+  if (gb === null || gb === undefined) return 'pi pi-question-circle';
+  if (gb < 10) return 'pi pi-exclamation-circle';
+  if (gb < 30) return 'pi pi-exclamation-triangle';
+  return 'pi pi-check-circle';
+}
+
+function formatDateShort(val) {
+  if (!val) return '—';
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return val;
+  return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+}
 
 const {
   isDragging,

@@ -1,4 +1,184 @@
 
+/* ─── Tab Toolbar & Live Search ─────────────────────────────────────────────── */
+.tab-toolbar-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.tab-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.tab-search-box {
+  min-width: 260px;
+  flex: 0 1 auto;
+}
+
+.search-input {
+  width: 100%;
+  border-radius: 8px;
+}
+
+/* ─── Filter Pills Row ──────────────────────────────────────────────────────── */
+.filter-pills-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.85rem;
+}
+
+.filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--surface-border, #e2e8f0);
+  background: var(--surface-card, #ffffff);
+  color: var(--text-color-secondary, #64748b);
+  transition: all 0.18s ease;
+}
+
+.filter-pill:hover {
+  background: var(--surface-hover, #f1f5f9);
+  color: var(--text-color, #1e293b);
+  border-color: var(--primary-color, #3b82f6);
+}
+
+.filter-pill.active {
+  background: var(--primary-color, #3b82f6);
+  border-color: var(--primary-color, #3b82f6);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.25);
+}
+
+.pill-badge {
+  padding: 0.1rem 0.45rem;
+  border-radius: 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: var(--surface-200, rgba(0, 0, 0, 0.08));
+  color: inherit;
+}
+
+.filter-pill.active .pill-badge {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+.filter-pill.pill-danger:hover,
+.filter-pill.pill-danger.active {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.25);
+}
+
+.filter-pill.pill-warn:hover,
+.filter-pill.pill-warn.active {
+  background: #f59e0b;
+  border-color: #f59e0b;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.25);
+}
+
+.filter-pill.pill-success:hover,
+.filter-pill.pill-success.active {
+  background: #10b981;
+  border-color: #10b981;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
+}
+
+/* ─── Cabang & Table Cell Typography ────────────────────────────────────────── */
+.cabang-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.cabang-code {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-color, #0f172a);
+}
+
+.cabang-name {
+  font-size: 0.75rem;
+  color: var(--text-color-secondary, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.path-badge {
+  font-size: 0.78rem;
+  background: var(--surface-100, #f1f5f9);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--text-color, #334155);
+  border: 1px solid var(--surface-border, #e2e8f0);
+}
+
+/* ─── Storage Gauge Progress Bar ────────────────────────────────────────────── */
+.storage-gauge {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 170px;
+}
+
+.storage-gauge-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.storage-bar-track {
+  width: 100%;
+  height: 6px;
+  background: var(--surface-200, #e2e8f0);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.storage-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.bar-ok { background: #10b981; }
+.bar-warning { background: #f59e0b; }
+.bar-critical { background: #ef4444; }
+
+.capture-thumb-mini {
+  max-width: 65px;
+  max-height: 44px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 4px;
+  border: 1px solid var(--surface-border, #e2e8f0);
+  cursor: pointer;
+  transition: transform 0.18s ease;
+}
+
+.capture-thumb-mini:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
 .capture-section { border-top: 1px solid var(--surface-border); padding-top: 0.75rem; margin-top: 0.25rem; }
 .capture-upload-row {
   display: flex;

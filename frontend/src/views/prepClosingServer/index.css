@@ -71,16 +71,16 @@
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    background: #f0fdf4;
-    border: 1px solid #bbf7d0;
-    color: #15803d;
+    background: var(--green-50, rgba(16, 185, 129, 0.12));
+    border: 1px solid var(--green-200, rgba(16, 185, 129, 0.28));
+    color: var(--green-700, #10b981);
     padding: 0.35rem 0.75rem;
     border-radius: 6px;
     font-size: 0.785rem;
 }
 
 .active-filter-badge i {
-    color: #16a34a;
+    color: var(--green-600, #16a34a);
     font-size: 0.85rem;
 }
 
@@ -243,7 +243,30 @@
     font-size: .78rem;
     text-transform: uppercase;
     letter-spacing: .04em;
-    padding: .6rem .75rem;
+    padding: .65rem .75rem;
+}
+
+:deep(.ceklist-table .p-datatable-thead > tr > th.p-sortable-column) {
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+:deep(.ceklist-table .p-datatable-thead > tr > th.p-sortable-column:hover) {
+    background: color-mix(in srgb, #000000 12%, var(--primary-color, #2563eb));
+}
+
+:deep(.ceklist-table .p-sortable-column-icon) {
+    color: var(--primary-contrast-color);
+    margin-left: 0.35rem;
+    font-size: 0.75rem;
+}
+
+:deep(.ceklist-table .p-paginator) {
+    background: var(--surface-card, #ffffff);
+    border-top: 1px solid var(--surface-border, #e2e8f0);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.825rem;
+    border-radius: 0 0 10px 10px;
 }
 
 :deep(.ceklist-table .p-datatable-tbody > tr) {

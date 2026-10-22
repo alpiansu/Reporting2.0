@@ -82,20 +82,37 @@
 
         <!-- ─── Compact Capture Upload ─── -->
         <div class="form-field form-field-full capture-section">
-          <label>Capture <span style="color:var(--text-color-secondary);font-weight:400;font-size:0.8rem">(opsional)</span></label>
-          <div class="capture-upload-row">
+          <div class="flex align-items-center justify-content-between mb-2">
+            <label class="m-0 font-medium">Capture <span style="color:var(--text-color-secondary);font-weight:400;font-size:0.8rem">(opsional)</span></label>
+            <span class="paste-badge-small"><i class="pi pi-copy mr-1"></i>Bisa <strong>Ctrl + V</strong> screenshot di sini</span>
+          </div>
+          <div
+            class="capture-upload-row"
+            :class="{ 'drag-over': isDragging }"
+            @dragover="onDragOver"
+            @dragleave="onDragLeave"
+            @drop="onDrop"
+          >
             <div class="capture-preview-box">
-              <img v-if="capturePath" :src="api.getAssetUrl(capturePath)" alt="capture"
-                style="max-width:120px;max-height:80px;width:auto;height:auto;object-fit:contain;border-radius:4px" />
+              <img v-if="uploadPreview || capturePath" :src="uploadPreview || api.getAssetUrl(capturePath)" alt="capture"
+                style="max-width:120px;max-height:80px;width:auto;height:auto;object-fit:contain;border-radius:4px"
+                @click="openPreview(uploadPreview || api.getAssetUrl(capturePath))" class="cursor-pointer" />
               <i v-else class="pi pi-image" style="font-size:2rem;color:var(--text-color-secondary)" />
             </div>
             <div class="capture-upload-actions">
               <input ref="fileInput" type="file" accept="image/*" style="display:none" @change="onFileChange" />
-              <Button :label="capturePath ? 'Ganti' : 'Pilih File'" icon="pi pi-upload"
-                class="p-button-outlined p-button-sm" @click="fileInput.click()" />
-              <span v-if="captureFile" class="capture-filename">{{ captureFile.name }}</span>
-              <Button v-if="captureFile" label="Upload" icon="pi pi-check" class="p-button-success p-button-sm"
-                :loading="uploading" @click="doUpload" />
+              <div class="flex gap-2 flex-wrap">
+                <Button :label="uploadPreview || capturePath ? 'Ganti File' : 'Pilih File'" icon="pi pi-folder-open"
+                  class="p-button-outlined p-button-sm" @click="fileInput?.click()" />
+                <Button label="Paste Clipboard" icon="pi pi-clipboard"
+                  class="p-button-outlined p-button-secondary p-button-sm" @click="pasteFromClipboard"
+                  v-tooltip.top="'Paste screenshot dari clipboard OS'" />
+              </div>
+              <div v-if="captureFile" class="capture-file-info">
+                <span class="capture-filename"><i class="pi pi-paperclip mr-1"></i>{{ captureFile.name }}</span>
+                <Button label="Upload Gambar" icon="pi pi-upload" class="p-button-success p-button-sm mt-1"
+                  :loading="uploading" @click="doUpload" />
+              </div>
             </div>
           </div>
         </div>
@@ -124,6 +141,7 @@ import Calendar from 'primevue/calendar';
 import Dropdown from 'primevue/dropdown';
 import Dialog from 'primevue/dialog';
 import * as api from '@/services/ceklistPrepClosing.service.js';
+import { useImageClipboardPaste } from '../composables/useImageClipboardPaste.js';
 
 const props = defineProps({
   rows:      { type: Array, default: () => [] },
@@ -147,6 +165,24 @@ const previewVisible = ref(false);
 const previewSrc = ref('');
 const form = reactive({ cab: '', path: '', capacity: '', freeSpace: '', tglCheck: null });
 
+const {
+  isDragging,
+  previewUrl: uploadPreview,
+  setFile,
+  reset: resetClipboard,
+  pasteFromClipboard,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+} = useImageClipboardPaste({
+  isActive: dlgVisible,
+  onImageCaptured: (file) => {
+    captureFile.value = file;
+  },
+  toast,
+  filePrefix: 'space-tampung',
+});
+
 // Cabang yang sudah punya record pada periode ini → tidak boleh ditambah dua kali
 const existingCabs = computed(() => new Set(props.rows.map(r => r.CAB)));
 
@@ -165,7 +201,11 @@ function onCabChange() {
 
 function openPreview(url) { previewSrc.value = url; previewVisible.value = true; }
 
-function onFileChange(e) { captureFile.value = e.target.files[0] || null; }
+function onFileChange(e) {
+  const f = e.target.files?.[0];
+  if (!f) return;
+  setFile(f);
+}
 
 async function doUpload() {
   if (!captureFile.value || !form.cab || !props.periode) {
@@ -179,6 +219,7 @@ async function doUpload() {
     const res = await api.uploadCaptureTampung(fd, form.cab, props.periode);
     capturePath.value = res.captureUrl;
     captureFile.value = null;
+    resetClipboard();
     toast.add({ severity: 'success', summary: 'Upload Berhasil', detail: 'Gambar capture disimpan', life: 3000 });
     if (props.onRefresh) {
       await props.onRefresh();
@@ -213,6 +254,7 @@ defineExpose({ openDialog });
 function openDialog(row = null) {
   isEdit.value = !!row;
   captureFile.value = null;
+  resetClipboard();
   capturePath.value = row?.CAPTURE_PATH || null;
   Object.assign(form, {
     cab: row?.CAB || '', path: row?.PATH || '', capacity: row?.CAPACITY || '',
@@ -227,6 +269,14 @@ async function save() {
   }
   saving.value = true;
   try {
+    if (captureFile.value && props.periode) {
+      const fd = new FormData();
+      fd.append('capture', captureFile.value);
+      const res = await api.uploadCaptureTampung(fd, form.cab, props.periode);
+      capturePath.value = res.captureUrl;
+      captureFile.value = null;
+      resetClipboard();
+    }
     await api.upsertSpaceTampung({
       cab: form.cab, periode: props.periode, path: form.path || null,
       capacity: form.capacity || null, freeSpace: form.freeSpace || null,

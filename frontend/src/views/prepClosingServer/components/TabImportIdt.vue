@@ -80,16 +80,35 @@
 
     <!-- Upload Image Dialog -->
     <Dialog v-model:visible="uploadDlgVisible" header="Upload Capture Gambar"
-      modal class="ceklist-dialog" :style="{ width: '400px' }">
-      <div class="upload-zone">
-        <i class="pi pi-image upload-icon"></i>
-        <p class="upload-hint">Pilih gambar (JPEG/PNG/WebP, maks 10 MB)</p>
+      modal class="ceklist-dialog" :style="{ width: '440px' }">
+      <div
+        class="upload-zone"
+        :class="{ 'drag-over': isDragging }"
+        @dragover="onDragOver"
+        @dragleave="onDragLeave"
+        @drop="onDrop"
+      >
+        <div class="upload-icon-container">
+          <i class="pi pi-images upload-icon"></i>
+        </div>
+        <div class="paste-hint-box">
+          <i class="pi pi-copy mr-1 text-primary"></i>
+          <span>Bisa langsung <strong>Ctrl + V</strong> screenshot di sini</span>
+        </div>
+        <p class="upload-hint">atau seret file gambar / pilih dari file komputer</p>
         <input ref="fileInput" type="file" accept="image/*" style="display:none" @change="onFileSelected" />
-        <Button icon="pi pi-folder-open" label="Pilih File" class="p-button-outlined mt-2"
-          @click="fileInput?.click()" />
+        <div class="upload-actions-bar">
+          <Button icon="pi pi-folder-open" label="Pilih File" class="p-button-outlined p-button-sm"
+            @click="fileInput?.click()" />
+          <Button icon="pi pi-clipboard" label="Paste Clipboard" class="p-button-outlined p-button-secondary p-button-sm"
+            @click="pasteFromClipboard" v-tooltip.top="'Ambil gambar langsung dari clipboard OS'" />
+        </div>
         <div v-if="uploadFile" class="upload-preview">
           <img :src="uploadPreview" class="preview-img" alt="preview" />
-          <span class="preview-name">{{ uploadFile.name }}</span>
+          <div class="preview-info">
+            <span class="preview-name">{{ uploadFile.name }}</span>
+            <span class="preview-size">({{ (uploadFile.size / 1024).toFixed(1) }} KB)</span>
+          </div>
         </div>
       </div>
       <template #footer>
@@ -112,6 +131,7 @@ import Dialog from 'primevue/dialog';
 import Dropdown from 'primevue/dropdown';
 import Tag from 'primevue/tag';
 import * as api from '@/services/ceklistPrepClosing.service.js';
+import { useImageClipboardPaste } from '../composables/useImageClipboardPaste.js';
 
 
 const props = defineProps({
@@ -185,18 +205,45 @@ const uploading = ref(false);
 const uploadDlgVisible = ref(false);
 const uploadTarget = ref(null);
 const uploadFile   = ref(null);
-const uploadPreview = ref('');
 const fileInput    = ref(null);
 
+const {
+  isDragging,
+  previewUrl: uploadPreview,
+  setFile,
+  reset: resetClipboard,
+  pasteFromClipboard,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+} = useImageClipboardPaste({
+  isActive: uploadDlgVisible,
+  onImageCaptured: (file) => {
+    uploadFile.value = file;
+  },
+  toast,
+  filePrefix: 'idt-capture',
+});
+
 function openUploadDlg(row) {
-  uploadTarget.value = row; uploadFile.value = null; uploadPreview.value = '';
+  uploadTarget.value = row;
+  uploadFile.value = null;
+  resetClipboard();
   uploadDlgVisible.value = true;
 }
-function closeUpload() { uploadDlgVisible.value = false; uploadFile.value = null; }
-function onFileSelected(e) {
-  const f = e.target.files?.[0]; if (!f) return;
-  uploadFile.value = f; uploadPreview.value = URL.createObjectURL(f);
+
+function closeUpload() {
+  uploadDlgVisible.value = false;
+  uploadFile.value = null;
+  resetClipboard();
 }
+
+function onFileSelected(e) {
+  const f = e.target.files?.[0];
+  if (!f) return;
+  setFile(f);
+}
+
 async function doUpload() {
   if (!uploadFile.value || !uploadTarget.value) return;
   uploading.value = true;

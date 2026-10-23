@@ -1,4 +1,5 @@
 import axios from "axios";
+import { setupScreeningGuard } from "./screeningGuard.service";
 
 // Create axios instance with default config
 const api = axios.create({
@@ -12,6 +13,9 @@ const api = axios.create({
     "Content-Type": "application/json",
   },
 });
+
+// Pre-flight guard untuk mencegah request screening massal saat ada task SSE aktif
+setupScreeningGuard(api);
 
 // Request interceptor for adding auth token
 api.interceptors.request.use(

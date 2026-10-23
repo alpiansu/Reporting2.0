@@ -36,4 +36,12 @@ export default {
   localStore: {
     filePath: "data/stores.json", // Relative to project root
   },
+
+  // Schedule for automatic store monitoring synchronization (toko buka, tutup, TS, takeover)
+  storeMonitoring: {
+    enabled: true,
+    time: "05:00",
+    timezone: "Asia/Jakarta",
+    description: "Daily store monitoring sync (WRC to store-monitoring.json)",
+  },
 };

@@ -8,11 +8,13 @@ import syncConfig from "../../config/sync.config.js";
 import logger from "../../config/logger.js";
 import combinedScreeningService from "../combined-screening/combined_screening.service.js";
 import combinedConfig from "../combined-screening/combined_screening.config.js";
+import StoreSyncService from "../store/store-sync.service.js";
 import moment from "moment-timezone";
 
 class CronScheduler {
   constructor() {
     this.jobs = [];
+    this.storeSyncService = new StoreSyncService();
   }
 
   /**
@@ -38,6 +40,9 @@ class CronScheduler {
 
     // Schedule combined screening
     this.scheduleCombinedScreening();
+
+    // Schedule daily store monitoring sync (toko buka, tutup, TS, takeover)
+    this.scheduleStoreMonitoringSync();
   }
 
   /**
@@ -123,6 +128,81 @@ class CronScheduler {
 
     const csCount = schedules.filter(s => s.enabled !== false).length;
     logger.info(`[scheduler] Registered ${csCount} combined screening schedule(s)`);
+  }
+
+  /**
+   * Schedule daily store monitoring synchronization (toko buka, tutup, TS, takeover).
+   * Default: 05:00 WIB (Asia/Jakarta) setiap hari.
+   */
+  scheduleStoreMonitoringSync() {
+    const config = syncConfig.storeMonitoring || {
+      enabled: true,
+      time: "05:00",
+      timezone: "Asia/Jakarta",
+      description: "Daily store monitoring sync (WRC to store-monitoring.json)",
+    };
+
+    if (config.enabled === false) {
+      logger.info("[scheduler] Store monitoring sync is disabled in configuration");
+      return;
+    }
+
+    const [hour, minute] = (config.time || "05:00").split(":");
+    if (hour === undefined || minute === undefined) {
+      logger.warn(`[scheduler] Invalid store monitoring schedule time: ${config.time} — skipping`);
+      return;
+    }
+
+    const cronExp = `${parseInt(minute, 10)} ${parseInt(hour, 10)} * * *`;
+    const timezone = config.timezone || "Asia/Jakarta";
+
+    try {
+      const job = cron.schedule(
+        cronExp,
+        async () => {
+          logger.info(`[scheduler] Menjalankan sinkronisasi otomatis monitoring toko (${config.description || config.time})...`);
+          await this._runScheduledStoreMonitoring();
+        },
+        {
+          timezone,
+        }
+      );
+
+      this.jobs.push(job);
+      logger.info(`[scheduler] Store monitoring sync registered at ${config.time} (${timezone})`);
+    } catch (error) {
+      logger.error(`[scheduler] Failed to register store monitoring sync schedule: ${error.message}`);
+    }
+  }
+
+  /**
+   * Execute scheduled store monitoring synchronization
+   */
+  async _runScheduledStoreMonitoring() {
+    const startTime = Date.now();
+    try {
+      const result = await this.storeSyncService.syncStoreMonitoring({
+        user: {
+          username: "system_cron",
+          fullName: "Auto Scheduler (05:00 WIB)",
+        },
+      });
+
+      const durationSec = Math.round((Date.now() - startTime) / 1000);
+      const totalCab = result?.metadata?.totalCabang || 0;
+      const successCab = result?.metadata?.successfulCabang || 0;
+      const failedCab = result?.metadata?.failedCabang || 0;
+
+      logger.info(
+        `[scheduler] Store monitoring sync selesai dalam ${durationSec}s. Cabang: ${successCab}/${totalCab} sukses${
+          failedCab > 0 ? `, ${failedCab} gagal` : ""
+        }. Total: ${result?.summary?.totalAkanBuka || 0} akan buka, ${result?.summary?.totalTutupSementara || 0} TS, ${
+          result?.summary?.totalSudahTutup || 0
+        } sudah tutup.`,
+      );
+    } catch (error) {
+      logger.error(`[scheduler] Store monitoring sync failed: ${error.message}`);
+    }
   }
 
   /**

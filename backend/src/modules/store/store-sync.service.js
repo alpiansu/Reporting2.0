@@ -23,6 +23,7 @@ import logger from "../../config/logger.js";
 import WrcBulananService from "../../services/wrc.service.js";
 import MCabangService from "../m_cabang/m_cabang.service.js";
 import storeService from "./storeService.js";
+import moment from "moment-timezone";
 
 const LAST_SYNC_PATH = path.join(process.cwd(), "data/master-store-sync.json");
 const MONITORING_CACHE_PATH = path.join(process.cwd(), "data/store-monitoring.json");
@@ -666,10 +667,11 @@ class StoreSyncService {
       }
 
       // 4. Transformasi dan Kategorisasi
-      const today = new Date();
-      const todayStr = today.toISOString().split("T")[0];
-      const curMonth = today.getMonth() + 1;
-      const curYear = today.getFullYear();
+      const nowJkt = moment().tz("Asia/Jakarta");
+      const todayStr = nowJkt.format("YYYY-MM-DD");
+      const maxAkanBukaStr = nowJkt.clone().add(21, "days").format("YYYY-MM-DD");
+      const curMonth = nowJkt.month() + 1;
+      const curYear = nowJkt.year();
       const periodeSaldo = latestKodetokoTable ? latestKodetokoTable.replace("kodetoko_", "") : null;
 
       const akanBuka = [];
@@ -683,14 +685,13 @@ class StoreSyncService {
         const tglBuka = row.tglBuka && row.tglBuka !== "0000-00-00" ? row.tglBuka : null;
         const tglTutup = row.tglTutup && row.tglTutup !== "0000-00-00" ? row.tglTutup : null;
 
-        // Cek Toko Akan Buka / Toko Baru Bulan Ini
+        // Cek Toko Akan Buka & Toko Baru Bulan Ini
         if (tglBuka) {
-          const bukaDate = new Date(tglBuka);
-          const bukaMonth = bukaDate.getMonth() + 1;
-          const bukaYear = bukaDate.getFullYear();
-          const isNewThisMonth = bukaMonth === curMonth && bukaYear === curYear;
+          const [bYear, bMonth] = tglBuka.split("-").map(Number);
+          const isBulanIni = bYear === curYear && bMonth === curMonth;
 
-          if (tglBuka > todayStr || isNewThisMonth) {
+          // 1) Toko Baru (Bulan Ini): Buka di bulan berjalan & sudah buka (tglBuka <= todayStr)
+          if (isBulanIni && tglBuka <= todayStr) {
             akanBuka.push({
               kodeToko,
               namaToko,
@@ -698,10 +699,24 @@ class StoreSyncService {
               kodeGudang,
               tglBuka,
               tglTutup,
-              isNewThisMonth,
-              statusText: isNewThisMonth ? "Toko Baru (Bulan Ini)" : "Akan Buka",
+              isNewThisMonth: true,
+              statusText: "Toko Baru (Bulan Ini)",
             });
           }
+          // 2) Toko Akan Buka: Tanggal buka di masa depan & range kurang dari 3 minggu (<= 21 hari) ke depan dari hari ini
+          else if (tglBuka > todayStr && tglBuka <= maxAkanBukaStr) {
+            akanBuka.push({
+              kodeToko,
+              namaToko,
+              cabang: cab,
+              kodeGudang,
+              tglBuka,
+              tglTutup,
+              isNewThisMonth: false,
+              statusText: "Akan Buka",
+            });
+          }
+          // Toko dengan tglBuka > 3 minggu ke depan dilewati dari monitoring aktif
         }
 
         // Cek Toko Akan Tutup & Sudah Tutup

@@ -249,6 +249,7 @@ class StoreSyncService {
           const isChanged =
             existing.dbHost !== storeData.dbHost ||
             existing.storeName !== storeData.storeName ||
+            String(existing.station || "").trim() !== String(storeData.station || "").trim() ||
             String(existing.branch || "").trim().toUpperCase() !== branch ||
             existing.notes !== storeData.notes;
 
@@ -396,6 +397,7 @@ class StoreSyncService {
     // Fasa 1: resolusi cabang + insert/update nama + IP
     let created = 0;
     let updatedIp = 0;
+    let updatedStation = 0;
     let unchangedIp = 0;
     let branchAssigned = 0;
     const skippedUnregistered = [];
@@ -432,13 +434,19 @@ class StoreSyncService {
 
       try {
         if (existing) {
+          const isStationChanged =
+            String(existing.station || "").trim() !== String(storeData.station || "").trim();
+          const isNotesChanged =
+            String(existing.notes || "").trim().toUpperCase() !==
+            String(storeData.notes || "").trim().toUpperCase();
           const isIpOrNameChanged =
             existing.dbHost !== storeData.dbHost || existing.storeName !== storeData.storeName;
           const isBranchChanged = String(existing.branch || "").trim().toUpperCase() !== branch;
 
-          if (isIpOrNameChanged || isBranchChanged) {
+          if (isIpOrNameChanged || isStationChanged || isNotesChanged || isBranchChanged) {
             await storeService.updateStore(existing.id, storeData);
             if (isIpOrNameChanged) updatedIp++;
+            else if (isStationChanged) updatedStation++;
             else branchAssigned++;
           } else {
             unchangedIp++;
@@ -513,6 +521,7 @@ class StoreSyncService {
         wrcToko: wrcMap.size,
         created,
         updatedIp,
+        updatedStation,
         unchangedIp,
         branchAssigned,
         branchUpdated,
@@ -528,7 +537,7 @@ class StoreSyncService {
     await this.writeLastSync(syncMeta);
 
     logger.info(
-      `[store-sync] Selesai master-csv: ${created} created, ${updatedIp} ip/nama updated, ${branchAssigned} cabang ditetapkan, ${branchUpdated} cabang updated, ${cleanup.removed} toko cabang tak terdaftar dibersihkan, ${skippedUnregistered.length} skip (cabang tak terdaftar)`,
+      `[store-sync] Selesai master-csv: ${created} created, ${updatedIp} ip/nama updated, ${updatedStation} station updated, ${branchAssigned} cabang ditetapkan, ${branchUpdated} cabang updated, ${cleanup.removed} toko cabang tak terdaftar dibersihkan, ${skippedUnregistered.length} skip (cabang tak terdaftar)`,
     );
 
     return { success: true, ...syncMeta };

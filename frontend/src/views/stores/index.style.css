@@ -1346,53 +1346,189 @@
   border-width: 0;
 }
 
-.btn-danger {
-  padding: 0.5rem 1.15rem;
-  border: none;
-  background: #dc2626;
-  color: #ffffff;
-  border-radius: 6px;
-  font-size: 0.825rem;
+/* Modern Form / Dialog Action Bar */
+.form-actions-modern {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--surface-border, #e2e8f0);
+}
+
+.form-actions-modern.text-center {
+  justify-content: center;
+}
+
+.mt-6 {
+  margin-top: 1.5rem;
+}
+
+/* Secondary Button (Cancel / Dismiss) */
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.55rem 1.15rem;
+  background: var(--surface-100, #f1f5f9);
+  border: 1px solid var(--surface-300, #cbd5e1);
+  border-radius: 7px;
+  font-size: 0.85rem;
   font-weight: 600;
+  color: var(--text-color, #475569);
   cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--surface-200, #e2e8f0);
+  color: var(--text-color, #1e293b);
+  transform: translateY(-1px);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Primary Button (Confirm / Submit) */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.55rem 1.35rem;
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+  border: 1px solid #0284c7;
+  border-radius: 7px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(2, 132, 199, 0.2);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0369a1, #075985);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(2, 132, 199, 0.3);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Warning Solid Button variant */
+.btn-warning-solid {
+  background: linear-gradient(135deg, #d97706, #b45309);
+  border-color: #d97706;
+  box-shadow: 0 2px 4px rgba(217, 119, 6, 0.2);
+}
+
+.btn-warning-solid:hover:not(:disabled) {
+  background: linear-gradient(135deg, #b45309, #92400e);
+  box-shadow: 0 4px 8px rgba(217, 119, 6, 0.3);
+}
+
+/* Danger Button (Delete) */
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.55rem 1.35rem;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border: 1px solid #dc2626;
+  border-radius: 7px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(220, 38, 38, 0.2);
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: #b91c1c;
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(220, 38, 38, 0.3);
 }
 
+.btn-danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.loading-spinner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+/* Dialog Typography Enhancements */
+.dialog-warning-msg,
 .delete-msg {
   font-size: 0.95rem;
   color: #1e293b;
-  margin: 0.5rem 0;
+  margin: 0.75rem 0 0.5rem 0;
+  line-height: 1.55;
 }
 
+.dialog-sub-msg,
 .delete-sub-msg {
-  font-size: 0.8rem;
+  font-size: 0.825rem;
   color: #64748b;
   margin: 0 0 1rem 0;
+  line-height: 1.5;
+}
+
+.dialog-source-tag {
+  display: inline-block;
+  font-family: monospace;
+  font-size: 0.775rem;
+  background: #f1f5f9;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  color: #475569;
 }
 
 /* CSV Upload Area */
 .csv-upload-area {
   border: 2px dashed var(--surface-border, #cbd5e1);
-  border-radius: 8px;
-  padding: 1.5rem;
+  border-radius: 10px;
+  padding: 1.75rem 1.25rem;
   text-align: center;
   background: var(--surface-section, #f8fafc);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s ease;
   margin: 1rem 0;
+  position: relative;
 }
 
 .csv-upload-area:hover:not(.is-busy) {
   border-color: #0284c7;
   background: #f0f9ff;
+  transform: translateY(-1px);
+}
+
+.csv-upload-area.has-file {
+  border-color: #0284c7;
+  background: #f8fafc;
 }
 
 .csv-upload-area.is-busy {
   cursor: wait;
   border-color: #0284c7;
+  background: #f0f9ff;
 }
 
 .file-input-hidden {
@@ -1400,69 +1536,112 @@
 }
 
 .csv-stage-icon {
-  font-size: 1.75rem;
+  font-size: 2rem;
   color: #0284c7;
   margin-bottom: 0.5rem;
+  display: inline-block;
 }
 
 .csv-stage-title {
-  font-size: 0.9rem;
+  font-size: 0.925rem;
   font-weight: 600;
   color: #1e293b;
   margin: 0;
 }
 
 .csv-stage-sub {
-  font-size: 0.775rem;
+  font-size: 0.8rem;
   color: #64748b;
   margin: 0.35rem 0 0 0;
+  line-height: 1.4;
 }
 
-.csv-prompt-icon {
-  font-size: 1.75rem;
-  color: #94a3b8;
-  margin-bottom: 0.35rem;
+.csv-upload-prompt .csv-prompt-icon {
+  font-size: 2.25rem;
+  color: #0284c7;
+  margin-bottom: 0.5rem;
+  display: inline-block;
 }
 
 .csv-upload-prompt p {
-  font-size: 0.85rem;
-  color: #334155;
-  margin: 0;
-  font-weight: 500;
+  font-size: 0.9rem;
+  color: #1e293b;
+  margin: 0 0 0.25rem 0;
+  font-weight: 600;
+}
+
+.csv-prompt-hint {
+  font-size: 0.75rem;
+  color: #64748b;
+  display: block;
 }
 
 .csv-upload-preview {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
   background: #ffffff;
-  padding: 0.4rem 0.75rem;
-  border-radius: 6px;
-  border: 1px solid #cbd5e1;
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  border: 1px solid #bfdbfe;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.08);
 }
 
-.csv-file-name {
-  font-size: 0.825rem;
-  font-weight: 600;
+.csv-file-icon {
+  font-size: 1.5rem;
   color: #0284c7;
 }
 
+.csv-file-info {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.csv-file-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.csv-file-size {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
 .csv-file-remove {
-  background: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
   border: none;
-  color: #94a3b8;
+  background: #fee2e2;
+  color: #dc2626;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
   cursor: pointer;
+  transition: all 0.2s ease;
+  margin-left: 0.5rem;
 }
 
 .csv-file-remove:hover {
-  color: #dc2626;
+  background: #dc2626;
+  color: #ffffff;
 }
 
 .csv-upload-message.error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
   color: #dc2626;
   font-size: 0.8rem;
-  margin-top: 0.5rem;
-  text-align: center;
+  margin-top: 0.75rem;
+  background: #fef2f2;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid #fecaca;
 }
 
 /* --------------------------------------------------------------------------

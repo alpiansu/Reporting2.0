@@ -792,13 +792,19 @@
           </button>
         </div>
         <div class="dialog-body-modern text-center">
-          <p class="delete-msg">Are you sure you want to delete <strong>{{ storeToDelete?.storeName }}</strong>?</p>
-          <p class="delete-sub-msg">This action cannot be undone and will remove all associated store record.</p>
+          <p class="dialog-warning-msg">Are you sure you want to delete <strong>{{ storeToDelete?.storeName }}</strong> ({{ storeToDelete?.storeCode }})?</p>
+          <p class="dialog-sub-msg">This action cannot be undone and will remove all associated store record.</p>
 
           <div class="form-actions-modern mt-6">
-            <button class="btn-secondary" @click="closeDeleteDialog" :disabled="formLoading">Cancel</button>
-            <button class="btn-danger" @click="handleDeleteStore" :disabled="formLoading">
-              <span v-if="!formLoading">Delete Store</span>
+            <button type="button" class="btn-secondary" @click="closeDeleteDialog" :disabled="formLoading">
+              <i class="pi pi-times"></i>
+              <span>Cancel</span>
+            </button>
+            <button type="button" class="btn-danger" @click="handleDeleteStore" :disabled="formLoading">
+              <span v-if="!formLoading">
+                <i class="pi pi-trash"></i>
+                <span>Delete Store</span>
+              </span>
               <div v-else class="loading-spinner">
                 <i class="pi pi-spin pi-spinner"></i>
                 <span>Deleting...</span>
@@ -822,19 +828,25 @@
           </button>
         </div>
         <div class="dialog-body-modern text-center">
-          <p class="delete-msg">
+          <p class="dialog-warning-msg">
             Data master toko baru saja di-update oleh <strong>{{ syncConfirmLastSync?.syncedByFullName || syncConfirmLastSync?.syncedBy || '-' }}</strong>
             pada <strong>{{ formatDateTime(syncConfirmLastSync?.lastSyncedAt) }}</strong>
-            (sumber: {{ syncConfirmLastSync?.source || '-' }}).
+            <span v-if="syncConfirmLastSync?.source" class="dialog-source-tag">({{ syncConfirmLastSync.source }})</span>.
           </p>
-          <p class="delete-sub-msg">
+          <p class="dialog-sub-msg">
             Apakah Anda tetap ingin melakukan sinkronisasi master toko lagi?
           </p>
 
           <div class="form-actions-modern mt-6">
-            <button class="btn-secondary" @click="closeSyncConfirmDialog" :disabled="isSyncingAfterUpload">Batal</button>
-            <button class="btn-primary" @click="runSyncAfterUploadWithForce()" :disabled="isSyncingAfterUpload">
-              <span v-if="!isSyncingAfterUpload">Ya, Lanjutkan</span>
+            <button type="button" class="btn-secondary" @click="closeSyncConfirmDialog" :disabled="isSyncingAfterUpload">
+              <i class="pi pi-times"></i>
+              <span>Batal</span>
+            </button>
+            <button type="button" class="btn-primary btn-warning-solid" @click="runSyncAfterUploadWithForce()" :disabled="isSyncingAfterUpload">
+              <span v-if="!isSyncingAfterUpload">
+                <i class="pi pi-refresh"></i>
+                <span>Ya, Lanjutkan Sync</span>
+              </span>
               <div v-else class="loading-spinner">
                 <i class="pi pi-spin pi-spinner"></i>
                 <span>Menyinkronkan...</span>
@@ -865,14 +877,14 @@
           </button>
         </div>
         <div class="dialog-body-modern">
-          <p class="delete-sub-msg">
-            Format yang didukung: <code>master-tokomain.csv</code>.
-            Setelah upload, sistem otomatis memproses update data master toko.
+          <p class="dialog-sub-msg">
+            Format yang didukung: file <code>.csv</code> master toko (misal: <code>syncMasterToko.csv</code> atau <code>master-tokomain.csv</code>).
+            Setelah upload, sistem otomatis memproses pembaruan IP, nama, station, dan resolusi cabang toko.
           </p>
 
           <div
             class="csv-upload-area"
-            :class="{ 'is-busy': uploadStage === 'uploading' || uploadStage === 'syncing' }"
+            :class="{ 'is-busy': uploadStage === 'uploading' || uploadStage === 'syncing', 'has-file': Boolean(csvFile) }"
             @click="triggerFilePicker"
           >
             <input
@@ -886,7 +898,7 @@
             <!-- Stage: uploading -->
             <div v-if="uploadStage === 'uploading'" class="csv-stage">
               <i class="pi pi-spin pi-spinner csv-stage-icon"></i>
-              <p class="csv-stage-title">Mengupload file...</p>
+              <p class="csv-stage-title">Mengupload file CSV...</p>
               <p class="csv-stage-sub">{{ csvFile?.name }}</p>
             </div>
 
@@ -894,19 +906,23 @@
             <div v-else-if="uploadStage === 'syncing'" class="csv-stage">
               <i class="pi pi-spin pi-spinner csv-stage-icon"></i>
               <p class="csv-stage-title">Memproses update master toko...</p>
-              <p class="csv-stage-sub">Update IP & nama, lalu menyamakan kode cabang dari semua server WRC. Proses ini bisa memakan waktu beberapa menit.</p>
+              <p class="csv-stage-sub">Update IP, nama & station, lalu menyamakan kode cabang dari semua server WRC...</p>
             </div>
 
             <!-- Stage: select / error -->
             <template v-else>
               <div v-if="!csvFile" class="csv-upload-prompt">
-                <i class="pi pi-upload csv-prompt-icon"></i>
-                <p>Pilih file CSV</p>
+                <i class="pi pi-cloud-upload csv-prompt-icon"></i>
+                <p>Klik untuk memilih file CSV</p>
+                <span class="csv-prompt-hint">Maksimal 1 file format .csv</span>
               </div>
               <div v-else class="csv-upload-preview">
-                <i class="pi pi-file-excel csv-prompt-icon"></i>
-                <span class="csv-file-name">{{ csvFile.name }}</span>
-                <button class="csv-file-remove" @click.stop="clearCsvFile">
+                <i class="pi pi-file-excel csv-file-icon"></i>
+                <div class="csv-file-info">
+                  <span class="csv-file-name">{{ csvFile.name }}</span>
+                  <span class="csv-file-size" v-if="csvFile.size">{{ (csvFile.size / 1024).toFixed(1) }} KB</span>
+                </div>
+                <button type="button" class="csv-file-remove" title="Hapus file" @click.stop="clearCsvFile">
                   <i class="pi pi-times"></i>
                 </button>
               </div>
@@ -914,19 +930,30 @@
           </div>
 
           <div class="form-actions-modern">
-            <button class="btn-secondary" :disabled="uploadStage === 'uploading' || uploadStage === 'syncing'" @click="closeCsvUploadDialog">Batal</button>
             <button
+              type="button"
+              class="btn-secondary"
+              :disabled="uploadStage === 'uploading' || uploadStage === 'syncing'"
+              @click="closeCsvUploadDialog"
+            >
+              <i class="pi pi-times"></i>
+              <span>Batal</span>
+            </button>
+            <button
+              type="button"
               class="btn-primary"
               :disabled="!csvFile || uploadStage === 'uploading' || uploadStage === 'syncing'"
               @click="uploadCsv"
             >
               <i v-if="uploadStage === 'uploading' || uploadStage === 'syncing'" class="pi pi-spin pi-spinner"></i>
-              {{ uploadStage === 'syncing' ? 'Memproses...' : 'Upload & Update' }}
+              <i v-else class="pi pi-upload"></i>
+              <span>{{ uploadStage === 'syncing' ? 'Memproses...' : 'Upload & Update' }}</span>
             </button>
           </div>
 
           <p v-if="csvUploadMessage && uploadStage === 'error'" class="csv-upload-message error">
-            {{ csvUploadMessage }}
+            <i class="pi pi-exclamation-circle"></i>
+            <span>{{ csvUploadMessage }}</span>
           </p>
         </div>
       </div>

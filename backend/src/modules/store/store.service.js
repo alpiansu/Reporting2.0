@@ -628,7 +628,7 @@ class StoreService {
       const updatedStore = {
         ...this.stores[index],
         storeCode: storeData.storeCode || this.stores[index].storeCode,
-        station: storeData.station || this.stores[index].station,
+        station: storeData.station !== undefined ? String(storeData.station).trim() : this.stores[index].station,
         dbHost: storeData.dbHost || this.stores[index].dbHost,
         notes: (storeData.notes || this.stores[index].notes)?.toUpperCase(),
         storeName: storeData.storeName || this.stores[index].storeName,

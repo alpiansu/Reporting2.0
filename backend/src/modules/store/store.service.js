@@ -190,7 +190,7 @@ class StoreService {
    * @returns {Object} Paginated stores
    */
   async getAllStores(options = {}) {
-    const { page = 1, limit = 10, search = "", region, city, status } = options;
+    const { page = 1, limit = 10, search = "", region, city, status, sortBy = "updatedAt", sortOrder = "desc" } = options;
 
     try {
       await this.ensureInitialized();
@@ -231,8 +231,30 @@ class StoreService {
       }
       filteredStores = Array.from(uniqueStoresMap.values());
 
-      // Sort by updatedAt in descending order
-      filteredStores.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+      // Sort stores dynamically with valid columns whitelist
+      const validSortColumns = ['storeCode', 'station', 'storeName', 'branch', 'dbHost', 'notes', 'updatedAt'];
+      const actualSortBy = validSortColumns.includes(sortBy) ? sortBy : 'updatedAt';
+      const isAsc = String(sortOrder).toLowerCase() === 'asc';
+
+      filteredStores.sort((a, b) => {
+        const valA = a[actualSortBy];
+        const valB = b[actualSortBy];
+
+        if (valA === valB) return 0;
+        if (valA === undefined || valA === null) return isAsc ? -1 : 1;
+        if (valB === undefined || valB === null) return isAsc ? 1 : -1;
+
+        if (actualSortBy === 'updatedAt') {
+          const timeA = new Date(valA).getTime() || 0;
+          const timeB = new Date(valB).getTime() || 0;
+          return isAsc ? timeA - timeB : timeB - timeA;
+        }
+
+        const strA = String(valA);
+        const strB = String(valB);
+        const cmp = strA.localeCompare(strB, undefined, { numeric: true, sensitivity: 'base' });
+        return isAsc ? cmp : -cmp;
+      });
 
       // Pastikan page & limit numerik
       const currentPage = Number(page) || 1;

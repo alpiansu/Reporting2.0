@@ -285,14 +285,49 @@
           <table class="store-table-compact">
             <thead>
               <tr>
-                <th class="th-code">Kode Toko</th>
-                <th class="th-station">Station</th>
-                <th class="th-name">Nama Toko</th>
-                <th class="th-branch">Cabang</th>
-                <th class="th-host">DB Host IP</th>
-                <th class="th-type">Tipe</th>
+                <th class="th-code sortable-th" :class="{ 'sorted': sortBy === 'storeCode' }" @click="handleSort('storeCode')" title="Klik untuk mengurutkan berdasarkan Kode Toko">
+                  <div class="th-content">
+                    <span>Kode Toko</span>
+                    <i class="sort-icon" :class="getSortIcon('storeCode')"></i>
+                  </div>
+                </th>
+                <th class="th-station sortable-th" :class="{ 'sorted': sortBy === 'station' }" @click="handleSort('station')" title="Klik untuk mengurutkan berdasarkan Station">
+                  <div class="th-content">
+                    <span>Station</span>
+                    <i class="sort-icon" :class="getSortIcon('station')"></i>
+                  </div>
+                </th>
+                <th class="th-name sortable-th" :class="{ 'sorted': sortBy === 'storeName' }" @click="handleSort('storeName')" title="Klik untuk mengurutkan berdasarkan Nama Toko">
+                  <div class="th-content">
+                    <span>Nama Toko</span>
+                    <i class="sort-icon" :class="getSortIcon('storeName')"></i>
+                  </div>
+                </th>
+                <th class="th-branch sortable-th" :class="{ 'sorted': sortBy === 'branch' }" @click="handleSort('branch')" title="Klik untuk mengurutkan berdasarkan Cabang">
+                  <div class="th-content">
+                    <span>Cabang</span>
+                    <i class="sort-icon" :class="getSortIcon('branch')"></i>
+                  </div>
+                </th>
+                <th class="th-host sortable-th" :class="{ 'sorted': sortBy === 'dbHost' }" @click="handleSort('dbHost')" title="Klik untuk mengurutkan berdasarkan DB Host IP">
+                  <div class="th-content">
+                    <span>DB Host IP</span>
+                    <i class="sort-icon" :class="getSortIcon('dbHost')"></i>
+                  </div>
+                </th>
+                <th class="th-type sortable-th" :class="{ 'sorted': sortBy === 'notes' }" @click="handleSort('notes')" title="Klik untuk mengurutkan berdasarkan Tipe Server">
+                  <div class="th-content">
+                    <span>Tipe</span>
+                    <i class="sort-icon" :class="getSortIcon('notes')"></i>
+                  </div>
+                </th>
                 <th class="th-address">Alamat</th>
-                <th class="th-updated">Terakhir Update</th>
+                <th class="th-updated sortable-th" :class="{ 'sorted': sortBy === 'updatedAt' }" @click="handleSort('updatedAt')" title="Klik untuk mengurutkan berdasarkan Terakhir Update">
+                  <div class="th-content">
+                    <span>Terakhir Update</span>
+                    <i class="sort-icon" :class="getSortIcon('updatedAt')"></i>
+                  </div>
+                </th>
                 <th class="th-actions text-center">Aksi</th>
               </tr>
             </thead>
@@ -495,36 +530,110 @@
       </div>
     </main>
 
-    <!-- Compact Pagination Footer -->
+    <!-- Compact Advanced Pagination Footer -->
     <footer v-if="stores.length > 0 && pagination" class="view-footer-pagination">
-      <div class="pagination-summary">
-        <span>Menampilkan <strong>{{ startItem }}</strong> - <strong>{{ endItem }}</strong> dari <strong>{{ pagination.totalItems }}</strong> toko</span>
+      <div class="pagination-left-group">
+        <div class="pagination-summary">
+          <span>Menampilkan <strong>{{ startItem }}</strong> - <strong>{{ endItem }}</strong> dari <strong>{{ pagination.totalItems }}</strong> toko</span>
+        </div>
+        <div class="pagination-limit-selector">
+          <label for="stores-limit-select" class="limit-label">Tampilkan:</label>
+          <select id="stores-limit-select" v-model="itemsPerPage" @change="handleLimitChange" class="limit-select">
+            <option :value="10">10</option>
+            <option :value="25">25</option>
+            <option :value="50">50</option>
+            <option :value="100">100</option>
+          </select>
+          <span class="limit-suffix">baris</span>
+        </div>
       </div>
 
-      <div class="pagination-nav-group">
+      <div class="pagination-center-group">
+        <!-- First Page -->
+        <button
+          type="button"
+          class="nav-btn nav-icon-btn"
+          :disabled="pagination.currentPage <= 1 || loading"
+          @click="handlePageChange(1)"
+          title="Halaman Pertama"
+        >
+          <i class="pi pi-angle-double-left"></i>
+        </button>
+
+        <!-- Previous Page -->
         <button
           type="button"
           class="nav-btn"
           :disabled="pagination.currentPage <= 1 || loading"
           @click="handlePageChange(pagination.currentPage - 1)"
+          title="Halaman Sebelumnya"
         >
           <i class="pi pi-chevron-left"></i>
-          <span>Sebelumnya</span>
+          <span class="nav-btn-text">Sebelumnya</span>
         </button>
 
-        <div class="nav-pages-indicator">
-          <span>Halaman <strong>{{ pagination.currentPage }}</strong> / {{ pagination.totalPages }}</span>
+        <!-- Page Number Buttons -->
+        <div class="nav-page-numbers">
+          <template v-for="(p, idx) in displayedPages" :key="idx">
+            <span v-if="p === '...'" class="page-ellipsis">...</span>
+            <button
+              v-else
+              type="button"
+              class="page-num-btn"
+              :class="{ 'active': p === pagination.currentPage }"
+              :disabled="loading"
+              @click="handlePageChange(p)"
+            >
+              {{ p }}
+            </button>
+          </template>
         </div>
 
+        <!-- Next Page -->
         <button
           type="button"
           class="nav-btn"
           :disabled="pagination.currentPage >= pagination.totalPages || loading"
           @click="handlePageChange(pagination.currentPage + 1)"
+          title="Halaman Berikutnya"
         >
-          <span>Berikutnya</span>
+          <span class="nav-btn-text">Berikutnya</span>
           <i class="pi pi-chevron-right"></i>
         </button>
+
+        <!-- Last Page -->
+        <button
+          type="button"
+          class="nav-btn nav-icon-btn"
+          :disabled="pagination.currentPage >= pagination.totalPages || loading"
+          @click="handlePageChange(pagination.totalPages)"
+          title="Halaman Terakhir"
+        >
+          <i class="pi pi-angle-double-right"></i>
+        </button>
+      </div>
+
+      <div class="pagination-right-group">
+        <div class="pagination-jump-box">
+          <span class="jump-label">Ke hal:</span>
+          <input
+            type="number"
+            min="1"
+            :max="pagination.totalPages"
+            v-model="jumpPageInput"
+            @keyup.enter="handleJumpPage"
+            class="jump-input"
+            placeholder="#"
+          />
+          <button
+            type="button"
+            class="jump-btn"
+            @click="handleJumpPage"
+            title="Lompat ke halaman ini"
+          >
+            Lompat
+          </button>
+        </div>
       </div>
     </footer>
     </div>
@@ -987,6 +1096,12 @@ const canEdit = computed(() => isSuperAdmin.value || isAdmin.value);
 
 // View Mode: 'table' (default zero-scroll) vs 'cards'
 const viewMode = ref('table');
+// Sorting and Pagination State
+const sortBy = ref('updatedAt');
+const sortOrder = ref('desc');
+const itemsPerPage = ref(10);
+const jumpPageInput = ref('');
+
 
 // State
 const searchQuery = ref('');
@@ -1090,16 +1205,7 @@ let searchTimeout = null;
 
 // Fetch stores on mount
 onMounted(async () => {
-  try {
-    await storeStore.fetchStores({
-      page: 1,
-      limit: 10
-    });
-  } catch (error) {
-    console.error('Error fetching stores:', error);
-    toast.showError('Error', 'Failed to load stores');
-  }
-
+  await loadStores(1);
   if (canEdit.value) {
     await loadSyncStatus();
   }
@@ -1107,11 +1213,7 @@ onMounted(async () => {
 
 const refreshStores = async () => {
   try {
-    await storeStore.fetchStores({
-      page: pagination.value?.currentPage || 1,
-      limit: 10,
-      search: searchQuery.value || ''
-    });
+    await loadStores(pagination.value?.currentPage || 1);
     if (canEdit.value) {
       await loadSyncStatus();
     }
@@ -1321,29 +1423,8 @@ const toggleFilterMenu = () => {
 };
 
 const applyFilters = async () => {
-  try {
-    const options = {
-      page: 1,
-      limit: 10,
-      search: searchQuery.value || ''
-    };
-
-    if (selectedRegions.value.length > 0) {
-      options.region = selectedRegions.value.join(',');
-    }
-    if (selectedCities.value.length > 0) {
-      options.city = selectedCities.value.join(',');
-    }
-    if (selectedStatuses.value.length > 0) {
-      options.status = selectedStatuses.value.join(',');
-    }
-
-    await storeStore.fetchStores(options);
-    showFilterMenu.value = false;
-  } catch (error) {
-    console.error('Error applying filters:', error);
-    toast.showError('Error', 'Failed to apply filters');
-  }
+  showFilterMenu.value = false;
+  await loadStores(1);
 };
 
 const clearFilters = () => {
@@ -1458,24 +1539,88 @@ const handleDeleteStore = async () => {
   }
 };
 
-const handlePageChange = async (page) => {
+// Unified store loading with dynamic sorting and pagination
+const loadStores = async (page = 1) => {
   try {
     const options = {
       page,
-      limit: 10,
-      search: searchQuery.value || ''
+      limit: itemsPerPage.value,
+      search: searchQuery.value || '',
+      sortBy: sortBy.value,
+      sortOrder: sortOrder.value,
     };
+
     if (selectedRegions.value.length > 0) {
       options.region = selectedRegions.value.join(',');
+    }
+    if (selectedCities.value.length > 0) {
+      options.city = selectedCities.value.join(',');
     }
     if (selectedStatuses.value.length > 0) {
       options.status = selectedStatuses.value.join(',');
     }
+
     await storeStore.fetchStores(options);
   } catch (error) {
-    console.error('Error changing page:', error);
-    toast.showError('Error', 'Failed to load page');
+    console.error('Error fetching stores:', error);
+    toast.showError('Error', 'Gagal memuat data toko');
   }
+};
+
+const getSortIcon = (column) => {
+  if (sortBy.value !== column) {
+    return 'pi pi-sort-alt text-muted-sort';
+  }
+  return sortOrder.value === 'asc' ? 'pi pi-sort-amount-up-alt active-sort' : 'pi pi-sort-amount-down active-sort';
+};
+
+const handleSort = (column) => {
+  if (sortBy.value === column) {
+    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc';
+  } else {
+    sortBy.value = column;
+    sortOrder.value = column === 'updatedAt' ? 'desc' : 'asc';
+  }
+  loadStores(1);
+};
+
+const handleLimitChange = () => {
+  loadStores(1);
+};
+
+const handleJumpPage = () => {
+  const targetPage = parseInt(jumpPageInput.value, 10);
+  const maxPage = pagination.value?.totalPages || 1;
+  if (!targetPage || isNaN(targetPage)) {
+    toast.showWarn('Peringatan', 'Masukkan nomor halaman yang valid');
+    return;
+  }
+  if (targetPage < 1 || targetPage > maxPage) {
+    toast.showWarn('Peringatan', `Nomor halaman harus antara 1 dan ${maxPage}`);
+    return;
+  }
+  jumpPageInput.value = '';
+  loadStores(targetPage);
+};
+
+const displayedPages = computed(() => {
+  const total = pagination.value?.totalPages || 1;
+  const current = pagination.value?.currentPage || 1;
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+  if (current <= 4) {
+    return [1, 2, 3, 4, 5, '...', total];
+  }
+  if (current >= total - 3) {
+    return [1, '...', total - 4, total - 3, total - 2, total - 1, total];
+  }
+  return [1, '...', current - 1, current, current + 1, '...', total];
+});
+
+const handlePageChange = async (page) => {
+  if (page < 1 || page > (pagination.value?.totalPages || 1)) return;
+  await loadStores(page);
 };
 </script>
 

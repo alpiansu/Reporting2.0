@@ -7,13 +7,15 @@ class StoreService {
    * @returns {Promise} Promise with paginated stores data
    */
   getAllStores(options = {}) {
-    const { page = 1, limit = 10, search = '', region = '', city = '', status = '' } = options;
+    const { page = 1, limit = 10, search = '', region = '', city = '', status = '', sortBy = '', sortOrder = '' } = options;
     let url = `/stores?page=${page}&limit=${limit}`;
     
     if (search) url += `&search=${encodeURIComponent(search)}`;
     if (region) url += `&region=${encodeURIComponent(region)}`;
     if (city) url += `&city=${encodeURIComponent(city)}`;
     if (status) url += `&status=${encodeURIComponent(status)}`;
+    if (sortBy) url += `&sortBy=${encodeURIComponent(sortBy)}`;
+    if (sortOrder) url += `&sortOrder=${encodeURIComponent(sortOrder)}`;
     
     return api.get(url);
   }

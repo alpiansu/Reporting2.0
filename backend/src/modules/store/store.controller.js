@@ -12,7 +12,7 @@ const storeSyncService = new StoreSyncService();
  */
 export const getAllStores = async (req, res, next) => {
   try {
-    const { page, limit, search, region, city, status } = req.query;
+    const { page, limit, search, region, city, status, sortBy, sortOrder } = req.query;
     
     const options = {
       page: parseInt(page) || 1,
@@ -21,6 +21,8 @@ export const getAllStores = async (req, res, next) => {
       region,
       city,
       status,
+      sortBy,
+      sortOrder,
     };
     
     const result = await storeService.getAllStores(options);

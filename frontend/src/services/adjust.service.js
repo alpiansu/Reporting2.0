@@ -33,6 +33,16 @@ class AdjustService {
   }
 
   /**
+   * Confirm virtual margin adjustment status and update RECID in database
+   * @param {Array} items - Array of items with status SUCCESS/FAILED
+   * @returns {Promise<Object>} Confirmation results
+   */
+  async confirmVirtualMargin(items) {
+    const response = await api.post("/adjust/confirm-virtual-margin", { items });
+    return response.data;
+  }
+
+  /**
    * Download CSV master template
    * @returns {Promise<void>} Triggers file download
    */

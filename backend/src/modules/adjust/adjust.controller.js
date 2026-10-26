@@ -346,3 +346,35 @@ export const checkAdjustTarget = async (req, res) => {
   }
 };
 
+
+/**
+ * Confirm virtual margin adjustment status and update RECID in database
+ * @param {Request} req - Express request object
+ * @param {Response} res - Express response object
+ */
+export const confirmVirtualMarginAdjust = async (req, res) => {
+  try {
+    const { items } = req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+      return apiResponse.badRequest(res, "Daftar item penyesuaian virtual margin tidak boleh kosong");
+    }
+
+    const username = req.user?.username || "unknown";
+    const fullName = req.user?.fullName || username;
+
+    const result = await adjustService.confirmVirtualMarginAdjust({
+      items,
+      username,
+      fullName,
+    });
+
+    return apiResponse.success(
+      res,
+      result,
+      `Status penyesuaian berhasil disimpan. ${result.updatedCount} item diperbarui ke database, ${result.failedCount} item ditandai gagal.`
+    );
+  } catch (error) {
+    logger.error(`[adjust] Error confirming virtual margin adjustment: ${error.message}`);
+    return apiResponse.error(res, error.message || "Gagal menyimpan konfirmasi penyesuaian virtual margin", 500);
+  }
+};

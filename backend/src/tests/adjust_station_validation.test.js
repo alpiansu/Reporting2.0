@@ -38,6 +38,20 @@ jest.mock("../models/hist_adjust.model.js", () => ({
   default: {},
 }));
 
+jest.mock("../models/saldovirtual.model.js", () => ({
+  __esModule: true,
+  default: {
+    update: jest.fn().mockResolvedValue([1]),
+  },
+}));
+
+jest.mock("../modules/rekon_virtual_mrg/rekon_virtual_mrg.service.js", () => ({
+  __esModule: true,
+  default: {
+    syncToJsonFile: jest.fn().mockResolvedValue(10),
+  },
+}));
+
 jest.mock("../modules/store/storeService.js", () => ({
   __esModule: true,
   default: {

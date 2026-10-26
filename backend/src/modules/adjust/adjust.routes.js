@@ -14,5 +14,6 @@ router.get("/history/filters", authenticateJWT, adjustController.getAdjustFilter
 router.get("/history/export", authenticateJWT, adjustController.exportAdjustHistoryCsv);
 router.get("/sync-history", authenticateJWT, adjustController.syncHistory);
 router.post("/check-target", authenticateJWT, adjustController.checkAdjustTarget);
+router.post("/confirm-virtual-margin", authenticateJWT, adjustController.confirmVirtualMarginAdjust);
 
 export default router;

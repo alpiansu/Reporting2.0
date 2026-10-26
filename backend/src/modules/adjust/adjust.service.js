@@ -12,6 +12,9 @@ import os from "os";
 import pLimit from "p-limit";
 import progressService from "../progress/progress.service.js";
 import adjustPostActionService from "./adjust_post_action.service.js";
+import SaldoVirtual from "../../models/saldovirtual.model.js";
+import rekonVirtualService from "../rekon_virtual_mrg/rekon_virtual_mrg.service.js";
+import { Op } from "sequelize";
 import { isLocalIp } from "../../utils/storeConnection.utils.js";
 
 class AdjustService {
@@ -27,6 +30,82 @@ class AdjustService {
       logger.error(`[adjust][${context}] query failed: ${err.message}`);
       throw err;
     }
+  }
+
+  /**
+   * Helper to normalize date string to YYYY-MM-DD format
+   * @param {string|Date} rawDate
+   * @returns {string|null}
+   */
+  normalizeDate(rawDate) {
+    if (!rawDate) return null;
+    const str = String(rawDate).trim();
+    if (!str) return null;
+    const m = moment(str, ["YYYY-MM-DD", "DD-MM-YYYY", "YYYY/MM/DD", "DD/MM/YYYY", moment.ISO_8601], false);
+    if (!m.isValid()) return null;
+    return m.format("YYYY-MM-DD");
+  }
+
+  /**
+   * Helper to read and parse virtual margin JSON file for a given period
+   * Looks up in data/virtual_mrg_based or backend/data/virtual_mrg_based
+   * @param {string} periode - Period in YYMM format
+   * @returns {Promise<Array>}
+   */
+  async readVirtualMarginJsonFile(periode) {
+    if (!periode) return [];
+    const possiblePaths = [
+      path.join(process.cwd(), "data", "virtual_mrg_based", `rekon_virtual_mrg_${periode}.json`),
+      path.join(process.cwd(), "backend", "data", "virtual_mrg_based", `rekon_virtual_mrg_${periode}.json`),
+    ];
+
+    for (const filePath of possiblePaths) {
+      try {
+        const raw = await fs.readFile(filePath, "utf8");
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      } catch (err) {
+        if (err.code !== "ENOENT") {
+          logger.warn(`[adjust] Error reading virtual margin JSON file (${filePath}): ${err.message}`);
+        }
+      }
+    }
+    return [];
+  }
+
+  /**
+   * Loads unadjusted virtual margin records (RECID !== '1') for the specified periods
+   * and maps them with key: ${SHOP}_${TANGGAL}_${PRDCD}
+   * @param {Set<string>|Array<string>} periodes
+   * @returns {Promise<Map<string, Object>>}
+   */
+  async getUnadjustedVirtualMarginMap(periodes) {
+    const map = new Map();
+    if (!periodes) return map;
+    const periodList = Array.isArray(periodes) ? periodes : Array.from(periodes);
+
+    for (const periode of periodList) {
+      try {
+        const records = await this.readVirtualMarginJsonFile(periode);
+        for (const rec of records) {
+          // Hanya record yang belum di-adjust (RECID !== '1')
+          if (rec.RECID !== "1") {
+            const shop = (rec.SHOP || "").trim().toUpperCase();
+            const tanggal = this.normalizeDate(rec.TANGGAL);
+            const prdcd = (rec.PRDCD || "").trim();
+            if (shop && tanggal && prdcd) {
+              const key = `${shop}_${tanggal}_${prdcd}`;
+              map.set(key, rec);
+            }
+          }
+        }
+      } catch (err) {
+        logger.warn(`[adjust] Failed to build unadjusted virtual margin map for period ${periode}: ${err.message}`);
+      }
+    }
+    return map;
   }
 
   /**
@@ -299,6 +378,26 @@ class AdjustService {
       const yy = lastMonth.format("YY");
       const mm = lastMonth.format("MM");
 
+      // Collect unique periods (YYMM) from valid tgl_selisih in CSV records
+      const uniquePeriods = new Set();
+      for (const items of storeMap.values()) {
+        for (const item of items) {
+          if (item.tgl_selisih) {
+            const norm = this.normalizeDate(item.tgl_selisih);
+            if (norm) {
+              item.tgl_selisih = norm;
+              uniquePeriods.add(moment(norm).format("YYMM"));
+            }
+          }
+        }
+      }
+
+      // Load unadjusted records (RECID !== '1') from virtual margin JSON file(s)
+      const unadjustedVirtualMap = await this.getUnadjustedVirtualMarginMap(uniquePeriods);
+      logger.info(
+        `[adjust:generate] Loaded ${unadjustedVirtualMap.size} unadjusted virtual margin records for periods: ${Array.from(uniquePeriods).join(", ") || "none"}`,
+      );
+
       const results = {
         totalStores: storeCodes.length,
         processedStores: 0,
@@ -306,6 +405,7 @@ class AdjustService {
         failedStores: [],
         totalRecords: records.length,
         historyRecords: [], // used for UI DataTable
+        virtualMarginItems: [], // items matching unadjusted virtual margin for confirmation dialog
         csvContent: "",
         fileName: `FILE_BC_KHUSUS_${moment().tz("Asia/Jakarta").format("YYYYMMDD_HHmmss")}.csv`,
         mode: "generate",
@@ -351,16 +451,46 @@ class AdjustService {
         results.successStores++;
 
         for (const item of items) {
-          results.historyRecords.push({
+          const histRecord = {
             kdtk: item.kdtk,
+            storeName: store.storeName || "-",
+            cabang: kdcab,
+            station: station,
             prdcd: item.prdcd,
             qty_adj: item.qty_adj,
             keter: item.keter,
+            tgl_selisih: item.tgl_selisih || "",
             note: `Generated for BC Khusus (${kdcab}|${kdtk}|${station})`,
             pic: username,
             updtime: executedAt,
             status: "SUCCESS",
-          });
+          };
+          results.historyRecords.push(histRecord);
+
+          // HANYA data yang MATCH dengan data di virtual margin based (RECID !== '1')
+          // berdasarkan kesesuaian kdtk, tanggal selisih, dan prdcd
+          if (item.tgl_selisih) {
+            const matchKey = `${kdtk}_${item.tgl_selisih}_${item.prdcd}`;
+            const matchedVm = unadjustedVirtualMap.get(matchKey);
+
+            if (matchedVm) {
+              results.virtualMarginItems.push({
+                kdtk: item.kdtk,
+                storeName: store.storeName || "-",
+                cabang: matchedVm.CABANG || kdcab,
+                station: station,
+                prdcd: item.prdcd,
+                singkatan: matchedVm.SINGKATAN || "-",
+                sel_virtual: matchedVm.SEL !== undefined ? matchedVm.SEL : null,
+                price: matchedVm.PRICE !== undefined ? matchedVm.PRICE : null,
+                acost: matchedVm.ACOST !== undefined ? matchedVm.ACOST : null,
+                qty_adj: item.qty_adj,
+                keter: item.keter,
+                tgl_selisih: item.tgl_selisih,
+                status: "SUCCESS", // default sukses sesuai asumsi
+              });
+            }
+          }
         }
       }
 
@@ -982,6 +1112,135 @@ class AdjustService {
       logger.error(`Error generating CSV template: ${error.message}`);
       throw new Error("Failed to generate CSV template");
     }
+  }
+
+  /**
+   * Confirm virtual margin adjustment status and update RECID to '1' in database
+   * @param {Object} params
+   * @param {Array} params.items - List of virtual margin items with custom status (SUCCESS / FAILED)
+   * @param {string} params.username - Current user
+   * @param {string} params.fullName - Full name of user
+   */
+  async confirmVirtualMarginAdjust({ items, username, fullName }) {
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new Error("Daftar item virtual margin wajib diisi");
+    }
+
+    const executedAt = new Date();
+    const historyRecords = [];
+    const affectedPeriods = new Set();
+    const successStores = new Set();
+    let updatedCount = 0;
+    let failedCount = 0;
+
+    logger.info(`[adjust:confirmVirtualMargin] Processing confirmation for ${items.length} items by ${username}`);
+
+    for (const item of items) {
+      const kdtk = (item.kdtk || "").trim().toUpperCase();
+      const prdcd = (item.prdcd || "").trim();
+      const tglSelisih = this.normalizeDate(item.tgl_selisih) || (item.tgl_selisih || "").trim();
+      const cabang = (item.cabang || "").trim().toUpperCase();
+      const qtyAdj = parseInt(item.qty_adj, 10) || 0;
+      const keter = (item.keter || "").trim();
+      const isSuccess = String(item.status || "").toUpperCase() === "SUCCESS";
+
+      if (isSuccess) {
+        successStores.add(kdtk);
+
+        try {
+          // Update RECID = '1' di database Central SaldoVirtual
+          const whereClause = {
+            SHOP: kdtk,
+            PRDCD: prdcd,
+            TANGGAL: tglSelisih,
+          };
+          if (cabang && cabang !== "-") {
+            whereClause.CABANG = cabang;
+          }
+
+          const [rowsUpdated] = await SaldoVirtual.update(
+            { RECID: "1" },
+            {
+              where: {
+                ...whereClause,
+                RECID: { [Op.ne]: "1" },
+              },
+            },
+          );
+
+          if (rowsUpdated > 0) {
+            updatedCount += rowsUpdated;
+          } else {
+            updatedCount += 1;
+          }
+
+          if (tglSelisih) {
+            const periode = moment(tglSelisih).format("YYMM");
+            if (periode && periode.length === 4) {
+              affectedPeriods.add(periode);
+            }
+          }
+        } catch (dbErr) {
+          logger.error(
+            `[adjust:confirmVirtualMargin] Failed to update SaldoVirtual for ${kdtk} / ${prdcd} / ${tglSelisih}: ${dbErr.message}`,
+          );
+        }
+
+        historyRecords.push({
+          kdtk,
+          prdcd,
+          qty_adj: qtyAdj,
+          keter,
+          note: `Adjusted via external BC Khusus (Confirmed by ${fullName || username})`,
+          pic: username,
+          updtime: executedAt,
+          status: "SUCCESS",
+        });
+      } else {
+        // Flagged as FAILED - RECID tidak diupdate
+        failedCount += 1;
+        historyRecords.push({
+          kdtk,
+          prdcd,
+          qty_adj: qtyAdj,
+          keter,
+          note: `Execution failed on external platform (Flagged by ${fullName || username})`,
+          pic: username,
+          updtime: executedAt,
+          status: "FAILED",
+        });
+      }
+    }
+
+    // 1. Simpan history records ke hist_adjust_staging
+    if (historyRecords.length > 0) {
+      try {
+        await histAdjustStagingService.bulkInsert(historyRecords);
+        logger.info(`[adjust:confirmVirtualMargin] Saved ${historyRecords.length} history records to staging`);
+      } catch (histErr) {
+        logger.error(`[adjust:confirmVirtualMargin] Failed to save history records: ${histErr.message}`);
+      }
+    }
+
+    // 2. Sinkronisasi file cache JSON per periode unik yang terupdate
+    for (const periode of affectedPeriods) {
+      try {
+        await rekonVirtualService.syncToJsonFile(periode);
+        logger.info(`[adjust:confirmVirtualMargin] Synced JSON cache for period ${periode}`);
+      } catch (syncErr) {
+        logger.warn(
+          `[adjust:confirmVirtualMargin] Could not sync JSON file for period ${periode}: ${syncErr.message}`,
+        );
+      }
+    }
+
+    return {
+      totalItems: items.length,
+      updatedCount,
+      failedCount,
+      affectedStores: successStores.size,
+      affectedPeriods: Array.from(affectedPeriods),
+    };
   }
 }
 

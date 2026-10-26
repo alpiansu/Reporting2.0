@@ -314,6 +314,15 @@
                 <i class="pi pi-download"></i>
                 <span>Download BC Khusus</span>
               </button>
+              <button
+                v-if="virtualMarginItems.length > 0"
+                class="export-btn btn-confirm-virtual"
+                @click="showVirtualMarginConfirmDialog = true"
+                title="Buka dialog konfirmasi status penyesuaian virtual margin"
+              >
+                <i class="pi pi-check-square"></i>
+                <span>Konfirmasi Status Virtual Margin ({{ virtualMarginItems.length }})</span>
+              </button>
               <button class="export-btn" @click="exportToExcel"
                 :disabled="!processResults?.historyRecords || processResults.historyRecords.length === 0"
                 title="Export to Excel">
@@ -433,6 +442,14 @@
         @close="showStationErrorDialog = false"
         @navigate-stores="navigateToStores"
       />
+
+      <!-- Dialog Konfirmasi Status Adjust Virtual Margin -->
+      <AdjustVirtualMarginConfirmDialog
+        v-model:visible="showVirtualMarginConfirmDialog"
+        :items="virtualMarginItems"
+        :file-name="lastGeneratedFileName"
+        @confirmed="handleVirtualMarginConfirmed"
+      />
     </div>
   </div>
 </template>
@@ -456,6 +473,7 @@ import ProgressBar from "../../components/common/ProgressBar.vue";
 import AdjustHistoryReportCard from "./components/AdjustHistoryReportCard.vue";
 import AdjustCsvPreviewDialog from "./components/AdjustCsvPreviewDialog.vue";
 import AdjustStationErrorDialog from "./components/AdjustStationErrorDialog.vue";
+import AdjustVirtualMarginConfirmDialog from "./components/AdjustVirtualMarginConfirmDialog.vue";
 import * as XLSX from "xlsx";
 
 const formatCode = (val) => {
@@ -477,6 +495,8 @@ const isCheckingTarget = ref(false);
 const isDirectIntervention = ref(false);
 const showStationErrorDialog = ref(false);
 const invalidStationList = ref([]);
+const showVirtualMarginConfirmDialog = ref(false);
+const virtualMarginItems = ref([]);
 
 const navigateToStores = () => {
   showStationErrorDialog.value = false;
@@ -781,9 +801,20 @@ const handleUpload = async () => {
 
         // Otomatis download file BC Khusus
         triggerDownloadCsv(actualData.csvContent, actualData.fileName);
+
+        // Jika terdapat item virtual margin (memiliki tgl_selisih), buka dialog konfirmasi status
+        if (Array.isArray(actualData.virtualMarginItems) && actualData.virtualMarginItems.length > 0) {
+          virtualMarginItems.value = actualData.virtualMarginItems;
+          setTimeout(() => {
+            showVirtualMarginConfirmDialog.value = true;
+          }, 500);
+        } else {
+          virtualMarginItems.value = [];
+        }
       } else {
         lastGeneratedCsvContent.value = "";
         lastGeneratedFileName.value = "";
+        virtualMarginItems.value = [];
       }
 
       // Reset upload form after successful processing
@@ -849,6 +880,28 @@ const handleUpload = async () => {
     });
   } finally {
     isProcessing.value = false;
+  }
+};
+
+const handleVirtualMarginConfirmed = ({ items, result }) => {
+  // Update status visual pada processResults.historyRecords jika ada
+  if (processResults.value?.historyRecords && Array.isArray(items)) {
+    const statusMap = new Map();
+    items.forEach(it => {
+      const key = `${it.kdtk}_${it.prdcd}_${it.tgl_selisih}`;
+      statusMap.set(key, it.status);
+    });
+
+    processResults.value.historyRecords.forEach(rec => {
+      const key = `${rec.kdtk}_${rec.prdcd}_${rec.tgl_selisih}`;
+      if (statusMap.has(key)) {
+        const newStatus = statusMap.get(key);
+        rec.status = newStatus;
+        if (newStatus === "FAILED") {
+          rec.note = "Execution failed on external platform (Flagged by user)";
+        }
+      }
+    });
   }
 };
 

@@ -2548,6 +2548,15 @@
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
+.export-btn.btn-confirm-virtual {
+  background-color: #0284c7;
+  color: #ffffff;
+}
+
+.export-btn.btn-confirm-virtual:hover:not(:disabled) {
+  background-color: #0369a1;
+}
+
 .export-btn:disabled {
   background-color: #cccccc;
   cursor: not-allowed;

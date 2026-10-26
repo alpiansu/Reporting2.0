@@ -173,6 +173,18 @@ const addDynamicRoutes = async () => {
           roles: ["admin", "superadmin"],
         },
       },
+      // Rute log-maintenance — khusus superadmin
+      {
+        path: "log-maintenance",
+        name: "LogMaintenance",
+        component: () => import("../views/logMaintenance/index.vue"),
+        meta: {
+          requiresAuth: true,
+          title: "Log Maintenance",
+          layout: "main",
+          roles: ["superadmin"],
+        },
+      },
     ];
 
     // Tambahkan routes untuk setiap menu item
@@ -180,7 +192,7 @@ const addDynamicRoutes = async () => {
       if (item.path && item.path !== "/dashboard") {
         // Skip dashboard karena sudah ada
         // Skip menu-manager karena sudah ditambahkan sebagai static route di atas
-        if (item.path === "/menu-manager") return;
+        if (item.path === "/menu-manager" || item.path === "/log-maintenance") return;
 
         const routeName = item.text.replace(/\s+/g, "");
         const component = getComponent(item.path);

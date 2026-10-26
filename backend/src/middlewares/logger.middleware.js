@@ -39,7 +39,11 @@ const stream = {
  */
 const requestLogger = morgan(morganFormat, {
   stream,
-  skip: (req) => req.url?.startsWith("/uploads/") || req.url === "/favicon.ico",
+  skip: (req) =>
+    req.url?.startsWith("/uploads/") ||
+    req.url?.startsWith("/api/log-maintenance/download") ||
+    req.originalUrl?.startsWith("/api/log-maintenance/download") ||
+    req.url === "/favicon.ico",
 });
 
 export default requestLogger;

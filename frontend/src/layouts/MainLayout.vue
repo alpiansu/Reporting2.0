@@ -219,6 +219,13 @@ const menuCategories = computed(() => {
                 icon: 'pi pi-key',
                 roles: ['superadmin'],
               },
+              {
+                id: 'log-maintenance',
+                text: 'Log Maintenance',
+                path: '/log-maintenance',
+                icon: 'pi pi-file-edit',
+                roles: ['superadmin'],
+              },
             ]
           : []),
       ],

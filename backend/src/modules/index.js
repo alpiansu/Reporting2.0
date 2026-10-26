@@ -40,6 +40,7 @@ import salesCustabModule from "./sales_custab/index.js";
 import storeConfigModule from "./store-config/index.js";
 import deviceConfigModule from "./device-config/index.js";
 import ceklistPanduanModule from "./ceklist_panduan/index.js";
+import logMaintenanceModule from "./log-maintenance/index.js";
 
 export default {
   // Export all modules
@@ -80,6 +81,7 @@ export default {
   storeConfigModule,
   deviceConfigModule,
   ceklistPanduanModule,
+  logMaintenanceModule,
 
   // Initialize all modules
   initialize: app => {
@@ -120,6 +122,7 @@ export default {
     const storeConfig = storeConfigModule.initialize(app);
     const deviceConfig = deviceConfigModule.initialize(app);
     const ceklistPanduan = ceklistPanduanModule.initialize(app);
+    const logMaintenance = logMaintenanceModule.initialize(app);
 
     // Initialize menu manager module
     app.use("/api/menu-manager", menuManagerModule.routes);
@@ -161,6 +164,7 @@ export default {
       storeConfig,
       deviceConfig,
       ceklistPanduan,
+      logMaintenance,
       menuManager: true,
     };
   },

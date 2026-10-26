@@ -24,10 +24,43 @@ import WrcBulananService from "../../services/wrc.service.js";
 import MCabangService from "../m_cabang/m_cabang.service.js";
 import storeService from "./storeService.js";
 import moment from "moment-timezone";
+import {
+  SALDO_ACTION,
+  chunkArray,
+  composeSaldoFields,
+  decideSaldoAction,
+  listKodetokoTables,
+} from "./store-saldo.resolver.js";
 
 const LAST_SYNC_PATH = path.join(process.cwd(), "data/master-store-sync.json");
 const MONITORING_CACHE_PATH = path.join(process.cwd(), "data/store-monitoring.json");
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Urutkan daftar monitoring sebagai URUTAN BAWAAN: tanggal terbaru di atas.
+ *  - toko buka  (akanBuka)   -> tgl_buka  DESC
+ *  - toko tutup              -> tgl_tutup DESC
+ *      (tutup sementara pakai tglMulai, takeover pakai tglTutupLama)
+ * Data tanpa tanggal diletakkan paling bawah.
+ */
+const descByDate = (field) => (a, b) => {
+  const av = String(a?.[field] || "");
+  const bv = String(b?.[field] || "");
+  if (!av && !bv) return 0;
+  if (!av) return 1;
+  if (!bv) return -1;
+  return bv.localeCompare(av);
+};
+
+const sortMonitoringLists = (data) => {
+  if (!data) return data;
+  data.akanBuka = (data.akanBuka || []).sort(descByDate("tglBuka"));
+  data.tutupSementara = (data.tutupSementara || []).sort(descByDate("tglMulai"));
+  data.akanTutup = (data.akanTutup || []).sort(descByDate("tglTutup"));
+  data.sudahTutup = (data.sudahTutup || []).sort(descByDate("tglTutup"));
+  data.takeover = (data.takeover || []).sort(descByDate("tglTutupLama"));
+  return data;
+};
 
 const WRC_TOKO_ALL_QUERY = `
   SELECT kode_toko AS kodeToko, nama_toko AS namaToko
@@ -569,9 +602,67 @@ class StoreSyncService {
   }
 
   /**
-   * Fetch data toko akan buka, tutup sementara, akan tutup, dan sudah tutup dari server WRC cabang tertentu.
+   * Cari saldo toko SUDAH TUTUP mundur dari periode TERBARU ke belakang pada
+   * tabel kodetoko_YYMM (tabel WRC digulung tiap bulan: periode lama hilang
+   * saat periode baru masuk), sehingga ketiadaan baris di tabel terbaru tidak
+   * langsung diartikan saldo nol.
+   *
+   * Nilai yang dipakai adalah kemunculan PERTAMA toko (periode terbaru tempat
+   * toko masih tercatat). Query dikerjakan per chunk IN (...) dan berhenti
+   * lebih awal begitu seluruh kandidat ketemu.
+   *
+   * @param {object} connection            koneksi mysql2 ke WRC cabang
+   * @param {Array<{table: string, periode: string}>} kodetokoTables urut terbaru -> terlama
+   * @param {string[]} kodeTokoList        kandidat toko yang perlu dicek
+   * @returns {Promise<Map<string, {qty: number, rp: number, periode: string}>>}
    */
-  async fetchWrcMonitoringData(cab) {
+  async lookupSaldoBackward(connection, kodetokoTables, kodeTokoList) {
+    const found = new Map();
+    const pending = new Set(
+      (kodeTokoList || []).map((k) => String(k || "").trim()).filter(Boolean),
+    );
+
+    for (const { table, periode } of kodetokoTables) {
+      if (pending.size === 0) break;
+
+      for (const chunk of chunkArray([...pending])) {
+        try {
+          const [rows] = await connection.query(
+            `SELECT KODE_TOKO AS kodeToko,
+                    SUM(SALDO_AKH) AS qty,
+                    SUM(RP_SLD_AKH) AS rp
+             FROM poscabang.\`${table}\`
+             WHERE KODE_TOKO IN (?)
+             GROUP BY KODE_TOKO`,
+            [chunk],
+          );
+          for (const row of rows || []) {
+            const kode = String(row.kodeToko || "").trim();
+            if (!pending.has(kode)) continue;
+            found.set(kode, {
+              qty: Number(row.qty) || 0,
+              rp: Number(row.rp) || 0,
+              periode,
+            });
+            pending.delete(kode);
+          }
+        } catch (err) {
+          logger.warn(`[store-sync] Query saldo ${table} failed: ${err.message}`);
+        }
+      }
+    }
+
+    return found;
+  }
+
+  /**
+   * Fetch data toko akan buka, tutup sementara, akan tutup, dan sudah tutup dari server WRC cabang tertentu.
+   *
+   * @param {string} cab
+   * @param {Map<string, object>|null} prevSaldoMap memori lokal status saldo toko
+   *        tutup dari sync sebelumnya (key: `CAB|kodeToko`, sumber: store-monitoring.json)
+   */
+  async fetchWrcMonitoringData(cab, prevSaldoMap = null) {
     let connection;
     try {
       const config = await this.wrcService.getConnWRC(cab);
@@ -643,37 +734,16 @@ class StoreSyncService {
       }
 
 
-      // 3. Query saldo toko dari kodetoko_YYMM terbaru untuk cek saldo toko sudah tutup
-      let saldoMap = new Map();
-      let latestKodetokoTable = null;
+      // 3. Daftar tabel kodetoko_YYMM (diurutkan TERBARU -> terlama) sebagai
+      //    rentang pencarian saldo: dari periode terbaru ke belakang.
+      let kodetokoTables = [];
       try {
         const [tables] = await connection.query("SHOW TABLES LIKE 'kodetoko_%'");
-        const tableNames = tables
-          .map(t => Object.values(t)[0])
-          .filter(name => /^kodetoko_\d{4}$/.test(name))
-          .sort()
-          .reverse();
-
-        if (tableNames.length > 0) {
-          latestKodetokoTable = tableNames[0];
-          const [saldoRows] = await connection.query(`
-            SELECT 
-              KODE_TOKO AS kodeToko,
-              SUM(SALDO_AKH) AS totalQty,
-              SUM(RP_SLD_AKH) AS totalRp
-            FROM poscabang.${latestKodetokoTable}
-            GROUP BY KODE_TOKO
-          `);
-          for (const s of saldoRows) {
-            saldoMap.set(String(s.kodeToko).trim(), {
-              qty: Number(s.totalQty) || 0,
-              rp: Number(s.totalRp) || 0,
-            });
-          }
-        }
+        kodetokoTables = listKodetokoTables((tables || []).map((t) => Object.values(t)[0]));
       } catch (err) {
-        logger.warn(`[store-sync] Query kodetoko table failed for cabang ${cab}: ${err.message}`);
+        logger.warn(`[store-sync] SHOW TABLES kodetoko failed for cabang ${cab}: ${err.message}`);
       }
+      const periodLatest = kodetokoTables[0]?.periode || null;
 
       // 4. Transformasi dan Kategorisasi
       const nowJkt = moment().tz("Asia/Jakarta");
@@ -681,11 +751,13 @@ class StoreSyncService {
       const maxAkanBukaStr = nowJkt.clone().add(21, "days").format("YYYY-MM-DD");
       const curMonth = nowJkt.month() + 1;
       const curYear = nowJkt.year();
-      const periodeSaldo = latestKodetokoTable ? latestKodetokoTable.replace("kodetoko_", "") : null;
 
       const akanBuka = [];
       const akanTutup = [];
       const sudahTutup = [];
+      // Baris toko sudah tutup KUMULATIF (tanpa saldo dulu); status saldonya
+      // diresolusi di blok 4b setelah keputusan RECHECK vs KEEP per toko.
+      const sudahTutupBase = [];
 
       for (const row of allRows) {
         const kodeToko = String(row.kodeToko).trim();
@@ -741,27 +813,54 @@ class StoreSyncService {
               statusText: "Akan Tutup",
             });
           } else {
-            // Sudah Tutup
-            const saldoInfo = saldoMap.get(kodeToko);
-            const saldoQty = saldoInfo ? saldoInfo.qty : 0;
-            const saldoRp = saldoInfo ? saldoInfo.rp : 0;
-            const isZero = !saldoInfo || (saldoQty === 0 && saldoRp === 0);
-
-            sudahTutup.push({
+            // Sudah Tutup -> status saldonya menyusul di blok 4b
+            sudahTutupBase.push({
               kodeToko,
               namaToko,
               cabang: cab,
               kodeGudang,
               tglBuka,
               tglTutup,
-              statusSaldo: isZero ? "NOL" : "ADA_SISA",
-              saldoQty,
-              saldoRp,
-              periodeSaldo,
-              statusText: isZero ? "Saldo Nol (Clear)" : "Ada Sisa Saldo",
             });
           }
         }
+      }
+
+      // 4b. Resolusi saldo toko sudah tutup:
+      //  - SKIP_NOL / KEEP : pakai memori lokal -> TIDAK di-query, TIDAK ditimpa
+      //  - RECHECK         : query WRC, pencarian mundur dari periode terbaru ke belakang
+      //    * ADA_SISA selalu RECHECK sampai ketemu nilai 0
+      //    * TIDAK_ADA RECHECK hanya selama tgl tutup belum tercakup data WRC
+      const canLookup = kodetokoTables.length > 0;
+      const pendingCodes = [];
+      const decisions = new Map();
+
+      for (const base of sudahTutupBase) {
+        const prev = prevSaldoMap ? prevSaldoMap.get(`${cab}|${base.kodeToko}`) : null;
+        let action = decideSaldoAction({ prev, tglTutup: base.tglTutup, periodLatest });
+
+        // Tabel kodetoko tidak tersedia -> jangan ubah data lokal yang sudah ada
+        if (action === SALDO_ACTION.RECHECK && prev && !canLookup) {
+          action = SALDO_ACTION.KEEP;
+        }
+
+        decisions.set(base.kodeToko, { action, prev });
+        if (action === SALDO_ACTION.RECHECK) pendingCodes.push(base.kodeToko);
+      }
+
+      const lookupMap =
+        canLookup && pendingCodes.length > 0
+          ? await this.lookupSaldoBackward(connection, kodetokoTables, pendingCodes)
+          : new Map();
+
+      for (const base of sudahTutupBase) {
+        const { action, prev } = decisions.get(base.kodeToko);
+        const fields = composeSaldoFields({
+          action,
+          prev,
+          hit: lookupMap.get(base.kodeToko) || null,
+        });
+        sudahTutup.push({ ...base, ...fields });
       }
 
       // 5. Agregasi Toko Tutup Sementara (TS)
@@ -875,9 +974,24 @@ class StoreSyncService {
       .map(c => String(c?.kdcab || "").trim().toUpperCase())
       .filter(Boolean);
 
-    logger.info(`[store-sync] Memulai sync store monitoring untuk ${branchCodes.length} cabang...`);
+    // Memori lokal: status saldo toko tutup dari sync sebelumnya (store-monitoring.json).
+    // Hasil sync baru hanya MENIMPA entri hasil RECHECK; entri KEEP/SKIP_NOL dipertahankan.
+    const prevCache = await this.readStoreMonitoring();
+    const prevSaldoMap = new Map();
+    for (const item of prevCache?.data?.sudahTutup || []) {
+      const c = String(item?.cabang || "").trim().toUpperCase();
+      const k = String(item?.kodeToko || "").trim();
+      if (c && k) prevSaldoMap.set(`${c}|${k}`, item);
+    }
 
-    const fetchPromises = branchCodes.map(cab => this.fetchWrcMonitoringData(cab));
+    logger.info(
+      `[store-sync] Memulai sync store monitoring untuk ${branchCodes.length} cabang ` +
+        `(${prevSaldoMap.size} entri saldo toko tutup di memori lokal)...`,
+    );
+
+    const fetchPromises = branchCodes.map(cab =>
+      this.fetchWrcMonitoringData(cab, prevSaldoMap),
+    );
     const results = await Promise.all(fetchPromises);
 
     const akanBuka = [];
@@ -890,6 +1004,7 @@ class StoreSyncService {
     let totalBaruBulanIni = 0;
     let totalSudahTutupAdaSisa = 0;
     let totalSudahTutupNol = 0;
+    let totalSudahTutupTidakAda = 0;
 
     for (const res of results) {
       cabangSummary.push({
@@ -917,8 +1032,10 @@ class StoreSyncService {
         for (const item of res.sudahTutup) {
           if (item.statusSaldo === "ADA_SISA") {
             totalSudahTutupAdaSisa++;
-          } else {
+          } else if (item.statusSaldo === "NOL") {
             totalSudahTutupNol++;
+          } else {
+            totalSudahTutupTidakAda++;
           }
           sudahTutup.push(item);
         }
@@ -997,6 +1114,7 @@ class StoreSyncService {
         totalSudahTutup: sudahTutup.length,
         totalSudahTutupAdaSisa,
         totalSudahTutupNol,
+        totalSudahTutupTidakAda,
         totalTakeover: takeover.length,
         totalTakeoverAlerts: takeoverAlerts.length,
       },
@@ -1011,6 +1129,7 @@ class StoreSyncService {
       },
     };
 
+    sortMonitoringLists(monitoringData.data);
     await this.writeStoreMonitoring(monitoringData);
     logger.info(
       `[store-sync] Selesai sync store monitoring dalam ${durationMs}ms: ` +
@@ -1034,7 +1153,7 @@ class StoreSyncService {
       category = "all", // "akan_buka", "tutup_sementara", "akan_tutup", "sudah_tutup", "all"
       cabang = "",
       search = "",
-      saldoStatus = "all", // "all", "ada_sisa", "nol"
+      saldoStatus = "all", // "all", "ada_sisa", "nol", "tidak_ada"
       isNew = "", // "true", "false", ""
     } = options;
 
@@ -1077,6 +1196,10 @@ class StoreSyncService {
       akanBuka =  akanBuka.filter(item => !item.isNewThisMonth);
     }
 
+    // Urutan bawaan: tanggal terbaru di atas (toko tutup -> tgl tutup DESC,
+    // toko buka -> tgl buka DESC) — berlaku apapun filter yang aktif.
+    sortMonitoringLists({ akanBuka, tutupSementara, akanTutup, sudahTutup, takeover });
+
     return {
       meta: cached.meta,
       summary: {
@@ -1087,6 +1210,7 @@ class StoreSyncService {
         totalSudahTutup: sudahTutup.length,
         totalSudahTutupAdaSisa: sudahTutup.filter(x => x.statusSaldo === "ADA_SISA").length,
         totalSudahTutupNol: sudahTutup.filter(x => x.statusSaldo === "NOL").length,
+        totalSudahTutupTidakAda: sudahTutup.filter(x => x.statusSaldo === "TIDAK_ADA").length,
         totalTakeover: takeover.length,
         totalTakeoverAlerts: cached.data?.takeoverAlerts?.length || 0,
       },
@@ -1244,7 +1368,12 @@ class StoreSyncService {
         kodeToko: item.kodeToko,
         namaToko: item.namaToko,
         tglTutup: item.tglTutup,
-        statusSaldo: item.statusSaldo === "NOL" ? "Nol (Clear)" : "Ada Sisa",
+        statusSaldo:
+          item.statusSaldo === "NOL"
+            ? "Nol (Clear)"
+            : item.statusSaldo === "ADA_SISA"
+              ? "Ada Sisa"
+              : "Data Tidak Ada",
         periodeSaldo: item.periodeSaldo || "-",
         saldoQty: item.saldoQty,
         saldoRp: item.saldoRp,

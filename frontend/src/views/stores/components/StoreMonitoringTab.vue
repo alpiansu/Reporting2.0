@@ -138,6 +138,13 @@
             >
               {{ dynamicSummary.totalSudahTutupAdaSisa }} ada sisa
             </span>
+            <span
+              v-if="dynamicSummary.totalSudahTutupTidakAda > 0"
+              class="kpi-sub-badge muted"
+              title="Toko tutup tanpa data saldo di WRC (tabel periode lamanya sudah digulung)"
+            >
+              {{ dynamicSummary.totalSudahTutupTidakAda }} tanpa data
+            </span>
           </div>
         </div>
       </div>
@@ -305,6 +312,7 @@
           <option value="all">Semua Status Saldo</option>
           <option value="ada_sisa">Ada Sisa Saldo Saja</option>
           <option value="nol">Saldo Nol (Clear) Saja</option>
+          <option value="tidak_ada">Tidak Ada Data Saja</option>
         </select>
 
         <!-- Sub Filter Khusus Takeover -->
@@ -544,8 +552,19 @@
             <span v-if="slotProps.data.statusSaldo === 'NOL'" class="table-badge success">
               <i class="pi pi-check-circle"></i> Saldo Nol (Clear)
             </span>
-            <span v-else class="table-badge danger" title="Masih ada saldo akhir di closing WRC">
+            <span
+              v-else-if="slotProps.data.statusSaldo === 'ADA_SISA'"
+              class="table-badge danger"
+              title="Masih ada saldo akhir di closing WRC"
+            >
               <i class="pi pi-exclamation-circle"></i> Ada Sisa Saldo
+            </span>
+            <span
+              v-else
+              class="table-badge neutral"
+              title="Data saldo tidak ditemukan di WRC: tabel periode lama sudah digulung, jadi BUKAN berarti saldonya nol"
+            >
+              <i class="pi pi-minus-circle"></i> Data Tidak Ada
             </span>
           </template>
         </Column>
@@ -556,14 +575,24 @@
         </Column>
         <Column field="saldoQty" header="Qty Saldo" :style="{ width: '120px', textAlign: 'right' }" sortable>
           <template #body="slotProps">
-            <span :class="{ 'text-danger font-bold': slotProps.data.saldoQty !== 0 }">
+            <span
+              v-if="slotProps.data.statusSaldo === 'TIDAK_ADA'"
+              class="text-muted"
+              title="Data saldo tidak tersedia di WRC"
+            >–</span>
+            <span v-else :class="{ 'text-danger font-bold': slotProps.data.saldoQty !== 0 }">
               {{ formatNumber(slotProps.data.saldoQty) }}
             </span>
           </template>
         </Column>
         <Column field="saldoRp" header="Rp Saldo Akhir" :style="{ width: '150px', textAlign: 'right' }" sortable>
           <template #body="slotProps">
-            <span :class="{ 'text-danger font-bold': slotProps.data.saldoRp !== 0 }">
+            <span
+              v-if="slotProps.data.statusSaldo === 'TIDAK_ADA'"
+              class="text-muted"
+              title="Data saldo tidak tersedia di WRC"
+            >–</span>
+            <span v-else :class="{ 'text-danger font-bold': slotProps.data.saldoRp !== 0 }">
               {{ formatCurrency(slotProps.data.saldoRp) }}
             </span>
           </template>
@@ -715,6 +744,7 @@ const summary = ref({
   totalSudahTutup: 0,
   totalSudahTutupAdaSisa: 0,
   totalSudahTutupNol: 0,
+  totalSudahTutupTidakAda: 0,
   totalTakeover: 0,
   totalTakeoverAlerts: 0,
 });
@@ -794,6 +824,7 @@ const dynamicSummary = computed(() => {
   const totalBaruBulanIni = bAkanBuka.filter((x) => x.isNewThisMonth).length;
   const totalSudahTutupAdaSisa = bSudahTutup.filter((x) => x.statusSaldo === 'ADA_SISA').length;
   const totalSudahTutupNol = bSudahTutup.filter((x) => x.statusSaldo === 'NOL').length;
+  const totalSudahTutupTidakAda = bSudahTutup.filter((x) => x.statusSaldo === 'TIDAK_ADA').length;
 
   return {
     totalAkanBuka: bAkanBuka.length,
@@ -803,6 +834,7 @@ const dynamicSummary = computed(() => {
     totalSudahTutup: bSudahTutup.length,
     totalSudahTutupAdaSisa,
     totalSudahTutupNol,
+    totalSudahTutupTidakAda,
     totalTakeover: bTakeover.length,
     totalTakeoverAlerts: bAlerts.length,
   };
@@ -851,6 +883,8 @@ const filteredSudahTutup = computed(() => {
     list = list.filter((x) => x.statusSaldo === 'ADA_SISA');
   } else if (filterSaldoStatus.value === 'nol') {
     list = list.filter((x) => x.statusSaldo === 'NOL');
+  } else if (filterSaldoStatus.value === 'tidak_ada') {
+    list = list.filter((x) => x.statusSaldo === 'TIDAK_ADA');
   }
   return list;
 });

@@ -213,13 +213,73 @@ class AdjustService {
           qty_adj: parseInt(record.QTY_ADJ || record.qty_adj, 10) || 0,
           keter: (record.KETER || record.keter || "").trim(),
           tgl_selisih: (record.TGL_SELISIH || record.tgl_selisih || "").trim(),
+          rowNumber: record._rowNumber,
         });
       }
 
       const storeCodes = Array.from(storeMap.keys());
       logger.info(`[adjust:generate] Found ${storeCodes.length} unique stores in CSV`);
 
-      // Start progress tracking
+      // Lookup INDUK stores from storeService
+      const selectedStores = await storeService.getStoresByCodes(storeCodes);
+      const storeInfoMap = new Map();
+      for (const s of selectedStores) {
+        storeInfoMap.set(s.storeCode, s);
+      }
+
+      // Validasi ketat informasi station untuk mode export CSV BC Khusus
+      // Kriteria: Toko harus terdaftar di master INDUK, station harus 2 digit angka dan TIDAK boleh '00'
+      const invalidStores = [];
+
+      for (const [kdtk, items] of storeMap.entries()) {
+        const store = storeInfoMap.get(kdtk);
+        const rowNumbers = items.map(it => it.rowNumber).filter(Boolean);
+
+        if (!store) {
+          invalidStores.push({
+            storeCode: kdtk,
+            storeName: "-",
+            rows: rowNumbers,
+            currentStation: "-",
+            errorType: "NOT_FOUND",
+            reason: `Toko ${kdtk} tidak ditemukan di master store INDUK. Silakan daftarkan/sinkronisasi toko di menu Stores.`,
+          });
+          continue;
+        }
+
+        const rawStation = String(store.station || "").trim();
+        const isTwoDigits = /^\d{2}$/.test(rawStation);
+        const isZeroZero = rawStation === "00";
+
+        if (!isTwoDigits || isZeroZero) {
+          invalidStores.push({
+            storeCode: kdtk,
+            storeName: store.storeName || "-",
+            rows: rowNumbers,
+            currentStation: rawStation || "(kosong)",
+            errorType: "INVALID_STATION",
+            reason: isZeroZero
+              ? "Station tidak boleh bernilai '00'. Harus dua digit angka valid (contoh: '01', '02')."
+              : `Station '${rawStation}' tidak valid. Harus tepat dua digit angka (contoh: '01', '02').`,
+          });
+        }
+      }
+
+      if (invalidStores.length > 0) {
+        logger.warn(
+          `[adjust:generate] Validasi station gagal untuk ${invalidStores.length} toko: ${invalidStores.map(s => `${s.storeCode}(${s.currentStation})`).join(", ")}`,
+        );
+
+        const error = new Error(
+          "Validasi data toko gagal: Ditemukan informasi station yang tidak sesuai untuk mode export CSV BC Khusus. Proses export file CSV dibatalkan.",
+        );
+        error.name = "StationValidationError";
+        error.errorType = "VALIDATION_STATION_FAILED";
+        error.invalidStores = invalidStores;
+        throw error;
+      }
+
+      // Start progress tracking setelah validasi lolos
       try {
         const timeStart = moment().format("YYYY-MM-DD HH:mm:ss");
         await progressService.startProgress(taskId, storeCodes.length, {
@@ -232,13 +292,6 @@ class AdjustService {
         });
       } catch (err) {
         logger.warn(`[adjust:generate] Could not start progress task: ${err.message}`);
-      }
-
-      // Lookup INDUK stores from storeService
-      const selectedStores = await storeService.getStoresByCodes(storeCodes);
-      const storeInfoMap = new Map();
-      for (const s of selectedStores) {
-        storeInfoMap.set(s.storeCode, s);
       }
 
       // Extract last month YY and MM for filet table
@@ -628,6 +681,7 @@ class AdjustService {
   async parseCsvBuffer(buffer) {
     return new Promise((resolve, reject) => {
       const records = [];
+      let rowNum = 1; // Baris 1 adalah header
       const readable = Readable.from(buffer);
 
       readable
@@ -637,7 +691,10 @@ class AdjustService {
             mapValues: ({ value }) => value.trim(),
           }),
         )
-        .on("data", data => records.push(data))
+        .on("data", data => {
+          rowNum++;
+          records.push({ ...data, _rowNumber: rowNum });
+        })
         .on("error", err => {
           reject(new Error(`Error parsing CSV: ${err.message}`));
         })

@@ -1143,25 +1143,28 @@ const csvSnapshotText = computed(() => {
 
 const runSyncAfterUploadWithForce = async () => {
   if (isSyncingAfterUpload.value) return;
-  showSyncConfirmDialog.value = false;
-  syncConfirmLastSync.value = null;
   isSyncingAfterUpload.value = true;
   try {
     const result = await storeService.syncMasterCsv(true);
 
     if (result.needsSnapshot) {
       toast.showError('Sinkronisasi Master Toko', result.message || 'Belum ada data CSV.');
+      showSyncConfirmDialog.value = false;
+      syncConfirmLastSync.value = null;
       return;
     }
 
     if (result.needsConfirmation) {
       syncConfirmLastSync.value = result.lastSync || null;
-      showSyncConfirmDialog.value = true;
       return;
     }
 
     syncResult.value = result;
     await loadSyncStatus();
+    await applyFilters();
+    showSyncConfirmDialog.value = false;
+    syncConfirmLastSync.value = null;
+    toast.showSuccess('Sukses', 'Data master toko berhasil disinkronisasi.');
   } catch (error) {
     console.error('Error syncing master stores:', error);
     toast.showError('Sinkronisasi Master Toko', error?.response?.data?.message || 'Gagal melakukan sinkronisasi master toko');
@@ -1171,7 +1174,7 @@ const runSyncAfterUploadWithForce = async () => {
 };
 
 const closeSyncConfirmDialog = () => {
-  if (syncing.value) return;
+  if (isSyncingAfterUpload.value || syncing.value) return;
   showSyncConfirmDialog.value = false;
   syncConfirmLastSync.value = null;
 };
@@ -1279,6 +1282,7 @@ const uploadCsv = async () => {
 
     syncResult.value = sync;
     await loadSyncStatus();
+    await applyFilters();
     showCsvUploadDialog.value = false;
     uploadStage.value = 'select';
     toast.showSuccess('Sukses', 'Data master toko berhasil disinkronisasi.');

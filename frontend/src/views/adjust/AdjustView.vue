@@ -427,6 +427,12 @@
         @cancel="handlePreviewCancel"
         @confirm="handlePreviewConfirm"
       />
+      <AdjustStationErrorDialog
+        :show="showStationErrorDialog"
+        :invalid-stores="invalidStationList"
+        @close="showStationErrorDialog = false"
+        @navigate-stores="navigateToStores"
+      />
     </div>
   </div>
 </template>
@@ -434,6 +440,7 @@
 <style src="./AdjustView.style.css" scoped></style>
 <script setup>
 import { ref, computed, onBeforeUnmount, watch } from "vue";
+import { useRouter } from "vue-router";
 import { useToast } from "primevue/usetoast";
 import { useAuthStore } from '../../stores';
 import DataTable from 'primevue/datatable';
@@ -448,6 +455,7 @@ import { exportAdjustmentHistory } from "./exportExcel.js";
 import ProgressBar from "../../components/common/ProgressBar.vue";
 import AdjustHistoryReportCard from "./components/AdjustHistoryReportCard.vue";
 import AdjustCsvPreviewDialog from "./components/AdjustCsvPreviewDialog.vue";
+import AdjustStationErrorDialog from "./components/AdjustStationErrorDialog.vue";
 import * as XLSX from "xlsx";
 
 const formatCode = (val) => {
@@ -456,6 +464,7 @@ const formatCode = (val) => {
   return str.startsWith('#') ? str.slice(1).trim() : str;
 };
 
+const router = useRouter();
 const toast = useToast();
 const authStore = useAuthStore();
 const strUsername = computed(() => authStore.user?.username || "");
@@ -466,6 +475,13 @@ const isSuperAdmin = computed(() => {
 const detectedLocalStore = ref(null);
 const isCheckingTarget = ref(false);
 const isDirectIntervention = ref(false);
+const showStationErrorDialog = ref(false);
+const invalidStationList = ref([]);
+
+const navigateToStores = () => {
+  showStationErrorDialog.value = false;
+  router.push('/stores');
+};
 
 const canIntervene = computed(() => {
   return isSuperAdmin.value || (detectedLocalStore.value && detectedLocalStore.value.isLocal === true);
@@ -811,10 +827,24 @@ const handleUpload = async () => {
 
   } catch (error) {
     console.error("Upload error:", error);
+
+    const errorData = error.response?.data;
+    if (errorData?.errorType === "VALIDATION_STATION_FAILED" && Array.isArray(errorData.invalidStores)) {
+      invalidStationList.value = errorData.invalidStores;
+      showStationErrorDialog.value = true;
+      toast.add({
+        severity: "error",
+        summary: "Validasi Station Gagal",
+        detail: "Proses export CSV dibatalkan. Beberapa toko memiliki station tidak valid.",
+        life: 6000,
+      });
+      return;
+    }
+
     toast.add({
       severity: "error",
       summary: "Error",
-      detail: error.response?.data?.message || "Failed to process file",
+      detail: errorData?.message || "Failed to process file",
       life: 5000,
     });
   } finally {

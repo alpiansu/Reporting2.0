@@ -81,6 +81,14 @@ export const uploadAdjustCsv = async (req, res) => {
     });
   } catch (error) {
     logger.error(`Error starting adjust process: ${error.message}`);
+    if (error.name === "StationValidationError" || error.errorType === "VALIDATION_STATION_FAILED") {
+      return res.status(400).json({
+        success: false,
+        errorType: "VALIDATION_STATION_FAILED",
+        message: error.message,
+        invalidStores: error.invalidStores || [],
+      });
+    }
     const statusCode = error.statusCode || 500;
     return apiResponse.error(res, error.message, statusCode, error.details || null);
   }

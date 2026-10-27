@@ -368,11 +368,10 @@ export const confirmVirtualMarginAdjust = async (req, res) => {
       fullName,
     });
 
-    return apiResponse.success(
-      res,
-      result,
-      `Status penyesuaian berhasil disimpan. ${result.updatedCount} item diperbarui ke database, ${result.failedCount} item ditandai gagal.`
-    );
+    return apiResponse.success(res, {
+      message: `Status penyesuaian berhasil disimpan. ${result.updatedCount} item diperbarui ke database, ${result.failedCount} item ditandai gagal.`,
+      ...result,
+    });
   } catch (error) {
     logger.error(`[adjust] Error confirming virtual margin adjustment: ${error.message}`);
     return apiResponse.error(res, error.message || "Gagal menyimpan konfirmasi penyesuaian virtual margin", 500);

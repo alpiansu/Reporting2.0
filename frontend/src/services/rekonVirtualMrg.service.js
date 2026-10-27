@@ -171,6 +171,16 @@ const rekonVirtualMrgService = {
     const response = await api.post(`/notes/autonoteVirtual`, parameters);
     return response.data;
   },
+
+  /**
+   * Sync JSON cache from database for a specific period
+   * @param {string} periode - Period in YYMM format
+   * @returns {Promise} - Response with sync result
+   */
+  syncJson: async (periode) => {
+    const response = await api.post(`/${fixedPattern}/sync-json`, { periode });
+    return response.data;
+  },
 };
 
 export default rekonVirtualMrgService;

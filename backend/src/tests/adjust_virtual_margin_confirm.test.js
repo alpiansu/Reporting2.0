@@ -17,6 +17,13 @@ jest.mock("../modules/progress/progress.service.js", () => ({
   },
 }));
 
+jest.mock("../models/hist_adjust.model.js", () => ({
+  __esModule: true,
+  default: {
+    findAll: jest.fn().mockResolvedValue([]),
+  },
+}));
+
 jest.mock("../models/saldovirtual.model.js", () => ({
   __esModule: true,
   default: {
@@ -47,6 +54,8 @@ jest.mock("../modules/store/storeService.js", () => ({
 }));
 
 import adjustService from "../modules/adjust/adjust.service.js";
+import { confirmVirtualMarginAdjust } from "../modules/adjust/adjust.controller.js";
+import apiResponse from "../utils/apiResponse.js";
 import SaldoVirtual from "../models/saldovirtual.model.js";
 import rekonVirtualService from "../modules/rekon_virtual_mrg/rekon_virtual_mrg.service.js";
 import histAdjustStagingService from "../modules/adjust/hist_adjust_staging.service.js";
@@ -255,6 +264,78 @@ describe("Adjust Service - Confirm Virtual Margin Adjust", () => {
       expect(vmItem.price).toBe(20000);
       expect(vmItem.acost).toBe(18000);
       expect(vmItem.status).toBe("SUCCESS");
+    });
+  });
+
+  describe("Controller confirmVirtualMarginAdjust", () => {
+    test("should respond with HTTP 200 and formatted message without ERR_HTTP_INVALID_STATUS_CODE", async () => {
+      const mockReq = {
+        body: {
+          items: [
+            {
+              kdtk: "TW06",
+              cabang: "G107",
+              prdcd: "1001",
+              tgl_selisih: "2026-02-15",
+              qty_adj: 5,
+              status: "SUCCESS",
+            },
+          ],
+        },
+        user: { username: "admin_test", fullName: "Admin Tester" },
+      };
+
+      const mockJson = jest.fn();
+      const mockStatus = jest.fn().mockReturnValue({ json: mockJson });
+      const mockRes = { status: mockStatus };
+
+      await confirmVirtualMarginAdjust(mockReq, mockRes);
+
+      expect(mockStatus).toHaveBeenCalledWith(200);
+      expect(mockJson).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          data: expect.objectContaining({
+            totalItems: 1,
+            updatedCount: 1,
+            failedCount: 0,
+            message: expect.stringContaining("1 item diperbarui ke database"),
+          }),
+        }),
+      );
+    });
+
+    test("should return 400 bad request if items array is missing or empty", async () => {
+      const mockReq = { body: { items: [] }, user: { username: "admin_test" } };
+      const mockJson = jest.fn();
+      const mockStatus = jest.fn().mockReturnValue({ json: mockJson });
+      const mockRes = { status: mockStatus };
+
+      await confirmVirtualMarginAdjust(mockReq, mockRes);
+
+      expect(mockStatus).toHaveBeenCalledWith(400);
+      expect(mockJson).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          message: expect.stringContaining("tidak boleh kosong"),
+        }),
+      );
+    });
+  });
+
+  describe("apiResponse.success resilience", () => {
+    test("should safely accept message string as 3rd param without throwing RangeError", () => {
+      const mockJson = jest.fn();
+      const mockStatus = jest.fn().mockReturnValue({ json: mockJson });
+      const mockRes = { status: mockStatus };
+
+      apiResponse.success(mockRes, { foo: "bar" }, "Custom success message");
+
+      expect(mockStatus).toHaveBeenCalledWith(200);
+      expect(mockJson).toHaveBeenCalledWith({
+        success: true,
+        data: { message: "Custom success message", foo: "bar" },
+      });
     });
   });
 });

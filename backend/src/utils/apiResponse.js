@@ -6,12 +6,25 @@
  * Send success response
  * @param {object} res - Express response object
  * @param {*} data - Response data
- * @param {number} statusCode - HTTP status code
+ * @param {number|string} statusCode - HTTP status code (number) or fallback message (string)
  */
 const success = (res, data = {}, statusCode = 200) => {
-  return res.status(statusCode).json({
+  let finalStatusCode = statusCode;
+  let finalData = data;
+
+  // Defensive fallback: jika argumen ke-3 tidak sengaja diisi string pesan alih-alih integer HTTP status code
+  if (typeof statusCode === "string") {
+    finalStatusCode = 200;
+    if (typeof finalData === "object" && finalData !== null && !Array.isArray(finalData)) {
+      finalData = { message: statusCode, ...finalData };
+    } else {
+      finalData = { message: statusCode, data: finalData };
+    }
+  }
+
+  return res.status(finalStatusCode).json({
     success: true,
-    data,
+    data: finalData,
   });
 };
 

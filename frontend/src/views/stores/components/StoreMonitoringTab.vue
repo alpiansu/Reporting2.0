@@ -603,6 +603,8 @@
       <DataTable
         v-if="activeCategory === 'takeover'"
         :value="filteredTakeover"
+        sortField="tglEfektif"
+        :sortOrder="-1"
         :paginator="true"
         :rows="15"
         :rowsPerPageOptions="[15, 30, 50, 100]"
@@ -618,7 +620,7 @@
         <Column header="No" :style="{ width: '60px', textAlign: 'center' }">
           <template #body="slotProps">{{ slotProps.index + 1 }}</template>
         </Column>
-        <Column field="cabang" header="Cabang" :style="{ width: '110px' }">
+        <Column field="cabang" header="Cabang" :style="{ width: '110px' }" sortable>
           <template #body="slotProps">
             <span class="branch-tag" :title="getCabangName(slotProps.data.cabang)">{{ slotProps.data.cabang }}</span>
           </template>
@@ -632,23 +634,22 @@
             </span>
           </template>
         </Column>
-        <Column header="Toko Lama" :style="{ width: '220px' }">
+        <Column field="kodeLama" header="Kode Toko Lama" :style="{ width: '150px' }" sortable>
           <template #body="slotProps">
-            <div class="flex items-center gap-2">
-              <span class="code-badge-old">{{ slotProps.data.kodeLama }}</span>
-              <span class="text-xs text-muted">{{ formatDate(slotProps.data.tglTutupLama) }}</span>
-            </div>
+            <span class="code-badge-old">{{ slotProps.data.kodeLama }}</span>
           </template>
         </Column>
-        <Column header="Toko Baru" :style="{ width: '220px' }">
+        <Column field="kodeBaru" header="Kode Toko Baru" :style="{ width: '150px' }" sortable>
           <template #body="slotProps">
-            <div class="flex items-center gap-2">
-              <span class="code-badge-new">{{ slotProps.data.kodeBaru }}</span>
-              <span class="text-xs text-muted">{{ formatDate(slotProps.data.tglBukaBaru) }}</span>
-            </div>
+            <span class="code-badge-new">{{ slotProps.data.kodeBaru }}</span>
           </template>
         </Column>
-        <Column field="selisihHari" header="Selisih" :style="{ width: '120px', textAlign: 'center' }">
+        <Column field="tglEfektif" header="Tanggal Efektif" :style="{ width: '160px' }" sortable>
+          <template #body="slotProps">
+            <span class="font-medium">{{ formatDate(slotProps.data.tglEfektif) }}</span>
+          </template>
+        </Column>
+        <Column field="selisihHari" header="Selisih" :style="{ width: '120px', textAlign: 'center' }" sortable>
           <template #body="slotProps">
             <span class="table-badge success">
               {{ slotProps.data.selisihHari === 0 ? 'Hari Sama' : '1 Hari' }}
@@ -894,7 +895,15 @@ const filteredTakeover = computed(() => {
   if (filterTakeoverType.value !== 'all') {
     list = list.filter((x) => x.tipeTransisi === filterTakeoverType.value);
   }
-  return list;
+  const mapped = list.map((x) => ({
+    ...x,
+    tglEfektif: x.tglEfektif || x.tglTakeover || x.tglBukaBaru || x.tglTutupLama || '',
+  }));
+  return mapped.sort((a, b) => {
+    const dateA = a.tglEfektif || '';
+    const dateB = b.tglEfektif || '';
+    return dateB.localeCompare(dateA);
+  });
 });
 
 // Apakah filter sedang aktif

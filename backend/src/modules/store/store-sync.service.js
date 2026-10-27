@@ -907,6 +907,7 @@ class StoreSyncService {
           tglTutupLama: r.tglTutupLama,
           tglBukaBaru: r.tglBukaBaru,
           tglTakeover: r.tglBukaBaru,
+          tglEfektif: r.tglBukaBaru,
           selisihHari: Number(r.selisihHari) || 0,
           tipeTransisi,
         };
@@ -1395,8 +1396,9 @@ class StoreSyncService {
       { header: "Nama Toko", key: "namaToko", width: 35 },
       { header: "Tipe Transisi", key: "tipeTransisi", width: 24 },
       { header: "Kode Lama", key: "kodeLama", width: 12 },
-      { header: "Tgl Tutup Lama", key: "tglTutupLama", width: 15 },
       { header: "Kode Baru", key: "kodeBaru", width: 12 },
+      { header: "Tanggal Efektif", key: "tglEfektif", width: 16 },
+      { header: "Tgl Tutup Lama", key: "tglTutupLama", width: 15 },
       { header: "Tgl Buka Baru", key: "tglBukaBaru", width: 15 },
       { header: "Selisih", key: "selisihHari", width: 10 },
     ]);
@@ -1407,8 +1409,9 @@ class StoreSyncService {
         namaToko: item.namaToko,
         tipeTransisi: item.tipeTransisi,
         kodeLama: item.kodeLama,
-        tglTutupLama: item.tglTutupLama,
         kodeBaru: item.kodeBaru,
+        tglEfektif: item.tglEfektif || item.tglTakeover || item.tglBukaBaru,
+        tglTutupLama: item.tglTutupLama,
         tglBukaBaru: item.tglBukaBaru,
         selisihHari: `${item.selisihHari} Hari`,
       });

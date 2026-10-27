@@ -56,9 +56,14 @@
     <div class="queries-container" v-if="queries && queries.length > 0">
       <div v-for="(q, idx) in queries" :key="idx" class="query-card">
         <div class="query-card-header">
-          <div class="query-card-title">
-            <i class="pi pi-code"></i>
-            <span>{{ q.title || `Query ${idx + 1}` }}</span>
+          <div class="query-card-title-group">
+            <div class="query-card-title">
+              <i class="pi pi-code"></i>
+              <span>{{ q.title || `Query ${idx + 1}` }}</span>
+            </div>
+            <div v-if="q.description" class="query-card-desc">
+              {{ q.description }}
+            </div>
           </div>
           <Button
             size="small"
@@ -163,7 +168,7 @@ const handleCopyAll = async () => {
   if (!props.queries || props.queries.length === 0) return;
 
   const allQueryText = props.queries
-    .map(q => `-- ${q.title}\n${q.sql}`)
+    .map(q => `-- ${q.title}${q.description ? `\n-- Catatan: ${q.description}` : ''}\n${q.sql}`)
     .join('\n\n');
 
   const success = await copyToClipboard(allQueryText);

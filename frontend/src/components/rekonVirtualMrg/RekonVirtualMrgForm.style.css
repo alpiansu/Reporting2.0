@@ -27,6 +27,11 @@
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
+  min-width: 0;
+}
+
+.filter-item-shops {
+  min-width: 0;
 }
 
 .filter-label {
@@ -53,39 +58,189 @@
   color: #ef4444;
 }
 
-/* PrimeVue Component Overrides */
+/* Scoped Component Overrides */
 :deep(.filter-dropdown),
 :deep(.filter-calendar),
 :deep(.filter-multiselect) {
   width: 100%;
+  min-width: 0;
+}
+
+/* Form inputs: Dropdown & Select */
+:deep(.p-dropdown),
+:deep(.p-select) {
+  width: 100%;
+  background: var(--surface-card, #ffffff);
+  border: 1px solid var(--surface-border, #cbd5e1);
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  min-height: 35px;
+  box-sizing: border-box;
 }
 
 :deep(.p-dropdown .p-dropdown-label),
+:deep(.p-select .p-select-label) {
+  padding: 0.45rem 0.75rem;
+  font-size: 0.825rem;
+  color: var(--text-color, #1e293b);
+  line-height: 1.2;
+}
+
+/* Form inputs: Calendar & DatePicker */
+:deep(.p-calendar),
+:deep(.p-datepicker) {
+  width: 100%;
+  min-width: 0;
+  display: inline-flex;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
 :deep(.p-calendar input),
+:deep(.p-datepicker input),
+:deep(.p-datepicker-input) {
+  width: 100%;
+  min-width: 0;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.825rem;
+  background: var(--surface-card, #ffffff) !important;
+  border: 1px solid var(--surface-border, #cbd5e1);
+  border-radius: 6px;
+  color: var(--text-color, #1e293b);
+  transition: all 0.15s ease;
+  min-height: 35px;
+  box-sizing: border-box;
+}
+
+:deep(.p-datepicker:has(.p-datepicker-dropdown) .p-datepicker-input),
+:deep(.p-calendar:has(.p-datepicker-dropdown) input) {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+:deep(.p-datepicker-dropdown),
+:deep(.p-calendar .p-datepicker-dropdown) {
+  background: var(--surface-hover, #f1f5f9) !important;
+  border: 1px solid var(--surface-border, #cbd5e1);
+  border-left: none;
+  color: #0284c7;
+  padding: 0 0.65rem;
+  border-top-right-radius: 6px;
+  border-bottom-right-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Form inputs: MultiSelect */
+:deep(.p-multiselect) {
+  width: 100%;
+  background: var(--surface-card, #ffffff) !important;
+  border: 1px solid var(--surface-border, #cbd5e1);
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  min-height: 35px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+}
+
 :deep(.p-multiselect .p-multiselect-label) {
   padding: 0.45rem 0.75rem;
   font-size: 0.825rem;
+  color: var(--text-color, #1e293b);
+  line-height: 1.2;
 }
 
-:deep(.p-dropdown),
-:deep(.p-calendar),
-:deep(.p-multiselect) {
-  border-radius: 6px;
-  border-color: var(--surface-border, #cbd5e1);
-  transition: all 0.15s ease;
+:deep(.p-multiselect .p-placeholder) {
+  color: var(--text-color-secondary, #94a3b8);
+}
+
+/* Clear icon polish: tactile circular dismiss button */
+:deep(.p-multiselect .p-multiselect-clear-icon) {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 20px !important;
+  height: 20px !important;
+  border-radius: 50% !important;
+  color: #94a3b8 !important;
+  font-size: 0.75rem !important;
+  cursor: pointer !important;
+  margin-right: 0.35rem !important;
+  padding: 2px !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  background: transparent !important;
+  flex-shrink: 0 !important;
+}
+
+:deep(.p-multiselect .p-multiselect-clear-icon:hover) {
+  background: #fee2e2 !important;
+  color: #ef4444 !important;
+  transform: scale(1.1) !important;
+}
+
+:deep(.p-multiselect .p-multiselect-clear-icon:active) {
+  transform: scale(0.92) !important;
+}
+
+:deep(.p-multiselect .p-multiselect-clear-icon svg) {
+  width: 10px !important;
+  height: 10px !important;
+  stroke-width: 2.5 !important;
+}
+
+:deep(.p-multiselect .p-multiselect-dropdown) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  color: #64748b;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+:deep(.p-multiselect:hover .p-multiselect-dropdown) {
+  color: #0284c7;
+}
+
+:deep(.p-multiselect .p-multiselect-dropdown-icon) {
+  width: 13px;
+  height: 13px;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s ease;
+}
+
+:deep(.p-multiselect.p-multiselect-open .p-multiselect-dropdown-icon) {
+  transform: rotate(180deg);
+  color: #0284c7;
 }
 
 :deep(.p-dropdown:not(.p-disabled):hover),
-:deep(.p-calendar:not(.p-disabled):hover),
+:deep(.p-select:not(.p-disabled):hover),
+:deep(.p-calendar input:not(:disabled):hover),
+:deep(.p-datepicker-input:not(:disabled):hover),
 :deep(.p-multiselect:not(.p-disabled):hover) {
   border-color: #94a3b8;
 }
 
 :deep(.p-dropdown.p-focus),
-:deep(.p-calendar.p-focus),
+:deep(.p-select.p-focus),
+:deep(.p-calendar input:focus),
+:deep(.p-datepicker-input:focus),
 :deep(.p-multiselect.p-focus) {
   border-color: #0284c7;
   box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
+}
+
+:deep(.p-dropdown.p-disabled),
+:deep(.p-select.p-disabled),
+:deep(.p-calendar input:disabled),
+:deep(.p-datepicker-input:disabled),
+:deep(.p-multiselect.p-disabled) {
+  background: var(--surface-ground, #f8fafc) !important;
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .filter-error-text {
@@ -185,7 +340,147 @@
 }
 
 /* --------------------------------------------------------------------------
-   3. Responsive Breakpoints
+   3. Namespaced Overlay Styling (Isolated to Rekon Virtual Margin Form)
+   -------------------------------------------------------------------------- */
+:global(.rekon-mrg-calendar-panel),
+:global(.rekon-mrg-shops-overlay) {
+  background: var(--surface-card, #ffffff) !important;
+  color: var(--text-color, #1e293b) !important;
+  border: 1px solid var(--surface-border, #cbd5e1) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.06) !important;
+  border-radius: 8px !important;
+  z-index: 9999 !important;
+}
+
+/* Calendar month-picker styling */
+:global(.rekon-mrg-calendar-panel .p-datepicker-header) {
+  background: var(--surface-card, #ffffff) !important;
+  border-bottom: 1px solid var(--surface-border, #f1f5f9) !important;
+  padding: 0.5rem 0.75rem !important;
+}
+
+:global(.rekon-mrg-calendar-panel .p-datepicker-month-view) {
+  background: var(--surface-card, #ffffff) !important;
+  padding: 0.5rem !important;
+}
+
+:global(.rekon-mrg-calendar-panel .p-datepicker-month) {
+  color: var(--text-color, #1e293b) !important;
+  font-size: 0.825rem !important;
+  padding: 0.5rem !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+}
+
+:global(.rekon-mrg-calendar-panel .p-datepicker-month:hover) {
+  background: var(--surface-hover, #f1f5f9) !important;
+}
+
+:global(.rekon-mrg-calendar-panel .p-datepicker-month.p-datepicker-month-selected) {
+  background: #0284c7 !important;
+  color: #ffffff !important;
+}
+
+/* MultiSelect shops overlay header, search, and list */
+:global(.rekon-mrg-shops-overlay .p-multiselect-header) {
+  background: var(--surface-card, #f8fafc) !important;
+  border-bottom: 1px solid var(--surface-border, #e2e8f0) !important;
+  padding: 0.55rem 0.75rem !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.6rem !important;
+}
+
+:global(.rekon-mrg-shops-overlay .p-multiselect-filter-container) {
+  position: relative !important;
+  width: 100% !important;
+  flex: 1 1 auto !important;
+}
+
+:global(.rekon-mrg-shops-overlay .p-multiselect-filter) {
+  width: 100% !important;
+  padding: 0.35rem 0.65rem !important;
+  font-size: 0.8rem !important;
+  border: 1px solid var(--surface-border, #cbd5e1) !important;
+  border-radius: 5px !important;
+  background: var(--surface-card, #ffffff) !important;
+  color: var(--text-color, #1e293b) !important;
+}
+
+:global(.rekon-mrg-shops-overlay .p-multiselect-list-container) {
+  background: var(--surface-card, #ffffff) !important;
+  max-height: 250px !important;
+}
+
+:global(.rekon-mrg-shops-overlay .p-multiselect-list) {
+  padding: 0.35rem !important;
+}
+
+:global(.rekon-mrg-shops-overlay .p-multiselect-option) {
+  color: var(--text-color, #1e293b) !important;
+  padding: 0.45rem 0.65rem !important;
+  font-size: 0.825rem !important;
+  border-radius: 5px !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  margin-bottom: 2px !important;
+}
+
+:global(.rekon-mrg-shops-overlay .p-multiselect-option:hover),
+:global(.rekon-mrg-shops-overlay .p-multiselect-option.p-focus) {
+  background-color: var(--surface-hover, #f1f5f9) !important;
+}
+
+:global(.rekon-mrg-shops-overlay .p-multiselect-option.p-multiselect-option-selected) {
+  background-color: rgba(2, 132, 199, 0.12) !important;
+  color: #0284c7 !important;
+  font-weight: 600 !important;
+}
+
+/* Custom store option row template styling */
+:global(.store-option-item) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+}
+
+:global(.store-code-badge) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.725rem;
+  font-weight: 700;
+  color: #0369a1;
+  background: #e0f2fe;
+  border: 1px solid #bae6fd;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+:global(.store-name-text) {
+  font-size: 0.825rem;
+  color: var(--text-color, #1e293b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+:global(.rekon-mrg-shops-overlay .p-multiselect-option:hover .store-code-badge),
+:global(.rekon-mrg-shops-overlay .p-multiselect-option.p-multiselect-option-selected .store-code-badge) {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #0284c7;
+}
+
+/* --------------------------------------------------------------------------
+   4. Responsive Breakpoints
    -------------------------------------------------------------------------- */
 @media (max-width: 1024px) {
   .filter-main-bar {

@@ -39,7 +39,9 @@
           :disabled="isReconciling || isSingleLoading" 
           :maxDate="today" 
           showIcon 
-          class="filter-calendar" 
+          class="filter-calendar"
+          panelClass="rekon-mrg-calendar-panel"
+          appendTo="body" 
           @date-select="updatePeriode" 
         />
         <small v-if="errors?.periode" class="filter-error-text">{{ errors.periode }}</small>
@@ -58,8 +60,15 @@
           :options="storeOptions" 
           optionLabel="label" 
           optionValue="kdtk"
-          placeholder="Semua toko di cabang..." 
+          :placeholder="!formData.cab || formData.cab === 'All' ? 'Pilih cabang untuk memfilter toko' : 'Semua toko di cabang (atau pilih/cari toko)'" 
+          filterPlaceholder="Cari kode atau nama toko..."
+          selectedItemsLabel="{0} toko dipilih"
+          emptyFilterMessage="Tidak ada toko yang cocok"
+          emptyMessage="Pilih cabang terlebih dahulu untuk melihat daftar toko"
           class="filter-multiselect"
+          panelClass="rekon-mrg-shops-overlay"
+          overlayClass="rekon-mrg-shops-overlay"
+          appendTo="body"
           :disabled="isReconciling || isSingleLoading || !formData.cab || formData.cab === 'All'"
           :loading="loadingStores"
           filter
@@ -68,7 +77,14 @@
           @show="focusStoreFilter"
           :showClear="true"
           :maxSelectedLabels="2"
-        />
+        >
+          <template #option="slotProps">
+            <div class="store-option-item">
+              <span class="store-code-badge">{{ slotProps.option.kdtk }}</span>
+              <span class="store-name-text">{{ formatStoreName(slotProps.option) }}</span>
+            </div>
+          </template>
+        </MultiSelect>
       </div>
 
       <!-- Action Button -->
@@ -170,6 +186,14 @@ const authStore = useAuthStore();
 const strUsername = authStore.user.username;
 
 const storeSelect = ref(null);
+
+const formatStoreName = (opt) => {
+  if (!opt) return '';
+  if (opt.label && opt.kdtk && opt.label.startsWith(opt.kdtk)) {
+    return opt.label.replace(opt.kdtk, '').replace(/^\s*-\s*/, '');
+  }
+  return opt.label || opt.kdtk || '';
+};
 
 const focusStoreFilter = () => {
   setTimeout(() => {
@@ -415,8 +439,10 @@ const handleCabChange = () => {
   // Clear selected stores metadata
   selectedStoresMetadata.value = [];
 
-  // Kita tidak lagi memanggil fetchStores() secara otomatis saat ganti cabang
-  // Toko akan di-load saat user mengetik di pencarian MultiSelect
+  // Jika cabang spesifik dipilih, langsung muat daftar toko awal agar dropdown tidak kosong
+  if (formData.cab && formData.cab !== 'All') {
+    fetchStores();
+  }
 
   // Pastikan periode sudah ada sebelum emit event
   if (formData.periode) {
@@ -476,10 +502,12 @@ const onStoreFilter = (event) => {
   if (query && query.length >= 2) {
     filterTimeout = setTimeout(() => {
       fetchStores(query);
-    }, 500);
+    }, 400);
   } else if (!query) {
-    // Jika input dihapus, biarkan saja list yang ada atau kosongkan
-    // storeOptions.value = []; 
+    // Jika input filter dibersihkan, muat ulang daftar toko awal
+    filterTimeout = setTimeout(() => {
+      fetchStores('');
+    }, 300);
   }
 };
 

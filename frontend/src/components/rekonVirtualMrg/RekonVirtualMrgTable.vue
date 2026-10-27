@@ -89,7 +89,7 @@
         Last Catch
         <i v-if="sortColumn === 'LASTCATCH'" class="pi sort-icon" :class="getSortIcon(sortOrder)"></i>
       </th>
-      <th class="sticky-col sticky-notes">Notes</th>
+      <th class="sticky-col sticky-notes" :class="{ 'no-actions': !isAdmin }">Notes</th>
       <th class="sticky-col sticky-actions" v-if="isAdmin">Actions</th>
     </template>
 
@@ -122,7 +122,7 @@
           class="adjust-checkbox" />
       </td>
       <td class="text-center">{{ formatDateTime(item.LASTCATCH) }}</td>
-      <td class="text-center note-cell sticky-col sticky-notes">
+      <td class="text-center note-cell sticky-col sticky-notes" :class="{ 'no-actions': !isAdmin }">
         <div class="note-display" v-if="!item.editingNote" @click="startEditingNote(item)">
           <div class="note-category" v-if="item.note && item.note.category"
             :class="getCategoryClass(item.note.category.name)">

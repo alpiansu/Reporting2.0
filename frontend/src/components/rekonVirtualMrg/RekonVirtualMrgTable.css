@@ -122,7 +122,8 @@
 /* --------------------------------------------------------------------------
    2. Clean and Professional Table Container (High-Density)
    -------------------------------------------------------------------------- */
-.table-responsive {
+.table-responsive,
+:deep(.table-responsive) {
     max-height: calc(100vh - 280px);
     width: 100%;
     position: relative;
@@ -131,12 +132,16 @@
     border-radius: 8px;
     background: var(--surface-card);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    overflow-x: auto !important;
+    overflow-y: auto !important;
 }
 
-.results-table {
+.results-table,
+:deep(.results-table) {
     width: 100%;
-    border-collapse: separate;
-    border-spacing: 0;
+    min-width: 1750px !important;
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
     background: var(--surface-card);
     position: relative;
     table-layout: auto;
@@ -144,7 +149,8 @@
 }
 
 /* Clean Professional Header */
-.results-table th {
+.results-table th,
+:deep(.results-table th) {
     background: #f8fafc;
     color: #475569;
     font-weight: 700;
@@ -162,11 +168,13 @@
     z-index: 5;
 }
 
-.results-table th:last-child {
+.results-table th:last-child,
+:deep(.results-table th:last-child) {
     border-right: none;
 }
 
-.results-table th:hover {
+.results-table th:hover,
+:deep(.results-table th:hover) {
     background: var(--surface-section);
     color: var(--text-color);
 }
@@ -174,54 +182,76 @@
 /* Sticky Column Styles */
 .sticky-col {
     position: sticky !important;
-    z-index: 10 !important;
+    z-index: 12 !important;
     background-color: var(--surface-card) !important;
-    /* Solid background by default */
+    box-sizing: border-box !important;
 }
 
-.results-table th.sticky-col {
-    z-index: 30 !important;
+.results-table th.sticky-col,
+:deep(.results-table th.sticky-col) {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 35 !important;
     background-color: var(--surface-ground) !important;
-    /* Match header background */
+}
+
+.results-table th.sticky-col:hover,
+:deep(.results-table th.sticky-col:hover) {
+    background-color: var(--surface-section) !important;
 }
 
 /* Specific right-aligned sticky columns */
 .sticky-notes {
-    right: 180px;
-    /* Default when Actions column is present */
+    right: 160px !important;
+    width: 260px !important;
+    min-width: 260px !important;
+    max-width: 260px !important;
+    box-sizing: border-box !important;
     border-left: 2px solid var(--surface-border) !important;
     box-shadow: -4px 0 8px -4px rgba(0, 0, 0, 0.15);
 }
 
+.sticky-notes.no-actions,
+:deep(.no-actions.sticky-notes),
+.no-actions .sticky-notes {
+    right: 0 !important;
+}
+
 .sticky-actions {
-    right: 0;
+    right: 0 !important;
+    width: 160px !important;
+    min-width: 160px !important;
+    max-width: 160px !important;
+    box-sizing: border-box !important;
     border-left: 1px solid var(--surface-border) !important;
+    background-color: var(--surface-card) !important;
+    text-align: center !important;
+}
+
+.results-table th.sticky-actions,
+:deep(.results-table th.sticky-actions) {
     background-color: var(--surface-ground) !important;
-    /* Slightly distinct or same as header */
 }
 
 /* Specific background handling for different row states */
-.results-table tbody tr:nth-child(even) td.sticky-col {
+.results-table tbody tr:nth-child(even) td.sticky-col,
+:deep(.results-table tbody tr:nth-child(even) td.sticky-col) {
     background-color: var(--surface-ground) !important;
 }
 
-.results-table tbody tr:nth-child(odd) td.sticky-col {
+.results-table tbody tr:nth-child(odd) td.sticky-col,
+:deep(.results-table tbody tr:nth-child(odd) td.sticky-col) {
     background-color: var(--surface-card) !important;
 }
 
-.results-table tbody tr:hover td.sticky-col {
+.results-table tbody tr:hover td.sticky-col,
+:deep(.results-table tbody tr:hover td.sticky-col) {
     background-color: color-mix(in srgb, #3b82f6 12%, var(--surface-card)) !important;
-    /* Match row hover color */
 }
 
-.results-table tbody tr.row-updated td.sticky-col {
+.results-table tbody tr.row-updated td.sticky-col,
+:deep(.results-table tbody tr.row-updated td.sticky-col) {
     background-color: color-mix(in srgb, #3b82f6 8%, var(--surface-card)) !important;
-    /* Match highlighted row color */
-}
-
-/* Adjust sticky notes when there's no Actions column (non-admin) */
-.no-actions .sticky-notes {
-    right: 0;
 }
 
 /* Sortable Header Styling */
@@ -319,39 +349,59 @@
 
 /* Optimized Column Widths for Better Readability */
 .results-table th:nth-child(1),
-.results-table td:nth-child(1) {
-    width: 60px !important;
-    min-width: 60px !important;
+.results-table td:nth-child(1),
+:deep(.results-table th:nth-child(1)),
+:deep(.results-table td:nth-child(1)) {
+    width: 55px !important;
+    min-width: 55px !important;
+    max-width: 55px !important;
     text-align: center !important;
     font-weight: 500 !important;
     color: var(--text-color-secondary) !important;
 }
 
 .results-table th:nth-child(2),
-.results-table td:nth-child(2) {
-    max-width: 100px !important;
-    width: auto !important;
+.results-table td:nth-child(2),
+:deep(.results-table th:nth-child(2)),
+:deep(.results-table td:nth-child(2)) {
+    width: 95px !important;
+    min-width: 95px !important;
+    text-align: center !important;
     font-weight: 500 !important;
 }
 
 .results-table th:nth-child(3),
-.results-table td:nth-child(3) {
-    width: auto;
-    font-weight: 500;
+.results-table td:nth-child(3),
+:deep(.results-table th:nth-child(3)),
+:deep(.results-table td:nth-child(3)) {
+    width: 90px !important;
+    min-width: 90px !important;
+    text-align: center !important;
+    font-weight: 500 !important;
 }
 
 .results-table th:nth-child(4),
-.results-table td:nth-child(4) {
-    width: auto;
+.results-table td:nth-child(4),
+:deep(.results-table th:nth-child(4)),
+:deep(.results-table td:nth-child(4)) {
+    width: 105px !important;
+    min-width: 105px !important;
+    text-align: center !important;
 }
 
 .results-table th:nth-child(5),
-.results-table td:nth-child(5) {
-    width: auto;
+.results-table td:nth-child(5),
+:deep(.results-table th:nth-child(5)),
+:deep(.results-table td:nth-child(5)) {
+    width: 95px !important;
+    min-width: 95px !important;
+    text-align: center !important;
 }
 
 .results-table th:nth-child(6),
-.results-table td:nth-child(6) {
+.results-table td:nth-child(6),
+:deep(.results-table th:nth-child(6)),
+:deep(.results-table td:nth-child(6)) {
     white-space: normal !important;
     min-width: 220px !important;
     max-width: 320px !important;
@@ -360,35 +410,71 @@
 }
 
 .results-table th:nth-child(7),
-.results-table td:nth-child(7) {
+.results-table td:nth-child(7),
+:deep(.results-table th:nth-child(7)),
+:deep(.results-table td:nth-child(7)) {
+    width: 110px !important;
     min-width: 110px !important;
+    text-align: right !important;
     font-variant-numeric: tabular-nums;
 }
 
 .results-table th:nth-child(8),
-.results-table td:nth-child(8) {
+.results-table td:nth-child(8),
+:deep(.results-table th:nth-child(8)),
+:deep(.results-table td:nth-child(8)) {
+    width: 110px !important;
     min-width: 110px !important;
-    text-align: right;
+    text-align: right !important;
     font-variant-numeric: tabular-nums;
 }
 
 .results-table th:nth-child(9),
-.results-table td:nth-child(9) {
-    width: auto;
-    text-align: right;
+.results-table td:nth-child(9),
+:deep(.results-table th:nth-child(9)),
+:deep(.results-table td:nth-child(9)) {
+    width: 95px !important;
+    min-width: 95px !important;
+    text-align: right !important;
     font-variant-numeric: tabular-nums;
 }
 
 .results-table th:nth-child(10),
-.results-table td:nth-child(10) {
-    width: auto;
-    text-align: right;
+.results-table td:nth-child(10),
+:deep(.results-table th:nth-child(10)),
+:deep(.results-table td:nth-child(10)) {
+    width: 95px !important;
+    min-width: 95px !important;
+    text-align: right !important;
     font-variant-numeric: tabular-nums;
 }
 
 .results-table th:nth-child(11),
-.results-table td:nth-child(11) {
-    width: auto;
+.results-table td:nth-child(11),
+:deep(.results-table th:nth-child(11)),
+:deep(.results-table td:nth-child(11)) {
+    width: 95px !important;
+    min-width: 95px !important;
+    text-align: right !important;
+    font-variant-numeric: tabular-nums;
+}
+
+.results-table th:nth-child(12),
+.results-table td:nth-child(12),
+:deep(.results-table th:nth-child(12)),
+:deep(.results-table td:nth-child(12)) {
+    width: 75px !important;
+    min-width: 75px !important;
+    text-align: center !important;
+}
+
+.results-table th:nth-child(13),
+.results-table td:nth-child(13),
+:deep(.results-table th:nth-child(13)),
+:deep(.results-table td:nth-child(13)) {
+    width: 155px !important;
+    min-width: 155px !important;
+    text-align: center !important;
 }
 
 /* Clean Scrollbar Design */
@@ -825,11 +911,13 @@
     background: rgba(16, 185, 129, 0.08) !important;
 }
 
-.results-table tbody tr.row-adjusted:nth-child(even) td.sticky-col {
+.results-table tbody tr.row-adjusted:nth-child(even) td.sticky-col,
+:deep(.results-table tbody tr.row-adjusted:nth-child(even) td.sticky-col) {
     background-color: color-mix(in srgb, #10b981 10%, var(--surface-ground)) !important;
 }
 
-.results-table tbody tr.row-adjusted:nth-child(odd) td.sticky-col {
+.results-table tbody tr.row-adjusted:nth-child(odd) td.sticky-col,
+:deep(.results-table tbody tr.row-adjusted:nth-child(odd) td.sticky-col) {
     background-color: color-mix(in srgb, #10b981 8%, var(--surface-card)) !important;
 }
 
@@ -837,7 +925,8 @@
     background: rgba(16, 185, 129, 0.15) !important;
 }
 
-.results-table tbody tr.row-adjusted:hover td.sticky-col {
+.results-table tbody tr.row-adjusted:hover td.sticky-col,
+:deep(.results-table tbody tr.row-adjusted:hover td.sticky-col) {
     background-color: color-mix(in srgb, #10b981 15%, var(--surface-card)) !important;
 }
 
@@ -859,11 +948,13 @@
     background: rgba(59, 130, 246, 0.08) !important;
 }
 
-.results-table tbody tr.row-has-note:nth-child(even) td.sticky-col {
+.results-table tbody tr.row-has-note:nth-child(even) td.sticky-col,
+:deep(.results-table tbody tr.row-has-note:nth-child(even) td.sticky-col) {
     background-color: color-mix(in srgb, #3b82f6 10%, var(--surface-ground)) !important;
 }
 
-.results-table tbody tr.row-has-note:nth-child(odd) td.sticky-col {
+.results-table tbody tr.row-has-note:nth-child(odd) td.sticky-col,
+:deep(.results-table tbody tr.row-has-note:nth-child(odd) td.sticky-col) {
     background-color: color-mix(in srgb, #3b82f6 8%, var(--surface-card)) !important;
 }
 
@@ -871,7 +962,8 @@
     background: rgba(59, 130, 246, 0.15) !important;
 }
 
-.results-table tbody tr.row-has-note:hover td.sticky-col {
+.results-table tbody tr.row-has-note:hover td.sticky-col,
+:deep(.results-table tbody tr.row-has-note:hover td.sticky-col) {
     background-color: color-mix(in srgb, #3b82f6 15%, var(--surface-card)) !important;
 }
 
@@ -893,11 +985,13 @@
     background: var(--surface-card) !important;
 }
 
-.results-table tbody tr.row-unchecked:nth-child(even) td.sticky-col {
+.results-table tbody tr.row-unchecked:nth-child(even) td.sticky-col,
+:deep(.results-table tbody tr.row-unchecked:nth-child(even) td.sticky-col) {
     background-color: var(--surface-ground) !important;
 }
 
-.results-table tbody tr.row-unchecked:nth-child(odd) td.sticky-col {
+.results-table tbody tr.row-unchecked:nth-child(odd) td.sticky-col,
+:deep(.results-table tbody tr.row-unchecked:nth-child(odd) td.sticky-col) {
     background-color: var(--surface-card) !important;
 }
 
@@ -905,7 +999,8 @@
     background: var(--surface-section) !important;
 }
 
-.results-table tbody tr.row-unchecked:hover td.sticky-col {
+.results-table tbody tr.row-unchecked:hover td.sticky-col,
+:deep(.results-table tbody tr.row-unchecked:hover td.sticky-col) {
     background-color: var(--surface-section) !important;
 }
 
@@ -958,13 +1053,6 @@
     transform: scale(1.15);
 }
 
-/* Adjust first column width to accommodate status icon */
-.results-table th:nth-child(1),
-.results-table td:nth-child(1) {
-    width: 85px !important;
-    min-width: 85px !important;
-}
-
 /* Clean and Professional Action Buttons */
 .action-buttons {
     display: flex;
@@ -972,7 +1060,8 @@
     align-items: center;
     justify-content: center;
     flex-wrap: nowrap;
-    min-width: 150px;
+    width: 100%;
+    min-width: 0;
 }
 
 /* Responsive adjustments for notes column */
